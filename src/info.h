@@ -1,0 +1,5251 @@
+// SONIC ROBO BLAST 2
+//-----------------------------------------------------------------------------
+// Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 1998-2000 by DooM Legacy Team.
+// Copyright (C) 1999-2024 by Sonic Team Junior.
+//
+// This program is free software distributed under the
+// terms of the GNU General Public License, version 2.
+// See the 'LICENSE' file for more details.
+//-----------------------------------------------------------------------------
+
+
+
+#ifndef __INFO__
+#define __INFO__
+
+
+#include "d_think.h"
+#include "sounds.h"
+#include "m_fixed.h"
+#include "dehacked.h"  
+
+
+
+
+
+
+enum actionnum
+{
+	A_EXPLODE = 0,
+	A_PAIN,
+	A_FALL,
+	A_MONITORPOP,
+	A_GOLDMONITORPOP,
+	A_GOLDMONITORRESTORE,
+	A_GOLDMONITORSPARKLE,
+	A_LOOK,
+	A_CHASE,
+	A_FACESTABCHASE,
+	A_FACESTABREV,
+	A_FACESTABHURL,
+	A_FACESTABMISS,
+	A_STATUEBURST,
+	A_FACETARGET,
+	A_FACETRACER,
+	A_SCREAM,
+	A_BOSSDEATH,
+	A_SETSHADOWSCALE,
+	A_SHADOWSCREAM,
+	A_CUSTOMPOWER,
+	A_GIVEWEAPON,
+	A_RINGBOX,
+	A_INVINCIBILITY,
+	A_SUPERSNEAKERS,
+	A_BUNNYHOP,
+	A_BUBBLESPAWN,
+	A_FANBUBBLESPAWN,
+	A_BUBBLERISE,
+	A_BUBBLECHECK,
+	A_AWARDSCORE,
+	A_EXTRALIFE,
+	A_GIVESHIELD,
+	A_GRAVITYBOX,
+	A_SCORERISE,
+	A_ATTRACTCHASE,
+	A_DROPMINE,
+	A_FISHJUMP,
+	A_THROWNRING,
+	A_SETSOLIDSTEAM,
+	A_UNSETSOLIDSTEAM,
+	A_SIGNSPIN,
+	A_SIGNPLAYER,
+	A_OVERLAYTHINK,
+	A_JETCHASE,
+	A_JETBTHINK,
+	A_JETGTHINK,
+	A_JETGSHOOT,
+	A_SHOOTBULLET,
+	A_MINUSDIGGING,
+	A_MINUSPOPUP,
+	A_MINUSCHECK,
+	A_CHICKENCHECK,
+	A_MOUSETHINK,
+	A_DETONCHASE,
+	A_CAPECHASE,
+	A_ROTATESPIKEBALL,
+	A_SLINGAPPEAR,
+	A_UNIDUSBALL,
+	A_ROCKSPAWN,
+	A_SETFUSE,
+	A_CRAWLACOMMANDERTHINK,
+	A_SMOKETRAILER,
+	A_RINGEXPLODE,
+	A_OLDRINGEXPLODE,
+	A_MIXUP,
+	A_RECYCLEPOWERS,
+	A_BOSS1CHASE,
+	A_FOCUSTARGET,
+	A_BOSS2CHASE,
+	A_BOSS2POGO,
+	A_BOSSZOOM,
+	A_BOSSSCREAM,
+	A_BOSS2TAKEDAMAGE,
+	A_BOSS7CHASE,
+	A_GOOPSPLAT,
+	A_BOSS2POGOSFX,
+	A_BOSS2POGOTARGET,
+	A_BOSSJETFUME,
+	A_EGGMANBOX,
+	A_TURRETFIRE,
+	A_SUPERTURRETFIRE,
+	A_TURRETSTOP,
+	A_JETJAWROAM,
+	A_JETJAWCHOMP,
+	A_POINTYTHINK,
+	A_CHECKBUDDY,
+	A_HOODFIRE,
+	A_HOODTHINK,
+	A_HOODFALL,
+	A_ARROWBONKS,
+	A_SNAILERTHINK,
+	A_SHARPCHASE,
+	A_SHARPSPIN,
+	A_SHARPDECEL,
+	A_CRUSHSTACEANWALK,
+	A_CRUSHSTACEANPUNCH,
+	A_CRUSHCLAWAIM,
+	A_CRUSHCLAWLAUNCH,
+	A_VULTUREVTOL,
+	A_VULTURECHECK,
+	A_VULTUREHOVER,
+	A_VULTUREBLAST,
+	A_VULTUREFLY,
+	A_SKIMCHASE,
+	A_1UPTHINKER,
+	A_SKULLATTACK,
+	A_LOBSHOT,
+	A_FIRESHOT,
+	A_SUPERFIRESHOT,
+	A_BOSSFIRESHOT,
+	A_BOSS7FIREMISSILES,
+	A_BOSS1LASER,
+	A_BOSS4REVERSE,
+	A_BOSS4SPEEDUP,
+	A_BOSS4RAISE,
+	A_SPARKFOLLOW,
+	A_BUZZFLY,
+	A_GUARDCHASE,
+	A_EGGSHIELD,
+	A_SETREACTIONTIME,
+	A_BOSS1SPIKEBALLS,
+	A_BOSS3TAKEDAMAGE,
+	A_BOSS3PATH,
+	A_BOSS3SHOCKTHINK,
+	A_SHOCKWAVE,
+	A_LINEDEFEXECUTE,
+	A_LINEDEFEXECUTEFROMARG,
+	A_PLAYSEESOUND,
+	A_PLAYATTACKSOUND,
+	A_PLAYACTIVESOUND,
+	A_SPAWNOBJECTABSOLUTE,
+	A_SPAWNOBJECTRELATIVE,
+	A_CHANGEANGLERELATIVE,
+	A_CHANGEANGLEABSOLUTE,
+	A_ROLLANGLE,
+	A_CHANGEROLLANGLERELATIVE,
+	A_CHANGEROLLANGLEABSOLUTE,
+	A_PLAYSOUND,
+	A_FINDTARGET,
+	A_FINDTRACER,
+	A_SETTICS,
+	A_SETRANDOMTICS,
+	A_CHANGECOLORRELATIVE,
+	A_CHANGECOLORABSOLUTE,
+	A_DYE,
+	A_SETTRANSLATION,
+	A_MOVERELATIVE,
+	A_MOVEABSOLUTE,
+	A_THRUST,
+	A_ZTHRUST,
+	A_SETTARGETSTARGET,
+	A_SETOBJECTFLAGS,
+	A_SETOBJECTFLAGS2,
+	A_RANDOMSTATE,
+	A_RANDOMSTATERANGE,
+	A_STATERANGEBYANGLE,
+	A_STATERANGEBYPARAMETER,
+	A_DUALACTION,
+	A_REMOTEACTION,
+	A_TOGGLEFLAMEJET,
+	A_ORBITNIGHTS,
+	A_GHOSTME,
+	A_SETOBJECTSTATE,
+	A_SETOBJECTTYPESTATE,
+	A_KNOCKBACK,
+	A_PUSHAWAY,
+	A_RINGDRAIN,
+	A_SPLITSHOT,
+	A_MISSILESPLIT,
+	A_MULTISHOT,
+	A_INSTALOOP,
+	A_CUSTOM3DROTATE,
+	A_SEARCHFORPLAYERS,
+	A_CHECKRANDOM,
+	A_CHECKTARGETRINGS,
+	A_CHECKRINGS,
+	A_CHECKTOTALRINGS,
+	A_CHECKHEALTH,
+	A_CHECKRANGE,
+	A_CHECKHEIGHT,
+	A_CHECKTRUERANGE,
+	A_CHECKTHINGCOUNT,
+	A_CHECKAMBUSH,
+	A_CHECKCUSTOMVALUE,
+	A_CHECKCUSVALMEMO,
+	A_SETCUSTOMVALUE,
+	A_USECUSVALMEMO,
+	A_RELAYCUSTOMVALUE,
+	A_CUSVALACTION,
+	A_FORCESTOP,
+	A_FORCEWIN,
+	A_SPIKERETRACT,
+	A_INFOSTATE,
+	A_REPEAT,
+	A_SETSCALE,
+	A_REMOTEDAMAGE,
+	A_HOMINGCHASE,
+	A_TRAPSHOT,
+	A_VILETARGET,
+	A_VILEATTACK,
+	A_VILEFIRE,
+	A_BRAKCHASE,
+	A_BRAKFIRESHOT,
+	A_BRAKLOBSHOT,
+	A_NAPALMSCATTER,
+	A_SPAWNFRESHCOPY,
+	A_FLICKYSPAWN,
+	A_FLICKYCENTER,
+	A_FLICKYAIM,
+	A_FLICKYFLY,
+	A_FLICKYSOAR,
+	A_FLICKYCOAST,
+	A_FLICKYHOP,
+	A_FLICKYFLOUNDER,
+	A_FLICKYCHECK,
+	A_FLICKYHEIGHTCHECK,
+	A_FLICKYFLUTTER,
+	A_FLAMEPARTICLE,
+	A_FADEOVERLAY,
+	A_BOSS5JUMP,
+	A_LIGHTBEAMRESET,
+	A_MINEEXPLODE,
+	A_MINERANGE,
+	A_CONNECTTOGROUND,
+	A_SPAWNPARTICLERELATIVE,
+	A_MULTISHOTDIST,
+	A_WHOCARESIFYOURSONISABEE,
+	A_PARENTTRIESTOSLEEP,
+	A_CRYINGTOMOMMA,
+	A_CHECKFLAGS2,
+	A_BOSS5FINDWAYPOINT,
+	A_DONPCSKID,
+	A_DONPCPAIN,
+	A_PREPAREREPEAT,
+	A_BOSS5EXTRAREPEAT,
+	A_BOSS5CALM,
+	A_BOSS5CHECKONGROUND,
+	A_BOSS5CHECKFALLING,
+	A_BOSS5PINCHSHOT,
+	A_BOSS5MAKEITRAIN,
+	A_BOSS5MAKEJUNK,
+	A_LOOKFORBETTER,
+	A_BOSS5BOMBEXPLODE,
+	A_DUSTDEVILTHINK,
+	A_TNTEXPLODE,
+	A_DEBRISRANDOM,
+	A_TRAINCAMEO,
+	A_TRAINCAMEO2,
+	A_CANARIVOREGAS,
+	A_KILLSEGMENTS,
+	A_SNAPPERSPAWN,
+	A_SNAPPERTHINKER,
+	A_SALOONDOORSPAWN,
+	A_MINECARTSPARKTHINK,
+	A_MODULOTOSTATE,
+	A_LAVAFALLROCKS,
+	A_LAVAFALLLAVA,
+	A_FALLINGLAVACHECK,
+	A_FIRESHRINK,
+	A_SPAWNPTERABYTES,
+	A_PTERABYTEHOVER,
+	A_ROLLOUTSPAWN,
+	A_ROLLOUTROCK,
+	A_DRAGONBOMBERSPAWN,
+	A_DRAGONWING,
+	A_DRAGONSEGMENT,
+	A_CHANGEHEIGHT,
+	NUMACTIONS
+};
+
+struct mobj_s;
+
+
+
+void A_Explode(struct mobj_s *actor);
+void A_Pain(struct mobj_s *actor);
+void A_Fall(struct mobj_s *actor);
+void A_MonitorPop(struct mobj_s *actor);
+void A_GoldMonitorPop(struct mobj_s *actor);
+void A_GoldMonitorRestore(struct mobj_s *actor);
+void A_GoldMonitorSparkle(struct mobj_s *actor);
+void A_Look(struct mobj_s *actor);
+void A_Chase(struct mobj_s *actor);
+void A_FaceStabChase(struct mobj_s *actor);
+void A_FaceStabRev(struct mobj_s *actor);
+void A_FaceStabHurl(struct mobj_s *actor);
+void A_FaceStabMiss(struct mobj_s *actor);
+void A_StatueBurst(struct mobj_s *actor);
+void A_FaceTarget(struct mobj_s *actor);
+void A_FaceTracer(struct mobj_s *actor);
+void A_Scream(struct mobj_s *actor);
+void A_BossDeath(struct mobj_s *actor);
+void A_SetShadowScale(struct mobj_s *actor);
+void A_ShadowScream(struct mobj_s *actor);  
+void A_CustomPower(struct mobj_s *actor);  
+void A_GiveWeapon(struct mobj_s *actor);  
+void A_RingBox(struct mobj_s *actor);  
+void A_Invincibility(struct mobj_s *actor);  
+void A_SuperSneakers(struct mobj_s *actor);  
+void A_BunnyHop(struct mobj_s *actor);  
+void A_BubbleSpawn(struct mobj_s *actor);  
+void A_FanBubbleSpawn(struct mobj_s *actor);
+void A_BubbleRise(struct mobj_s *actor);  
+void A_BubbleCheck(struct mobj_s *actor);  
+void A_AwardScore(struct mobj_s *actor);
+void A_ExtraLife(struct mobj_s *actor);  
+void A_GiveShield(struct mobj_s *actor);  
+void A_GravityBox(struct mobj_s *actor);
+void A_ScoreRise(struct mobj_s *actor);  
+void A_AttractChase(struct mobj_s *actor);  
+void A_DropMine(struct mobj_s *actor);  
+void A_FishJump(struct mobj_s *actor);  
+void A_ThrownRing(struct mobj_s *actor);  
+void A_SetSolidSteam(struct mobj_s *actor);
+void A_UnsetSolidSteam(struct mobj_s *actor);
+void A_SignSpin(struct mobj_s *actor);
+void A_SignPlayer(struct mobj_s *actor);
+void A_OverlayThink(struct mobj_s *actor);
+void A_JetChase(struct mobj_s *actor);
+void A_JetbThink(struct mobj_s *actor);  
+void A_JetgThink(struct mobj_s *actor);  
+void A_JetgShoot(struct mobj_s *actor);  
+void A_ShootBullet(struct mobj_s *actor);  
+void A_MinusDigging(struct mobj_s *actor);
+void A_MinusPopup(struct mobj_s *actor);
+void A_MinusCheck(struct mobj_s *actor);
+void A_ChickenCheck(struct mobj_s *actor);
+void A_MouseThink(struct mobj_s *actor);  
+void A_DetonChase(struct mobj_s *actor);  
+void A_CapeChase(struct mobj_s *actor);  
+void A_RotateSpikeBall(struct mobj_s *actor);  
+void A_SlingAppear(struct mobj_s *actor);
+void A_UnidusBall(struct mobj_s *actor);
+void A_RockSpawn(struct mobj_s *actor);
+void A_SetFuse(struct mobj_s *actor);
+void A_CrawlaCommanderThink(struct mobj_s *actor);  
+void A_SmokeTrailer(struct mobj_s *actor);
+void A_RingExplode(struct mobj_s *actor);
+void A_OldRingExplode(struct mobj_s *actor);
+void A_MixUp(struct mobj_s *actor);
+void A_RecyclePowers(struct mobj_s *actor);
+void A_BossScream(struct mobj_s *actor);
+void A_Boss2TakeDamage(struct mobj_s *actor);
+void A_GoopSplat(struct mobj_s *actor);
+void A_Boss2PogoSFX(struct mobj_s *actor);
+void A_Boss2PogoTarget(struct mobj_s *actor);
+void A_EggmanBox(struct mobj_s *actor);
+void A_TurretFire(struct mobj_s *actor);
+void A_SuperTurretFire(struct mobj_s *actor);
+void A_TurretStop(struct mobj_s *actor);
+void A_JetJawRoam(struct mobj_s *actor);
+void A_JetJawChomp(struct mobj_s *actor);
+void A_PointyThink(struct mobj_s *actor);
+void A_CheckBuddy(struct mobj_s *actor);
+void A_HoodFire(struct mobj_s *actor);
+void A_HoodThink(struct mobj_s *actor);
+void A_HoodFall(struct mobj_s *actor);
+void A_ArrowBonks(struct mobj_s *actor);
+void A_SnailerThink(struct mobj_s *actor);
+void A_SharpChase(struct mobj_s *actor);
+void A_SharpSpin(struct mobj_s *actor);
+void A_SharpDecel(struct mobj_s *actor);
+void A_CrushstaceanWalk(struct mobj_s *actor);
+void A_CrushstaceanPunch(struct mobj_s *actor);
+void A_CrushclawAim(struct mobj_s *actor);
+void A_CrushclawLaunch(struct mobj_s *actor);
+void A_VultureVtol(struct mobj_s *actor);
+void A_VultureCheck(struct mobj_s *actor);
+void A_VultureHover(struct mobj_s *actor);
+void A_VultureBlast(struct mobj_s *actor);
+void A_VultureFly(struct mobj_s *actor);
+void A_SkimChase(struct mobj_s *actor);
+void A_SkullAttack(struct mobj_s *actor);
+void A_LobShot(struct mobj_s *actor);
+void A_FireShot(struct mobj_s *actor);
+void A_SuperFireShot(struct mobj_s *actor);
+void A_BossFireShot(struct mobj_s *actor);
+void A_Boss7FireMissiles(struct mobj_s *actor);
+void A_Boss1Laser(struct mobj_s *actor);
+void A_FocusTarget(struct mobj_s *actor);
+void A_Boss4Reverse(struct mobj_s *actor);
+void A_Boss4SpeedUp(struct mobj_s *actor);
+void A_Boss4Raise(struct mobj_s *actor);
+void A_SparkFollow(struct mobj_s *actor);
+void A_BuzzFly(struct mobj_s *actor);
+void A_GuardChase(struct mobj_s *actor);
+void A_EggShield(struct mobj_s *actor);
+void A_SetReactionTime(struct mobj_s *actor);
+void A_Boss1Spikeballs(struct mobj_s *actor);
+void A_Boss3TakeDamage(struct mobj_s *actor);
+void A_Boss3Path(struct mobj_s *actor);
+void A_Boss3ShockThink(struct mobj_s *actor);
+void A_Shockwave(struct mobj_s *actor);
+void A_LinedefExecute(struct mobj_s *actor);
+void A_LinedefExecuteFromArg(struct mobj_s *actor);
+void A_PlaySeeSound(struct mobj_s *actor);
+void A_PlayAttackSound(struct mobj_s *actor);
+void A_PlayActiveSound(struct mobj_s *actor);
+void A_1upThinker(struct mobj_s *actor);
+void A_BossZoom(struct mobj_s *actor);  
+void A_Boss1Chase(struct mobj_s *actor);
+void A_Boss2Chase(struct mobj_s *actor);
+void A_Boss2Pogo(struct mobj_s *actor);
+void A_Boss7Chase(struct mobj_s *actor);
+void A_BossJetFume(struct mobj_s *actor);
+void A_SpawnObjectAbsolute(struct mobj_s *actor);
+void A_SpawnObjectRelative(struct mobj_s *actor);
+void A_ChangeAngleRelative(struct mobj_s *actor);
+void A_ChangeAngleAbsolute(struct mobj_s *actor);
+void A_RollAngle(struct mobj_s *actor);
+void A_ChangeRollAngleRelative(struct mobj_s *actor);
+void A_ChangeRollAngleAbsolute(struct mobj_s *actor);
+void A_PlaySound(struct mobj_s *actor);
+void A_FindTarget(struct mobj_s *actor);
+void A_FindTracer(struct mobj_s *actor);
+void A_SetTics(struct mobj_s *actor);
+void A_SetRandomTics(struct mobj_s *actor);
+void A_ChangeColorRelative(struct mobj_s *actor);
+void A_ChangeColorAbsolute(struct mobj_s *actor);
+void A_Dye(struct mobj_s *actor);
+void A_SetTranslation(struct mobj_s *actor);
+void A_MoveRelative(struct mobj_s *actor);
+void A_MoveAbsolute(struct mobj_s *actor);
+void A_Thrust(struct mobj_s *actor);
+void A_ZThrust(struct mobj_s *actor);
+void A_SetTargetsTarget(struct mobj_s *actor);
+void A_SetObjectFlags(struct mobj_s *actor);
+void A_SetObjectFlags2(struct mobj_s *actor);
+void A_RandomState(struct mobj_s *actor);
+void A_RandomStateRange(struct mobj_s *actor);
+void A_StateRangeByAngle(struct mobj_s *actor);
+void A_StateRangeByParameter(struct mobj_s *actor);
+void A_DualAction(struct mobj_s *actor);
+void A_RemoteAction(struct mobj_s *actor);
+void A_ToggleFlameJet(struct mobj_s *actor);
+void A_OrbitNights(struct mobj_s *actor);
+void A_GhostMe(struct mobj_s *actor);
+void A_SetObjectState(struct mobj_s *actor);
+void A_SetObjectTypeState(struct mobj_s *actor);
+void A_KnockBack(struct mobj_s *actor);
+void A_PushAway(struct mobj_s *actor);
+void A_RingDrain(struct mobj_s *actor);
+void A_SplitShot(struct mobj_s *actor);
+void A_MissileSplit(struct mobj_s *actor);
+void A_MultiShot(struct mobj_s *actor);
+void A_InstaLoop(struct mobj_s *actor);
+void A_Custom3DRotate(struct mobj_s *actor);
+void A_SearchForPlayers(struct mobj_s *actor);
+void A_CheckRandom(struct mobj_s *actor);
+void A_CheckTargetRings(struct mobj_s *actor);
+void A_CheckRings(struct mobj_s *actor);
+void A_CheckTotalRings(struct mobj_s *actor);
+void A_CheckHealth(struct mobj_s *actor);
+void A_CheckRange(struct mobj_s *actor);
+void A_CheckHeight(struct mobj_s *actor);
+void A_CheckTrueRange(struct mobj_s *actor);
+void A_CheckThingCount(struct mobj_s *actor);
+void A_CheckAmbush(struct mobj_s *actor);
+void A_CheckCustomValue(struct mobj_s *actor);
+void A_CheckCusValMemo(struct mobj_s *actor);
+void A_SetCustomValue(struct mobj_s *actor);
+void A_UseCusValMemo(struct mobj_s *actor);
+void A_RelayCustomValue(struct mobj_s *actor);
+void A_CusValAction(struct mobj_s *actor);
+void A_ForceStop(struct mobj_s *actor);
+void A_ForceWin(struct mobj_s *actor);
+void A_SpikeRetract(struct mobj_s *actor);
+void A_InfoState(struct mobj_s *actor);
+void A_Repeat(struct mobj_s *actor);
+void A_SetScale(struct mobj_s *actor);
+void A_RemoteDamage(struct mobj_s *actor);
+void A_HomingChase(struct mobj_s *actor);
+void A_TrapShot(struct mobj_s *actor);
+void A_VileTarget(struct mobj_s *actor);
+void A_VileAttack(struct mobj_s *actor);
+void A_VileFire(struct mobj_s *actor);
+void A_BrakChase(struct mobj_s *actor);
+void A_BrakFireShot(struct mobj_s *actor);
+void A_BrakLobShot(struct mobj_s *actor);
+void A_NapalmScatter(struct mobj_s *actor);
+void A_SpawnFreshCopy(struct mobj_s *actor);
+void A_FlickySpawn(struct mobj_s *actor);
+void A_FlickyCenter(struct mobj_s *actor);
+void A_FlickyAim(struct mobj_s *actor);
+void A_FlickyFly(struct mobj_s *actor);
+void A_FlickySoar(struct mobj_s *actor);
+void A_FlickyCoast(struct mobj_s *actor);
+void A_FlickyHop(struct mobj_s *actor);
+void A_FlickyFlounder(struct mobj_s *actor);
+void A_FlickyCheck(struct mobj_s *actor);
+void A_FlickyHeightCheck(struct mobj_s *actor);
+void A_FlickyFlutter(struct mobj_s *actor);
+void A_FlameParticle(struct mobj_s *actor);
+void A_FadeOverlay(struct mobj_s *actor);
+void A_Boss5Jump(struct mobj_s *actor);
+void A_LightBeamReset(struct mobj_s *actor);
+void A_MineExplode(struct mobj_s *actor);
+void A_MineRange(struct mobj_s *actor);
+void A_ConnectToGround(struct mobj_s *actor);
+void A_SpawnParticleRelative(struct mobj_s *actor);
+void A_MultiShotDist(struct mobj_s *actor);
+void A_WhoCaresIfYourSonIsABee(struct mobj_s *actor);
+void A_ParentTriesToSleep(struct mobj_s *actor);
+void A_CryingToMomma(struct mobj_s *actor);
+void A_CheckFlags2(struct mobj_s *actor);
+void A_Boss5FindWaypoint(struct mobj_s *actor);
+void A_DoNPCSkid(struct mobj_s *actor);
+void A_DoNPCPain(struct mobj_s *actor);
+void A_PrepareRepeat(struct mobj_s *actor);
+void A_Boss5ExtraRepeat(struct mobj_s *actor);
+void A_Boss5Calm(struct mobj_s *actor);
+void A_Boss5CheckOnGround(struct mobj_s *actor);
+void A_Boss5CheckFalling(struct mobj_s *actor);
+void A_Boss5PinchShot(struct mobj_s *actor);
+void A_Boss5MakeItRain(struct mobj_s *actor);
+void A_Boss5MakeJunk(struct mobj_s *actor);
+void A_LookForBetter(struct mobj_s *actor);
+void A_Boss5BombExplode(struct mobj_s *actor);
+void A_DustDevilThink(struct mobj_s *actor);
+void A_TNTExplode(struct mobj_s *actor);
+void A_DebrisRandom(struct mobj_s *actor);
+void A_TrainCameo(struct mobj_s *actor);
+void A_TrainCameo2(struct mobj_s *actor);
+void A_CanarivoreGas(struct mobj_s *actor);
+void A_KillSegments(struct mobj_s *actor);
+void A_SnapperSpawn(struct mobj_s *actor);
+void A_SnapperThinker(struct mobj_s *actor);
+void A_SaloonDoorSpawn(struct mobj_s *actor);
+void A_MinecartSparkThink(struct mobj_s *actor);
+void A_ModuloToState(struct mobj_s *actor);
+void A_LavafallRocks(struct mobj_s *actor);
+void A_LavafallLava(struct mobj_s *actor);
+void A_FallingLavaCheck(struct mobj_s *actor);
+void A_FireShrink(struct mobj_s *actor);
+void A_SpawnPterabytes(struct mobj_s *actor);
+void A_PterabyteHover(struct mobj_s *actor);
+void A_RolloutSpawn(struct mobj_s *actor);
+void A_RolloutRock(struct mobj_s *actor);
+void A_DragonbomberSpawn(struct mobj_s *actor);
+void A_DragonWing(struct mobj_s *actor);
+void A_DragonSegment(struct mobj_s *actor);
+void A_ChangeHeight(struct mobj_s *actor);
+
+extern int actionsoverridden[NUMACTIONS][MAX_ACTION_RECURSION];
+
+
+#define NUMMOBJFREESLOTS 1024
+#define NUMSPRITEFREESLOTS NUMMOBJFREESLOTS
+#define NUMSTATEFREESLOTS (NUMMOBJFREESLOTS*8)
+#define MAXSPRITENAME 64
+
+
+typedef enum sprite
+{
+	SPR_NULL,  
+	SPR_UNKN,
+
+	SPR_THOK,  
+	SPR_PLAY,
+
+
+	SPR_POSS,  
+	SPR_SPOS,  
+	SPR_FISH,  
+	SPR_BUZZ,  
+	SPR_RBUZ,  
+	SPR_JETB,  
+	SPR_JETG,  
+	SPR_CCOM,  
+	SPR_DETN,  
+	SPR_SKIM,  
+	SPR_TRET,  
+	SPR_TURR,  
+	SPR_SHRP,  
+	SPR_CRAB,  
+	SPR_CR2B,  
+	SPR_CSPR,  
+	SPR_JJAW,  
+	SPR_SNLR,  
+	SPR_VLTR,  
+	SPR_PNTY,  
+	SPR_ARCH,  
+	SPR_CBFS,  
+	SPR_STAB,  
+	SPR_SPSH,  
+	SPR_ESHI,  
+	SPR_GSNP,  
+	SPR_GSNL,  
+	SPR_GSNH,  
+	SPR_MNUS,  
+	SPR_MNUD,  
+	SPR_SSHL,  
+	SPR_UNID,  
+	SPR_CANA,  
+	SPR_CANG,  
+	SPR_PYRE,  
+	SPR_PTER,  
+	SPR_DRAB,  
+
+
+	SPR_JETF,  
+
+
+	SPR_EGGM,  
+	SPR_EGLZ,  
+
+
+	SPR_EGGN,  
+	SPR_TANK,  
+	SPR_GOOP,  
+
+
+	SPR_EGGO,  
+	SPR_SEBH,  
+	SPR_FAKE,  
+	SPR_SHCK,  
+
+
+	SPR_EGGP,
+	SPR_EFIR,  
+	SPR_EGR1,  
+
+
+	SPR_FANG,  
+	SPR_BRKN,
+	SPR_WHAT,
+	SPR_VWRE,
+	SPR_PROJ,  
+	SPR_FBOM,
+	SPR_FSGN,
+	SPR_BARX,  
+	SPR_BARD,  
+
+
+	SPR_EGGR,
+
+
+	SPR_BRAK,
+	SPR_BGOO,  
+	SPR_BMSL,
+
+
+	SPR_EGGT,
+
+
+	SPR_RCKT,  
+	SPR_ELEC,  
+	SPR_TARG,  
+	SPR_NPLM,  
+	SPR_MNPL,  
+
+
+	SPR_METL,
+	SPR_MSCF,
+	SPR_MSCB,
+
+
+	SPR_RING,
+	SPR_TRNG,  
+	SPR_TOKE,  
+	SPR_RFLG,  
+	SPR_BFLG,  
+	SPR_SPHR,  
+	SPR_NCHP,  
+	SPR_NSTR,  
+	SPR_EMBM,  
+	SPR_CEMG,  
+	SPR_SHRD,  
+
+
+	SPR_BBLS,  
+	SPR_SIGN,  
+	SPR_SPIK,  
+	SPR_SFLM,  
+	SPR_TFLM,  
+	SPR_USPK,  
+	SPR_WSPK,  
+	SPR_WSPB,  
+	SPR_STPT,  
+	SPR_BMNE,  
+	SPR_PUMI,  
+
+
+	SPR_MSTV,  
+	SPR_XLTV,  
+
+	SPR_TRRI,  
+	SPR_TBRI,  
+
+	SPR_TVRI,  
+	SPR_TVPI,  
+	SPR_TVAT,  
+	SPR_TVFO,  
+	SPR_TVAR,  
+	SPR_TVWW,  
+	SPR_TVEL,  
+	SPR_TVSS,  
+	SPR_TVIV,  
+	SPR_TV1U,  
+	SPR_TV1P,  
+	SPR_TVEG,  
+	SPR_TVMX,  
+	SPR_TVMY,  
+	SPR_TVGV,  
+	SPR_TVRC,  
+	SPR_TV1K,  
+	SPR_TVTK,  
+	SPR_TVFL,  
+	SPR_TVBB,  
+	SPR_TVZP,  
+
+
+	SPR_MISL,
+	SPR_LASR,  
+	SPR_LASF,  
+	SPR_TORP,  
+	SPR_ENRG,  
+	SPR_MINE,  
+	SPR_JBUL,  
+	SPR_TRLS,
+	SPR_CBLL,  
+	SPR_AROW,  
+	SPR_CFIR,  
+
+
+	SPR_LETR,
+
+
+	SPR_TUPL,
+	SPR_TUPF,
+
+
+	SPR_FWR1,
+	SPR_FWR2,  
+	SPR_FWR3,  
+	SPR_FWR4,
+	SPR_BUS1,  
+	SPR_BUS2,  
+	SPR_BUS3,  
+
+	SPR_TRE1,  
+	SPR_TRE2,  
+	SPR_TRE3,  
+	SPR_TRE4,  
+	SPR_TRE5,  
+	SPR_TRE6,  
+
+
+	SPR_THZP,  
+	SPR_FWR5,  
+	SPR_FWR6,  
+	SPR_THZT,  
+	SPR_ALRM,  
+
+
+	SPR_GARG,  
+	SPR_SEWE,  
+	SPR_DRIP,  
+	SPR_CORL,  
+	SPR_BCRY,  
+	SPR_KELP,  
+	SPR_ALGA,  
+	SPR_ALGB,  
+	SPR_DSTG,  
+	SPR_LIBE,  
+
+
+	SPR_CHAN,  
+	SPR_FLAM,  
+	SPR_ESTA,  
+	SPR_SMCH,  
+	SPR_BMCH,  
+	SPR_SMCE,  
+	SPR_BMCE,  
+	SPR_BSPB,  
+	SPR_YSPB,  
+	SPR_RSPB,  
+	SPR_SFBR,  
+	SPR_BFBR,  
+	SPR_BANR,  
+	SPR_PINE,  
+	SPR_CEZB,  
+	SPR_CNDL,  
+	SPR_FLMH,  
+	SPR_CTRC,  
+	SPR_CFLG,  
+	SPR_CSTA,  
+	SPR_CBBS,  
+	SPR_CABR,  
+
+
+	SPR_BTBL,  
+	SPR_STBL,  
+	SPR_CACT,  
+	SPR_WWSG,  
+	SPR_WWS2,  
+	SPR_WWS3,  
+	SPR_OILL,  
+	SPR_OILF,  
+	SPR_BARR,  
+	SPR_REMT,  
+	SPR_TAZD,  
+	SPR_ADST,  
+	SPR_MCRT,  
+	SPR_MCSP,  
+	SPR_SALD,  
+	SPR_TRAE,  
+	SPR_TRAI,  
+	SPR_STEA,  
+
+
+	SPR_FLME,  
+	SPR_DFLM,  
+	SPR_LFAL,  
+	SPR_JPLA,  
+	SPR_TFLO,  
+	SPR_WVIN,  
+
+
+
+
+
+
+	SPR_XMS1,  
+	SPR_XMS2,  
+	SPR_XMS3,  
+	SPR_XMS4,  
+	SPR_XMS5,  
+	SPR_XMS6,  
+	SPR_SNTT,  
+	SPR_SSTT,  
+	SPR_FHZI,  
+	SPR_ROSY,
+
+
+	SPR_PUMK,  
+	SPR_HHPL,  
+	SPR_SHRM,  
+	SPR_HHZM,  
+
+
+	SPR_BGAR,  
+	SPR_RCRY,  
+	SPR_CFLM,  
+
+
+	SPR_BSZ1,  
+	SPR_BSZ2,  
+	SPR_BSZ3,  
+
+	SPR_BST1,  
+	SPR_BST2,  
+	SPR_BST3,  
+	SPR_BST4,  
+	SPR_BST5,  
+	SPR_BST6,  
+	SPR_BSZ5,  
+	SPR_BSZ6,  
+	SPR_BSZ7,  
+	SPR_BSZ8,  
+
+
+	SPR_STLG,  
+	SPR_DBAL,  
+	SPR_GINE,  
+	SPR_PPAL,  
+
+
+	SPR_ARMA,  
+	SPR_ARMF,  
+	SPR_ARMB,  
+	SPR_WIND,  
+	SPR_MAGN,  
+	SPR_ELEM,  
+	SPR_FORC,  
+	SPR_PITY,  
+	SPR_FIRS,  
+	SPR_BUBS,  
+	SPR_ZAPS,  
+	SPR_IVSP,  
+	SPR_SSPK,  
+
+	SPR_GOAL,  
+
+
+	SPR_FBUB,  
+	SPR_FL01,  
+	SPR_FL02,  
+	SPR_FL03,  
+	SPR_FL04,  
+	SPR_FL05,  
+	SPR_FL06,  
+	SPR_FL07,  
+	SPR_FL08,  
+	SPR_FL09,  
+	SPR_FL10,  
+	SPR_FL11,  
+	SPR_FL12,  
+	SPR_FL13,  
+	SPR_FL14,  
+	SPR_FL15,  
+	SPR_FL16,  
+	SPR_FS01,  
+	SPR_FS02,  
+
+
+	SPR_FANS,  
+	SPR_STEM,  
+	SPR_BUMP,  
+	SPR_BLON,  
+	SPR_SPRY,  
+	SPR_SPRR,  
+	SPR_SPRB,  
+	SPR_YSPR,  
+	SPR_RSPR,  
+	SPR_BSPR,  
+	SPR_SSWY,  
+	SPR_SSWR,  
+	SPR_SSWB,  
+	SPR_BSTY,  
+	SPR_BSTR,  
+
+
+	SPR_RAIN,  
+	SPR_SNO1,  
+	SPR_SPLH,  
+	SPR_LSPL,  
+	SPR_SPLA,  
+	SPR_SMOK,
+	SPR_BUBL,  
+	SPR_WZAP,
+	SPR_DUST,  
+	SPR_FPRT,  
+	SPR_TFOG,  
+	SPR_SEED,  
+	SPR_PRTL,  
+
+
+	SPR_SCOR,  
+	SPR_DRWN,  
+	SPR_FLII,  
+	SPR_LCKN,  
+	SPR_TTAG,  
+	SPR_GFLG,  
+	SPR_FNSF,  
+
+	SPR_CORK,
+	SPR_LHRT,
+
+
+	SPR_RRNG,  
+	SPR_RNGB,  
+	SPR_RNGR,  
+	SPR_RNGI,  
+	SPR_RNGA,  
+	SPR_RNGE,  
+	SPR_RNGS,  
+	SPR_RNGG,  
+
+	SPR_PIKB,  
+	SPR_PIKR,  
+	SPR_PIKA,  
+	SPR_PIKE,  
+	SPR_PIKS,  
+	SPR_PIKG,  
+
+	SPR_TAUT,  
+	SPR_TGRE,  
+	SPR_TSCR,  
+
+
+	SPR_COIN,
+	SPR_CPRK,
+	SPR_GOOM,
+	SPR_BGOM,
+	SPR_FFWR,
+	SPR_FBLL,
+	SPR_SHLL,
+	SPR_PUMA,
+	SPR_HAMM,
+	SPR_KOOP,
+	SPR_BFLM,
+	SPR_MAXE,
+	SPR_MUS1,
+	SPR_MUS2,
+	SPR_TOAD,
+
+
+	SPR_NDRN,  
+	SPR_NSPK,  
+	SPR_NBMP,  
+	SPR_HOOP,  
+	SPR_NSCR,  
+	SPR_NPRU,  
+	SPR_CAPS,  
+	SPR_IDYA,  
+	SPR_NTPN,  
+	SPR_SHLP,  
+
+
+	SPR_PENG,
+	SPR_POPH,
+	SPR_HIVE,
+	SPR_BUMB,
+	SPR_BBUZ,
+	SPR_FMCE,
+	SPR_HMCE,
+	SPR_CACO,
+	SPR_BAL2,
+	SPR_SBOB,
+	SPR_SBFL,
+	SPR_SBSK,
+	SPR_HBAT,
+
+
+	SPR_SPRK,  
+	SPR_BOM1,  
+	SPR_BOM2,  
+	SPR_BOM3,  
+	SPR_BOM4,  
+	SPR_BMNB,  
+
+
+	SPR_ROIA,
+	SPR_ROIB,
+	SPR_ROIC,
+	SPR_ROID,
+	SPR_ROIE,
+	SPR_ROIF,
+	SPR_ROIG,
+	SPR_ROIH,
+	SPR_ROII,
+	SPR_ROIJ,
+	SPR_ROIK,
+	SPR_ROIL,
+	SPR_ROIM,
+	SPR_ROIN,
+	SPR_ROIO,
+	SPR_ROIP,
+
+
+	SPR_GFZD,  
+	SPR_BRIC,  
+	SPR_WDDB,  
+	SPR_BRIR,  
+	SPR_BRIB,
+	SPR_BRIY,
+
+
+	SPR_GWLG,
+	SPR_GWLR,
+
+
+	SPR_OLDK,
+
+	SPR_FIRSTFREESLOT,
+	SPR_LASTFREESLOT = SPR_FIRSTFREESLOT + NUMSPRITEFREESLOTS - 1,
+	NUMSPRITES
+} spritenum_t;
+
+typedef enum playersprite
+{
+	SPR2_STND = 0,
+	SPR2_WAIT,
+	SPR2_WALK,
+	SPR2_SKID,
+	SPR2_RUN ,
+	SPR2_DASH,
+	SPR2_PAIN,
+	SPR2_STUN,
+	SPR2_DEAD,
+	SPR2_DRWN,  
+	SPR2_ROLL,
+	SPR2_GASP,
+	SPR2_JUMP,
+	SPR2_SPNG,  
+	SPR2_FALL,
+	SPR2_EDGE,
+	SPR2_RIDE,
+
+	SPR2_SPIN,  
+
+	SPR2_FLY ,
+	SPR2_SWIM,
+	SPR2_TIRE,  
+
+	SPR2_GLID,  
+	SPR2_LAND,  
+	SPR2_CLNG,  
+	SPR2_CLMB,  
+
+	SPR2_FLT ,  
+	SPR2_FRUN,  
+
+	SPR2_BNCE,  
+
+	SPR2_FIRE,  
+
+	SPR2_TWIN,  
+
+	SPR2_MLEE,  
+	SPR2_MLEL,  
+
+	SPR2_TRNS,  
+
+	SPR2_NSTD,  
+	SPR2_NFLT,  
+	SPR2_NFLY,  
+	SPR2_NDRL,  
+	SPR2_NSTN,  
+	SPR2_NPUL,  
+	SPR2_NATK,  
+
+
+	SPR2_TAL0,
+	SPR2_TAL1,
+	SPR2_TAL2,
+	SPR2_TAL3,
+	SPR2_TAL4,
+	SPR2_TAL5,
+	SPR2_TAL6,
+	SPR2_TAL7,
+	SPR2_TAL8,
+	SPR2_TAL9,
+	SPR2_TALA,
+	SPR2_TALB,
+	SPR2_TALC,
+
+
+	SPR2_MSC0,
+	SPR2_MSC1,
+	SPR2_MSC2,
+	SPR2_MSC3,
+	SPR2_MSC4,
+	SPR2_MSC5,
+	SPR2_MSC6,
+	SPR2_MSC7,
+	SPR2_MSC8,
+	SPR2_MSC9,
+
+	SPR2_CNT1,  
+	SPR2_CNT2,  
+	SPR2_CNT3,  
+	SPR2_CNT4,  
+
+	SPR2_SIGN,  
+	SPR2_LIFE,  
+
+	SPR2_XTRA,  
+
+	SPR2_FIRSTFREESLOT,
+	SPR2_LASTFREESLOT = 1024,  
+	NUMPLAYERSPRITES
+} playersprite_t;
+
+enum
+{
+	XTRA_LIFEPIC,
+	XTRA_CHARSEL,
+	XTRA_CONTINUE,
+	XTRA_ENDING
+};
+
+typedef enum state
+{
+	S_NULL,
+	S_UNKNOWN,
+	S_INVISIBLE,  
+
+	S_SPAWNSTATE,
+	S_SEESTATE,
+	S_MELEESTATE,
+	S_MISSILESTATE,
+	S_DEATHSTATE,
+	S_XDEATHSTATE,
+	S_RAISESTATE,
+
+
+	S_THOK,
+
+
+	S_PLAY_STND,
+	S_PLAY_WAIT,
+	S_PLAY_WALK,
+	S_PLAY_SKID,
+	S_PLAY_RUN,
+	S_PLAY_DASH,
+	S_PLAY_PAIN,
+	S_PLAY_STUN,
+	S_PLAY_DEAD,
+	S_PLAY_DRWN,
+	S_PLAY_ROLL,
+	S_PLAY_GASP,
+	S_PLAY_JUMP,
+	S_PLAY_SPRING,
+	S_PLAY_FALL,
+	S_PLAY_EDGE,
+	S_PLAY_RIDE,
+
+
+	S_PLAY_SPINDASH,
+
+
+	S_PLAY_FLY,
+	S_PLAY_SWIM,
+	S_PLAY_FLY_TIRED,
+
+
+	S_PLAY_GLIDE,
+	S_PLAY_GLIDE_LANDING,
+	S_PLAY_CLING,
+	S_PLAY_CLIMB,
+
+
+	S_PLAY_FLOAT,
+	S_PLAY_FLOAT_RUN,
+
+
+	S_PLAY_BOUNCE,
+	S_PLAY_BOUNCE_LANDING,
+
+
+	S_PLAY_FIRE,
+	S_PLAY_FIRE_FINISH,
+
+
+	S_PLAY_TWINSPIN,
+
+
+	S_PLAY_MELEE,
+	S_PLAY_MELEE_FINISH,
+	S_PLAY_MELEE_LANDING,
+
+
+	S_PLAY_SUPER_TRANS1,
+	S_PLAY_SUPER_TRANS2,
+	S_PLAY_SUPER_TRANS3,
+	S_PLAY_SUPER_TRANS4,
+	S_PLAY_SUPER_TRANS5,
+	S_PLAY_SUPER_TRANS6,
+
+
+	S_OBJPLACE_DUMMY,
+
+
+	S_PLAY_BOX1,
+	S_PLAY_BOX2,
+	S_PLAY_ICON1,
+	S_PLAY_ICON2,
+	S_PLAY_ICON3,
+
+
+	S_PLAY_SIGN,
+
+
+	S_PLAY_NIGHTS_TRANS1,
+	S_PLAY_NIGHTS_TRANS2,
+	S_PLAY_NIGHTS_TRANS3,
+	S_PLAY_NIGHTS_TRANS4,
+	S_PLAY_NIGHTS_TRANS5,
+	S_PLAY_NIGHTS_TRANS6,
+	S_PLAY_NIGHTS_STAND,
+	S_PLAY_NIGHTS_FLOAT,
+	S_PLAY_NIGHTS_FLY,
+	S_PLAY_NIGHTS_DRILL,
+	S_PLAY_NIGHTS_STUN,
+	S_PLAY_NIGHTS_PULL,
+	S_PLAY_NIGHTS_ATTACK,
+
+
+	S_TAILSOVERLAY_STAND,
+	S_TAILSOVERLAY_0DEGREES,
+	S_TAILSOVERLAY_PLUS30DEGREES,
+	S_TAILSOVERLAY_PLUS60DEGREES,
+	S_TAILSOVERLAY_MINUS30DEGREES,
+	S_TAILSOVERLAY_MINUS60DEGREES,
+	S_TAILSOVERLAY_RUN,
+	S_TAILSOVERLAY_FLY,
+	S_TAILSOVERLAY_TIRE,
+	S_TAILSOVERLAY_PAIN,
+	S_TAILSOVERLAY_GASP,
+	S_TAILSOVERLAY_EDGE,
+	S_TAILSOVERLAY_DASH,
+
+
+	S_JETFUMEFLASH,
+
+
+	S_POSS_STND,
+	S_POSS_RUN1,
+	S_POSS_RUN2,
+	S_POSS_RUN3,
+	S_POSS_RUN4,
+	S_POSS_RUN5,
+	S_POSS_RUN6,
+
+
+	S_SPOS_STND,
+	S_SPOS_RUN1,
+	S_SPOS_RUN2,
+	S_SPOS_RUN3,
+	S_SPOS_RUN4,
+	S_SPOS_RUN5,
+	S_SPOS_RUN6,
+
+
+	S_FISH1,
+	S_FISH2,
+	S_FISH3,
+	S_FISH4,
+
+
+	S_BUZZLOOK1,
+	S_BUZZLOOK2,
+	S_BUZZFLY1,
+	S_BUZZFLY2,
+
+
+	S_RBUZZLOOK1,
+	S_RBUZZLOOK2,
+	S_RBUZZFLY1,
+	S_RBUZZFLY2,
+
+
+	S_JETBLOOK1,
+	S_JETBLOOK2,
+	S_JETBZOOM1,
+	S_JETBZOOM2,
+
+
+	S_JETGLOOK1,
+	S_JETGLOOK2,
+	S_JETGZOOM1,
+	S_JETGZOOM2,
+	S_JETGSHOOT1,
+	S_JETGSHOOT2,
+
+
+	S_CCOMMAND1,
+	S_CCOMMAND2,
+	S_CCOMMAND3,
+	S_CCOMMAND4,
+
+
+	S_DETON1,
+	S_DETON2,
+	S_DETON3,
+	S_DETON4,
+	S_DETON5,
+	S_DETON6,
+	S_DETON7,
+	S_DETON8,
+	S_DETON9,
+	S_DETON10,
+	S_DETON11,
+	S_DETON12,
+	S_DETON13,
+	S_DETON14,
+	S_DETON15,
+
+
+	S_SKIM1,
+	S_SKIM2,
+	S_SKIM3,
+	S_SKIM4,
+
+
+	S_TURRET,
+	S_TURRETFIRE,
+	S_TURRETSHOCK1,
+	S_TURRETSHOCK2,
+	S_TURRETSHOCK3,
+	S_TURRETSHOCK4,
+	S_TURRETSHOCK5,
+	S_TURRETSHOCK6,
+	S_TURRETSHOCK7,
+	S_TURRETSHOCK8,
+	S_TURRETSHOCK9,
+
+
+	S_TURRETLOOK,
+	S_TURRETSEE,
+	S_TURRETPOPUP1,
+	S_TURRETPOPUP2,
+	S_TURRETPOPUP3,
+	S_TURRETPOPUP4,
+	S_TURRETPOPUP5,
+	S_TURRETPOPUP6,
+	S_TURRETPOPUP7,
+	S_TURRETPOPUP8,
+	S_TURRETSHOOT,
+	S_TURRETPOPDOWN1,
+	S_TURRETPOPDOWN2,
+	S_TURRETPOPDOWN3,
+	S_TURRETPOPDOWN4,
+	S_TURRETPOPDOWN5,
+	S_TURRETPOPDOWN6,
+	S_TURRETPOPDOWN7,
+	S_TURRETPOPDOWN8,
+
+
+	S_SPINCUSHION_LOOK,
+	S_SPINCUSHION_CHASE1,
+	S_SPINCUSHION_CHASE2,
+	S_SPINCUSHION_CHASE3,
+	S_SPINCUSHION_CHASE4,
+	S_SPINCUSHION_AIM1,
+	S_SPINCUSHION_AIM2,
+	S_SPINCUSHION_AIM3,
+	S_SPINCUSHION_AIM4,
+	S_SPINCUSHION_AIM5,
+	S_SPINCUSHION_SPIN1,
+	S_SPINCUSHION_SPIN2,
+	S_SPINCUSHION_SPIN3,
+	S_SPINCUSHION_SPIN4,
+	S_SPINCUSHION_STOP1,
+	S_SPINCUSHION_STOP2,
+	S_SPINCUSHION_STOP3,
+	S_SPINCUSHION_STOP4,
+
+
+	S_CRUSHSTACEAN_ROAM1,
+	S_CRUSHSTACEAN_ROAM2,
+	S_CRUSHSTACEAN_ROAM3,
+	S_CRUSHSTACEAN_ROAM4,
+	S_CRUSHSTACEAN_ROAMPAUSE,
+	S_CRUSHSTACEAN_PUNCH1,
+	S_CRUSHSTACEAN_PUNCH2,
+	S_CRUSHCLAW_AIM,
+	S_CRUSHCLAW_OUT,
+	S_CRUSHCLAW_STAY,
+	S_CRUSHCLAW_IN,
+	S_CRUSHCLAW_WAIT,
+	S_CRUSHCHAIN,
+
+
+	S_BANPYURA_ROAM1,
+	S_BANPYURA_ROAM2,
+	S_BANPYURA_ROAM3,
+	S_BANPYURA_ROAM4,
+	S_BANPYURA_ROAMPAUSE,
+	S_CDIAG1,
+	S_CDIAG2,
+	S_CDIAG3,
+	S_CDIAG4,
+	S_CDIAG5,
+	S_CDIAG6,
+	S_CDIAG7,
+	S_CDIAG8,
+
+
+	S_JETJAW_ROAM1,
+	S_JETJAW_ROAM2,
+	S_JETJAW_ROAM3,
+	S_JETJAW_ROAM4,
+	S_JETJAW_ROAM5,
+	S_JETJAW_ROAM6,
+	S_JETJAW_ROAM7,
+	S_JETJAW_ROAM8,
+	S_JETJAW_CHOMP1,
+	S_JETJAW_CHOMP2,
+	S_JETJAW_CHOMP3,
+	S_JETJAW_CHOMP4,
+	S_JETJAW_CHOMP5,
+	S_JETJAW_CHOMP6,
+	S_JETJAW_CHOMP7,
+	S_JETJAW_CHOMP8,
+	S_JETJAW_CHOMP9,
+	S_JETJAW_CHOMP10,
+	S_JETJAW_CHOMP11,
+	S_JETJAW_CHOMP12,
+	S_JETJAW_CHOMP13,
+	S_JETJAW_CHOMP14,
+	S_JETJAW_CHOMP15,
+	S_JETJAW_CHOMP16,
+	S_JETJAW_SOUND,
+
+
+	S_SNAILER1,
+	S_SNAILER_FLICKY,
+
+
+	S_VULTURE_STND,
+	S_VULTURE_DRIFT,
+	S_VULTURE_ZOOM1,
+	S_VULTURE_ZOOM2,
+	S_VULTURE_STUNNED,
+
+
+	S_POINTY1,
+	S_POINTYBALL1,
+
+
+	S_ROBOHOOD_LOOK,
+	S_ROBOHOOD_STAND,
+	S_ROBOHOOD_FIRE1,
+	S_ROBOHOOD_FIRE2,
+	S_ROBOHOOD_JUMP1,
+	S_ROBOHOOD_JUMP2,
+	S_ROBOHOOD_JUMP3,
+
+
+	S_FACESTABBER_STND1,
+	S_FACESTABBER_STND2,
+	S_FACESTABBER_STND3,
+	S_FACESTABBER_STND4,
+	S_FACESTABBER_STND5,
+	S_FACESTABBER_STND6,
+	S_FACESTABBER_CHARGE1,
+	S_FACESTABBER_CHARGE2,
+	S_FACESTABBER_CHARGE3,
+	S_FACESTABBER_CHARGE4,
+	S_FACESTABBER_PAIN,
+	S_FACESTABBER_DIE1,
+	S_FACESTABBER_DIE2,
+	S_FACESTABBER_DIE3,
+	S_FACESTABBERSPEAR,
+
+
+	S_EGGGUARD_STND,
+	S_EGGGUARD_WALK1,
+	S_EGGGUARD_WALK2,
+	S_EGGGUARD_WALK3,
+	S_EGGGUARD_WALK4,
+	S_EGGGUARD_MAD1,
+	S_EGGGUARD_MAD2,
+	S_EGGGUARD_MAD3,
+	S_EGGGUARD_RUN1,
+	S_EGGGUARD_RUN2,
+	S_EGGGUARD_RUN3,
+	S_EGGGUARD_RUN4,
+
+
+	S_EGGSHIELD,
+	S_EGGSHIELDBREAK,
+
+
+	S_SNAPPER_SPAWN,
+	S_SNAPPER_SPAWN2,
+	S_GSNAPPER_STND,
+	S_GSNAPPER1,
+	S_GSNAPPER2,
+	S_GSNAPPER3,
+	S_GSNAPPER4,
+	S_SNAPPER_XPLD,
+	S_SNAPPER_LEG,
+	S_SNAPPER_LEGRAISE,
+	S_SNAPPER_HEAD,
+
+
+	S_MINUS_INIT,
+	S_MINUS_STND,
+	S_MINUS_DIGGING1,
+	S_MINUS_DIGGING2,
+	S_MINUS_DIGGING3,
+	S_MINUS_DIGGING4,
+	S_MINUS_BURST0,
+	S_MINUS_BURST1,
+	S_MINUS_BURST2,
+	S_MINUS_BURST3,
+	S_MINUS_BURST4,
+	S_MINUS_BURST5,
+	S_MINUS_POPUP,
+	S_MINUS_AERIAL1,
+	S_MINUS_AERIAL2,
+	S_MINUS_AERIAL3,
+	S_MINUS_AERIAL4,
+
+
+	S_MINUSDIRT1,
+	S_MINUSDIRT2,
+	S_MINUSDIRT3,
+	S_MINUSDIRT4,
+	S_MINUSDIRT5,
+	S_MINUSDIRT6,
+	S_MINUSDIRT7,
+
+
+	S_SSHELL_STND,
+	S_SSHELL_RUN1,
+	S_SSHELL_RUN2,
+	S_SSHELL_RUN3,
+	S_SSHELL_RUN4,
+	S_SSHELL_SPRING1,
+	S_SSHELL_SPRING2,
+	S_SSHELL_SPRING3,
+	S_SSHELL_SPRING4,
+
+
+	S_YSHELL_STND,
+	S_YSHELL_RUN1,
+	S_YSHELL_RUN2,
+	S_YSHELL_RUN3,
+	S_YSHELL_RUN4,
+	S_YSHELL_SPRING1,
+	S_YSHELL_SPRING2,
+	S_YSHELL_SPRING3,
+	S_YSHELL_SPRING4,
+
+
+	S_UNIDUS_STND,
+	S_UNIDUS_RUN,
+	S_UNIDUS_BALL,
+
+
+	S_CANARIVORE_LOOK,
+	S_CANARIVORE_AWAKEN1,
+	S_CANARIVORE_AWAKEN2,
+	S_CANARIVORE_AWAKEN3,
+	S_CANARIVORE_GAS1,
+	S_CANARIVORE_GAS2,
+	S_CANARIVORE_GAS3,
+	S_CANARIVORE_GAS4,
+	S_CANARIVORE_GAS5,
+	S_CANARIVORE_GASREPEAT,
+	S_CANARIVORE_CLOSE1,
+	S_CANARIVORE_CLOSE2,
+	S_CANARIVOREGAS_1,
+	S_CANARIVOREGAS_2,
+	S_CANARIVOREGAS_3,
+	S_CANARIVOREGAS_4,
+	S_CANARIVOREGAS_5,
+	S_CANARIVOREGAS_6,
+	S_CANARIVOREGAS_7,
+	S_CANARIVOREGAS_8,
+
+
+	S_PYREFLY_FLY,
+	S_PYREFLY_BURN,
+	S_PYREFIRE1,
+	S_PYREFIRE2,
+
+
+	S_PTERABYTESPAWNER,
+	S_PTERABYTEWAYPOINT,
+	S_PTERABYTE_FLY1,
+	S_PTERABYTE_FLY2,
+	S_PTERABYTE_FLY3,
+	S_PTERABYTE_FLY4,
+	S_PTERABYTE_SWOOPDOWN,
+	S_PTERABYTE_SWOOPUP,
+
+
+	S_DRAGONBOMBER,
+	S_DRAGONWING1,
+	S_DRAGONWING2,
+	S_DRAGONWING3,
+	S_DRAGONWING4,
+	S_DRAGONTAIL_LOADED,
+	S_DRAGONTAIL_EMPTY,
+	S_DRAGONTAIL_EMPTYLOOP,
+	S_DRAGONTAIL_RELOAD,
+	S_DRAGONMINE,
+	S_DRAGONMINE_LAND1,
+	S_DRAGONMINE_LAND2,
+	S_DRAGONMINE_SLOWFLASH1,
+	S_DRAGONMINE_SLOWFLASH2,
+	S_DRAGONMINE_SLOWLOOP,
+	S_DRAGONMINE_FASTFLASH1,
+	S_DRAGONMINE_FASTFLASH2,
+	S_DRAGONMINE_FASTLOOP,
+
+
+	S_BOSSEXPLODE,
+
+
+	S_SONIC3KBOSSEXPLOSION1,
+	S_SONIC3KBOSSEXPLOSION2,
+	S_SONIC3KBOSSEXPLOSION3,
+	S_SONIC3KBOSSEXPLOSION4,
+	S_SONIC3KBOSSEXPLOSION5,
+	S_SONIC3KBOSSEXPLOSION6,
+
+	S_JETFUME1,
+
+
+	S_EGGMOBILE_STND,
+	S_EGGMOBILE_ROFL,
+	S_EGGMOBILE_LATK1,
+	S_EGGMOBILE_LATK2,
+	S_EGGMOBILE_LATK3,
+	S_EGGMOBILE_LATK4,
+	S_EGGMOBILE_LATK5,
+	S_EGGMOBILE_LATK6,
+	S_EGGMOBILE_LATK7,
+	S_EGGMOBILE_LATK8,
+	S_EGGMOBILE_LATK9,
+	S_EGGMOBILE_RATK1,
+	S_EGGMOBILE_RATK2,
+	S_EGGMOBILE_RATK3,
+	S_EGGMOBILE_RATK4,
+	S_EGGMOBILE_RATK5,
+	S_EGGMOBILE_RATK6,
+	S_EGGMOBILE_RATK7,
+	S_EGGMOBILE_RATK8,
+	S_EGGMOBILE_RATK9,
+	S_EGGMOBILE_PANIC1,
+	S_EGGMOBILE_PANIC2,
+	S_EGGMOBILE_PANIC3,
+	S_EGGMOBILE_PANIC4,
+	S_EGGMOBILE_PANIC5,
+	S_EGGMOBILE_PANIC6,
+	S_EGGMOBILE_PANIC7,
+	S_EGGMOBILE_PANIC8,
+	S_EGGMOBILE_PANIC9,
+	S_EGGMOBILE_PANIC10,
+	S_EGGMOBILE_PANIC11,
+	S_EGGMOBILE_PANIC12,
+	S_EGGMOBILE_PANIC13,
+	S_EGGMOBILE_PANIC14,
+	S_EGGMOBILE_PANIC15,
+	S_EGGMOBILE_PAIN,
+	S_EGGMOBILE_PAIN2,
+	S_EGGMOBILE_DIE1,
+	S_EGGMOBILE_DIE2,
+	S_EGGMOBILE_DIE3,
+	S_EGGMOBILE_DIE4,
+	S_EGGMOBILE_FLEE1,
+	S_EGGMOBILE_FLEE2,
+	S_EGGMOBILE_BALL,
+	S_EGGMOBILE_TARGET,
+
+	S_BOSSEGLZ1,
+	S_BOSSEGLZ2,
+
+
+	S_EGGMOBILE2_STND,
+	S_EGGMOBILE2_POGO1,
+	S_EGGMOBILE2_POGO2,
+	S_EGGMOBILE2_POGO3,
+	S_EGGMOBILE2_POGO4,
+	S_EGGMOBILE2_POGO5,
+	S_EGGMOBILE2_POGO6,
+	S_EGGMOBILE2_POGO7,
+	S_EGGMOBILE2_PAIN,
+	S_EGGMOBILE2_PAIN2,
+	S_EGGMOBILE2_DIE1,
+	S_EGGMOBILE2_DIE2,
+	S_EGGMOBILE2_DIE3,
+	S_EGGMOBILE2_DIE4,
+	S_EGGMOBILE2_FLEE1,
+	S_EGGMOBILE2_FLEE2,
+
+	S_BOSSTANK1,
+	S_BOSSTANK2,
+	S_BOSSSPIGOT,
+
+
+	S_GOOP1,
+	S_GOOP2,
+	S_GOOP3,
+	S_GOOPTRAIL,
+
+
+	S_EGGMOBILE3_STND,
+	S_EGGMOBILE3_SHOCK,
+	S_EGGMOBILE3_ATK1,
+	S_EGGMOBILE3_ATK2,
+	S_EGGMOBILE3_ATK3A,
+	S_EGGMOBILE3_ATK3B,
+	S_EGGMOBILE3_ATK3C,
+	S_EGGMOBILE3_ATK3D,
+	S_EGGMOBILE3_ATK4,
+	S_EGGMOBILE3_ATK5,
+	S_EGGMOBILE3_ROFL,
+	S_EGGMOBILE3_PAIN,
+	S_EGGMOBILE3_PAIN2,
+	S_EGGMOBILE3_DIE1,
+	S_EGGMOBILE3_DIE2,
+	S_EGGMOBILE3_DIE3,
+	S_EGGMOBILE3_DIE4,
+	S_EGGMOBILE3_FLEE1,
+	S_EGGMOBILE3_FLEE2,
+
+
+	S_FAKEMOBILE_INIT,
+	S_FAKEMOBILE,
+	S_FAKEMOBILE_ATK1,
+	S_FAKEMOBILE_ATK2,
+	S_FAKEMOBILE_ATK3A,
+	S_FAKEMOBILE_ATK3B,
+	S_FAKEMOBILE_ATK3C,
+	S_FAKEMOBILE_ATK3D,
+	S_FAKEMOBILE_DIE1,
+	S_FAKEMOBILE_DIE2,
+
+	S_BOSSSEBH1,
+	S_BOSSSEBH2,
+
+
+	S_SHOCKWAVE1,
+	S_SHOCKWAVE2,
+
+
+	S_EGGMOBILE4_STND,
+	S_EGGMOBILE4_LATK1,
+	S_EGGMOBILE4_LATK2,
+	S_EGGMOBILE4_LATK3,
+	S_EGGMOBILE4_LATK4,
+	S_EGGMOBILE4_LATK5,
+	S_EGGMOBILE4_LATK6,
+	S_EGGMOBILE4_RATK1,
+	S_EGGMOBILE4_RATK2,
+	S_EGGMOBILE4_RATK3,
+	S_EGGMOBILE4_RATK4,
+	S_EGGMOBILE4_RATK5,
+	S_EGGMOBILE4_RATK6,
+	S_EGGMOBILE4_RAISE1,
+	S_EGGMOBILE4_RAISE2,
+	S_EGGMOBILE4_PAIN1,
+	S_EGGMOBILE4_PAIN2,
+	S_EGGMOBILE4_DIE1,
+	S_EGGMOBILE4_DIE2,
+	S_EGGMOBILE4_DIE3,
+	S_EGGMOBILE4_DIE4,
+	S_EGGMOBILE4_FLEE1,
+	S_EGGMOBILE4_FLEE2,
+	S_EGGMOBILE4_MACE,
+	S_EGGMOBILE4_MACE_DIE1,
+	S_EGGMOBILE4_MACE_DIE2,
+	S_EGGMOBILE4_MACE_DIE3,
+
+
+	S_JETFLAME,
+
+
+	S_EGGROBO1_STND,
+	S_EGGROBO1_BSLAP1,
+	S_EGGROBO1_BSLAP2,
+	S_EGGROBO1_PISSED,
+
+
+	S_EGGROBOJET,
+
+
+	S_FANG_SETUP,
+	S_FANG_INTRO0,
+	S_FANG_INTRO1,
+	S_FANG_INTRO2,
+	S_FANG_INTRO3,
+	S_FANG_INTRO4,
+	S_FANG_INTRO5,
+	S_FANG_INTRO6,
+	S_FANG_INTRO7,
+	S_FANG_INTRO8,
+	S_FANG_INTRO9,
+	S_FANG_INTRO10,
+	S_FANG_INTRO11,
+	S_FANG_INTRO12,
+	S_FANG_CLONE1,
+	S_FANG_CLONE2,
+	S_FANG_CLONE3,
+	S_FANG_CLONE4,
+	S_FANG_IDLE0,
+	S_FANG_IDLE1,
+	S_FANG_IDLE2,
+	S_FANG_IDLE3,
+	S_FANG_IDLE4,
+	S_FANG_IDLE5,
+	S_FANG_IDLE6,
+	S_FANG_IDLE7,
+	S_FANG_IDLE8,
+	S_FANG_PAIN1,
+	S_FANG_PAIN2,
+	S_FANG_PATHINGSTART1,
+	S_FANG_PATHINGSTART2,
+	S_FANG_PATHING,
+	S_FANG_BOUNCE1,
+	S_FANG_BOUNCE2,
+	S_FANG_BOUNCE3,
+	S_FANG_BOUNCE4,
+	S_FANG_FALL1,
+	S_FANG_FALL2,
+	S_FANG_CHECKPATH1,
+	S_FANG_CHECKPATH2,
+	S_FANG_PATHINGCONT1,
+	S_FANG_PATHINGCONT2,
+	S_FANG_PATHINGCONT3,
+	S_FANG_SKID1,
+	S_FANG_SKID2,
+	S_FANG_SKID3,
+	S_FANG_CHOOSEATTACK,
+	S_FANG_FIRESTART1,
+	S_FANG_FIRESTART2,
+	S_FANG_FIRE1,
+	S_FANG_FIRE2,
+	S_FANG_FIRE3,
+	S_FANG_FIREREPEAT,
+	S_FANG_LOBSHOT0,
+	S_FANG_LOBSHOT1,
+	S_FANG_LOBSHOT2,
+	S_FANG_LOBSHOT3,
+	S_FANG_WAIT1,
+	S_FANG_WAIT2,
+	S_FANG_WALLHIT,
+	S_FANG_PINCHPATHINGSTART1,
+	S_FANG_PINCHPATHINGSTART2,
+	S_FANG_PINCHPATHING,
+	S_FANG_PINCHBOUNCE0,
+	S_FANG_PINCHBOUNCE1,
+	S_FANG_PINCHBOUNCE2,
+	S_FANG_PINCHBOUNCE3,
+	S_FANG_PINCHBOUNCE4,
+	S_FANG_PINCHFALL0,
+	S_FANG_PINCHFALL1,
+	S_FANG_PINCHFALL2,
+	S_FANG_PINCHSKID1,
+	S_FANG_PINCHSKID2,
+	S_FANG_PINCHLOBSHOT0,
+	S_FANG_PINCHLOBSHOT1,
+	S_FANG_PINCHLOBSHOT2,
+	S_FANG_PINCHLOBSHOT3,
+	S_FANG_PINCHLOBSHOT4,
+	S_FANG_PINCHLOBSHOT5,
+	S_FANG_DIE1,
+	S_FANG_DIE2,
+	S_FANG_DIE3,
+	S_FANG_DIE4,
+	S_FANG_DIE5,
+	S_FANG_DIE6,
+	S_FANG_DIE7,
+	S_FANG_DIE8,
+	S_FANG_FLEEPATHING1,
+	S_FANG_FLEEPATHING2,
+	S_FANG_FLEEBOUNCE1,
+	S_FANG_FLEEBOUNCE2,
+	S_FANG_KO,
+
+	S_BROKENROBOTRANDOM,
+	S_BROKENROBOTA,
+	S_BROKENROBOTB,
+	S_BROKENROBOTC,
+	S_BROKENROBOTD,
+	S_BROKENROBOTE,
+	S_BROKENROBOTF,
+
+	S_ALART1,
+	S_ALART2,
+
+	S_VWREF,
+	S_VWREB,
+
+	S_PROJECTORLIGHT1,
+	S_PROJECTORLIGHT2,
+	S_PROJECTORLIGHT3,
+	S_PROJECTORLIGHT4,
+	S_PROJECTORLIGHT5,
+
+	S_FBOMB1,
+	S_FBOMB2,
+	S_FBOMB_EXPL1,
+	S_FBOMB_EXPL2,
+	S_FBOMB_EXPL3,
+	S_FBOMB_EXPL4,
+	S_FBOMB_EXPL5,
+	S_FBOMB_EXPL6,
+	S_TNTDUST_1,
+	S_TNTDUST_2,
+	S_TNTDUST_3,
+	S_TNTDUST_4,
+	S_TNTDUST_5,
+	S_TNTDUST_6,
+	S_TNTDUST_7,
+	S_TNTDUST_8,
+	S_FSGNA,
+	S_FSGNB,
+	S_FSGNC,
+	S_FSGND,
+
+
+	S_BLACKEGG_STND,
+	S_BLACKEGG_STND2,
+	S_BLACKEGG_WALK1,
+	S_BLACKEGG_WALK2,
+	S_BLACKEGG_WALK3,
+	S_BLACKEGG_WALK4,
+	S_BLACKEGG_WALK5,
+	S_BLACKEGG_WALK6,
+	S_BLACKEGG_SHOOT1,
+	S_BLACKEGG_SHOOT2,
+	S_BLACKEGG_PAIN1,
+	S_BLACKEGG_PAIN2,
+	S_BLACKEGG_PAIN3,
+	S_BLACKEGG_PAIN4,
+	S_BLACKEGG_PAIN5,
+	S_BLACKEGG_PAIN6,
+	S_BLACKEGG_PAIN7,
+	S_BLACKEGG_PAIN8,
+	S_BLACKEGG_PAIN9,
+	S_BLACKEGG_PAIN10,
+	S_BLACKEGG_PAIN11,
+	S_BLACKEGG_PAIN12,
+	S_BLACKEGG_PAIN13,
+	S_BLACKEGG_PAIN14,
+	S_BLACKEGG_PAIN15,
+	S_BLACKEGG_PAIN16,
+	S_BLACKEGG_PAIN17,
+	S_BLACKEGG_PAIN18,
+	S_BLACKEGG_PAIN19,
+	S_BLACKEGG_PAIN20,
+	S_BLACKEGG_PAIN21,
+	S_BLACKEGG_PAIN22,
+	S_BLACKEGG_PAIN23,
+	S_BLACKEGG_PAIN24,
+	S_BLACKEGG_PAIN25,
+	S_BLACKEGG_PAIN26,
+	S_BLACKEGG_PAIN27,
+	S_BLACKEGG_PAIN28,
+	S_BLACKEGG_PAIN29,
+	S_BLACKEGG_PAIN30,
+	S_BLACKEGG_PAIN31,
+	S_BLACKEGG_PAIN32,
+	S_BLACKEGG_PAIN33,
+	S_BLACKEGG_PAIN34,
+	S_BLACKEGG_PAIN35,
+	S_BLACKEGG_HITFACE1,
+	S_BLACKEGG_HITFACE2,
+	S_BLACKEGG_HITFACE3,
+	S_BLACKEGG_HITFACE4,
+	S_BLACKEGG_DIE1,
+	S_BLACKEGG_DIE2,
+	S_BLACKEGG_DIE3,
+	S_BLACKEGG_DIE4,
+	S_BLACKEGG_DIE5,
+	S_BLACKEGG_MISSILE1,
+	S_BLACKEGG_MISSILE2,
+	S_BLACKEGG_MISSILE3,
+	S_BLACKEGG_GOOP,
+	S_BLACKEGG_JUMP1,
+	S_BLACKEGG_JUMP2,
+	S_BLACKEGG_DESTROYPLAT1,
+	S_BLACKEGG_DESTROYPLAT2,
+	S_BLACKEGG_DESTROYPLAT3,
+
+	S_BLACKEGG_HELPER,  
+
+	S_BLACKEGG_GOOP1,
+	S_BLACKEGG_GOOP2,
+	S_BLACKEGG_GOOP3,
+	S_BLACKEGG_GOOP4,
+	S_BLACKEGG_GOOP5,
+	S_BLACKEGG_GOOP6,
+	S_BLACKEGG_GOOP7,
+
+	S_BLACKEGG_MISSILE,
+
+
+	S_CYBRAKDEMON_IDLE,
+	S_CYBRAKDEMON_WALK1,
+	S_CYBRAKDEMON_WALK2,
+	S_CYBRAKDEMON_WALK3,
+	S_CYBRAKDEMON_WALK4,
+	S_CYBRAKDEMON_WALK5,
+	S_CYBRAKDEMON_WALK6,
+	S_CYBRAKDEMON_CHOOSE_ATTACK1,
+	S_CYBRAKDEMON_MISSILE_ATTACK1,  
+	S_CYBRAKDEMON_MISSILE_ATTACK2,  
+	S_CYBRAKDEMON_MISSILE_ATTACK3,  
+	S_CYBRAKDEMON_MISSILE_ATTACK4,  
+	S_CYBRAKDEMON_MISSILE_ATTACK5,  
+	S_CYBRAKDEMON_MISSILE_ATTACK6,  
+	S_CYBRAKDEMON_FLAME_ATTACK1,  
+	S_CYBRAKDEMON_FLAME_ATTACK2,  
+	S_CYBRAKDEMON_FLAME_ATTACK3,  
+	S_CYBRAKDEMON_FLAME_ATTACK4,  
+	S_CYBRAKDEMON_CHOOSE_ATTACK2,
+	S_CYBRAKDEMON_VILE_ATTACK1,
+	S_CYBRAKDEMON_VILE_ATTACK2,
+	S_CYBRAKDEMON_VILE_ATTACK3,
+	S_CYBRAKDEMON_VILE_ATTACK4,
+	S_CYBRAKDEMON_VILE_ATTACK5,
+	S_CYBRAKDEMON_VILE_ATTACK6,
+	S_CYBRAKDEMON_NAPALM_ATTACK1,
+	S_CYBRAKDEMON_NAPALM_ATTACK2,
+	S_CYBRAKDEMON_NAPALM_ATTACK3,
+	S_CYBRAKDEMON_FINISH_ATTACK1,  
+	S_CYBRAKDEMON_FINISH_ATTACK2,  
+	S_CYBRAKDEMON_PAIN1,
+	S_CYBRAKDEMON_PAIN2,
+	S_CYBRAKDEMON_PAIN3,
+	S_CYBRAKDEMON_DIE1,
+	S_CYBRAKDEMON_DIE2,
+	S_CYBRAKDEMON_DIE3,
+	S_CYBRAKDEMON_DIE4,
+	S_CYBRAKDEMON_DIE5,
+	S_CYBRAKDEMON_DIE6,
+	S_CYBRAKDEMON_DIE7,
+	S_CYBRAKDEMON_DIE8,
+	S_CYBRAKDEMON_DEINVINCIBLERIZE,
+	S_CYBRAKDEMON_INVINCIBLERIZE,
+
+	S_CYBRAKDEMONMISSILE,
+	S_CYBRAKDEMONMISSILE_EXPLODE1,
+	S_CYBRAKDEMONMISSILE_EXPLODE2,
+	S_CYBRAKDEMONMISSILE_EXPLODE3,
+
+	S_CYBRAKDEMONFLAMESHOT_FLY1,
+	S_CYBRAKDEMONFLAMESHOT_FLY2,
+	S_CYBRAKDEMONFLAMESHOT_FLY3,
+	S_CYBRAKDEMONFLAMESHOT_DIE,
+
+	S_CYBRAKDEMONFLAMEREST,
+
+	S_CYBRAKDEMONELECTRICBARRIER_INIT1,
+	S_CYBRAKDEMONELECTRICBARRIER_INIT2,
+	S_CYBRAKDEMONELECTRICBARRIER_PLAYSOUND,
+	S_CYBRAKDEMONELECTRICBARRIER1,
+	S_CYBRAKDEMONELECTRICBARRIER2,
+	S_CYBRAKDEMONELECTRICBARRIER3,
+	S_CYBRAKDEMONELECTRICBARRIER4,
+	S_CYBRAKDEMONELECTRICBARRIER5,
+	S_CYBRAKDEMONELECTRICBARRIER6,
+	S_CYBRAKDEMONELECTRICBARRIER7,
+	S_CYBRAKDEMONELECTRICBARRIER8,
+	S_CYBRAKDEMONELECTRICBARRIER9,
+	S_CYBRAKDEMONELECTRICBARRIER10,
+	S_CYBRAKDEMONELECTRICBARRIER11,
+	S_CYBRAKDEMONELECTRICBARRIER12,
+	S_CYBRAKDEMONELECTRICBARRIER13,
+	S_CYBRAKDEMONELECTRICBARRIER14,
+	S_CYBRAKDEMONELECTRICBARRIER15,
+	S_CYBRAKDEMONELECTRICBARRIER16,
+	S_CYBRAKDEMONELECTRICBARRIER17,
+	S_CYBRAKDEMONELECTRICBARRIER18,
+	S_CYBRAKDEMONELECTRICBARRIER19,
+	S_CYBRAKDEMONELECTRICBARRIER20,
+	S_CYBRAKDEMONELECTRICBARRIER21,
+	S_CYBRAKDEMONELECTRICBARRIER22,
+	S_CYBRAKDEMONELECTRICBARRIER23,
+	S_CYBRAKDEMONELECTRICBARRIER24,
+	S_CYBRAKDEMONELECTRICBARRIER_DIE1,
+	S_CYBRAKDEMONELECTRICBARRIER_DIE2,
+	S_CYBRAKDEMONELECTRICBARRIER_DIE3,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOMCHECK,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOMSUCCESS,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOMCHOOSE,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM1,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM2,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM3,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM4,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM5,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM6,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM7,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM8,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM9,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM10,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM11,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOM12,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOMFAIL,
+	S_CYBRAKDEMONELECTRICBARRIER_SPARK_RANDOMLOOP,
+	S_CYBRAKDEMONELECTRICBARRIER_REVIVE1,
+	S_CYBRAKDEMONELECTRICBARRIER_REVIVE2,
+	S_CYBRAKDEMONELECTRICBARRIER_REVIVE3,
+
+	S_CYBRAKDEMONTARGETRETICULE1,
+	S_CYBRAKDEMONTARGETRETICULE2,
+	S_CYBRAKDEMONTARGETRETICULE3,
+	S_CYBRAKDEMONTARGETRETICULE4,
+	S_CYBRAKDEMONTARGETRETICULE5,
+	S_CYBRAKDEMONTARGETRETICULE6,
+	S_CYBRAKDEMONTARGETRETICULE7,
+	S_CYBRAKDEMONTARGETRETICULE8,
+	S_CYBRAKDEMONTARGETRETICULE9,
+	S_CYBRAKDEMONTARGETRETICULE10,
+	S_CYBRAKDEMONTARGETRETICULE11,
+	S_CYBRAKDEMONTARGETRETICULE12,
+	S_CYBRAKDEMONTARGETRETICULE13,
+	S_CYBRAKDEMONTARGETRETICULE14,
+
+	S_CYBRAKDEMONTARGETDOT,
+
+	S_CYBRAKDEMONNAPALMBOMBLARGE_FLY1,
+	S_CYBRAKDEMONNAPALMBOMBLARGE_FLY2,
+	S_CYBRAKDEMONNAPALMBOMBLARGE_FLY3,
+	S_CYBRAKDEMONNAPALMBOMBLARGE_FLY4,
+	S_CYBRAKDEMONNAPALMBOMBLARGE_DIE1,  
+	S_CYBRAKDEMONNAPALMBOMBLARGE_DIE2,  
+	S_CYBRAKDEMONNAPALMBOMBLARGE_DIE3,  
+	S_CYBRAKDEMONNAPALMBOMBLARGE_DIE4,  
+
+	S_CYBRAKDEMONNAPALMBOMBSMALL,
+	S_CYBRAKDEMONNAPALMBOMBSMALL_DIE1,  
+	S_CYBRAKDEMONNAPALMBOMBSMALL_DIE2,  
+	S_CYBRAKDEMONNAPALMBOMBSMALL_DIE3,  
+	S_CYBRAKDEMONNAPALMBOMBSMALL_DIE4,  
+	S_CYBRAKDEMONNAPALMBOMBSMALL_DIE5,  
+
+	S_CYBRAKDEMONNAPALMFLAME_FLY1,
+	S_CYBRAKDEMONNAPALMFLAME_FLY2,
+	S_CYBRAKDEMONNAPALMFLAME_FLY3,
+	S_CYBRAKDEMONNAPALMFLAME_FLY4,
+	S_CYBRAKDEMONNAPALMFLAME_FLY5,
+	S_CYBRAKDEMONNAPALMFLAME_FLY6,
+	S_CYBRAKDEMONNAPALMFLAME_DIE,
+
+	S_CYBRAKDEMONVILEEXPLOSION1,
+	S_CYBRAKDEMONVILEEXPLOSION2,
+	S_CYBRAKDEMONVILEEXPLOSION3,
+
+
+	S_METALSONIC_RACE,
+
+	S_METALSONIC_FLOAT,
+	S_METALSONIC_VECTOR,
+	S_METALSONIC_STUN,
+	S_METALSONIC_RAISE,
+	S_METALSONIC_GATHER,
+	S_METALSONIC_DASH,
+	S_METALSONIC_BOUNCE,
+	S_METALSONIC_BADBOUNCE,
+	S_METALSONIC_SHOOT,
+	S_METALSONIC_PAIN,
+	S_METALSONIC_DEATH1,
+	S_METALSONIC_DEATH2,
+	S_METALSONIC_DEATH3,
+	S_METALSONIC_DEATH4,
+	S_METALSONIC_FLEE1,
+	S_METALSONIC_FLEE2,
+
+	S_MSSHIELD_F1,
+	S_MSSHIELD_F2,
+
+
+	S_RING,
+
+
+	S_BLUESPHERE,
+	S_BLUESPHEREBONUS,
+	S_BLUESPHERESPARK,
+
+
+	S_BOMBSPHERE1,
+	S_BOMBSPHERE2,
+	S_BOMBSPHERE3,
+	S_BOMBSPHERE4,
+
+
+	S_NIGHTSCHIP,
+	S_NIGHTSCHIPBONUS,
+
+
+	S_NIGHTSSTAR,
+	S_NIGHTSSTARXMAS,
+
+
+	S_GRAVWELLGREEN,
+	S_GRAVWELLRED,
+
+
+	S_TEAMRING,
+
+
+	S_TOKEN,
+
+
+	S_REDFLAG,
+	S_BLUEFLAG,
+
+
+	S_EMBLEM1,
+	S_EMBLEM2,
+	S_EMBLEM3,
+	S_EMBLEM4,
+	S_EMBLEM5,
+	S_EMBLEM6,
+	S_EMBLEM7,
+	S_EMBLEM8,
+	S_EMBLEM9,
+	S_EMBLEM10,
+	S_EMBLEM11,
+	S_EMBLEM12,
+	S_EMBLEM13,
+	S_EMBLEM14,
+	S_EMBLEM15,
+	S_EMBLEM16,
+	S_EMBLEM17,
+	S_EMBLEM18,
+	S_EMBLEM19,
+	S_EMBLEM20,
+	S_EMBLEM21,
+	S_EMBLEM22,
+	S_EMBLEM23,
+	S_EMBLEM24,
+	S_EMBLEM25,
+	S_EMBLEM26,
+
+
+	S_CEMG1,
+	S_CEMG2,
+	S_CEMG3,
+	S_CEMG4,
+	S_CEMG5,
+	S_CEMG6,
+	S_CEMG7,
+
+
+	S_SHRD1,
+	S_SHRD2,
+	S_SHRD3,
+
+
+	S_BUBBLES1,
+	S_BUBBLES2,
+	S_BUBBLES3,
+	S_BUBBLES4,
+
+
+	S_SIGN,
+	S_SIGNSPIN1,
+	S_SIGNSPIN2,
+	S_SIGNSPIN3,
+	S_SIGNSPIN4,
+	S_SIGNSPIN5,
+	S_SIGNSPIN6,
+	S_SIGNPLAYER,
+	S_SIGNSLOW,
+	S_SIGNSTOP,
+	S_SIGNBOARD,
+	S_EGGMANSIGN,
+	S_CLEARSIGN,
+
+
+	S_SPIKEBALL1,
+	S_SPIKEBALL2,
+	S_SPIKEBALL3,
+	S_SPIKEBALL4,
+	S_SPIKEBALL5,
+	S_SPIKEBALL6,
+	S_SPIKEBALL7,
+	S_SPIKEBALL8,
+
+
+	S_SPINFIRE1,
+	S_SPINFIRE2,
+	S_SPINFIRE3,
+	S_SPINFIRE4,
+	S_SPINFIRE5,
+	S_SPINFIRE6,
+
+	S_TEAM_SPINFIRE1,
+	S_TEAM_SPINFIRE2,
+	S_TEAM_SPINFIRE3,
+	S_TEAM_SPINFIRE4,
+	S_TEAM_SPINFIRE5,
+	S_TEAM_SPINFIRE6,
+
+
+	S_SPIKE1,
+	S_SPIKE2,
+	S_SPIKE3,
+	S_SPIKE4,
+	S_SPIKE5,
+	S_SPIKE6,
+	S_SPIKED1,
+	S_SPIKED2,
+
+
+	S_WALLSPIKE1,
+	S_WALLSPIKE2,
+	S_WALLSPIKE3,
+	S_WALLSPIKE4,
+	S_WALLSPIKE5,
+	S_WALLSPIKE6,
+	S_WALLSPIKEBASE,
+	S_WALLSPIKED1,
+	S_WALLSPIKED2,
+
+
+	S_STARPOST_IDLE,
+	S_STARPOST_FLASH,
+	S_STARPOST_STARTSPIN,
+	S_STARPOST_SPIN,
+	S_STARPOST_ENDSPIN,
+
+
+	S_BIGMINE_IDLE,
+	S_BIGMINE_ALERT1,
+	S_BIGMINE_ALERT2,
+	S_BIGMINE_ALERT3,
+	S_BIGMINE_SET1,
+	S_BIGMINE_SET2,
+	S_BIGMINE_SET3,
+	S_BIGMINE_BLAST1,
+	S_BIGMINE_BLAST2,
+	S_BIGMINE_BLAST3,
+	S_BIGMINE_BLAST4,
+	S_BIGMINE_BLAST5,
+
+
+	S_CANNONLAUNCHER1,
+	S_CANNONLAUNCHER2,
+	S_CANNONLAUNCHER3,
+
+
+	S_BOXSPARKLE1,
+	S_BOXSPARKLE2,
+	S_BOXSPARKLE3,
+	S_BOXSPARKLE4,
+
+	S_BOX_FLICKER,
+	S_BOX_POP1,
+	S_BOX_POP2,
+
+	S_GOLDBOX_FLICKER,
+	S_GOLDBOX_OFF1,
+	S_GOLDBOX_OFF2,
+	S_GOLDBOX_OFF3,
+	S_GOLDBOX_OFF4,
+	S_GOLDBOX_OFF5,
+	S_GOLDBOX_OFF6,
+	S_GOLDBOX_OFF7,
+
+
+	S_MYSTERY_BOX,
+	S_RING_BOX,
+	S_PITY_BOX,
+	S_ATTRACT_BOX,
+	S_FORCE_BOX,
+	S_ARMAGEDDON_BOX,
+	S_WHIRLWIND_BOX,
+	S_ELEMENTAL_BOX,
+	S_SNEAKERS_BOX,
+	S_INVULN_BOX,
+	S_1UP_BOX,
+	S_EGGMAN_BOX,
+	S_MIXUP_BOX,
+	S_GRAVITY_BOX,
+	S_RECYCLER_BOX,
+	S_SCORE1K_BOX,
+	S_SCORE10K_BOX,
+	S_FLAMEAURA_BOX,
+	S_BUBBLEWRAP_BOX,
+	S_THUNDERCOIN_BOX,
+
+
+	S_PITY_GOLDBOX,
+	S_ATTRACT_GOLDBOX,
+	S_FORCE_GOLDBOX,
+	S_ARMAGEDDON_GOLDBOX,
+	S_WHIRLWIND_GOLDBOX,
+	S_ELEMENTAL_GOLDBOX,
+	S_SNEAKERS_GOLDBOX,
+	S_INVULN_GOLDBOX,
+	S_EGGMAN_GOLDBOX,
+	S_GRAVITY_GOLDBOX,
+	S_FLAMEAURA_GOLDBOX,
+	S_BUBBLEWRAP_GOLDBOX,
+	S_THUNDERCOIN_GOLDBOX,
+
+
+	S_RING_REDBOX1,
+	S_RING_REDBOX2,
+	S_REDBOX_POP1,
+	S_REDBOX_POP2,
+
+	S_RING_BLUEBOX1,
+	S_RING_BLUEBOX2,
+	S_BLUEBOX_POP1,
+	S_BLUEBOX_POP2,
+
+
+	S_RING_ICON1,
+	S_RING_ICON2,
+
+	S_PITY_ICON1,
+	S_PITY_ICON2,
+
+	S_ATTRACT_ICON1,
+	S_ATTRACT_ICON2,
+
+	S_FORCE_ICON1,
+	S_FORCE_ICON2,
+
+	S_ARMAGEDDON_ICON1,
+	S_ARMAGEDDON_ICON2,
+
+	S_WHIRLWIND_ICON1,
+	S_WHIRLWIND_ICON2,
+
+	S_ELEMENTAL_ICON1,
+	S_ELEMENTAL_ICON2,
+
+	S_SNEAKERS_ICON1,
+	S_SNEAKERS_ICON2,
+
+	S_INVULN_ICON1,
+	S_INVULN_ICON2,
+
+	S_1UP_ICON1,
+	S_1UP_ICON2,
+
+	S_EGGMAN_ICON1,
+	S_EGGMAN_ICON2,
+
+	S_MIXUP_ICON1,
+	S_MIXUP_ICON2,
+
+	S_GRAVITY_ICON1,
+	S_GRAVITY_ICON2,
+
+	S_RECYCLER_ICON1,
+	S_RECYCLER_ICON2,
+
+	S_SCORE1K_ICON1,
+	S_SCORE1K_ICON2,
+
+	S_SCORE10K_ICON1,
+	S_SCORE10K_ICON2,
+
+	S_FLAMEAURA_ICON1,
+	S_FLAMEAURA_ICON2,
+
+	S_BUBBLEWRAP_ICON1,
+	S_BUBBLEWRAP_ICON2,
+
+	S_THUNDERCOIN_ICON1,
+	S_THUNDERCOIN_ICON2,
+
+
+
+	S_ROCKET,
+
+	S_LASER,
+	S_LASER2,
+	S_LASERFLASH,
+
+	S_LASERFLAME1,
+	S_LASERFLAME2,
+	S_LASERFLAME3,
+	S_LASERFLAME4,
+	S_LASERFLAME5,
+
+	S_TORPEDO,
+
+	S_ENERGYBALL1,
+	S_ENERGYBALL2,
+
+
+	S_MINE1,
+	S_MINE_BOOM1,
+	S_MINE_BOOM2,
+	S_MINE_BOOM3,
+	S_MINE_BOOM4,
+
+
+	S_JETBULLET1,
+	S_JETBULLET2,
+
+	S_TURRETLASER,
+	S_TURRETLASEREXPLODE1,
+	S_TURRETLASEREXPLODE2,
+
+
+	S_CANNONBALL1,
+
+
+	S_ARROW,
+	S_ARROWBONK,
+
+
+	S_DEMONFIRE,
+
+
+	S_LETTER,
+
+
+	S_TUTORIALLEAF1,
+	S_TUTORIALLEAF2,
+	S_TUTORIALLEAF3,
+	S_TUTORIALLEAF4,
+	S_TUTORIALLEAF5,
+	S_TUTORIALLEAF6,
+	S_TUTORIALLEAF7,
+	S_TUTORIALLEAF8,
+	S_TUTORIALLEAF9,
+	S_TUTORIALLEAF10,
+	S_TUTORIALLEAF11,
+	S_TUTORIALLEAF12,
+	S_TUTORIALLEAF13,
+	S_TUTORIALLEAF14,
+	S_TUTORIALLEAF15,
+	S_TUTORIALLEAF16,
+	S_TUTORIALFLOWER1,
+	S_TUTORIALFLOWER2,
+	S_TUTORIALFLOWER3,
+	S_TUTORIALFLOWER4,
+	S_TUTORIALFLOWER5,
+	S_TUTORIALFLOWER6,
+	S_TUTORIALFLOWER7,
+	S_TUTORIALFLOWER8,
+	S_TUTORIALFLOWER9,
+	S_TUTORIALFLOWER10,
+	S_TUTORIALFLOWER11,
+	S_TUTORIALFLOWER12,
+	S_TUTORIALFLOWER13,
+	S_TUTORIALFLOWER14,
+	S_TUTORIALFLOWER15,
+	S_TUTORIALFLOWER16,
+	S_TUTORIALFLOWERF1,
+	S_TUTORIALFLOWERF2,
+	S_TUTORIALFLOWERF3,
+	S_TUTORIALFLOWERF4,
+	S_TUTORIALFLOWERF5,
+	S_TUTORIALFLOWERF6,
+	S_TUTORIALFLOWERF7,
+	S_TUTORIALFLOWERF8,
+	S_TUTORIALFLOWERF9,
+	S_TUTORIALFLOWERF10,
+	S_TUTORIALFLOWERF11,
+	S_TUTORIALFLOWERF12,
+	S_TUTORIALFLOWERF13,
+	S_TUTORIALFLOWERF14,
+	S_TUTORIALFLOWERF15,
+	S_TUTORIALFLOWERF16,
+
+
+	S_GFZFLOWERA,
+	S_GFZFLOWERB,
+	S_GFZFLOWERC,
+
+	S_BLUEBERRYBUSH,
+	S_BERRYBUSH,
+	S_BUSH,
+
+
+	S_GFZTREE,
+	S_GFZBERRYTREE,
+	S_GFZCHERRYTREE,
+	S_CHECKERTREE,
+	S_CHECKERSUNSETTREE,
+	S_FHZTREE,  
+	S_FHZPINKTREE,
+	S_POLYGONTREE,
+	S_BUSHTREE,
+	S_BUSHREDTREE,
+	S_SPRINGTREE,
+
+
+	S_THZFLOWERA,  
+	S_THZFLOWERB,  
+	S_THZFLOWERC,  
+
+
+	S_THZTREE,
+	S_THZTREEBRANCH1,
+	S_THZTREEBRANCH2,
+	S_THZTREEBRANCH3,
+	S_THZTREEBRANCH4,
+	S_THZTREEBRANCH5,
+	S_THZTREEBRANCH6,
+	S_THZTREEBRANCH7,
+	S_THZTREEBRANCH8,
+	S_THZTREEBRANCH9,
+	S_THZTREEBRANCH10,
+	S_THZTREEBRANCH11,
+	S_THZTREEBRANCH12,
+	S_THZTREEBRANCH13,
+
+
+	S_ALARM1,
+
+
+	S_GARGOYLE,
+	S_BIGGARGOYLE,
+
+
+	S_SEAWEED1,
+	S_SEAWEED2,
+	S_SEAWEED3,
+	S_SEAWEED4,
+	S_SEAWEED5,
+	S_SEAWEED6,
+
+
+	S_DRIPA1,
+	S_DRIPA2,
+	S_DRIPA3,
+	S_DRIPA4,
+	S_DRIPB1,
+	S_DRIPC1,
+	S_DRIPC2,
+
+
+	S_CORAL1,
+	S_CORAL2,
+	S_CORAL3,
+	S_CORAL4,
+	S_CORAL5,
+
+
+	S_BLUECRYSTAL1,
+
+
+	S_KELP,
+
+
+	S_ANIMALGAETOP1,
+	S_ANIMALGAETOP2,
+	S_ANIMALGAESEG,
+
+
+	S_DSZSTALAGMITE,
+	S_DSZ2STALAGMITE,
+
+
+	S_LIGHTBEAM1,
+	S_LIGHTBEAM2,
+	S_LIGHTBEAM3,
+	S_LIGHTBEAM4,
+	S_LIGHTBEAM5,
+	S_LIGHTBEAM6,
+	S_LIGHTBEAM7,
+	S_LIGHTBEAM8,
+	S_LIGHTBEAM9,
+	S_LIGHTBEAM10,
+	S_LIGHTBEAM11,
+	S_LIGHTBEAM12,
+
+
+	S_CEZCHAIN,
+
+
+	S_FLAME,
+	S_FLAMEPARTICLE,
+	S_FLAMEREST,
+
+
+	S_EGGSTATUE1,
+
+
+	S_SLING1,
+	S_SLING2,
+
+
+	S_SMALLMACECHAIN,
+	S_BIGMACECHAIN,
+	S_SMALLMACE,
+	S_BIGMACE,
+	S_SMALLGRABCHAIN,
+	S_BIGGRABCHAIN,
+
+
+	S_BLUESPRINGBALL,
+	S_BLUESPRINGBALL2,
+	S_BLUESPRINGBALL3,
+	S_BLUESPRINGBALL4,
+	S_BLUESPRINGBALL5,
+
+
+	S_YELLOWSPRINGBALL,
+	S_YELLOWSPRINGBALL2,
+	S_YELLOWSPRINGBALL3,
+	S_YELLOWSPRINGBALL4,
+	S_YELLOWSPRINGBALL5,
+
+
+	S_REDSPRINGBALL,
+	S_REDSPRINGBALL2,
+	S_REDSPRINGBALL3,
+	S_REDSPRINGBALL4,
+	S_REDSPRINGBALL5,
+
+
+	S_SMALLFIREBAR1,
+	S_SMALLFIREBAR2,
+	S_SMALLFIREBAR3,
+	S_SMALLFIREBAR4,
+	S_SMALLFIREBAR5,
+	S_SMALLFIREBAR6,
+	S_SMALLFIREBAR7,
+	S_SMALLFIREBAR8,
+	S_SMALLFIREBAR9,
+	S_SMALLFIREBAR10,
+	S_SMALLFIREBAR11,
+	S_SMALLFIREBAR12,
+	S_SMALLFIREBAR13,
+	S_SMALLFIREBAR14,
+	S_SMALLFIREBAR15,
+	S_SMALLFIREBAR16,
+
+
+	S_BIGFIREBAR1,
+	S_BIGFIREBAR2,
+	S_BIGFIREBAR3,
+	S_BIGFIREBAR4,
+	S_BIGFIREBAR5,
+	S_BIGFIREBAR6,
+	S_BIGFIREBAR7,
+	S_BIGFIREBAR8,
+	S_BIGFIREBAR9,
+	S_BIGFIREBAR10,
+	S_BIGFIREBAR11,
+	S_BIGFIREBAR12,
+	S_BIGFIREBAR13,
+	S_BIGFIREBAR14,
+	S_BIGFIREBAR15,
+	S_BIGFIREBAR16,
+
+	S_CEZFLOWER,
+	S_CEZPOLE,
+	S_CEZBANNER1,
+	S_CEZBANNER2,
+	S_PINETREE,
+	S_CEZBUSH1,
+	S_CEZBUSH2,
+	S_CANDLE,
+	S_CANDLEPRICKET,
+	S_FLAMEHOLDER,
+	S_FIRETORCH,
+	S_WAVINGFLAG,
+	S_WAVINGFLAGSEG1,
+	S_WAVINGFLAGSEG2,
+	S_CRAWLASTATUE,
+	S_FACESTABBERSTATUE,
+	S_SUSPICIOUSFACESTABBERSTATUE_WAIT,
+	S_SUSPICIOUSFACESTABBERSTATUE_BURST1,
+	S_SUSPICIOUSFACESTABBERSTATUE_BURST2,
+	S_BRAMBLES,
+
+
+	S_BIGTUMBLEWEED,
+	S_BIGTUMBLEWEED_ROLL1,
+	S_BIGTUMBLEWEED_ROLL2,
+	S_BIGTUMBLEWEED_ROLL3,
+	S_BIGTUMBLEWEED_ROLL4,
+	S_BIGTUMBLEWEED_ROLL5,
+	S_BIGTUMBLEWEED_ROLL6,
+	S_BIGTUMBLEWEED_ROLL7,
+	S_BIGTUMBLEWEED_ROLL8,
+
+
+	S_LITTLETUMBLEWEED,
+	S_LITTLETUMBLEWEED_ROLL1,
+	S_LITTLETUMBLEWEED_ROLL2,
+	S_LITTLETUMBLEWEED_ROLL3,
+	S_LITTLETUMBLEWEED_ROLL4,
+	S_LITTLETUMBLEWEED_ROLL5,
+	S_LITTLETUMBLEWEED_ROLL6,
+	S_LITTLETUMBLEWEED_ROLL7,
+	S_LITTLETUMBLEWEED_ROLL8,
+
+
+	S_CACTI1,
+	S_CACTI2,
+	S_CACTI3,
+	S_CACTI4,
+	S_CACTI5,
+	S_CACTI6,
+	S_CACTI7,
+	S_CACTI8,
+	S_CACTI9,
+	S_CACTI10,
+	S_CACTI11,
+	S_CACTITINYSEG,
+	S_CACTISMALLSEG,
+
+
+	S_ARIDSIGN_CAUTION,
+	S_ARIDSIGN_CACTI,
+	S_ARIDSIGN_SHARPTURN,
+
+
+	S_OILLAMP,
+	S_OILLAMPFLARE,
+
+
+	S_TNTBARREL_STND1,
+	S_TNTBARREL_EXPL1,
+	S_TNTBARREL_EXPL2,
+	S_TNTBARREL_EXPL3,
+	S_TNTBARREL_EXPL4,
+	S_TNTBARREL_EXPL5,
+	S_TNTBARREL_EXPL6,
+	S_TNTBARREL_EXPL7,
+	S_TNTBARREL_FLYING,
+
+
+	S_PROXIMITY_TNT,
+	S_PROXIMITY_TNT_TRIGGER1,
+	S_PROXIMITY_TNT_TRIGGER2,
+	S_PROXIMITY_TNT_TRIGGER3,
+	S_PROXIMITY_TNT_TRIGGER4,
+	S_PROXIMITY_TNT_TRIGGER5,
+	S_PROXIMITY_TNT_TRIGGER6,
+	S_PROXIMITY_TNT_TRIGGER7,
+	S_PROXIMITY_TNT_TRIGGER8,
+	S_PROXIMITY_TNT_TRIGGER9,
+	S_PROXIMITY_TNT_TRIGGER10,
+	S_PROXIMITY_TNT_TRIGGER11,
+	S_PROXIMITY_TNT_TRIGGER12,
+	S_PROXIMITY_TNT_TRIGGER13,
+	S_PROXIMITY_TNT_TRIGGER14,
+	S_PROXIMITY_TNT_TRIGGER15,
+	S_PROXIMITY_TNT_TRIGGER16,
+	S_PROXIMITY_TNT_TRIGGER17,
+	S_PROXIMITY_TNT_TRIGGER18,
+	S_PROXIMITY_TNT_TRIGGER19,
+	S_PROXIMITY_TNT_TRIGGER20,
+	S_PROXIMITY_TNT_TRIGGER21,
+	S_PROXIMITY_TNT_TRIGGER22,
+	S_PROXIMITY_TNT_TRIGGER23,
+
+
+	S_DUSTDEVIL,
+	S_DUSTLAYER1,
+	S_DUSTLAYER2,
+	S_DUSTLAYER3,
+	S_DUSTLAYER4,
+	S_DUSTLAYER5,
+	S_ARIDDUST1,
+	S_ARIDDUST2,
+	S_ARIDDUST3,
+
+
+	S_MINECART_IDLE,
+	S_MINECART_DTH1,
+	S_MINECARTEND,
+	S_MINECARTSEG_FRONT,
+	S_MINECARTSEG_BACK,
+	S_MINECARTSEG_LEFT,
+	S_MINECARTSEG_RIGHT,
+	S_MINECARTSIDEMARK1,
+	S_MINECARTSIDEMARK2,
+	S_MINECARTSPARK,
+
+
+	S_SALOONDOOR,
+	S_SALOONDOORCENTER,
+
+
+	S_TRAINCAMEOSPAWNER_1,
+	S_TRAINCAMEOSPAWNER_2,
+	S_TRAINCAMEOSPAWNER_3,
+	S_TRAINCAMEOSPAWNER_4,
+	S_TRAINCAMEOSPAWNER_5,
+	S_TRAINPUFFMAKER,
+
+
+	S_TRAINDUST,
+	S_TRAINSTEAM,
+
+
+	S_FLAMEJETSTND,
+	S_FLAMEJETSTART,
+	S_FLAMEJETSTOP,
+	S_FLAMEJETFLAME1,
+	S_FLAMEJETFLAME2,
+	S_FLAMEJETFLAME3,
+	S_FLAMEJETFLAME4,
+	S_FLAMEJETFLAME5,
+	S_FLAMEJETFLAME6,
+	S_FLAMEJETFLAME7,
+	S_FLAMEJETFLAME8,
+	S_FLAMEJETFLAME9,
+
+
+	S_FJSPINAXISA1,  
+	S_FJSPINAXISA2,
+	S_FJSPINAXISB1,  
+	S_FJSPINAXISB2,
+
+
+	S_FLAMEJETFLAMEB1,
+	S_FLAMEJETFLAMEB2,
+	S_FLAMEJETFLAMEB3,
+
+
+	S_LAVAFALL_DORMANT,
+	S_LAVAFALL_TELL,
+	S_LAVAFALL_SHOOT,
+	S_LAVAFALL_LAVA1,
+	S_LAVAFALL_LAVA2,
+	S_LAVAFALL_LAVA3,
+	S_LAVAFALLROCK,
+
+
+	S_ROLLOUTSPAWN,
+	S_ROLLOUTROCK,
+
+
+	S_BIGFERNLEAF,
+	S_BIGFERN1,
+	S_BIGFERN2,
+	S_JUNGLEPALM,
+	S_TORCHFLOWER,
+	S_WALLVINE_LONG,
+	S_WALLVINE_SHORT,
+
+
+	S_GLAREGOYLE,
+	S_GLAREGOYLE_CHARGE,
+	S_GLAREGOYLE_BLINK,
+	S_GLAREGOYLE_HOLD,
+	S_GLAREGOYLE_FIRE,
+	S_GLAREGOYLE_LOOP,
+	S_GLAREGOYLE_COOLDOWN,
+	S_GLAREGOYLEUP,
+	S_GLAREGOYLEUP_CHARGE,
+	S_GLAREGOYLEUP_BLINK,
+	S_GLAREGOYLEUP_HOLD,
+	S_GLAREGOYLEUP_FIRE,
+	S_GLAREGOYLEUP_LOOP,
+	S_GLAREGOYLEUP_COOLDOWN,
+	S_GLAREGOYLEDOWN,
+	S_GLAREGOYLEDOWN_CHARGE,
+	S_GLAREGOYLEDOWN_BLINK,
+	S_GLAREGOYLEDOWN_HOLD,
+	S_GLAREGOYLEDOWN_FIRE,
+	S_GLAREGOYLEDOWN_LOOP,
+	S_GLAREGOYLEDOWN_COOLDOWN,
+	S_GLAREGOYLELONG,
+	S_GLAREGOYLELONG_CHARGE,
+	S_GLAREGOYLELONG_BLINK,
+	S_GLAREGOYLELONG_HOLD,
+	S_GLAREGOYLELONG_FIRE,
+	S_GLAREGOYLELONG_LOOP,
+	S_GLAREGOYLELONG_COOLDOWN,
+
+
+	S_TARGET_IDLE,
+	S_TARGET_HIT1,
+	S_TARGET_HIT2,
+	S_TARGET_RESPAWN,
+	S_TARGET_ALLDONE,
+
+
+	S_GREENFLAME,
+
+
+	S_BLUEGARGOYLE,
+
+
+	S_STG0,
+	S_STG1,
+	S_STG2,
+	S_STG3,
+	S_STG4,
+	S_STG5,
+	S_STG6,
+	S_STG7,
+	S_STG8,
+	S_STG9,
+
+
+	S_XMASPOLE,
+	S_CANDYCANE,
+	S_SNOWMAN,     
+	S_SNOWMANHAT,  
+	S_LAMPPOST1,   
+	S_LAMPPOST2,   
+	S_HANGSTAR,
+	S_MISTLETOE,
+	S_SSZTREE,
+	S_SSZTREE_BRANCH,
+	S_SSZTREE2,
+	S_SSZTREE2_BRANCH,
+
+	S_XMASBLUEBERRYBUSH,
+	S_XMASBERRYBUSH,
+	S_XMASBUSH,
+
+	S_FHZICE1,
+	S_FHZICE2,
+	S_ROSY_IDLE,
+	S_ROSY_JUMP,
+	S_ROSY_FALL,
+	S_ROSY_WALK,
+	S_ROSY_HUG,
+	S_ROSY_PAIN,
+	S_ROSY_STND,
+	S_ROSY_UNHAPPY,
+
+
+
+	S_JACKO1,
+	S_JACKO1OVERLAY_1,
+	S_JACKO1OVERLAY_2,
+	S_JACKO1OVERLAY_3,
+	S_JACKO1OVERLAY_4,
+	S_JACKO2,
+	S_JACKO2OVERLAY_1,
+	S_JACKO2OVERLAY_2,
+	S_JACKO2OVERLAY_3,
+	S_JACKO2OVERLAY_4,
+	S_JACKO3,
+	S_JACKO3OVERLAY_1,
+	S_JACKO3OVERLAY_2,
+	S_JACKO3OVERLAY_3,
+	S_JACKO3OVERLAY_4,
+
+	S_HHZTREE_TOP,
+	S_HHZTREE_TRUNK,
+	S_HHZTREE_LEAF,
+
+	S_HHZSHROOM_1,
+	S_HHZSHROOM_2,
+	S_HHZSHROOM_3,
+	S_HHZSHROOM_4,
+	S_HHZSHROOM_5,
+	S_HHZSHROOM_6,
+	S_HHZSHROOM_7,
+	S_HHZSHROOM_8,
+	S_HHZSHROOM_9,
+	S_HHZSHROOM_10,
+	S_HHZSHROOM_11,
+	S_HHZSHROOM_12,
+	S_HHZSHROOM_13,
+	S_HHZSHROOM_14,
+	S_HHZSHROOM_15,
+	S_HHZSHROOM_16,
+
+	S_HHZGRASS,
+	S_HHZTENT1,
+	S_HHZTENT2,
+	S_HHZSTALAGMITE_TALL,
+	S_HHZSTALAGMITE_SHORT,
+
+
+	S_BSZTALLFLOWER_RED,
+	S_BSZTALLFLOWER_PURPLE,
+	S_BSZTALLFLOWER_BLUE,
+	S_BSZTALLFLOWER_CYAN,
+	S_BSZTALLFLOWER_YELLOW,
+	S_BSZTALLFLOWER_ORANGE,
+	S_BSZFLOWER_RED,
+	S_BSZFLOWER_PURPLE,
+	S_BSZFLOWER_BLUE,
+	S_BSZFLOWER_CYAN,
+	S_BSZFLOWER_YELLOW,
+	S_BSZFLOWER_ORANGE,
+	S_BSZSHORTFLOWER_RED,
+	S_BSZSHORTFLOWER_PURPLE,
+	S_BSZSHORTFLOWER_BLUE,
+	S_BSZSHORTFLOWER_CYAN,
+	S_BSZSHORTFLOWER_YELLOW,
+	S_BSZSHORTFLOWER_ORANGE,
+	S_BSZTULIP_RED,
+	S_BSZTULIP_PURPLE,
+	S_BSZTULIP_BLUE,
+	S_BSZTULIP_CYAN,
+	S_BSZTULIP_YELLOW,
+	S_BSZTULIP_ORANGE,
+	S_BSZCLUSTER_RED,
+	S_BSZCLUSTER_PURPLE,
+	S_BSZCLUSTER_BLUE,
+	S_BSZCLUSTER_CYAN,
+	S_BSZCLUSTER_YELLOW,
+	S_BSZCLUSTER_ORANGE,
+	S_BSZBUSH_RED,
+	S_BSZBUSH_PURPLE,
+	S_BSZBUSH_BLUE,
+	S_BSZBUSH_CYAN,
+	S_BSZBUSH_YELLOW,
+	S_BSZBUSH_ORANGE,
+	S_BSZVINE_RED,
+	S_BSZVINE_PURPLE,
+	S_BSZVINE_BLUE,
+	S_BSZVINE_CYAN,
+	S_BSZVINE_YELLOW,
+	S_BSZVINE_ORANGE,
+	S_BSZSHRUB,
+	S_BSZCLOVER,
+	S_BIG_PALMTREE_TRUNK,
+	S_BIG_PALMTREE_TOP,
+	S_PALMTREE_TRUNK,
+	S_PALMTREE_TOP,
+
+	S_DBALL1,
+	S_DBALL2,
+	S_DBALL3,
+	S_DBALL4,
+	S_DBALL5,
+	S_DBALL6,
+	S_EGGSTATUE2,
+	S_GINE,
+	S_PPAL,
+	S_PPEL,
+
+
+	S_ARMA1,
+	S_ARMA2,
+	S_ARMA3,
+	S_ARMA4,
+	S_ARMA5,
+	S_ARMA6,
+	S_ARMA7,
+	S_ARMA8,
+	S_ARMA9,
+	S_ARMA10,
+	S_ARMA11,
+	S_ARMA12,
+	S_ARMA13,
+	S_ARMA14,
+	S_ARMA15,
+	S_ARMA16,
+
+	S_ARMF1,
+	S_ARMF2,
+	S_ARMF3,
+	S_ARMF4,
+	S_ARMF5,
+	S_ARMF6,
+	S_ARMF7,
+	S_ARMF8,
+	S_ARMF9,
+	S_ARMF10,
+	S_ARMF11,
+	S_ARMF12,
+	S_ARMF13,
+	S_ARMF14,
+	S_ARMF15,
+	S_ARMF16,
+	S_ARMF17,
+	S_ARMF18,
+	S_ARMF19,
+	S_ARMF20,
+	S_ARMF21,
+	S_ARMF22,
+	S_ARMF23,
+	S_ARMF24,
+	S_ARMF25,
+	S_ARMF26,
+	S_ARMF27,
+	S_ARMF28,
+	S_ARMF29,
+	S_ARMF30,
+	S_ARMF31,
+	S_ARMF32,
+
+	S_ARMB1,
+	S_ARMB2,
+	S_ARMB3,
+	S_ARMB4,
+	S_ARMB5,
+	S_ARMB6,
+	S_ARMB7,
+	S_ARMB8,
+	S_ARMB9,
+	S_ARMB10,
+	S_ARMB11,
+	S_ARMB12,
+	S_ARMB13,
+	S_ARMB14,
+	S_ARMB15,
+	S_ARMB16,
+	S_ARMB17,
+	S_ARMB18,
+	S_ARMB19,
+	S_ARMB20,
+	S_ARMB21,
+	S_ARMB22,
+	S_ARMB23,
+	S_ARMB24,
+	S_ARMB25,
+	S_ARMB26,
+	S_ARMB27,
+	S_ARMB28,
+	S_ARMB29,
+	S_ARMB30,
+	S_ARMB31,
+	S_ARMB32,
+
+	S_WIND1,
+	S_WIND2,
+	S_WIND3,
+	S_WIND4,
+	S_WIND5,
+	S_WIND6,
+	S_WIND7,
+	S_WIND8,
+
+	S_MAGN1,
+	S_MAGN2,
+	S_MAGN3,
+	S_MAGN4,
+	S_MAGN5,
+	S_MAGN6,
+	S_MAGN7,
+	S_MAGN8,
+	S_MAGN9,
+	S_MAGN10,
+	S_MAGN11,
+	S_MAGN12,
+	S_MAGN13,
+
+	S_FORC1,
+	S_FORC2,
+	S_FORC3,
+	S_FORC4,
+	S_FORC5,
+	S_FORC6,
+	S_FORC7,
+	S_FORC8,
+	S_FORC9,
+	S_FORC10,
+
+	S_FORC11,
+	S_FORC12,
+	S_FORC13,
+	S_FORC14,
+	S_FORC15,
+	S_FORC16,
+	S_FORC17,
+	S_FORC18,
+	S_FORC19,
+	S_FORC20,
+
+	S_FORC21,
+
+	S_ELEM1,
+	S_ELEM2,
+	S_ELEM3,
+	S_ELEM4,
+	S_ELEM5,
+	S_ELEM6,
+	S_ELEM7,
+	S_ELEM8,
+	S_ELEM9,
+	S_ELEM10,
+	S_ELEM11,
+	S_ELEM12,
+
+	S_ELEM13,
+	S_ELEM14,
+
+	S_ELEMF1,
+	S_ELEMF2,
+	S_ELEMF3,
+	S_ELEMF4,
+	S_ELEMF5,
+	S_ELEMF6,
+	S_ELEMF7,
+	S_ELEMF8,
+	S_ELEMF9,
+	S_ELEMF10,
+
+	S_PITY1,
+	S_PITY2,
+	S_PITY3,
+	S_PITY4,
+	S_PITY5,
+	S_PITY6,
+	S_PITY7,
+	S_PITY8,
+	S_PITY9,
+	S_PITY10,
+	S_PITY11,
+	S_PITY12,
+
+	S_FIRS1,
+	S_FIRS2,
+	S_FIRS3,
+	S_FIRS4,
+	S_FIRS5,
+	S_FIRS6,
+	S_FIRS7,
+	S_FIRS8,
+	S_FIRS9,
+
+	S_FIRS10,
+	S_FIRS11,
+
+	S_FIRSB1,
+	S_FIRSB2,
+	S_FIRSB3,
+	S_FIRSB4,
+	S_FIRSB5,
+	S_FIRSB6,
+	S_FIRSB7,
+	S_FIRSB8,
+	S_FIRSB9,
+
+	S_FIRSB10,
+
+	S_BUBS1,
+	S_BUBS2,
+	S_BUBS3,
+	S_BUBS4,
+	S_BUBS5,
+	S_BUBS6,
+	S_BUBS7,
+	S_BUBS8,
+	S_BUBS9,
+
+	S_BUBS10,
+	S_BUBS11,
+
+	S_BUBSB1,
+	S_BUBSB2,
+	S_BUBSB3,
+	S_BUBSB4,
+
+	S_BUBSB5,
+	S_BUBSB6,
+
+	S_ZAPS1,
+	S_ZAPS2,
+	S_ZAPS3,
+	S_ZAPS4,
+	S_ZAPS5,
+	S_ZAPS6,
+	S_ZAPS7,
+	S_ZAPS8,
+	S_ZAPS9,
+	S_ZAPS10,
+	S_ZAPS11,
+	S_ZAPS12,
+	S_ZAPS13,  
+	S_ZAPS14,
+	S_ZAPS15,
+	S_ZAPS16,
+
+	S_ZAPSB1,  
+	S_ZAPSB2,
+	S_ZAPSB3,
+	S_ZAPSB4,
+	S_ZAPSB5,
+	S_ZAPSB6,
+	S_ZAPSB7,
+	S_ZAPSB8,
+	S_ZAPSB9,
+	S_ZAPSB10,
+	S_ZAPSB11,  
+
+
+	S_THUNDERCOIN_SPARK,
+
+
+	S_IVSP,
+
+
+	S_SSPK1,
+	S_SSPK2,
+	S_SSPK3,
+	S_SSPK4,
+	S_SSPK5,
+
+
+	S_FLICKY_BUBBLE,
+
+
+	S_FLICKY_01_OUT,
+	S_FLICKY_01_FLAP1,
+	S_FLICKY_01_FLAP2,
+	S_FLICKY_01_FLAP3,
+	S_FLICKY_01_STAND,
+	S_FLICKY_01_CENTER,
+
+
+	S_FLICKY_02_OUT,
+	S_FLICKY_02_AIM,
+	S_FLICKY_02_HOP,
+	S_FLICKY_02_UP,
+	S_FLICKY_02_DOWN,
+	S_FLICKY_02_STAND,
+	S_FLICKY_02_CENTER,
+
+
+	S_FLICKY_03_OUT,
+	S_FLICKY_03_AIM,
+	S_FLICKY_03_HOP,
+	S_FLICKY_03_UP,
+	S_FLICKY_03_FLAP1,
+	S_FLICKY_03_FLAP2,
+	S_FLICKY_03_STAND,
+	S_FLICKY_03_CENTER,
+
+
+	S_FLICKY_04_OUT,
+	S_FLICKY_04_AIM,
+	S_FLICKY_04_HOP,
+	S_FLICKY_04_UP,
+	S_FLICKY_04_DOWN,
+	S_FLICKY_04_SWIM1,
+	S_FLICKY_04_SWIM2,
+	S_FLICKY_04_SWIM3,
+	S_FLICKY_04_SWIM4,
+	S_FLICKY_04_STAND,
+	S_FLICKY_04_CENTER,
+
+
+	S_FLICKY_05_OUT,
+	S_FLICKY_05_AIM,
+	S_FLICKY_05_HOP,
+	S_FLICKY_05_UP,
+	S_FLICKY_05_DOWN,
+	S_FLICKY_05_STAND,
+	S_FLICKY_05_CENTER,
+
+
+	S_FLICKY_06_OUT,
+	S_FLICKY_06_AIM,
+	S_FLICKY_06_HOP,
+	S_FLICKY_06_UP,
+	S_FLICKY_06_DOWN,
+	S_FLICKY_06_STAND,
+	S_FLICKY_06_CENTER,
+
+
+	S_FLICKY_07_OUT,
+	S_FLICKY_07_AIML,
+	S_FLICKY_07_HOPL,
+	S_FLICKY_07_UPL,
+	S_FLICKY_07_DOWNL,
+	S_FLICKY_07_AIMR,
+	S_FLICKY_07_HOPR,
+	S_FLICKY_07_UPR,
+	S_FLICKY_07_DOWNR,
+	S_FLICKY_07_SWIM1,
+	S_FLICKY_07_SWIM2,
+	S_FLICKY_07_SWIM3,
+	S_FLICKY_07_STAND,
+	S_FLICKY_07_CENTER,
+
+
+	S_FLICKY_08_OUT,
+	S_FLICKY_08_AIM,
+	S_FLICKY_08_HOP,
+	S_FLICKY_08_FLAP1,
+	S_FLICKY_08_FLAP2,
+	S_FLICKY_08_FLAP3,
+	S_FLICKY_08_FLAP4,
+	S_FLICKY_08_SWIM1,
+	S_FLICKY_08_SWIM2,
+	S_FLICKY_08_SWIM3,
+	S_FLICKY_08_SWIM4,
+	S_FLICKY_08_STAND,
+	S_FLICKY_08_CENTER,
+
+
+	S_FLICKY_09_OUT,
+	S_FLICKY_09_AIM,
+	S_FLICKY_09_HOP,
+	S_FLICKY_09_UP,
+	S_FLICKY_09_DOWN,
+	S_FLICKY_09_STAND,
+	S_FLICKY_09_CENTER,
+
+
+	S_FLICKY_10_OUT,
+	S_FLICKY_10_FLAP1,
+	S_FLICKY_10_FLAP2,
+	S_FLICKY_10_STAND,
+	S_FLICKY_10_CENTER,
+
+
+	S_FLICKY_11_OUT,
+	S_FLICKY_11_AIM,
+	S_FLICKY_11_RUN1,
+	S_FLICKY_11_RUN2,
+	S_FLICKY_11_RUN3,
+	S_FLICKY_11_STAND,
+	S_FLICKY_11_CENTER,
+
+
+	S_FLICKY_12_OUT,
+	S_FLICKY_12_AIM,
+	S_FLICKY_12_RUN1,
+	S_FLICKY_12_RUN2,
+	S_FLICKY_12_RUN3,
+	S_FLICKY_12_STAND,
+	S_FLICKY_12_CENTER,
+
+
+	S_FLICKY_13_OUT,
+	S_FLICKY_13_AIM,
+	S_FLICKY_13_HOP,
+	S_FLICKY_13_UP,
+	S_FLICKY_13_DOWN,
+	S_FLICKY_13_STAND,
+	S_FLICKY_13_CENTER,
+
+
+	S_FLICKY_14_OUT,
+	S_FLICKY_14_FLAP1,
+	S_FLICKY_14_FLAP2,
+	S_FLICKY_14_FLAP3,
+	S_FLICKY_14_STAND,
+	S_FLICKY_14_CENTER,
+
+
+	S_FLICKY_15_OUT,
+	S_FLICKY_15_AIM,
+	S_FLICKY_15_HOP,
+	S_FLICKY_15_UP,
+	S_FLICKY_15_DOWN,
+	S_FLICKY_15_STAND,
+	S_FLICKY_15_CENTER,
+
+
+	S_FLICKY_16_OUT,
+	S_FLICKY_16_FLAP1,
+	S_FLICKY_16_FLAP2,
+	S_FLICKY_16_FLAP3,
+	S_FLICKY_16_STAND,
+	S_FLICKY_16_CENTER,
+
+
+	S_SECRETFLICKY_01_OUT,
+	S_SECRETFLICKY_01_AIM,
+	S_SECRETFLICKY_01_HOP,
+	S_SECRETFLICKY_01_UP,
+	S_SECRETFLICKY_01_DOWN,
+	S_SECRETFLICKY_01_STAND,
+	S_SECRETFLICKY_01_CENTER,
+
+
+	S_SECRETFLICKY_02_OUT,
+	S_SECRETFLICKY_02_FLAP1,
+	S_SECRETFLICKY_02_FLAP2,
+	S_SECRETFLICKY_02_FLAP3,
+	S_SECRETFLICKY_02_STAND,
+	S_SECRETFLICKY_02_CENTER,
+
+
+	S_FAN,
+	S_FAN2,
+	S_FAN3,
+	S_FAN4,
+	S_FAN5,
+
+
+	S_STEAM1,
+	S_STEAM2,
+	S_STEAM3,
+	S_STEAM4,
+	S_STEAM5,
+	S_STEAM6,
+	S_STEAM7,
+	S_STEAM8,
+
+
+	S_BUMPER,
+	S_BUMPERHIT,
+
+
+	S_BALLOON,
+	S_BALLOONPOP1,
+	S_BALLOONPOP2,
+	S_BALLOONPOP3,
+	S_BALLOONPOP4,
+	S_BALLOONPOP5,
+	S_BALLOONPOP6,
+
+
+	S_YELLOWSPRING,
+	S_YELLOWSPRING2,
+	S_YELLOWSPRING3,
+	S_YELLOWSPRING4,
+	S_YELLOWSPRING5,
+
+
+	S_REDSPRING,
+	S_REDSPRING2,
+	S_REDSPRING3,
+	S_REDSPRING4,
+	S_REDSPRING5,
+
+
+	S_BLUESPRING,
+	S_BLUESPRING2,
+	S_BLUESPRING3,
+	S_BLUESPRING4,
+	S_BLUESPRING5,
+
+
+	S_YDIAG1,
+	S_YDIAG2,
+	S_YDIAG3,
+	S_YDIAG4,
+	S_YDIAG5,
+	S_YDIAG6,
+	S_YDIAG7,
+	S_YDIAG8,
+
+
+	S_RDIAG1,
+	S_RDIAG2,
+	S_RDIAG3,
+	S_RDIAG4,
+	S_RDIAG5,
+	S_RDIAG6,
+	S_RDIAG7,
+	S_RDIAG8,
+
+
+	S_BDIAG1,
+	S_BDIAG2,
+	S_BDIAG3,
+	S_BDIAG4,
+	S_BDIAG5,
+	S_BDIAG6,
+	S_BDIAG7,
+	S_BDIAG8,
+
+
+	S_YHORIZ1,
+	S_YHORIZ2,
+	S_YHORIZ3,
+	S_YHORIZ4,
+	S_YHORIZ5,
+	S_YHORIZ6,
+	S_YHORIZ7,
+	S_YHORIZ8,
+
+
+	S_RHORIZ1,
+	S_RHORIZ2,
+	S_RHORIZ3,
+	S_RHORIZ4,
+	S_RHORIZ5,
+	S_RHORIZ6,
+	S_RHORIZ7,
+	S_RHORIZ8,
+
+
+	S_BHORIZ1,
+	S_BHORIZ2,
+	S_BHORIZ3,
+	S_BHORIZ4,
+	S_BHORIZ5,
+	S_BHORIZ6,
+	S_BHORIZ7,
+	S_BHORIZ8,
+
+
+	S_BOOSTERSOUND,
+	S_YELLOWBOOSTERROLLER,
+	S_YELLOWBOOSTERSEG_LEFT,
+	S_YELLOWBOOSTERSEG_RIGHT,
+	S_YELLOWBOOSTERSEG_FACE,
+	S_REDBOOSTERROLLER,
+	S_REDBOOSTERSEG_LEFT,
+	S_REDBOOSTERSEG_RIGHT,
+	S_REDBOOSTERSEG_FACE,
+
+
+	S_RAIN1,
+	S_RAINRETURN,
+
+
+	S_SNOW1,
+	S_SNOW2,
+	S_SNOW3,
+
+
+	S_SPLISH1,
+	S_SPLISH2,
+	S_SPLISH3,
+	S_SPLISH4,
+	S_SPLISH5,
+	S_SPLISH6,
+	S_SPLISH7,
+	S_SPLISH8,
+	S_SPLISH9,
+
+
+	S_LAVASPLISH,
+
+
+	S_SPLASH1,
+	S_SPLASH2,
+	S_SPLASH3,
+
+
+	S_SMOKE1,
+	S_SMOKE2,
+	S_SMOKE3,
+	S_SMOKE4,
+	S_SMOKE5,
+
+
+	S_SMALLBUBBLE,
+	S_MEDIUMBUBBLE,
+	S_LARGEBUBBLE1,
+	S_LARGEBUBBLE2,
+	S_EXTRALARGEBUBBLE,  
+
+	S_POP1,  
+
+	S_WATERZAP,
+
+
+	S_SPINDUST1,
+	S_SPINDUST2,
+	S_SPINDUST3,
+	S_SPINDUST4,
+	S_SPINDUST_BUBBLE1,
+	S_SPINDUST_BUBBLE2,
+	S_SPINDUST_BUBBLE3,
+	S_SPINDUST_BUBBLE4,
+	S_SPINDUST_FIRE1,
+	S_SPINDUST_FIRE2,
+	S_SPINDUST_FIRE3,
+	S_SPINDUST_FIRE4,
+
+	S_FOG1,
+	S_FOG2,
+	S_FOG3,
+	S_FOG4,
+	S_FOG5,
+	S_FOG6,
+	S_FOG7,
+	S_FOG8,
+	S_FOG9,
+	S_FOG10,
+	S_FOG11,
+	S_FOG12,
+	S_FOG13,
+	S_FOG14,
+
+	S_SEED,
+
+	S_PARTICLE,
+
+
+	S_SCRA,  
+	S_SCRB,  
+	S_SCRC,  
+	S_SCRD,  
+	S_SCRE,  
+	S_SCRF,  
+	S_SCRG,  
+	S_SCRH,  
+	S_SCRI,  
+	S_SCRJ,  
+	S_SCRK,  
+	S_SCRL,  
+
+
+	S_ZERO1,
+	S_ONE1,
+	S_TWO1,
+	S_THREE1,
+	S_FOUR1,
+	S_FIVE1,
+
+	S_ZERO2,
+	S_ONE2,
+	S_TWO2,
+	S_THREE2,
+	S_FOUR2,
+	S_FIVE2,
+
+	S_FLIGHTINDICATOR,
+
+	S_LOCKON1,
+	S_LOCKON2,
+	S_LOCKON3,
+	S_LOCKON4,
+	S_LOCKONINF1,
+	S_LOCKONINF2,
+	S_LOCKONINF3,
+	S_LOCKONINF4,
+
+
+	S_TTAG,
+
+
+	S_GOTFLAG,
+
+
+	S_FINISHFLAG,
+
+	S_CORK,
+	S_LHRT,
+
+
+	S_RRNG1,
+	S_RRNG2,
+	S_RRNG3,
+	S_RRNG4,
+	S_RRNG5,
+	S_RRNG6,
+	S_RRNG7,
+
+
+	S_BOUNCERINGAMMO,
+	S_RAILRINGAMMO,
+	S_INFINITYRINGAMMO,
+	S_AUTOMATICRINGAMMO,
+	S_EXPLOSIONRINGAMMO,
+	S_SCATTERRINGAMMO,
+	S_GRENADERINGAMMO,
+
+
+	S_BOUNCEPICKUP,
+	S_BOUNCEPICKUPFADE1,
+	S_BOUNCEPICKUPFADE2,
+	S_BOUNCEPICKUPFADE3,
+	S_BOUNCEPICKUPFADE4,
+	S_BOUNCEPICKUPFADE5,
+	S_BOUNCEPICKUPFADE6,
+	S_BOUNCEPICKUPFADE7,
+	S_BOUNCEPICKUPFADE8,
+
+	S_RAILPICKUP,
+	S_RAILPICKUPFADE1,
+	S_RAILPICKUPFADE2,
+	S_RAILPICKUPFADE3,
+	S_RAILPICKUPFADE4,
+	S_RAILPICKUPFADE5,
+	S_RAILPICKUPFADE6,
+	S_RAILPICKUPFADE7,
+	S_RAILPICKUPFADE8,
+
+	S_AUTOPICKUP,
+	S_AUTOPICKUPFADE1,
+	S_AUTOPICKUPFADE2,
+	S_AUTOPICKUPFADE3,
+	S_AUTOPICKUPFADE4,
+	S_AUTOPICKUPFADE5,
+	S_AUTOPICKUPFADE6,
+	S_AUTOPICKUPFADE7,
+	S_AUTOPICKUPFADE8,
+
+	S_EXPLODEPICKUP,
+	S_EXPLODEPICKUPFADE1,
+	S_EXPLODEPICKUPFADE2,
+	S_EXPLODEPICKUPFADE3,
+	S_EXPLODEPICKUPFADE4,
+	S_EXPLODEPICKUPFADE5,
+	S_EXPLODEPICKUPFADE6,
+	S_EXPLODEPICKUPFADE7,
+	S_EXPLODEPICKUPFADE8,
+
+	S_SCATTERPICKUP,
+	S_SCATTERPICKUPFADE1,
+	S_SCATTERPICKUPFADE2,
+	S_SCATTERPICKUPFADE3,
+	S_SCATTERPICKUPFADE4,
+	S_SCATTERPICKUPFADE5,
+	S_SCATTERPICKUPFADE6,
+	S_SCATTERPICKUPFADE7,
+	S_SCATTERPICKUPFADE8,
+
+	S_GRENADEPICKUP,
+	S_GRENADEPICKUPFADE1,
+	S_GRENADEPICKUPFADE2,
+	S_GRENADEPICKUPFADE3,
+	S_GRENADEPICKUPFADE4,
+	S_GRENADEPICKUPFADE5,
+	S_GRENADEPICKUPFADE6,
+	S_GRENADEPICKUPFADE7,
+	S_GRENADEPICKUPFADE8,
+
+
+	S_THROWNBOUNCE1,
+	S_THROWNBOUNCE2,
+	S_THROWNBOUNCE3,
+	S_THROWNBOUNCE4,
+	S_THROWNBOUNCE5,
+	S_THROWNBOUNCE6,
+	S_THROWNBOUNCE7,
+	S_THROWNINFINITY1,
+	S_THROWNINFINITY2,
+	S_THROWNINFINITY3,
+	S_THROWNINFINITY4,
+	S_THROWNINFINITY5,
+	S_THROWNINFINITY6,
+	S_THROWNINFINITY7,
+	S_THROWNAUTOMATIC1,
+	S_THROWNAUTOMATIC2,
+	S_THROWNAUTOMATIC3,
+	S_THROWNAUTOMATIC4,
+	S_THROWNAUTOMATIC5,
+	S_THROWNAUTOMATIC6,
+	S_THROWNAUTOMATIC7,
+	S_THROWNEXPLOSION1,
+	S_THROWNEXPLOSION2,
+	S_THROWNEXPLOSION3,
+	S_THROWNEXPLOSION4,
+	S_THROWNEXPLOSION5,
+	S_THROWNEXPLOSION6,
+	S_THROWNEXPLOSION7,
+	S_THROWNGRENADE1,
+	S_THROWNGRENADE2,
+	S_THROWNGRENADE3,
+	S_THROWNGRENADE4,
+	S_THROWNGRENADE5,
+	S_THROWNGRENADE6,
+	S_THROWNGRENADE7,
+	S_THROWNGRENADE8,
+	S_THROWNGRENADE9,
+	S_THROWNGRENADE10,
+	S_THROWNGRENADE11,
+	S_THROWNGRENADE12,
+	S_THROWNGRENADE13,
+	S_THROWNGRENADE14,
+	S_THROWNGRENADE15,
+	S_THROWNGRENADE16,
+	S_THROWNGRENADE17,
+	S_THROWNGRENADE18,
+	S_THROWNSCATTER,
+
+	S_RINGEXPLODE,
+
+	S_COIN1,
+	S_COIN2,
+	S_COIN3,
+	S_COINSPARKLE1,
+	S_COINSPARKLE2,
+	S_COINSPARKLE3,
+	S_COINSPARKLE4,
+	S_GOOMBA1,
+	S_GOOMBA1B,
+	S_GOOMBA2,
+	S_GOOMBA3,
+	S_GOOMBA4,
+	S_GOOMBA5,
+	S_GOOMBA6,
+	S_GOOMBA7,
+	S_GOOMBA8,
+	S_GOOMBA9,
+	S_GOOMBA_DEAD,
+	S_BLUEGOOMBA1,
+	S_BLUEGOOMBA1B,
+	S_BLUEGOOMBA2,
+	S_BLUEGOOMBA3,
+	S_BLUEGOOMBA4,
+	S_BLUEGOOMBA5,
+	S_BLUEGOOMBA6,
+	S_BLUEGOOMBA7,
+	S_BLUEGOOMBA8,
+	S_BLUEGOOMBA9,
+	S_BLUEGOOMBA_DEAD,
+
+
+	S_FIREFLOWER1,
+	S_FIREFLOWER2,
+	S_FIREFLOWER3,
+	S_FIREFLOWER4,
+	S_FIREBALL,
+	S_FIREBALLTRAIL1,
+	S_FIREBALLTRAIL2,
+	S_SHELL,
+	S_PUMA_START1,
+	S_PUMA_START2,
+	S_PUMA_UP1,
+	S_PUMA_UP2,
+	S_PUMA_UP3,
+	S_PUMA_DOWN1,
+	S_PUMA_DOWN2,
+	S_PUMA_DOWN3,
+	S_PUMATRAIL1,
+	S_PUMATRAIL2,
+	S_PUMATRAIL3,
+	S_PUMATRAIL4,
+	S_HAMMER,
+	S_KOOPA1,
+	S_KOOPA2,
+	S_KOOPAFLAME1,
+	S_KOOPAFLAME2,
+	S_KOOPAFLAME3,
+	S_AXE1,
+	S_AXE2,
+	S_AXE3,
+	S_MARIOBUSH1,
+	S_MARIOBUSH2,
+	S_TOAD,
+
+
+
+	S_NIGHTSDRONE_MAN1,
+	S_NIGHTSDRONE_MAN2,
+	S_NIGHTSDRONE_SPARKLING1,
+	S_NIGHTSDRONE_SPARKLING2,
+	S_NIGHTSDRONE_SPARKLING3,
+	S_NIGHTSDRONE_SPARKLING4,
+	S_NIGHTSDRONE_SPARKLING5,
+	S_NIGHTSDRONE_SPARKLING6,
+	S_NIGHTSDRONE_SPARKLING7,
+	S_NIGHTSDRONE_SPARKLING8,
+	S_NIGHTSDRONE_SPARKLING9,
+	S_NIGHTSDRONE_SPARKLING10,
+	S_NIGHTSDRONE_SPARKLING11,
+	S_NIGHTSDRONE_SPARKLING12,
+	S_NIGHTSDRONE_SPARKLING13,
+	S_NIGHTSDRONE_SPARKLING14,
+	S_NIGHTSDRONE_SPARKLING15,
+	S_NIGHTSDRONE_SPARKLING16,
+	S_NIGHTSDRONE_GOAL1,
+	S_NIGHTSDRONE_GOAL2,
+	S_NIGHTSDRONE_GOAL3,
+	S_NIGHTSDRONE_GOAL4,
+
+	S_NIGHTSPARKLE1,
+	S_NIGHTSPARKLE2,
+	S_NIGHTSPARKLE3,
+	S_NIGHTSPARKLE4,
+	S_NIGHTSPARKLESUPER1,
+	S_NIGHTSPARKLESUPER2,
+	S_NIGHTSPARKLESUPER3,
+	S_NIGHTSPARKLESUPER4,
+	S_NIGHTSLOOPHELPER,
+
+
+	S_NIGHTSBUMPER1,
+	S_NIGHTSBUMPER2,
+	S_NIGHTSBUMPER3,
+	S_NIGHTSBUMPER4,
+	S_NIGHTSBUMPER5,
+	S_NIGHTSBUMPER6,
+	S_NIGHTSBUMPER7,
+	S_NIGHTSBUMPER8,
+	S_NIGHTSBUMPER9,
+	S_NIGHTSBUMPER10,
+	S_NIGHTSBUMPER11,
+	S_NIGHTSBUMPER12,
+
+	S_HOOP,
+	S_HOOP_XMASA,
+	S_HOOP_XMASB,
+
+	S_NIGHTSCORE10,
+	S_NIGHTSCORE20,
+	S_NIGHTSCORE30,
+	S_NIGHTSCORE40,
+	S_NIGHTSCORE50,
+	S_NIGHTSCORE60,
+	S_NIGHTSCORE70,
+	S_NIGHTSCORE80,
+	S_NIGHTSCORE90,
+	S_NIGHTSCORE100,
+	S_NIGHTSCORE10_2,
+	S_NIGHTSCORE20_2,
+	S_NIGHTSCORE30_2,
+	S_NIGHTSCORE40_2,
+	S_NIGHTSCORE50_2,
+	S_NIGHTSCORE60_2,
+	S_NIGHTSCORE70_2,
+	S_NIGHTSCORE80_2,
+	S_NIGHTSCORE90_2,
+	S_NIGHTSCORE100_2,
+
+
+	S_NIGHTSSUPERLOOP,
+	S_NIGHTSDRILLREFILL,
+	S_NIGHTSHELPER,
+	S_NIGHTSEXTRATIME,
+	S_NIGHTSLINKFREEZE,
+	S_EGGCAPSULE,
+
+
+	S_ORBITEM1,
+	S_ORBITEM2,
+	S_ORBITEM3,
+	S_ORBITEM4,
+	S_ORBITEM5,
+	S_ORBITEM6,
+	S_ORBITEM7,
+	S_ORBITEM8,
+	S_ORBIDYA1,
+	S_ORBIDYA2,
+	S_ORBIDYA3,
+	S_ORBIDYA4,
+	S_ORBIDYA5,
+
+
+	S_NIGHTOPIANHELPER1,
+	S_NIGHTOPIANHELPER2,
+	S_NIGHTOPIANHELPER3,
+	S_NIGHTOPIANHELPER4,
+	S_NIGHTOPIANHELPER5,
+	S_NIGHTOPIANHELPER6,
+	S_NIGHTOPIANHELPER7,
+	S_NIGHTOPIANHELPER8,
+	S_NIGHTOPIANHELPER9,
+
+
+	S_PIAN_LOOK1,
+	S_PIAN_LOOK2,
+	S_PIAN_LOOK3,
+	S_PIAN_FLY1,
+	S_PIAN_FLY2,
+	S_PIAN_FLY3,
+	S_PIAN_SING,
+
+
+	S_SHLEEP1,
+	S_SHLEEP2,
+	S_SHLEEP3,
+	S_SHLEEP4,
+	S_SHLEEPBOUNCE1,
+	S_SHLEEPBOUNCE2,
+	S_SHLEEPBOUNCE3,
+
+
+	S_PENGUINATOR_LOOK,
+	S_PENGUINATOR_WADDLE1,
+	S_PENGUINATOR_WADDLE2,
+	S_PENGUINATOR_WADDLE3,
+	S_PENGUINATOR_WADDLE4,
+	S_PENGUINATOR_SLIDE1,
+	S_PENGUINATOR_SLIDE2,
+	S_PENGUINATOR_SLIDE3,
+	S_PENGUINATOR_SLIDE4,
+	S_PENGUINATOR_SLIDE5,
+
+	S_POPHAT_LOOK,
+	S_POPHAT_SHOOT1,
+	S_POPHAT_SHOOT2,
+	S_POPHAT_SHOOT3,
+	S_POPHAT_SHOOT4,
+	S_POPSHOT,
+	S_POPSHOT_TRAIL,
+
+	S_HIVEELEMENTAL_LOOK,
+	S_HIVEELEMENTAL_PREPARE1,
+	S_HIVEELEMENTAL_PREPARE2,
+	S_HIVEELEMENTAL_SHOOT1,
+	S_HIVEELEMENTAL_SHOOT2,
+	S_HIVEELEMENTAL_DORMANT,
+	S_HIVEELEMENTAL_PAIN,
+	S_HIVEELEMENTAL_DIE1,
+	S_HIVEELEMENTAL_DIE2,
+	S_HIVEELEMENTAL_DIE3,
+
+	S_BUMBLEBORE_SPAWN,
+	S_BUMBLEBORE_LOOK1,
+	S_BUMBLEBORE_LOOK2,
+	S_BUMBLEBORE_FLY1,
+	S_BUMBLEBORE_FLY2,
+	S_BUMBLEBORE_RAISE,
+	S_BUMBLEBORE_FALL1,
+	S_BUMBLEBORE_FALL2,
+	S_BUMBLEBORE_STUCK1,
+	S_BUMBLEBORE_STUCK2,
+	S_BUMBLEBORE_DIE,
+
+	S_BUGGLEIDLE,
+	S_BUGGLEFLY,
+
+	S_SMASHSPIKE_FLOAT,
+	S_SMASHSPIKE_EASE1,
+	S_SMASHSPIKE_EASE2,
+	S_SMASHSPIKE_FALL,
+	S_SMASHSPIKE_STOMP1,
+	S_SMASHSPIKE_STOMP2,
+	S_SMASHSPIKE_RISE1,
+	S_SMASHSPIKE_RISE2,
+
+	S_CACO_LOOK,
+	S_CACO_WAKE1,
+	S_CACO_WAKE2,
+	S_CACO_WAKE3,
+	S_CACO_WAKE4,
+	S_CACO_ROAR,
+	S_CACO_CHASE,
+	S_CACO_CHASE_REPEAT,
+	S_CACO_RANDOM,
+	S_CACO_PREPARE_SOUND,
+	S_CACO_PREPARE1,
+	S_CACO_PREPARE2,
+	S_CACO_PREPARE3,
+	S_CACO_SHOOT_SOUND,
+	S_CACO_SHOOT1,
+	S_CACO_SHOOT2,
+	S_CACO_CLOSE,
+	S_CACO_DIE_FLAGS,
+	S_CACO_DIE_GIB1,
+	S_CACO_DIE_GIB2,
+	S_CACO_DIE_SCREAM,
+	S_CACO_DIE_SHATTER,
+	S_CACO_DIE_FALL,
+	S_CACOSHARD_RANDOMIZE,
+	S_CACOSHARD1_1,
+	S_CACOSHARD1_2,
+	S_CACOSHARD2_1,
+	S_CACOSHARD2_2,
+	S_CACOFIRE1,
+	S_CACOFIRE2,
+	S_CACOFIRE3,
+	S_CACOFIRE_EXPLODE1,
+	S_CACOFIRE_EXPLODE2,
+	S_CACOFIRE_EXPLODE3,
+	S_CACOFIRE_EXPLODE4,
+
+	S_SPINBOBERT_MOVE_FLIPUP,
+	S_SPINBOBERT_MOVE_UP,
+	S_SPINBOBERT_MOVE_FLIPDOWN,
+	S_SPINBOBERT_MOVE_DOWN,
+	S_SPINBOBERT_FIRE_MOVE,
+	S_SPINBOBERT_FIRE_GHOST,
+	S_SPINBOBERT_FIRE_TRAIL1,
+	S_SPINBOBERT_FIRE_TRAIL2,
+	S_SPINBOBERT_FIRE_TRAIL3,
+
+	S_HANGSTER_LOOK,
+	S_HANGSTER_SWOOP1,
+	S_HANGSTER_SWOOP2,
+	S_HANGSTER_ARC1,
+	S_HANGSTER_ARC2,
+	S_HANGSTER_ARC3,
+	S_HANGSTER_FLY1,
+	S_HANGSTER_FLY2,
+	S_HANGSTER_FLY3,
+	S_HANGSTER_FLY4,
+	S_HANGSTER_FLYREPEAT,
+	S_HANGSTER_ARCUP1,
+	S_HANGSTER_ARCUP2,
+	S_HANGSTER_ARCUP3,
+	S_HANGSTER_RETURN1,
+	S_HANGSTER_RETURN2,
+	S_HANGSTER_RETURN3,
+
+	S_CRUMBLE1,
+	S_CRUMBLE2,
+
+
+	S_SPRK1,
+	S_SPRK2,
+	S_SPRK3,
+
+
+	S_XPLD_FLICKY,
+	S_XPLD1,
+	S_XPLD2,
+	S_XPLD3,
+	S_XPLD4,
+	S_XPLD5,
+	S_XPLD6,
+	S_XPLD_EGGTRAP,
+
+
+	S_WPLD1,
+	S_WPLD2,
+	S_WPLD3,
+	S_WPLD4,
+	S_WPLD5,
+	S_WPLD6,
+
+	S_DUST1,
+	S_DUST2,
+	S_DUST3,
+	S_DUST4,
+
+	S_ROCKSPAWN,
+
+	S_ROCKCRUMBLEA,
+	S_ROCKCRUMBLEB,
+	S_ROCKCRUMBLEC,
+	S_ROCKCRUMBLED,
+	S_ROCKCRUMBLEE,
+	S_ROCKCRUMBLEF,
+	S_ROCKCRUMBLEG,
+	S_ROCKCRUMBLEH,
+	S_ROCKCRUMBLEI,
+	S_ROCKCRUMBLEJ,
+	S_ROCKCRUMBLEK,
+	S_ROCKCRUMBLEL,
+	S_ROCKCRUMBLEM,
+	S_ROCKCRUMBLEN,
+	S_ROCKCRUMBLEO,
+	S_ROCKCRUMBLEP,
+
+
+	S_GFZDEBRIS,
+	S_BRICKDEBRIS,
+	S_WOODDEBRIS,
+	S_REDBRICKDEBRIS,  
+	S_BLUEBRICKDEBRIS,  
+	S_YELLOWBRICKDEBRIS,  
+
+	S_NAMECHECK,
+
+
+	S_OLDK_STND,
+	S_OLDK_DIE0,
+	S_OLDK_DIE1,
+	S_OLDK_DIE2,
+
+	S_FIRSTFREESLOT,
+	S_LASTFREESLOT = S_FIRSTFREESLOT + NUMSTATEFREESLOTS - 1,
+	NUMSTATES
+} statenum_t;
+
+typedef struct
+{
+	spritenum_t sprite;
+	UINT32 frame;  
+	INT32 tics;
+	actionf_t action;
+	INT32 var1;
+	INT32 var2;
+	statenum_t nextstate;
+	UINT16 sprite2;
+} state_t;
+
+extern state_t states[NUMSTATES];
+extern char sprnames[NUMSPRITES + 1][MAXSPRITENAME + 1];
+extern char spr2names[NUMPLAYERSPRITES][MAXSPRITENAME + 1];
+extern playersprite_t spr2defaults[NUMPLAYERSPRITES];
+extern state_t *astate;
+extern playersprite_t free_spr2;
+
+typedef enum mobj_type
+{
+	MT_NULL,
+	MT_UNKNOWN,
+
+	MT_THOK,  
+	MT_PLAYER,
+	MT_TAILSOVERLAY,  
+	MT_METALJETFUME,
+
+
+	MT_BLUECRAWLA,  
+	MT_REDCRAWLA,  
+	MT_GFZFISH,  
+	MT_GOLDBUZZ,  
+	MT_REDBUZZ,  
+	MT_JETTBOMBER,  
+	MT_JETTGUNNER,  
+	MT_CRAWLACOMMANDER,  
+	MT_DETON,  
+	MT_SKIM,  
+	MT_TURRET,  
+	MT_POPUPTURRET,  
+	MT_SPINCUSHION,  
+	MT_CRUSHSTACEAN,  
+	MT_CRUSHCLAW,  
+	MT_CRUSHCHAIN,  
+	MT_BANPYURA,  
+	MT_BANPSPRING,  
+	MT_JETJAW,  
+	MT_SNAILER,  
+	MT_VULTURE,  
+	MT_POINTY,  
+	MT_POINTYBALL,  
+	MT_ROBOHOOD,  
+	MT_FACESTABBER,  
+	MT_FACESTABBERSPEAR,  
+	MT_EGGGUARD,  
+	MT_EGGSHIELD,  
+	MT_GSNAPPER,  
+	MT_SNAPPER_LEG,  
+	MT_SNAPPER_HEAD,  
+	MT_MINUS,  
+	MT_MINUSDIRT,  
+	MT_SPRINGSHELL,  
+	MT_YELLOWSHELL,  
+	MT_UNIDUS,  
+	MT_UNIBALL,  
+	MT_CANARIVORE,  
+	MT_CANARIVORE_GAS,  
+	MT_PYREFLY,  
+	MT_PYREFLY_FIRE,  
+	MT_PTERABYTESPAWNER,  
+	MT_PTERABYTEWAYPOINT,  
+	MT_PTERABYTE,  
+	MT_DRAGONBOMBER,  
+	MT_DRAGONWING,  
+	MT_DRAGONTAIL,  
+	MT_DRAGONMINE,  
+
+
+	MT_BOSSEXPLODE,
+	MT_SONIC3KBOSSEXPLODE,
+	MT_BOSSFLYPOINT,
+	MT_EGGTRAP,
+	MT_BOSS3WAYPOINT,
+	MT_BOSS9GATHERPOINT,
+	MT_BOSSJUNK,
+
+
+	MT_EGGMOBILE,
+	MT_JETFUME1,
+	MT_EGGMOBILE_BALL,
+	MT_EGGMOBILE_TARGET,
+	MT_EGGMOBILE_FIRE,
+
+
+	MT_EGGMOBILE2,
+	MT_EGGMOBILE2_POGO,
+	MT_GOOP,
+	MT_GOOPTRAIL,
+
+
+	MT_EGGMOBILE3,
+	MT_FAKEMOBILE,
+	MT_SHOCKWAVE,
+
+
+	MT_EGGMOBILE4,
+	MT_EGGMOBILE4_MACE,
+	MT_JETFLAME,
+	MT_EGGROBO1,
+	MT_EGGROBO1JET,
+
+
+	MT_FANG,
+	MT_BROKENROBOT,
+	MT_VWREF,
+	MT_VWREB,
+	MT_PROJECTORLIGHT,
+	MT_FBOMB,
+	MT_TNTDUST,  
+	MT_FSGNA,
+	MT_FSGNB,
+	MT_FANGWAYPOINT,
+
+
+	MT_BLACKEGGMAN,
+	MT_BLACKEGGMAN_HELPER,
+	MT_BLACKEGGMAN_GOOPFIRE,
+	MT_BLACKEGGMAN_MISSILE,
+
+
+	MT_CYBRAKDEMON,
+	MT_CYBRAKDEMON_ELECTRIC_BARRIER,
+	MT_CYBRAKDEMON_MISSILE,
+	MT_CYBRAKDEMON_FLAMESHOT,
+	MT_CYBRAKDEMON_FLAMEREST,
+	MT_CYBRAKDEMON_TARGET_RETICULE,
+	MT_CYBRAKDEMON_TARGET_DOT,
+	MT_CYBRAKDEMON_NAPALM_BOMB_LARGE,
+	MT_CYBRAKDEMON_NAPALM_BOMB_SMALL,
+	MT_CYBRAKDEMON_NAPALM_FLAMES,
+	MT_CYBRAKDEMON_VILE_EXPLOSION,
+
+
+	MT_METALSONIC_RACE,
+	MT_METALSONIC_BATTLE,
+	MT_MSSHIELD_FRONT,
+	MT_MSGATHER,
+
+
+	MT_RING,
+	MT_FLINGRING,  
+	MT_BLUESPHERE,   
+	MT_FLINGBLUESPHERE,  
+	MT_BOMBSPHERE,
+	MT_REDTEAMRING,   
+	MT_BLUETEAMRING,  
+	MT_TOKEN,  
+	MT_REDFLAG,  
+	MT_BLUEFLAG,  
+	MT_EMBLEM,
+	MT_EMERALD1,
+	MT_EMERALD2,
+	MT_EMERALD3,
+	MT_EMERALD4,
+	MT_EMERALD5,
+	MT_EMERALD6,
+	MT_EMERALD7,
+	MT_EMERHUNT,  
+	MT_EMERALDSPAWN,  
+	MT_FLINGEMERALD,  
+
+
+	MT_FAN,
+	MT_STEAM,
+	MT_BUMPER,
+	MT_BALLOON,
+
+	MT_YELLOWSPRING,
+	MT_REDSPRING,
+	MT_BLUESPRING,
+	MT_YELLOWDIAG,
+	MT_REDDIAG,
+	MT_BLUEDIAG,
+	MT_YELLOWHORIZ,
+	MT_REDHORIZ,
+	MT_BLUEHORIZ,
+
+	MT_BOOSTERSEG,
+	MT_BOOSTERROLLER,
+	MT_YELLOWBOOSTER,
+	MT_REDBOOSTER,
+
+
+	MT_BUBBLES,  
+	MT_SIGN,  
+	MT_SPIKEBALL,  
+	MT_SPINFIRE,
+	MT_SPIKE,
+	MT_WALLSPIKE,
+	MT_WALLSPIKEBASE,
+	MT_STARPOST,
+	MT_BIGMINE,
+	MT_BLASTEXECUTOR,
+	MT_CANNONLAUNCHER,
+
+
+	MT_BOXSPARKLE,
+
+
+	MT_RING_BOX,
+	MT_PITY_BOX,
+	MT_ATTRACT_BOX,
+	MT_FORCE_BOX,
+	MT_ARMAGEDDON_BOX,
+	MT_WHIRLWIND_BOX,
+	MT_ELEMENTAL_BOX,
+	MT_SNEAKERS_BOX,
+	MT_INVULN_BOX,
+	MT_1UP_BOX,
+	MT_EGGMAN_BOX,
+	MT_MIXUP_BOX,
+	MT_MYSTERY_BOX,
+	MT_GRAVITY_BOX,
+	MT_RECYCLER_BOX,
+	MT_SCORE1K_BOX,
+	MT_SCORE10K_BOX,
+	MT_FLAMEAURA_BOX,
+	MT_BUBBLEWRAP_BOX,
+	MT_THUNDERCOIN_BOX,
+
+
+	MT_PITY_GOLDBOX,
+	MT_ATTRACT_GOLDBOX,
+	MT_FORCE_GOLDBOX,
+	MT_ARMAGEDDON_GOLDBOX,
+	MT_WHIRLWIND_GOLDBOX,
+	MT_ELEMENTAL_GOLDBOX,
+	MT_SNEAKERS_GOLDBOX,
+	MT_INVULN_GOLDBOX,
+	MT_EGGMAN_GOLDBOX,
+	MT_GRAVITY_GOLDBOX,
+	MT_FLAMEAURA_GOLDBOX,
+	MT_BUBBLEWRAP_GOLDBOX,
+	MT_THUNDERCOIN_GOLDBOX,
+
+
+	MT_RING_REDBOX,
+	MT_RING_BLUEBOX,
+
+
+	MT_RING_ICON,
+	MT_PITY_ICON,
+	MT_ATTRACT_ICON,
+	MT_FORCE_ICON,
+	MT_ARMAGEDDON_ICON,
+	MT_WHIRLWIND_ICON,
+	MT_ELEMENTAL_ICON,
+	MT_SNEAKERS_ICON,
+	MT_INVULN_ICON,
+	MT_1UP_ICON,
+	MT_EGGMAN_ICON,
+	MT_MIXUP_ICON,
+	MT_GRAVITY_ICON,
+	MT_RECYCLER_ICON,
+	MT_SCORE1K_ICON,
+	MT_SCORE10K_ICON,
+	MT_FLAMEAURA_ICON,
+	MT_BUBBLEWRAP_ICON,
+	MT_THUNDERCOIN_ICON,
+
+
+	MT_ROCKET,
+	MT_LASER,
+	MT_TORPEDO,
+	MT_TORPEDO2,  
+	MT_ENERGYBALL,
+	MT_MINE,  
+	MT_JETTBULLET,  
+	MT_TURRETLASER,
+	MT_CANNONBALL,  
+	MT_CANNONBALLDECOR,  
+	MT_ARROW,  
+	MT_DEMONFIRE,  
+
+
+	MT_LETTER,
+
+
+	MT_TUTORIALPLANT,
+	MT_TUTORIALLEAF,
+	MT_TUTORIALFLOWER,
+	MT_TUTORIALFLOWERF,
+
+
+	MT_GFZFLOWER1,
+	MT_GFZFLOWER2,
+	MT_GFZFLOWER3,
+
+	MT_BLUEBERRYBUSH,
+	MT_BERRYBUSH,
+	MT_BUSH,
+
+
+	MT_GFZTREE,
+	MT_GFZBERRYTREE,
+	MT_GFZCHERRYTREE,
+	MT_CHECKERTREE,
+	MT_CHECKERSUNSETTREE,
+	MT_FHZTREE,  
+	MT_FHZPINKTREE,
+	MT_POLYGONTREE,
+	MT_BUSHTREE,
+	MT_BUSHREDTREE,
+	MT_SPRINGTREE,
+
+
+	MT_THZFLOWER1,
+	MT_THZFLOWER2,
+	MT_THZFLOWER3,
+	MT_THZTREE,  
+	MT_THZTREEBRANCH,  
+	MT_ALARM,
+
+
+	MT_GARGOYLE,  
+	MT_BIGGARGOYLE,  
+	MT_SEAWEED,  
+	MT_WATERDRIP,  
+	MT_WATERDROP,  
+	MT_CORAL1,  
+	MT_CORAL2,
+	MT_CORAL3,
+	MT_CORAL4,
+	MT_CORAL5,
+	MT_BLUECRYSTAL,  
+	MT_KELP,  
+	MT_ANIMALGAETOP,  
+	MT_ANIMALGAESEG,  
+	MT_DSZSTALAGMITE,  
+	MT_DSZ2STALAGMITE,  
+	MT_LIGHTBEAM,  
+
+
+	MT_CHAIN,  
+	MT_FLAME,  
+	MT_FLAMEPARTICLE,
+	MT_EGGSTATUE,  
+	MT_MACEPOINT,  
+	MT_CHAINMACEPOINT,  
+	MT_SPRINGBALLPOINT,  
+	MT_CHAINPOINT,  
+	MT_HIDDEN_SLING,  
+	MT_FIREBARPOINT,  
+	MT_CUSTOMMACEPOINT,  
+	MT_SMALLMACECHAIN,  
+	MT_BIGMACECHAIN,  
+	MT_SMALLMACE,  
+	MT_BIGMACE,  
+	MT_SMALLGRABCHAIN,  
+	MT_BIGGRABCHAIN,  
+	MT_BLUESPRINGBALL,  
+	MT_YELLOWSPRINGBALL,  
+	MT_REDSPRINGBALL,  
+	MT_SMALLFIREBAR,  
+	MT_BIGFIREBAR,  
+	MT_CEZFLOWER,  
+	MT_CEZPOLE1,  
+	MT_CEZPOLE2,  
+	MT_CEZBANNER1,  
+	MT_CEZBANNER2,  
+	MT_PINETREE,  
+	MT_CEZBUSH1,  
+	MT_CEZBUSH2,  
+	MT_CANDLE,  
+	MT_CANDLEPRICKET,  
+	MT_FLAMEHOLDER,  
+	MT_FIRETORCH,  
+	MT_WAVINGFLAG1,  
+	MT_WAVINGFLAG2,  
+	MT_WAVINGFLAGSEG1,  
+	MT_WAVINGFLAGSEG2,  
+	MT_CRAWLASTATUE,  
+	MT_FACESTABBERSTATUE,  
+	MT_SUSPICIOUSFACESTABBERSTATUE,  
+	MT_BRAMBLES,  
+
+
+	MT_BIGTUMBLEWEED,
+	MT_LITTLETUMBLEWEED,
+	MT_CACTI1,  
+	MT_CACTI2,  
+	MT_CACTI3,  
+	MT_CACTI4,  
+	MT_CACTI5,  
+	MT_CACTI6,  
+	MT_CACTI7,  
+	MT_CACTI8,  
+	MT_CACTI9,  
+	MT_CACTI10,  
+	MT_CACTI11,  
+	MT_CACTITINYSEG,  
+	MT_CACTISMALLSEG,  
+	MT_ARIDSIGN_CAUTION,  
+	MT_ARIDSIGN_CACTI,  
+	MT_ARIDSIGN_SHARPTURN,  
+	MT_OILLAMP,
+	MT_TNTBARREL,
+	MT_PROXIMITYTNT,
+	MT_DUSTDEVIL,
+	MT_DUSTLAYER,
+	MT_ARIDDUST,
+	MT_MINECART,
+	MT_MINECARTSEG,
+	MT_MINECARTSPAWNER,
+	MT_MINECARTEND,
+	MT_MINECARTENDSOLID,
+	MT_MINECARTSIDEMARK,
+	MT_MINECARTSPARK,
+	MT_SALOONDOOR,
+	MT_SALOONDOORCENTER,
+	MT_TRAINCAMEOSPAWNER,
+	MT_TRAINSEG,
+	MT_TRAINDUSTSPAWNER,
+	MT_TRAINSTEAMSPAWNER,
+	MT_MINECARTSWITCHPOINT,
+
+
+	MT_FLAMEJET,
+	MT_VERTICALFLAMEJET,
+	MT_FLAMEJETFLAME,
+
+	MT_FJSPINAXISA,  
+	MT_FJSPINAXISB,  
+
+	MT_FLAMEJETFLAMEB,  
+
+	MT_LAVAFALL,
+	MT_LAVAFALL_LAVA,
+	MT_LAVAFALLROCK,
+
+	MT_ROLLOUTSPAWN,
+	MT_ROLLOUTROCK,
+
+	MT_BIGFERNLEAF,
+	MT_BIGFERN,
+	MT_JUNGLEPALM,
+	MT_TORCHFLOWER,
+	MT_WALLVINE_LONG,
+	MT_WALLVINE_SHORT,
+
+
+
+
+
+
+	MT_GLAREGOYLE,
+	MT_GLAREGOYLEUP,
+	MT_GLAREGOYLEDOWN,
+	MT_GLAREGOYLELONG,
+	MT_TARGET,  
+	MT_GREENFLAME,
+	MT_BLUEGARGOYLE,
+
+
+	MT_STALAGMITE0,
+	MT_STALAGMITE1,
+	MT_STALAGMITE2,
+	MT_STALAGMITE3,
+	MT_STALAGMITE4,
+	MT_STALAGMITE5,
+	MT_STALAGMITE6,
+	MT_STALAGMITE7,
+	MT_STALAGMITE8,
+	MT_STALAGMITE9,
+
+
+	MT_XMASPOLE,
+	MT_CANDYCANE,
+	MT_SNOWMAN,     
+	MT_SNOWMANHAT,  
+	MT_LAMPPOST1,   
+	MT_LAMPPOST2,   
+	MT_HANGSTAR,
+	MT_MISTLETOE,
+	MT_SSZTREE,
+	MT_SSZTREE_BRANCH,
+	MT_SSZTREE2,
+	MT_SSZTREE2_BRANCH,
+
+	MT_XMASBLUEBERRYBUSH,
+	MT_XMASBERRYBUSH,
+	MT_XMASBUSH,
+
+	MT_FHZICE1,
+	MT_FHZICE2,
+	MT_ROSY,
+	MT_CDLHRT,
+
+
+
+	MT_JACKO1,
+	MT_JACKO2,
+	MT_JACKO3,
+
+	MT_HHZTREE_TOP,
+	MT_HHZTREE_PART,
+
+	MT_HHZSHROOM,
+	MT_HHZGRASS,
+	MT_HHZTENTACLE1,
+	MT_HHZTENTACLE2,
+	MT_HHZSTALAGMITE_TALL,
+	MT_HHZSTALAGMITE_SHORT,
+
+
+	MT_BSZTALLFLOWER_RED,
+	MT_BSZTALLFLOWER_PURPLE,
+	MT_BSZTALLFLOWER_BLUE,
+	MT_BSZTALLFLOWER_CYAN,
+	MT_BSZTALLFLOWER_YELLOW,
+	MT_BSZTALLFLOWER_ORANGE,
+	MT_BSZFLOWER_RED,
+	MT_BSZFLOWER_PURPLE,
+	MT_BSZFLOWER_BLUE,
+	MT_BSZFLOWER_CYAN,
+	MT_BSZFLOWER_YELLOW,
+	MT_BSZFLOWER_ORANGE,
+	MT_BSZSHORTFLOWER_RED,
+	MT_BSZSHORTFLOWER_PURPLE,
+	MT_BSZSHORTFLOWER_BLUE,
+	MT_BSZSHORTFLOWER_CYAN,
+	MT_BSZSHORTFLOWER_YELLOW,
+	MT_BSZSHORTFLOWER_ORANGE,
+	MT_BSZTULIP_RED,
+	MT_BSZTULIP_PURPLE,
+	MT_BSZTULIP_BLUE,
+	MT_BSZTULIP_CYAN,
+	MT_BSZTULIP_YELLOW,
+	MT_BSZTULIP_ORANGE,
+	MT_BSZCLUSTER_RED,
+	MT_BSZCLUSTER_PURPLE,
+	MT_BSZCLUSTER_BLUE,
+	MT_BSZCLUSTER_CYAN,
+	MT_BSZCLUSTER_YELLOW,
+	MT_BSZCLUSTER_ORANGE,
+	MT_BSZBUSH_RED,
+	MT_BSZBUSH_PURPLE,
+	MT_BSZBUSH_BLUE,
+	MT_BSZBUSH_CYAN,
+	MT_BSZBUSH_YELLOW,
+	MT_BSZBUSH_ORANGE,
+	MT_BSZVINE_RED,
+	MT_BSZVINE_PURPLE,
+	MT_BSZVINE_BLUE,
+	MT_BSZVINE_CYAN,
+	MT_BSZVINE_YELLOW,
+	MT_BSZVINE_ORANGE,
+	MT_BSZSHRUB,
+	MT_BSZCLOVER,
+	MT_BIG_PALMTREE_TRUNK,
+	MT_BIG_PALMTREE_TOP,
+	MT_PALMTREE_TRUNK,
+	MT_PALMTREE_TOP,
+
+
+	MT_DBALL,
+	MT_EGGSTATUE2,
+	MT_GINE,
+	MT_PPAL,
+	MT_PPEL,
+
+
+	MT_ELEMENTAL_ORB,  
+	MT_ATTRACT_ORB,  
+	MT_FORCE_ORB,  
+	MT_ARMAGEDDON_ORB,  
+	MT_WHIRLWIND_ORB,  
+	MT_PITY_ORB,  
+	MT_FLAMEAURA_ORB,  
+	MT_BUBBLEWRAP_ORB,  
+	MT_THUNDERCOIN_ORB,  
+	MT_THUNDERCOIN_SPARK,  
+	MT_IVSP,  
+	MT_SUPERSPARK,  
+
+
+	MT_FLICKY_01,  
+	MT_FLICKY_01_CENTER,
+	MT_FLICKY_02,  
+	MT_FLICKY_02_CENTER,
+	MT_FLICKY_03,  
+	MT_FLICKY_03_CENTER,
+	MT_FLICKY_04,  
+	MT_FLICKY_04_CENTER,
+	MT_FLICKY_05,  
+	MT_FLICKY_05_CENTER,
+	MT_FLICKY_06,  
+	MT_FLICKY_06_CENTER,
+	MT_FLICKY_07,  
+	MT_FLICKY_07_CENTER,
+	MT_FLICKY_08,  
+	MT_FLICKY_08_CENTER,
+	MT_FLICKY_09,  
+	MT_FLICKY_09_CENTER,
+	MT_FLICKY_10,  
+	MT_FLICKY_10_CENTER,
+	MT_FLICKY_11,  
+	MT_FLICKY_11_CENTER,
+	MT_FLICKY_12,  
+	MT_FLICKY_12_CENTER,
+	MT_FLICKY_13,  
+	MT_FLICKY_13_CENTER,
+	MT_FLICKY_14,  
+	MT_FLICKY_14_CENTER,
+	MT_FLICKY_15,  
+	MT_FLICKY_15_CENTER,
+	MT_FLICKY_16,  
+	MT_FLICKY_16_CENTER,
+	MT_SECRETFLICKY_01,  
+	MT_SECRETFLICKY_01_CENTER,
+	MT_SECRETFLICKY_02,  
+	MT_SECRETFLICKY_02_CENTER,
+	MT_SEED,
+
+
+	MT_RAIN,  
+	MT_SNOWFLAKE,  
+	MT_SPLISH,  
+	MT_LAVASPLISH,  
+	MT_SMOKE,
+	MT_SMALLBUBBLE,  
+	MT_MEDIUMBUBBLE,  
+	MT_EXTRALARGEBUBBLE,  
+	MT_WATERZAP,
+	MT_SPINDUST,  
+	MT_TFOG,
+	MT_PARTICLE,
+	MT_PARTICLEGEN,  
+
+
+	MT_SCORE,  
+	MT_DROWNNUMBERS,  
+	MT_GOTEMERALD,  
+	MT_LOCKON,  
+	MT_LOCKONINF,  
+	MT_TAG,  
+	MT_GOTFLAG,  
+	MT_FINISHFLAG,  
+
+
+	MT_AMBIENT,
+
+	MT_CORK,
+	MT_LHRT,
+
+
+	MT_REDRING,
+	MT_BOUNCERING,
+	MT_RAILRING,
+	MT_INFINITYRING,
+	MT_AUTOMATICRING,
+	MT_EXPLOSIONRING,
+	MT_SCATTERRING,
+	MT_GRENADERING,
+
+	MT_BOUNCEPICKUP,
+	MT_RAILPICKUP,
+	MT_AUTOPICKUP,
+	MT_EXPLODEPICKUP,
+	MT_SCATTERPICKUP,
+	MT_GRENADEPICKUP,
+
+	MT_THROWNBOUNCE,
+	MT_THROWNINFINITY,
+	MT_THROWNAUTOMATIC,
+	MT_THROWNSCATTER,
+	MT_THROWNEXPLOSION,
+	MT_THROWNGRENADE,
+
+
+	MT_COIN,
+	MT_FLINGCOIN,
+	MT_GOOMBA,
+	MT_BLUEGOOMBA,
+	MT_FIREFLOWER,
+	MT_FIREBALL,
+	MT_FIREBALLTRAIL,
+	MT_SHELL,
+	MT_PUMA,
+	MT_PUMATRAIL,
+	MT_HAMMER,
+	MT_KOOPA,
+	MT_KOOPAFLAME,
+	MT_AXE,
+	MT_MARIOBUSH1,
+	MT_MARIOBUSH2,
+	MT_TOAD,
+
+
+	MT_AXIS,
+	MT_AXISTRANSFER,
+	MT_AXISTRANSFERLINE,
+	MT_NIGHTSDRONE,
+	MT_NIGHTSDRONE_MAN,
+	MT_NIGHTSDRONE_SPARKLING,
+	MT_NIGHTSDRONE_GOAL,
+	MT_NIGHTSPARKLE,
+	MT_NIGHTSLOOPHELPER,
+	MT_NIGHTSBUMPER,  
+	MT_HOOP,
+	MT_HOOPCOLLIDE,  
+	MT_HOOPCENTER,  
+	MT_NIGHTSCORE,
+	MT_NIGHTSCHIP,  
+	MT_FLINGNIGHTSCHIP,  
+	MT_NIGHTSSTAR,  
+	MT_FLINGNIGHTSSTAR,  
+	MT_NIGHTSSUPERLOOP,
+	MT_NIGHTSDRILLREFILL,
+	MT_NIGHTSHELPER,
+	MT_NIGHTSEXTRATIME,
+	MT_NIGHTSLINKFREEZE,
+	MT_EGGCAPSULE,
+	MT_IDEYAANCHOR,
+	MT_NIGHTOPIANHELPER,  
+	MT_PIAN,  
+	MT_SHLEEP,  
+
+
+	MT_PENGUINATOR,
+	MT_POPHAT,
+	MT_POPSHOT,
+	MT_POPSHOT_TRAIL,
+
+	MT_HIVEELEMENTAL,
+	MT_BUMBLEBORE,
+
+	MT_BUGGLE,
+
+	MT_SMASHINGSPIKEBALL,
+	MT_CACOLANTERN,
+	MT_CACOSHARD,
+	MT_CACOFIRE,
+	MT_SPINBOBERT,
+	MT_SPINBOBERT_FIRE1,
+	MT_SPINBOBERT_FIRE2,
+	MT_HANGSTER,
+
+
+	MT_TELEPORTMAN,
+	MT_ALTVIEWMAN,
+	MT_CRUMBLEOBJ,  
+	MT_TUBEWAYPOINT,
+	MT_PUSH,
+	MT_GHOST,
+	MT_OVERLAY,
+	MT_ANGLEMAN,
+	MT_POLYANCHOR,
+	MT_POLYSPAWN,
+
+
+	MT_SKYBOX,
+
+
+	MT_SPARK,  
+	MT_EXPLODE,  
+	MT_UWEXPLODE,  
+	MT_DUST,
+	MT_ROCKSPAWNER,
+	MT_FALLINGROCK,
+	MT_ROCKCRUMBLE1,
+	MT_ROCKCRUMBLE2,
+	MT_ROCKCRUMBLE3,
+	MT_ROCKCRUMBLE4,
+	MT_ROCKCRUMBLE5,
+	MT_ROCKCRUMBLE6,
+	MT_ROCKCRUMBLE7,
+	MT_ROCKCRUMBLE8,
+	MT_ROCKCRUMBLE9,
+	MT_ROCKCRUMBLE10,
+	MT_ROCKCRUMBLE11,
+	MT_ROCKCRUMBLE12,
+	MT_ROCKCRUMBLE13,
+	MT_ROCKCRUMBLE14,
+	MT_ROCKCRUMBLE15,
+	MT_ROCKCRUMBLE16,
+
+
+	MT_GFZDEBRIS,
+	MT_BRICKDEBRIS,
+	MT_WOODDEBRIS,
+	MT_REDBRICKDEBRIS,  
+	MT_BLUEBRICKDEBRIS,  
+	MT_YELLOWBRICKDEBRIS,  
+
+	MT_NAMECHECK,
+	MT_RAY,  
+
+	MT_OLDK,
+
+	MT_FIRSTFREESLOT,
+	MT_LASTFREESLOT = MT_FIRSTFREESLOT + NUMMOBJFREESLOTS - 1,
+	NUMMOBJTYPES
+} mobjtype_t;
+
+typedef struct
+{
+	INT32 doomednum;
+	statenum_t spawnstate;
+	INT32 spawnhealth;
+	statenum_t seestate;
+	sfxenum_t seesound;
+	INT32 reactiontime;
+	sfxenum_t attacksound;
+	statenum_t painstate;
+	INT32 painchance;
+	sfxenum_t painsound;
+	statenum_t meleestate;
+	statenum_t missilestate;
+	statenum_t deathstate;
+	statenum_t xdeathstate;
+	sfxenum_t deathsound;
+	fixed_t speed;
+	fixed_t radius;
+	fixed_t height;
+	INT32 dispoffset;
+	INT32 mass;
+	INT32 damage;
+	sfxenum_t activesound;
+	UINT32 flags;
+	statenum_t raisestate;
+} mobjinfo_t;
+
+extern mobjinfo_t mobjinfo[NUMMOBJTYPES];
+
+void P_PatchInfoTables(void);
+
+void P_BackupTables(void);
+
+void P_ResetData(INT32 flags);
+
+#endif

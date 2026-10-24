@@ -1,0 +1,24 @@
+LIBRARY ICONV.DLL
+EXPORTS
+  iconv
+  iconv_open
+  iconv_close
+  iconvctl
+  libiconv=iconv
+  libiconv_open=iconv_open
+  libiconv_close=iconv_close
+  libiconvctl=iconvctl
+
+
+
+
+
+
+
+
+
+
+
+
+
+

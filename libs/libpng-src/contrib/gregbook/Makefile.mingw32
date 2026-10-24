@@ -1,0 +1,131 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PNGDIR = ../libpng-win32
+PNGINC = -I$(PNGDIR)
+PNGLIBd = $(PNGDIR)/libpng.dll.a	 
+PNGLIBs = $(PNGDIR)/libpng.a		 
+
+
+ZDIR = ../zlib-win32
+ZINC = -I$(ZDIR)
+ZLIBd = $(ZDIR)/libzdll.a
+ZLIBs = $(ZDIR)/libz.a
+
+
+W32DIR =
+
+W32INC = -I$(W32DIR)/include
+W32LIB = $(W32DIR)/lib/libuser32.a $(W32DIR)/lib/libgdi32.a
+
+CC = gcc
+
+LD = $(CC)
+RM = rm -f
+CPPFLAGS = $(INCS)
+CFLAGS = -O -Wall $(MINGW_CCFLAGS)
+
+
+LDFLAGS = $(MINGW_LDFLAGS)
+O = .o
+E = .exe
+
+INCS = $(PNGINC) $(ZINC) $(W32INC)
+RLIBSd = $(PNGLIBd) $(ZLIBd) $(W32LIB) -lm
+RLIBSs = $(PNGLIBs) $(ZLIBs) $(W32LIB) -lm
+WLIBSd = $(PNGLIBd) $(ZLIBd)
+WLIBSs = $(PNGLIBs) $(ZLIBs)
+
+RPNG   = rpng-win
+RPNG2  = rpng2-win
+WPNG   = wpng
+
+ROBJSd  = $(RPNG)$(O) readpng.pic$(O)
+ROBJS2d = $(RPNG2)$(O) readpng2.pic$(O)
+WOBJSd  = $(WPNG)$(O) writepng.pic$(O)
+
+RPNGs  = $(RPNG)-static
+RPNG2s = $(RPNG2)-static
+WPNGs  = $(WPNG)-static
+
+ROBJSs  = $(RPNG)$(O) readpng$(O)
+ROBJS2s = $(RPNG2)$(O) readpng2$(O)
+WOBJSs  = $(WPNG)$(O) writepng$(O)
+
+STATIC_EXES  = $(RPNGs)$(E) $(RPNG2s)$(E) $(WPNGs)$(E)
+DYNAMIC_EXES = $(RPNG)$(E) $(RPNG2)$(E) $(WPNG)$(E)
+
+EXES = $(STATIC_EXES) $(DYNAMIC_EXES)
+
+
+
+
+.c$(O):
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) $<
+
+%.pic$(O): %.c
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) -DPNG_BUILD_DLL -o $@ $<
+
+
+
+
+all:  $(EXES)
+
+$(RPNGs)$(E): $(ROBJSs)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJSs) $(RLIBSs)
+
+$(RPNG)$(E): $(ROBJSd)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJSd) $(RLIBSd)
+
+$(RPNG2s)$(E): $(ROBJS2s)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJS2s) $(RLIBSs)
+
+$(RPNG2)$(E): $(ROBJS2d)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJS2d) $(RLIBSd)
+
+$(WPNGs)$(E): $(WOBJSs)
+	$(LD) $(LDFLAGS) -o $@ $(WOBJSs) $(WLIBSs)
+
+$(WPNG)$(E): $(WOBJSd)
+	$(LD) $(LDFLAGS) -o $@ $(WOBJSd) $(WLIBSd)
+
+$(RPNG)$(O):	$(RPNG).c readpng.h
+$(RPNG2)$(O):	$(RPNG2).c readpng2.h
+$(WPNG)$(O):	$(WPNG).c writepng.h
+
+readpng$(O) readpng.pic$(O):	readpng.c readpng.h
+readpng2$(O) readpng2.pic$(O):	readpng2.c readpng2.h
+writepng$(O) writepng.pic$(O):	writepng.c writepng.h
+
+
+
+
+clean:
+	$(RM) $(EXES)
+	$(RM) $(ROBJSs) $(ROBJS2s) $(WOBJSs)
+	$(RM) $(ROBJSd) $(ROBJS2d) $(WOBJSd)

@@ -1,0 +1,21 @@
+#include "../doomdef.h"
+#include "../d_main.h"
+#include "../m_argv.h"
+
+int main(int argc, char **argv)
+{
+	myargc = argc;
+	myargv = argv;  
+
+
+	CONS_Printf("Setting up SRB2...\n");
+	D_SRB2Main();
+	CONS_Printf("Entering main game loop...\n");
+
+	D_SRB2Loop();
+
+
+#ifndef __GNUC__
+	return 0;
+#endif
+}

@@ -1,0 +1,126 @@
+ 
+
+ 
+#undef HAVE_DLFCN_H
+
+ 
+#undef HAVE_FEENABLEEXCEPT
+
+ 
+#undef HAVE_INTTYPES_H
+
+ 
+#undef HAVE_LIBM
+
+ 
+#undef HAVE_LIBZ
+
+ 
+#undef HAVE_MEMORY_H
+
+ 
+#undef HAVE_POW
+
+ 
+#undef HAVE_STDINT_H
+
+ 
+#undef HAVE_STDLIB_H
+
+ 
+#undef HAVE_STRINGS_H
+
+ 
+#undef HAVE_STRING_H
+
+ 
+#undef HAVE_SYS_STAT_H
+
+ 
+#undef HAVE_SYS_TYPES_H
+
+ 
+#undef HAVE_UNISTD_H
+
+ 
+#undef LT_OBJDIR
+
+ 
+#undef PACKAGE
+
+ 
+#undef PACKAGE_BUGREPORT
+
+ 
+#undef PACKAGE_NAME
+
+ 
+#undef PACKAGE_STRING
+
+ 
+#undef PACKAGE_TARNAME
+
+ 
+#undef PACKAGE_URL
+
+ 
+#undef PACKAGE_VERSION
+
+ 
+#undef PNG_ARM_NEON_API_SUPPORTED
+
+ 
+#undef PNG_ARM_NEON_CHECK_SUPPORTED
+
+ 
+#undef PNG_ARM_NEON_OPT
+
+ 
+#undef PNG_INTEL_SSE_OPT
+
+ 
+#undef PNG_MIPS_MSA_API_SUPPORTED
+
+ 
+#undef PNG_MIPS_MSA_CHECK_SUPPORTED
+
+ 
+#undef PNG_MIPS_MSA_OPT
+
+ 
+#undef PNG_POWERPC_VSX_API_SUPPORTED
+
+ 
+#undef PNG_POWERPC_VSX_CHECK_SUPPORTED
+
+ 
+#undef PNG_POWERPC_VSX_OPT
+
+ 
+#undef STDC_HEADERS
+
+ 
+#undef TM_IN_SYS_TIME
+
+ 
+#undef VERSION
+
+ 
+#undef const
+
+                                                                
+                                                                  
+                          
+#undef restrict
+                                                                 
+                                                                          
+                                                                         
+                                                                        
+                                                                        
+#if defined __SUNPRO_CC && !defined __RESTRICT
+# define _Restrict
+# define __restrict__
+#endif
+
+ 
+#undef size_t

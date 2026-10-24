@@ -1,0 +1,717 @@
+#! /bin/sh
+#
+# Copyright (C) 2002-2010 Free Software Foundation, Inc.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+
+
+
+
+progname=$0
+package=gettext-tools
+version=0.18.1
+
+
+
+prefix="/usr/local/i686-w64-mingw32/stow/gettext-0.18.1.1"
+datarootdir="${prefix}/share"
+gettext_dir="${datarootdir}/gettext"
+
+
+
+
+
+func_tmpdir ()
+{
+
+
+
+  : ${TMPDIR=/tmp}
+  {
+
+
+    tmp=`(umask 077 && mktemp -d "$TMPDIR/gtXXXXXX") 2>/dev/null` &&
+    test -n "$tmp" && test -d "$tmp"
+  } ||
+  {
+
+
+
+
+
+    tmp=$TMPDIR/gt$$-$RANDOM
+    (umask 077 && mkdir "$tmp")
+  } ||
+  {
+    echo "$0: cannot create a temporary directory in $TMPDIR" >&2
+    { (exit 1); exit 1; }
+  }
+}
+
+
+func_find_curr_installdir ()
+{
+
+  curr_executable="$0"
+  case "$curr_executable" in
+    */* | *\\*) ;;
+    *)  
+      if test "${PATH_SEPARATOR+set}" != set; then
+        func_tmpdir
+        { echo "#! /bin/sh"; echo "exit 0"; } > "$tmp"/conf.sh
+        chmod +x "$tmp"/conf.sh
+        if (PATH="/nonexistent;$tmp"; conf.sh) >/dev/null 2>&1; then
+          PATH_SEPARATOR=';'
+        else
+          PATH_SEPARATOR=:
+        fi
+        rm -rf "$tmp"
+      fi
+      save_IFS="$IFS"; IFS="$PATH_SEPARATOR"
+      for dir in $PATH; do
+        IFS="$save_IFS"
+        test -z "$dir" && dir=.
+        for exec_ext in ''; do
+          if test -f "$dir/$curr_executable$exec_ext"; then
+            curr_executable="$dir/$curr_executable$exec_ext"
+            break 2
+          fi
+        done
+      done
+      IFS="$save_IFS"
+      ;;
+  esac
+
+  case "$curr_executable" in
+    /* | ?:/* | ?:\\*) ;;
+    *) curr_executable=`pwd`/"$curr_executable" ;;
+  esac
+
+  sed_dirname='s,/[^/]*$,,'
+  sed_linkdest='s,^.* -> \(.*\),\1,p'
+  while : ; do
+    lsline=`LC_ALL=C ls -l "$curr_executable"`
+    case "$lsline" in
+      *" -> "*)
+        linkdest=`echo "$lsline" | sed -n -e "$sed_linkdest"`
+        case "$linkdest" in
+          /* | ?:/* | ?:\\*) curr_executable="$linkdest" ;;
+          *) curr_executable=`echo "$curr_executable" | sed -e "$sed_dirname"`/"$linkdest" ;;
+        esac ;;
+      *) break ;;
+    esac
+  done
+  curr_installdir=`echo "$curr_executable" | sed -e 's,/[^/]*$,,'`
+
+  curr_installdir=`cd "$curr_installdir" && pwd`
+}
+func_find_prefixes ()
+{
+
+
+  orig_installprefix="$orig_installdir"
+  curr_installprefix="$curr_installdir"
+  while true; do
+    orig_last=`echo "$orig_installprefix" | sed -n -e 's,^.*/\([^/]*\)$,\1,p'`
+    curr_last=`echo "$curr_installprefix" | sed -n -e 's,^.*/\([^/]*\)$,\1,p'`
+    if test -z "$orig_last" || test -z "$curr_last"; then
+      break
+    fi
+    if test "$orig_last" != "$curr_last"; then
+      break
+    fi
+    orig_installprefix=`echo "$orig_installprefix" | sed -e 's,/[^/]*$,,'`
+    curr_installprefix=`echo "$curr_installprefix" | sed -e 's,/[^/]*$,,'`
+  done
+}
+if test "no" = yes; then
+  exec_prefix="${prefix}"
+  bindir="${exec_prefix}/bin"
+  orig_installdir="$bindir"  
+  func_find_curr_installdir  
+  func_find_prefixes
+
+  gettext_dir=`echo "$gettext_dir/" | sed -e "s%^${orig_installprefix}/%${curr_installprefix}/%" | sed -e 's,/$,,'`
+fi
+
+
+
+func_usage ()
+{
+  echo "\
+Usage: autopoint [OPTION]...
+
+Copies standard gettext infrastructure files into a source package.
+
+Options:
+      --help           print this help and exit
+      --version        print version information and exit
+  -f, --force          force overwriting of files that already exist
+  -n, --dry-run        print modifications but don't perform them"
+
+
+
+  echo "
+Report bugs to <bug-gnu-gettext@gnu.org>."
+}
+
+
+
+func_version ()
+{
+  echo "$progname (GNU $package) $version"
+  echo "Uses a versions archive in git format."
+  echo "Copyright (C) 2002-2010 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law."
+  echo "Written by" "Bruno Haible"
+}
+
+
+
+func_fatal_error ()
+{
+  echo "autopoint: *** $1" 1>&2
+  echo "autopoint: *** Stop." 1>&2
+  exit 1
+}
+
+
+
+
+
+
+{
+  force=
+  ver=
+  doit=:
+
+  while test $# -gt 0; do
+    case "$1" in
+      -n | --dry-run | --dry-ru | --dry-r | --dry- | --dry | --dr | --d )
+        shift
+        doit=false ;;
+      -f | --force | --forc | --for | --fo | --f )
+        shift
+        force=yes ;;
+      --help | --hel | --he | --h )
+        func_usage; exit 0 ;;
+
+
+
+
+
+
+
+
+
+
+
+      --version | --versio | --versi | --vers | --ver | --ve | --v )
+        func_version
+        exit 0 ;;
+      -- )  
+        shift; break ;;
+      -* )
+        echo "autopoint: unknown option $1" 1>&2
+        echo "Try 'autopoint --help' for more information." 1>&2
+        exit 1 ;;
+      * )
+        break ;;
+    esac
+  done
+}
+
+
+
+{
+  if test $# -gt 0; then
+    func_usage 1>&2
+    exit 1
+  fi
+}
+
+srcdir=`pwd`
+
+
+
+
+if test -f configure.in; then
+  configure_in=configure.in
+else
+  if test -f configure.ac; then
+    configure_in=configure.ac
+  else
+
+    if test -f configure.in.in; then
+      configure_in=configure.in.in
+    else
+      func_fatal_error "Missing configure.in or configure.ac, please cd to your package first."
+    fi
+  fi
+fi
+
+
+
+sed_extract_AM_GNU_GETTEXT_VERSION_argument='s/^AM_GNU_GETTEXT_VERSION(\([^()]*\)).*$/\1/'
+sed_remove_outer_brackets='s/^\[\(.*\)\]$/\1/'
+xver=`cat "$configure_in" | grep '^AM_GNU_GETTEXT_VERSION(' | sed -n -e "$sed_extract_AM_GNU_GETTEXT_VERSION_argument"p | sed -e "$sed_remove_outer_brackets" | sed -e 1q`
+if test -z "$xver" && test -f intl/VERSION; then
+  xver=`cat intl/VERSION | LC_ALL=C sed -n -e 's/^.*gettext-\([-+_.0-9A-Za-z]*\).*$/\1/p'`
+fi
+if test -n "$xver"; then
+  if test -n "$ver"; then
+    if test "X$ver" != "X$xver"; then
+      func_fatal_error "Version mismatch: specified -V $ver but the package uses gettext version $xver"
+    fi
+  else
+    ver="$xver"
+  fi
+else
+  if test -z "$ver"; then
+    func_fatal_error "Missing version: please specify in $configure_in through a line 'AM_GNU_GETTEXT_VERSION(x.yy.zz)' the gettext version the package is using"
+  fi
+fi
+
+
+case "$ver" in
+  0.10.35 | 0.10.36 | 0.10.37 | 0.10.38 | 0.10.39 | 0.10.40 | \
+  0.11 | 0.11.1 | 0.11.2 | 0.11.3 | 0.11.4 | 0.11.5 | \
+  0.12 | 0.12.1 | \
+  0.13 | 0.13.1 | \
+  0.14 | 0.14.1 | 0.14.2 | 0.14.3 | 0.14.4 | 0.14.5 | 0.14.6 | \
+  0.15 | \
+  0.16 | 0.16.1 | \
+  0.17 | \
+  0.18 | 0.18.1 )
+    ;;
+  *)
+    func_fatal_error "The AM_GNU_GETTEXT_VERSION declaration in your $configure_in
+               file requires the infrastructure from gettext-$ver but this version
+               is older. Please upgrade to gettext-$ver or newer."
+    ;;
+esac
+
+
+auxdir=`cat "$configure_in" | grep '^AC_CONFIG_AUX_DIR' | sed -n -e 's/AC_CONFIG_AUX_DIR(\([^()]*\))/\1/p' | sed -e 's/^\[\(.*\)\]$/\1/' | sed -e 1q`
+if test -n "$auxdir"; then
+  auxdir="$auxdir/"
+fi
+
+
+m4dir=m4
+if test -f Makefile.am; then
+
+
+  aclocal_amflags=`grep '^ACLOCAL_AMFLAGS[ 	]*=' Makefile.am | sed -e 's/^ACLOCAL_AMFLAGS[ 	]*=\(.*\)$/\1/'`
+  m4dir_is_next=
+  for arg in $aclocal_amflags; do
+    if test -n "$m4dir_is_next"; then
+      m4dir="$arg"
+      break
+    else
+      if test "X$arg" = "X-I"; then
+        m4dir_is_next=yes
+      else
+        m4dir_is_next=
+      fi
+    fi
+  done
+fi
+
+
+omitintl=`cat "$configure_in" | grep '^AM_GNU_GETTEXT' | sed -n -e 's/^AM_GNU_GETTEXT(\([^(),]*\).*$/\1/p' | sed -e 's/^\[\(.*\)\]$/\1/' | sed -e 1q`
+omitintl=`if test 'external' = "$omitintl"; then echo yes; fi`
+
+
+sed_extract_config_files='s,#.*$,,
+s,^dnl .*$,,
+s, dnl .*$,,
+/AC_CONFIG_FILES(/ {
+  ta
+  :a
+    s/)/)/
+    tb
+    s/\\$//
+    N
+    ba
+  :b
+  s,^.*AC_CONFIG_FILES([[ ]*\([^]"$`\\)]*\).*$,\1,p
+}'
+configfiles=`cat "$configure_in" | sed -n -e "$sed_extract_config_files"`
+
+
+
+
+sed_remove_Makefile_in='s,/Makefile\.in$,,'
+podirs=`for f in $configfiles; do case "$f" in */Makefile.in) echo $f;; esac; done | sed -e "$sed_remove_Makefile_in"`
+if test -z "$podirs"; then
+
+
+  podirs="po"
+fi
+
+
+
+
+work_dir=tmpwrk$$
+mkdir "$work_dir" || {
+  if test -d "$work_dir"; then
+    func_fatal_error "directory $work_dir already exists"
+  else
+    func_fatal_error "cannot create directory $work_dir"
+  fi
+}
+
+
+
+
+
+
+
+
+
+
+case "git" in
+  dir)
+
+
+    gzip -d -c < "$gettext_dir/archive.dir.tar.gz" | (cd "$work_dir" && tar xf - "gettext-$ver")
+    if test `find "$work_dir" -type f -print | wc -l` = 0; then
+      rm -rf "$work_dir"
+      func_fatal_error "infrastructure files for version $ver not found; this is autopoint from GNU $package $version"
+    fi
+    mv "$work_dir/gettext-$ver" "$work_dir/archive"
+    ;;
+
+  cvs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    (cvs -v) >/dev/null 2>/dev/null || func_fatal_error "cvs program not found"
+
+
+
+
+
+
+
+
+    cvs_dir=tmpcvs$$
+
+
+    (umask 077 && mkdir "$cvs_dir") || {
+      if test -d "$cvs_dir"; then
+        func_fatal_error "directory $cvs_dir already exists"
+      else
+        func_fatal_error "cannot create directory $cvs_dir"
+      fi
+    }
+    CVSROOT="$srcdir/$cvs_dir"
+    unset CVS_CLIENT_LOG
+    unset CVS_CLIENT_PORT
+    unset CVS_IGNORE_REMOTE_ROOT
+    unset CVS_LOCAL_BRANCH_NUM
+    unset CVS_NOBASES
+    unset CVS_PASSFILE
+    unset CVS_PASSWORD
+    unset CVS_PROXY_PORT
+    unset CVS_RCMD_PORT
+    unset CVS_RSH
+    unset CVS_SERVER
+    unset CVS_SERVER_SLEEP
+    CVS_SIGN_COMMITS=
+    export CVS_SIGN_COMMITS
+    unset CVS_SSH
+    unset CVS_VERIFY_CHECKOUTS
+    unset CVS_VERIFY_TEMPLATE
+    unset CVSIGNORE
+    unset CVSREAD
+    unset CVSREADONLYFS
+    unset CVSUMASK
+    unset CVSWRAPPERS
+
+
+
+    cvs -d "$CVSROOT" init
+    gzip -d -c < "$gettext_dir/archive.cvs.tar.gz" | (cd "$cvs_dir" && tar xf -)
+
+    cd "$work_dir"
+    cvsver=gettext-`echo "$ver" | sed -e 's/\./_/g'`
+    (cvs -d "$CVSROOT" checkout -r"$cvsver" archive > /dev/null) 2>&1 | grep -v '^cvs checkout: Updating'
+    find archive -name CVS -type d -print | xargs rm -rf
+    cd ..
+    rm -rf "$cvs_dir"
+
+
+    if test `find $work_dir/archive -name CVS -type d -print | wc -l` != 0; then
+      rm -rf "$work_dir"
+      func_fatal_error "failed to remove all CVS subdirectories"
+    fi
+    if test `find $work_dir/archive -type f -print | wc -l` = 0; then
+      rm -rf "$work_dir"
+      func_fatal_error "infrastructure files for version $ver not found; this is autopoint from GNU $package $version"
+    fi
+    ;;
+
+  git)
+
+    (git --version) >/dev/null 2>/dev/null || func_fatal_error "git program not found"
+    mkdir "$work_dir/archive"
+    gzip -d -c < "$gettext_dir/archive.git.tar.gz" | (cd "$work_dir/archive" && tar xf -)
+    (cd "$work_dir/archive" && git checkout -q "gettext-$ver") || {
+      rm -rf "$work_dir"
+      func_fatal_error "infrastructure files for version $ver not found; this is autopoint from GNU $package $version"
+    }
+    (cd "$work_dir/archive" && rm -rf .git .gitignore)
+    ;;
+esac
+
+
+
+
+
+
+
+
+
+
+func_destfile ()
+{
+
+
+
+
+
+
+  sharedowner=
+  allpodirs=
+  case `echo "$1" | sed -e 's,[^/]*$,,'` in
+    "" )
+      case "$1" in
+        config.rpath ) destfile="$auxdir$1" ;;
+        mkinstalldirs ) destfile="$auxdir$1" sharedowner=yes ;;
+        * ) destfile="$1" ;;
+      esac
+      ;;
+    m4/ ) destfile=`echo "$1" | sed -e "s,^m4/,$m4dir/,"` ;;
+    intl/ ) if test -n "$omitintl"; then destfile=""; else destfile="$1"; fi ;;
+    po/ ) destfile=`echo "$1" | sed -e "s,^po/,,"` allpodirs=yes ;;
+    * ) destfile="$1" ;;
+  esac
+}
+
+
+
+
+
+sed_extract_serial='s/^#.* serial \([^ ]*\).*/\1/p
+1q'
+func_compare ()
+{
+  if cmp -s "$1" "$2"; then
+    false
+  else
+    case "$2" in
+      *.m4)
+
+
+
+
+
+        existing_serial=`sed -n -e "$sed_extract_serial" < "$1"`
+        gettext_serial=`sed -n -e "$sed_extract_serial" < "$2"`
+        if test -n "$existing_serial" && test -n "$gettext_serial" \
+           && test "$existing_serial" -ge "$gettext_serial" 2> /dev/null; then
+          false
+        else
+          true
+        fi
+        ;;
+      *)
+        true
+        ;;
+    esac
+  fi
+}
+
+
+
+
+
+if test -z "$force"; then
+  mismatch=
+  func_tmpdir
+  mismatchfile="$tmp"/autopoint.diff
+  for file in `find "$work_dir/archive" -type f -print | sed -e "s,^$work_dir/archive/,," | LC_ALL=C sort`; do
+    func_destfile "$file"
+    if test -n "$destfile"; then
+      func_compare_to_destfile ()
+      {
+        finaldestfile="$1"
+        if test -f "$finaldestfile"; then
+          if func_compare "$finaldestfile" "$work_dir/archive/$file"; then
+            if test -n "$sharedowner"; then
+              echo "autopoint: warning: File $finaldestfile has been locally modified." 1>&2
+            else
+              echo "autopoint: File $finaldestfile has been locally modified." 1>&2
+              mismatch=yes
+              diff -c "$work_dir/archive/$file" "$finaldestfile" | sed -e "1s,$work_dir/archive/,," >> "$mismatchfile"
+            fi
+          fi
+        fi
+      }
+      if test -n "$allpodirs"; then
+        for dir in $podirs; do
+          func_compare_to_destfile "$dir/$destfile"
+        done
+      else
+        func_compare_to_destfile "$destfile"
+      fi
+    fi
+  done
+  if test -n "$mismatch"; then
+    rm -rf "$work_dir"
+    func_fatal_error "Some files have been locally modified. Not overwriting them because --force has not been specified. For your convenience, you find the local modifications in the file '$mismatchfile'."
+  fi
+  rm -rf "$tmp"
+fi
+
+
+
+
+func_mkdir_for ()
+{
+  base=`echo "$1" | sed -e 's,/[^/]*$,,'`
+  if test "X$base" != "X$1" && test -n "$base"; then
+    func_mkdir_for "$base"
+
+    base=`echo "$1" | sed -e 's,/[^/]*$,,'`
+    test -d "$base" || { echo "Creating directory $base"; mkdir "$base"; }
+  fi
+}
+
+
+
+
+
+func_copy ()
+{
+  if $doit; then
+    func_mkdir_for "$2"
+    rm -f "$2"
+    echo "Copying file $2"
+    cp "$1" "$2"
+  else
+    echo "Copy file $2"
+  fi
+}
+
+
+
+
+func_backup ()
+{
+  if $doit; then
+    if test -f "$1"; then
+      rm -f "$1~"
+      cp -p "$1" "$1~"
+    fi
+  fi
+}
+
+
+for file in `find "$work_dir/archive" -type f -print | sed -e "s,^$work_dir/archive/,," | LC_ALL=C sort`; do
+  func_destfile "$file"
+  if test -n "$destfile"; then
+    func_copy_to_destfile ()
+    {
+      finaldestfile="$1"
+      mustcopy=
+      if test -f "$finaldestfile"; then
+        if func_compare "$finaldestfile" "$work_dir/archive/$file"; then
+          if test -n "$force"; then
+
+            mustcopy=yes
+          fi
+
+
+        fi
+      else
+        mustcopy=yes
+      fi
+      if test -n "$mustcopy"; then
+        func_backup "$finaldestfile"
+        func_copy "$work_dir/archive/$file" "$finaldestfile"
+      fi
+    }
+    if test -n "$allpodirs"; then
+      for dir in $podirs; do
+        func_copy_to_destfile "$dir/$destfile"
+      done
+    else
+      func_copy_to_destfile "$destfile"
+    fi
+  fi
+done
+
+
+rm -rf "$work_dir"
+exit 0

@@ -1,0 +1,134 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PNGDIR = ../..#	this one is for libpng-x.y.z/contrib/gregbook builds
+
+PNGINC = -I$(PNGDIR)
+PNGLIBd = -Wl,-rpath,$(PNGDIR) -L$(PNGDIR) -lpng16	 
+PNGLIBs = $(PNGDIR)/libpng.a		 
+
+ZDIR = /usr/local/lib
+
+ZINC = -I/usr/local/include
+ZLIBd = -L$(ZDIR) -lz			 
+ZLIBs = $(ZDIR)/libz.a			 
+
+
+
+
+
+
+
+
+
+
+XINC = -I/usr/X11R6/include		 
+XLIB = -L/usr/X11R6/lib -lX11
+
+
+INCS = $(PNGINC) $(ZINC) $(XINC)
+RLIBSd = $(PNGLIBd) $(ZLIBd) $(XLIB) -lm
+RLIBSs = $(PNGLIBs) $(ZLIBs) $(XLIB) -lm
+WLIBSd = $(PNGLIBd) $(ZLIBd) -lm
+WLIBSs = $(PNGLIBs) $(ZLIBs) -lm
+
+CC = gcc
+LD = gcc
+RM = rm -f
+CPPFLAGS = $(INCS) -DFEATURE_LOOP
+CFLAGS = -O -Wall
+
+
+
+LDFLAGS =
+O = .o
+E =
+
+RPNG   = rpng-x
+RPNG2  = rpng2-x
+WPNG   = wpng
+
+RPNGs  = $(RPNG)-static
+RPNG2s = $(RPNG2)-static
+WPNGs  = $(WPNG)-static
+
+ROBJS  = $(RPNG)$(O) readpng$(O)
+ROBJS2 = $(RPNG2)$(O) readpng2$(O)
+WOBJS  = $(WPNG)$(O) writepng$(O)
+
+STATIC_EXES  = $(RPNGs)$(E) $(RPNG2s)$(E) $(WPNGs)$(E)
+DYNAMIC_EXES = $(RPNG)$(E) $(RPNG2)$(E) $(WPNG)$(E)
+
+EXES = $(STATIC_EXES) $(DYNAMIC_EXES)
+
+
+
+
+.c$(O):
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) $<
+
+
+
+
+all:  $(EXES)
+
+$(RPNGs)$(E): $(ROBJS)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJS) $(RLIBSs)
+
+$(RPNG)$(E): $(ROBJS)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJS) $(RLIBSd)
+
+$(RPNG2s)$(E): $(ROBJS2)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJS2) $(RLIBSs)
+
+$(RPNG2)$(E): $(ROBJS2)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJS2) $(RLIBSd)
+
+$(WPNGs)$(E): $(WOBJS)
+	$(LD) $(LDFLAGS) -o $@ $(WOBJS) $(WLIBSs)
+
+$(WPNG)$(E): $(WOBJS)
+	$(LD) $(LDFLAGS) -o $@ $(WOBJS) $(WLIBSd)
+
+$(RPNG)$(O):	$(RPNG).c readpng.h
+$(RPNG2)$(O):	$(RPNG2).c readpng2.h
+$(WPNG)$(O):	$(WPNG).c writepng.h
+
+readpng$(O):	readpng.c readpng.h
+readpng2$(O):	readpng2.c readpng2.h
+writepng$(O):	writepng.c writepng.h
+
+
+
+
+clean:
+	$(RM) $(EXES) $(ROBJS) $(ROBJS2) $(WOBJS)

@@ -1,0 +1,141 @@
+// SONIC ROBO BLAST 2
+//-----------------------------------------------------------------------------
+// Copyright (C) 1998-2000 by DooM Legacy Team.
+// Copyright (C) 1999-2024 by Sonic Team Junior.
+//
+// This program is free software distributed under the
+// terms of the GNU General Public License, version 2.
+// See the 'LICENSE' file for more details.
+//-----------------------------------------------------------------------------
+
+
+
+#ifndef __D_CLISRV__
+#define __D_CLISRV__
+
+#include "protocol.h"
+#include "../d_ticcmd.h"
+#include "d_net.h"
+#include "d_netcmd.h"
+#include "d_net.h"
+#include "../tables.h"
+#include "../d_player.h"
+#include "mserv.h"
+
+#define CLIENTBACKUPTICS 32
+
+#ifdef PACKETDROP
+void Command_Drop(void);
+void Command_Droprate(void);
+#endif
+#ifdef _DEBUG
+void Command_Numnodes(void);
+#endif
+
+extern INT32 mapchangepending;
+
+
+extern doomdata_t *netbuffer;
+
+#define BASEPACKETSIZE      offsetof(doomdata_t, u)
+#define BASESERVERTICSSIZE  offsetof(doomdata_t, u.serverpak.cmds[0])
+
+typedef enum
+{
+	KR_KICK          = 1,  
+	KR_PINGLIMIT     = 2,  
+	KR_SYNCH         = 3,  
+	KR_TIMEOUT       = 4,  
+	KR_BAN           = 5,  
+	KR_LEAVE         = 6,  
+	KR_IDLE          = 7,  
+} kickreason_t;
+
+ 
+#define MAXNAMECHANGES (5)
+#define NAMECHANGERATE (60*TICRATE)
+
+extern boolean server;
+extern boolean serverrunning;
+#define client (!server)
+extern boolean dedicated;  
+extern UINT16 software_MAXPACKETLENGTH;
+extern boolean acceptnewnode;
+extern SINT8 servernode;
+extern tic_t maketic;
+extern tic_t neededtic;
+extern INT16 consistancy[BACKUPTICS];
+
+void Command_Ping_f(void);
+extern tic_t connectiontimeout;
+extern UINT16 pingmeasurecount;
+extern UINT32 realpingtable[MAXPLAYERS];
+extern UINT32 playerpingtable[MAXPLAYERS];
+extern tic_t servermaxping;
+
+extern consvar_t cv_netticbuffer, cv_netlowlatency, cv_resynchattempts, cv_blamecfail, cv_playbackspeed, cv_idletime, cv_idleaction, cv_dedicatedidletime;
+extern consvar_t cv_httpsource;
+
+
+void D_ClientServerInit(void);
+
+
+void NetUpdate(void);
+
+
+void NetKeepAlive(void);
+
+void GetPackets(void);
+void ResetNode(INT32 node);
+INT16 Consistancy(void);
+void D_WriteConsistencyReport(const char *trigger, tic_t tic, SINT8 node,
+	INT16 expected, INT16 received);
+void D_WriteJoinStateReport(const char *event, INT32 playernum, SINT8 node,
+	UINT8 attempt);
+
+void SV_StartSinglePlayerServer(void);
+void SV_SpawnServer(void);
+void SV_StopServer(void);
+void SV_ResetServer(void);
+void CL_AddSplitscreenPlayer(void);
+void CL_RemoveSplitscreenPlayer(void);
+void CL_Reset(void);
+void CL_ClearPlayer(INT32 playernum);
+void CL_RemovePlayer(INT32 playernum, kickreason_t reason);
+void CL_HandleTimeout(void);
+
+boolean Playing(void);
+
+
+
+void D_QuitNetGame(void);
+
+
+boolean TryRunTics(tic_t realtic);
+
+
+
+                                                           
+                                                               
+
+
+
+SINT8 nametonum(const char *name);
+
+extern char motd[254], server_context[8];
+extern UINT8 playernode[MAXPLAYERS];
+
+INT32 D_NumPlayers(void);
+INT32 D_NumNodes(boolean skiphost);
+INT32 D_NumBots(void);
+
+tic_t GetLag(INT32 node);
+
+void D_MD5PasswordPass(const UINT8 *buffer, size_t len, const char *salt, void *dest);
+
+extern UINT8 (*adminpassmd5)[16];
+extern UINT32 adminpasscount;
+
+extern boolean hu_stopped;
+
+#endif

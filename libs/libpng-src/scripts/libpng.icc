@@ -1,0 +1,47 @@
+// Project file for libpng (static)
+// IBM VisualAge/C++ version 4.0 or later
+// Copyright (C) 2000 Cosmin Truta
+//
+// This code is released under the libpng license.
+// For conditions of distribution and use, see the disclaimer
+// and license in png.h
+//
+
+
+
+
+
+
+option incl(searchpath, "../zlib"), opt(level, "2"),
+ link(libsearchpath, "../zlib")
+{
+   target type(lib) "libpng.lib"
+   {
+      source type(c) "png.c"
+      source type(c) "pngerror.c"
+      source type(c) "pngget.c"
+      source type(c) "pngmem.c"
+      source type(c) "pngpread.c"
+      source type(c) "pngread.c"
+      source type(c) "pngrio.c"
+      source type(c) "pngrtran.c"
+      source type(c) "pngrutil.c"
+      source type(c) "pngset.c"
+      source type(c) "pngtrans.c"
+      source type(c) "pngwio.c"
+      source type(c) "pngwrite.c"
+      source type(c) "pngwtran.c"
+      source type(c) "pngwutil.c"
+   }
+}
+
+option incl(searchpath, "../zlib"), opt(level, "2"),
+ link(libsearchpath, "../zlib")
+{
+   target type(exe) "pngtest.exe"
+   {
+      source type(c) "pngtest.c"
+      source type(lib) "libpng.lib"
+      source type(lib) "zlib.lib"
+   }
+}

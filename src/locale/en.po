@@ -1,0 +1,4018 @@
+
+
+# Copyright (C) Sonic Team Junior
+
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
+# GNU General Public License for more details.
+
+
+msgid ""
+msgstr ""
+"Project-Id-Version: 2.1\n"
+"Report-Msgid-Bugs-To: Callum Dickinson <callum@huttradio.co.nz>\n"
+"POT-Creation-Date: 2011-02-04 23:01+1300\n"
+"PO-Revision-Date: 2011-02-04 23:01+1300\n"
+"Last-Translator: Callum Dickinson <callum@huttradio.co.nz>\n"
+"Language-Team: Sonic Team Junior <stjr@srb2.org>\n"
+"Language: English\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+
+msgid "Command buffer full!\n"
+msgstr ""
+
+
+
+msgid "Unknown command '%s'\n"
+msgstr ""
+
+
+msgid "alias <name> <command>\n"
+msgstr ""
+
+
+msgid "exec <filename> : run a script file\n"
+msgstr ""
+
+
+
+msgid "couldn't execute file %s\n"
+msgstr ""
+
+
+
+msgid "executing %s\n"
+msgstr ""
+
+
+
+msgid "Variable %s:\n"
+msgstr ""
+
+
+msgid "  flags :"
+msgstr ""
+
+
+
+msgid "  range from %d to %d\n"
+msgstr ""
+
+
+
+msgid " Current value: %d\n"
+msgstr ""
+
+
+
+msgid "  possible value : %s\n"
+msgstr ""
+
+
+
+msgid " Current value: %s\n"
+msgstr ""
+
+
+msgid "No Help for this command/variable\n"
+msgstr ""
+
+
+msgid "Commands\n"
+msgstr ""
+
+
+msgid ""
+"\n"
+"Variables\n"
+msgstr ""
+
+
+msgid ""
+"\n"
+"read help file for more or type help <command or variable>\n"
+msgstr ""
+
+
+
+msgid "Total : %d\n"
+msgstr ""
+
+
+msgid "Toggle <cvar_name> : Toggle the value of a cvar\n"
+msgstr ""
+
+
+
+msgid "%s is not a cvar\n"
+msgstr ""
+
+
+
+msgid "%s is not a boolean value\n"
+msgstr ""
+
+
+
+msgid "Variable %s is already defined\n"
+msgstr ""
+
+
+
+msgid "%s is a command name\n"
+msgstr ""
+
+
+
+msgid "variable %s has CV_NOINIT without CV_CALL"
+msgstr ""
+
+
+
+msgid "variable %s has CV_CALL without a function"
+msgstr ""
+
+
+
+msgid "Bounded cvar \"%s\" without maximum!"
+msgstr ""
+
+
+
+msgid "\"%s\" is not a possible value for \"%s\"\n"
+msgstr ""
+
+
+
+msgid "Variable %s default value \"%s\" is not a possible value\n"
+msgstr ""
+
+
+
+msgid "%s set to %s\n"
+msgstr ""
+
+
+
+msgid "Illegal netvar command received from %s\n"
+msgstr ""
+
+
+
+msgid "Netvar not found with netid %hu\n"
+msgstr ""
+
+
+
+msgid "Netvar received: %s [netid=%d] value %s\n"
+msgstr ""
+
+
+msgid "CV_Set: no variable\n"
+msgstr ""
+
+
+
+msgid "Only the server can change this variable: %s %s\n"
+msgstr ""
+
+
+msgid ""
+"Changing this variable\n"
+"requires cheats to be enabled.\n"
+"Do you wish to enable cheats? (Y/N)\n"
+msgstr ""
+
+
+msgid "Cheats must be enabled to use this.\n"
+msgstr ""
+
+
+
+msgid "This variable can't be changed while in netgame: %s %s\n"
+msgstr ""
+
+
+
+msgid "\"%s\" is \"%s\" default is \"%s\"\n"
+msgstr ""
+
+
+
+msgid "Number of console HUD lines is now %d\n"
+msgstr ""
+
+
+msgid "English keymap.\n"
+msgstr ""
+
+
+msgid "bind <keyname> [<command>]\n"
+msgstr ""
+
+
+msgid "bind table :\n"
+msgstr ""
+
+
+msgid "Empty\n"
+msgstr ""
+
+
+msgid "Invalid key name\n"
+msgstr ""
+
+
+msgid "Press ENTER to continue\n"
+msgstr ""
+
+
+
+msgid ""
+"No more place in the buffer for netcmd %d\n"
+"localtextcmd is %d\n"
+"nparam is %s\n"
+msgstr ""
+
+
+
+msgid "Got unknown net command [%s]=%d (max %d)\n"
+msgstr ""
+
+
+msgid "Sending join request...\n"
+msgstr ""
+
+
+msgid "No more free memory for savegame\n"
+msgstr ""
+
+
+
+msgid "Didn't save %s for netgame"
+msgstr ""
+
+
+
+msgid "Loading savegame length %s\n"
+msgstr ""
+
+
+msgid "Can't read savegame sent"
+msgstr ""
+
+
+
+msgid "Map is now \"%s"
+msgstr ""
+
+
+
+
+
+msgid "ZONE"
+msgstr ""
+
+
+msgid "Can't load the level!\n"
+msgstr ""
+
+
+
+msgid "WARNING: Can't delete %s"
+msgstr ""
+
+
+
+msgid "Can't delete %s"
+msgstr ""
+
+
+msgid "Press ESC to abort\n"
+msgstr ""
+
+
+msgid "Searching the server...\n"
+msgstr ""
+
+
+msgid "Contacting the server...\n"
+msgstr ""
+
+
+
+msgid "Connecting to: %s\n"
+msgstr ""
+
+
+
+msgid "Gametype: %s\n"
+msgstr ""
+
+
+
+msgid "Version: %d.%.2d.%u\n"
+msgstr ""
+
+
+msgid "Found, "
+msgstr ""
+
+
+
+msgid ""
+"Maximum players reached: %d\n"
+"Press ESC"
+msgstr ""
+
+
+msgid "Checking files...\n"
+msgstr ""
+
+
+msgid "Network game synchronization aborted.\n"
+msgstr ""
+
+
+msgid "Cheats have been activated.\n"
+msgstr ""
+
+
+msgid "Ban List:\n"
+msgstr ""
+
+
+
+msgid "Why: %s\n"
+msgstr ""
+
+
+msgid " None\n"
+msgstr ""
+
+
+msgid "Could not save ban list into ban.txt\n"
+msgstr ""
+
+
+msgid "Could not open ban.txt for ban list\n"
+msgstr ""
+
+
+msgid ""
+"Connect <serveraddress>: connect to a server\n"
+"Connect ANY: connect to the first lan server found\n"
+"Connect SELF: connect to your own server.\n"
+msgstr ""
+
+
+msgid ""
+"You cannot connect while in a game\n"
+"End this game first\n"
+msgstr ""
+
+
+msgid ""
+"You have wad files loaded and/or\n"
+"modified the game in some way.\n"
+"Please restart SRB2 before\n"
+"connecting."
+msgstr ""
+
+
+msgid "There is no server identification with this network driver\n"
+msgstr ""
+
+
+msgid "There is no network driver\n"
+msgstr ""
+
+
+
+msgid "num:%2d  node:%2d  %s\n"
+msgstr ""
+
+
+
+msgid "num:%2d  node:%2d  %s\n"
+msgstr ""
+
+
+
+msgid "There is no player named \"%s\"\n"
+msgstr ""
+
+
+msgid " (verified admin)"
+msgstr ""
+
+
+msgid " (spectator)"
+msgstr ""
+
+
+msgid "Ban <playername> or <playernum> <reason>: ban and kick a player\n"
+msgstr ""
+
+
+msgid "Too many bans! Geez, that's a lot of people you're excluding...\n"
+msgstr ""
+
+
+
+
+
+msgid "You are not the server. You cannot do this.\n"
+msgstr ""
+
+
+msgid "Kick <playername> or <playernum> <reason>: kick a player\n"
+msgstr ""
+
+
+msgid "Server is being shut down remotely. Goodbye!\n"
+msgstr ""
+
+
+
+msgid "Illegal kick command received from %s for player %d\n"
+msgstr ""
+
+
+
+msgid ""
+"So, you must be asking, why is this an illegal kick?\n"
+"Well, let's take a look at the facts, shall we?\n"
+"\n"
+"playernum (this is the guy who did it), he's %d.\n"
+"pnum (the guy he's trying to kick) is %d.\n"
+"playernum's node is %d.\n"
+"That node has %d players.\n"
+"Player 2 on that node is %d.\n"
+"pnum's node is %d.\n"
+"That node has %d players.\n"
+"Player 2 on that node is %d.\n"
+"\n"
+"If you think this is a bug, please report it, including all of the details above.\n"
+msgstr ""
+
+
+msgid "has been kicked (No reason given)\n"
+msgstr ""
+
+
+msgid "left the game (Broke ping limit)\n"
+msgstr ""
+
+
+msgid "left the game (Synch failure)\n"
+msgstr ""
+
+
+
+msgid "Player kicked is #%d\n"
+msgstr ""
+
+
+
+msgid "Player %d is at %d, %d, %d\n"
+msgstr ""
+
+
+
+msgid "Player %d has a null mo\n"
+msgstr ""
+
+
+msgid "left the game (Connection timeout)\n"
+msgstr ""
+
+
+msgid "left the game\n"
+msgstr ""
+
+
+msgid "has been banned (No reason given)\n"
+msgstr ""
+
+
+
+msgid "has been kicked (%s)\n"
+msgstr ""
+
+
+
+msgid "has been banned (%s)\n"
+msgstr ""
+
+
+msgid ""
+"Server closed connection\n"
+"(consistency failure)\n"
+"Press ESC\n"
+msgstr ""
+
+
+msgid ""
+"Server closed connection\n"
+"(Broke ping limit)\n"
+"Press ESC\n"
+msgstr ""
+
+
+msgid ""
+"You have been banned by the server\n"
+"\n"
+"Press ESC\n"
+msgstr ""
+
+
+
+msgid ""
+"You have been kicked\n"
+"(%s)\n"
+"Press ESC\n"
+msgstr ""
+
+
+
+msgid ""
+"You have been banned\n"
+"(%s)\n"
+"Press ESC\n"
+msgstr ""
+
+
+msgid ""
+"You have been kicked by the server\n"
+"\n"
+"Press ESC\n"
+msgstr ""
+
+
+
+msgid "Illegal add player command received from %s\n"
+msgstr ""
+
+
+
+msgid "Player %d has joined the game (node %d)\n"
+msgstr ""
+
+
+
+msgid "Player Address is %s\n"
+msgstr ""
+
+
+
+msgid "Server added player %d node %d\n"
+msgstr ""
+
+
+msgid "Starting Server....\n"
+msgstr ""
+
+
+msgid ""
+"You have been banned\n"
+"from the server"
+msgstr ""
+
+
+
+msgid ""
+"Different SRB2 versions cannot\n"
+"play a netgame!\n"
+"(server version %d.%d.%d)"
+msgstr ""
+
+
+msgid ""
+"The server is not accepting\n"
+"joins for the moment"
+msgstr ""
+
+
+
+msgid "Maximum players reached: %d"
+msgstr ""
+
+
+msgid ""
+"Too many players from\n"
+"this node."
+msgstr ""
+
+
+msgid ""
+"No players from\n"
+"this node."
+msgstr ""
+
+
+msgid "Server couldn't send info, please try again"
+msgstr ""
+
+
+msgid ""
+"Server has shutdown\n"
+"\n"
+"Press Esc"
+msgstr ""
+
+
+msgid ""
+"Server Timeout\n"
+"\n"
+"Press Esc"
+msgstr ""
+
+
+
+msgid "Received packet from unknown host %d\n"
+msgstr ""
+
+
+
+msgid ""
+"Server refuses connection\n"
+"\n"
+"Reason:\n"
+"%s"
+msgstr ""
+
+
+msgid "Join accepted, waiting for next level change...\n"
+msgstr ""
+
+
+
+msgid "Server accept join gametic=%u mynode=%d\n"
+msgstr ""
+
+
+
+msgid "unknown packet received (%d) from unknown host\n"
+msgstr ""
+
+
+
+msgid "Illegal movement value recieved from node %d\n"
+msgstr ""
+
+
+
+msgid "Consistency failure for player %d, restoring...\n"
+msgstr ""
+
+
+
+msgid "PT_SERVERTICS recieved from non-host %d\n"
+msgstr ""
+
+
+
+msgid "PT_CONSISTENCY recieved from non-host %d\n"
+msgstr ""
+
+
+
+msgid "PT_PING recieved from non-host %d\n"
+msgstr ""
+
+
+
+msgid "SRB2.SRB/SRB2.WAD not found! Expected in %s, ss files: %s and %s\n"
+msgstr ""
+
+
+msgid "Development mode ON.\n"
+msgstr ""
+
+
+msgid "Please set $HOME to your home directory\n"
+msgstr ""
+
+
+msgid "Z_Init: Init zone memory allocation daemon. \n"
+msgstr ""
+
+
+msgid "W_Init: Init WADfiles.\n"
+msgstr ""
+
+
+msgid "A WAD file was not found or not valid\n"
+msgstr ""
+
+
+msgid "HU_Init: Setting up heads up display.\n"
+msgstr ""
+
+
+msgid "M_Init: Init miscellaneous info.\n"
+msgstr ""
+
+
+msgid "R_Init: Init SRB2 refresh daemon - "
+msgstr ""
+
+
+msgid "S_Init: Setting up sound.\n"
+msgstr ""
+
+
+msgid "ST_Init: Init status bar.\n"
+msgstr ""
+
+
+msgid "D_CheckNetGame: Checking network game status.\n"
+msgstr ""
+
+
+
+msgid "Playing demo %s.\n"
+msgstr ""
+
+
+
+msgid "Set extratics to %d\n"
+msgstr ""
+
+
+
+msgid "Network bandwidth set to %d\n"
+msgstr ""
+
+
+msgid "usage: -bandwidth <byte_per_sec>"
+msgstr ""
+
+
+msgid "usage: -packetsize <bytes_per_packet>"
+msgstr ""
+
+
+msgid "Doomcom buffer invalid!"
+msgstr ""
+
+
+
+msgid "Too many nodes (%d), max:%d"
+msgstr ""
+
+
+
+msgid "debug output to: %s\n"
+msgstr ""
+
+
+
+msgid "cannot debug output to file %s!\n"
+msgstr ""
+
+
+
+msgid ""
+"%.2d : %s\n"
+" %d tics, %d ms.\n"
+msgstr ""
+
+
+
+msgid ""
+"%.2d : %s\n"
+" %d ms\n"
+msgstr ""
+
+
+
+msgid "%s renamed to %s\n"
+msgstr ""
+
+
+
+msgid "Player %d sent a bad name change\n"
+msgstr ""
+
+
+
+msgid "There is no player %d!"
+msgstr ""
+
+
+
+msgid "Illegal color change received from %s (team: %d), color: %d)\n"
+msgstr ""
+
+
+
+
+msgid "DEVMODE must be enabled.\n"
+msgstr ""
+
+
+msgid "rteleport -x <value> -y <value> -z <value>: relative teleport to a location\n"
+msgstr ""
+
+
+msgid "You can't teleport while in a netgame!\n"
+msgstr ""
+
+
+msgid "Player is dead, etc.\n"
+msgstr ""
+
+
+msgid "Not a valid location\n"
+msgstr ""
+
+
+
+msgid "Teleporting by %d, %d, %d...\n"
+msgstr ""
+
+
+msgid "Unable to teleport to that spot!\n"
+msgstr ""
+
+
+msgid "teleport -x <value> -y <value> -z <value>: teleport to a location\n"
+msgstr ""
+
+
+msgid "X value not specified\n"
+msgstr ""
+
+
+msgid "Y value not specified\n"
+msgstr ""
+
+
+
+msgid "Teleporting to %d, %d, %d...\n"
+msgstr ""
+
+
+msgid "playdemo <demoname>: playback a demo\n"
+msgstr ""
+
+
+msgid ""
+"\n"
+"You can't play a demo while in a netgame.\n"
+msgstr ""
+
+
+
+msgid "Playing back demo '%s'.\n"
+msgstr ""
+
+
+msgid "timedemo <demoname>: time a demo\n"
+msgstr ""
+
+
+
+msgid "Timing demo '%s'.\n"
+msgstr ""
+
+
+msgid "Stopped demo.\n"
+msgstr ""
+
+
+
+msgid "Map change: mapnum=%d gametype=%d ultmode=%d resetplayers=%d delay=%d skipprecutscene=%d\n"
+msgstr ""
+
+
+msgid "map <mapname> [-gametype <type> [-force]: warp to map\n"
+msgstr ""
+
+
+
+msgid "Internal game level '%s' not found\n"
+msgstr ""
+
+
+msgid "Sorry, level change disabled in single player.\n"
+msgstr ""
+
+
+
+msgid "Invalid level name %s\n"
+msgstr ""
+
+
+msgid "You can't switch gametypes in single player!\n"
+msgstr ""
+
+
+
+msgid ""
+"That level doesn't support %s mode!\n"
+"(Use -force to override)\n"
+msgstr ""
+
+
+msgid "That level doesn't support Single Player mode!\n"
+msgstr ""
+
+
+
+msgid "Illegal map change received from %s\n"
+msgstr ""
+
+
+
+msgid "Speeding off to %s...\n"
+msgstr ""
+
+
+msgid "You can't pause here.\n"
+msgstr ""
+
+
+
+msgid "Illegal pause command received from %s\n"
+msgstr ""
+
+
+
+msgid "Game paused by %s\n"
+msgstr ""
+
+
+
+msgid "Game unpaused by %s\n"
+msgstr ""
+
+
+
+
+msgid "You must be in a level to use this.\n"
+msgstr ""
+
+
+msgid "You may only use this in co-op and single player!"
+msgstr ""
+
+
+
+msgid "Illegal suicide command recieved from %s\n"
+msgstr ""
+
+
+
+msgid "Illegal clear scores command received from %s\n"
+msgstr ""
+
+
+msgid "Scores have been reset by the server.\n"
+msgstr ""
+
+
+msgid "changeteam <team>: switch to a new team (spectator or playing)\n"
+msgstr ""
+
+
+msgid "changeteam <team>: switch to a new team (red, blue or spectator)\n"
+msgstr ""
+
+
+
+msgid "This command cannot be used outside of Match, Tag or CTF.\n"
+msgstr ""
+
+
+msgid "Invalid gametype after initial checks!"
+msgstr ""
+
+
+msgid "You're already on that team!\n"
+msgstr ""
+
+
+msgid "The server does not allow team change.\n"
+msgstr ""
+
+
+msgid "No tag status changes after hidetime!\n"
+msgstr ""
+
+
+msgid "changeteam2 <team>: switch to a new team (spectator or playing)\n"
+msgstr ""
+
+
+msgid "changeteam2 <team>: switch to a new team (red, blue or spectator)\n"
+msgstr ""
+
+
+msgid "serverchangeteam <playernum> <team>: switch player to a new team (spectator or playing)\n"
+msgstr ""
+
+
+msgid "serverchangeteam <playernum> <team>: switch player to a new team (it, notit, playing, or spectator)\n"
+msgstr ""
+
+
+msgid "serverchangeteam <playernum> <team>: switch player to a new team (red, blue or spectator)\n"
+msgstr ""
+
+
+msgid "That player is already on that team!\n"
+msgstr ""
+
+
+
+msgid "Illegal team change received from player %s\n"
+msgstr ""
+
+
+
+msgid "Player %s sent illegal team change to team %d\n"
+msgstr ""
+
+
+
+msgid "%s was autobalanced to even the teams.\n"
+msgstr ""
+
+
+
+msgid "%s was scrambled to a different team.\n"
+msgstr ""
+
+
+
+
+msgid "%s is now IT!\n"
+msgstr ""
+
+
+
+msgid "%s switched to the red team\n"
+msgstr ""
+
+
+
+msgid "%s is no longer IT!\n"
+msgstr ""
+
+
+
+msgid "%s switched to the blue team\n"
+msgstr ""
+
+
+
+msgid "%s entered the game.\n"
+msgstr ""
+
+
+
+msgid "%s became a spectator.\n"
+msgstr ""
+
+
+msgid "password <password>: change password\n"
+msgstr ""
+
+
+msgid "login <password>: Administrator login\n"
+msgstr ""
+
+
+
+msgid ""
+"Sending Login...%s\n"
+"(Notice only given if password is correct.)\n"
+msgstr ""
+
+
+
+msgid "%s passed authentication. (%s)\n"
+msgstr ""
+
+
+
+msgid "Password from %d failed (%s)\n"
+msgstr ""
+
+
+msgid "verify <node>: give admin privileges to a node\n"
+msgstr ""
+
+
+
+msgid "Illegal verification received from %s (serverplayer is %s)\n"
+msgstr ""
+
+
+msgid "Password correct. You are now a server administrator.\n"
+msgstr ""
+
+
+msgid "motd <message>: Set a message that clients see upon join.\n"
+msgstr ""
+
+
+msgid "Message of the day set.\n"
+msgstr ""
+
+
+
+msgid "Illegal motd change received from %s\n"
+msgstr ""
+
+
+msgid "runsoc <socfile.soc> or <lumpname>: run a soc\n"
+msgstr ""
+
+
+msgid "Could not find SOC.\n"
+msgstr ""
+
+
+
+
+msgid "WARNING: Game must be restarted to record statistics.\n"
+msgstr ""
+
+
+
+msgid "Illegal runsoc command received from %s\n"
+msgstr ""
+
+
+
+msgid ""
+"The server tried to add %s,\n"
+"but you don't have this file.\n"
+"You need to find it in order\n"
+"to play on this server."
+msgstr ""
+
+
+
+msgid "Unknown error finding soc file (%s) the server added.\n"
+msgstr ""
+
+
+msgid "addfile <wadfile.wad>: load wad file\n"
+msgstr ""
+
+
+
+msgid "MD5 calc for %s took %f second\n"
+msgstr ""
+
+
+
+msgid "File %s not found.\n"
+msgstr ""
+
+
+msgid "You must NOT be in a level to use this.\n"
+msgstr ""
+
+
+
+msgid "Illegal addfile command received from %s\n"
+msgstr ""
+
+
+
+msgid "The server doesn't have %s\n"
+msgstr ""
+
+
+
+msgid "Checksum mismatch on %s\n"
+msgstr ""
+
+
+
+msgid "Unknown error finding wad file (%s)\n"
+msgstr ""
+
+
+
+msgid "Illegal delfile command received from %s\n"
+msgstr ""
+
+
+
+msgid ""
+"Checksum mismatch while loading %s.\n"
+"Make sure you have the copy of\n"
+"this file that the server has.\n"
+msgstr ""
+
+
+
+msgid "Unknown error finding wad file (%s) the server added.\n"
+msgstr ""
+
+
+
+msgid "There are %d wads loaded:\n"
+msgstr ""
+
+
+
+msgid "SRB2%s (%s %s %s)\n"
+msgstr ""
+
+
+
+msgid ""
+"Mod ID: %d\n"
+"Mod Version: %d\n"
+"Code Base:%d\n"
+msgstr ""
+
+
+
+msgid "Current gametype is %d\n"
+msgstr ""
+
+
+msgid "jumptoaxis <axisnum>: Jump to axis within current mare.\n"
+msgstr ""
+
+
+msgid "You can't use this in a netgame.\n"
+msgstr ""
+
+
+msgid "Objectplace Controls:\\\\Camera L: Cycle backwards      \\Camera R: Cycle forwards       \\     Jump: Float up             \\     Spin: Float down           \\    Throw: Place object         \\Toss Flag: Remove object (buggy)\\"
+msgstr ""
+
+
+
+msgid "Levels will end after %s scores %d point%s.\n"
+msgstr ""
+
+
+msgid "a team"
+msgstr ""
+
+
+msgid "someone"
+msgstr ""
+
+
+msgid "Point limit disabled\n"
+msgstr ""
+
+
+
+msgid "Number of laps set to %d\n"
+msgstr ""
+
+
+
+msgid "Levels will end after %d minute%s.\n"
+msgstr ""
+
+
+msgid "Time limit disabled\n"
+msgstr ""
+
+
+
+msgid "Gametype was changed from %s to %s\n"
+msgstr ""
+
+
+
+msgid "Illegal color change received from %s (team: %d, color: %d)\n"
+msgstr ""
+
+
+
+msgid "You haven't earned this yet.\n"
+msgstr ""
+
+
+msgid "This command cannot be used outside of Team Match or CTF.\n"
+msgstr ""
+
+
+msgid "Teams will be scrambled next round.\n"
+msgstr ""
+
+
+msgid "Cheats cannot be disabled after they are activated. You must restart the server to disable cheats.\n"
+msgstr ""
+
+
+msgid "You can't use this in single player.\n"
+msgstr ""
+
+
+msgid "HIDETIME cannot be greater or equal to the time limit!\n"
+msgstr ""
+
+
+
+msgid "Illegal exitlevel command received from %s\n"
+msgstr ""
+
+
+
+msgid "Displayplayer is %d\n"
+msgstr ""
+
+
+msgid "If you want to change the sky interactively on a map, use the linedef executor feature instead.\n"
+msgstr ""
+
+
+msgid "skynum <sky#>: change the sky\n"
+msgstr ""
+
+
+
+msgid "Previewing sky %s...\n"
+msgstr ""
+
+
+
+msgid "tunes <slot#/default> <speed>: play a slot or the default stage tune at the specified speed(100%%)\n"
+msgstr ""
+
+
+
+msgid "The current tune is: %d\n"
+msgstr ""
+
+
+
+msgid "Valid slots are 1 to %d, or 0 to stop music\n"
+msgstr ""
+
+
+msgid "modifiedgame is true, but you can save emblem and time data in this mod.\n"
+msgstr ""
+
+
+msgid "modifiedgame is true, secrets will not be unlocked\n"
+msgstr ""
+
+
+msgid "modifiedgame is false, you can unlock secrets\n"
+msgstr ""
+
+
+msgid "You may not change your name when chat is muted.\n"
+msgstr ""
+
+
+msgid "Chat has been muted.\n"
+msgstr ""
+
+
+msgid "Chat is no longer muted.\n"
+msgstr ""
+
+
+msgid "This only works in a netgame.\n"
+msgstr ""
+
+
+
+msgid "%s's score is %u\n"
+msgstr ""
+
+
+
+msgid "The pointlimit is %d\n"
+msgstr ""
+
+
+
+msgid ""
+"The current time is %f.\n"
+"The timelimit is %f\n"
+msgstr ""
+
+
+
+msgid "searching for '%s' "
+msgstr ""
+
+
+msgid "already loaded\n"
+msgstr ""
+
+
+
+msgid "found %d\n"
+msgstr ""
+
+
+
+msgid "Downloading %s...(done)\n"
+msgstr ""
+
+
+
+msgid "Thing %d doesn't exist"
+msgstr ""
+
+
+
+msgid "Character %d out of range"
+msgstr ""
+
+
+
+msgid "Level number %d out of range"
+msgstr ""
+
+
+
+msgid "Cutscene number %d out of range"
+msgstr ""
+
+
+
+msgid "Unlockable number %d out of range"
+msgstr ""
+
+
+
+msgid "Frame %d doesn't exist"
+msgstr ""
+
+
+
+msgid "Sound %d doesn't exist"
+msgstr ""
+
+
+
+msgid "HUD item number %d out of range"
+msgstr ""
+
+
+
+msgid "Emblem number %d out of range"
+msgstr ""
+
+
+
+msgid "Warning: patch from a different SRB2 version (%d), "
+msgstr ""
+
+
+msgid "only version 2.0 is supported\n"
+msgstr ""
+
+
+
+msgid "Unknown word: %s"
+msgstr ""
+
+
+
+msgid "missing argument for '%s'"
+msgstr ""
+
+
+
+msgid "No word in this line: %s"
+msgstr ""
+
+
+
+msgid "%d warning%s in the SOC lump\n"
+msgstr ""
+
+
+msgid "Unloading WAD SOC edits\n"
+msgstr ""
+
+
+msgid "Sonic Team Junior\n"
+msgstr ""
+
+
+msgid "Staff\n"
+msgstr ""
+
+
+msgid "Producer\n"
+msgstr ""
+
+
+msgid "Director\n"
+msgstr ""
+
+
+msgid "Game Designers\n"
+msgstr ""
+
+
+msgid "Character Designers\n"
+msgstr ""
+
+
+msgid "Visual Design\n"
+msgstr ""
+
+
+msgid "Landscape Design\n"
+msgstr ""
+
+
+msgid "Chief Programmer\n"
+msgstr ""
+
+
+msgid "Programmers\n"
+msgstr ""
+
+
+msgid "Coding Assistants\n"
+msgstr ""
+
+
+msgid "Level Designers\n"
+msgstr ""
+
+
+msgid "Texture Artists\n"
+msgstr ""
+
+
+msgid "Music Production\n"
+msgstr ""
+
+
+msgid "Lead Guitar\n"
+msgstr ""
+
+
+msgid "Sound Effects\n"
+msgstr ""
+
+
+msgid "Official Mascot\n"
+msgstr ""
+
+
+msgid "Sky Sanctuary Team\n"
+msgstr ""
+
+
+msgid "Special Thanks\n"
+msgstr ""
+
+
+msgid "In Fond Memory Of\n"
+msgstr ""
+
+
+msgid "Modification By\n"
+msgstr ""
+
+
+msgid ""
+"Two months had passed since Dr. Eggman\n"
+"tried to take over the world using his\n"
+"Ring Satellite.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"As it was about to drain the rings\n"
+"away from the planet, Sonic burst into\n"
+"the Satellite and for what he thought\n"
+"would be the last time, defeated\n"
+"Dr. Eggman.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\n"
+"What Sonic, Tails, and Knuckles had\n"
+"not anticipated was that Eggman would\n"
+"return, bringing an all new threat.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"About once every year, a strange asteroid\n"
+"hovers around the planet. it suddenly\n"
+"appears from nowhere, circles around, and\n"
+"- just as mysteriously as it arrives, it\n"
+"vanishes after about two months.\n"
+"No one knows why it appears, or how.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\"Curses!\" Eggman yelled. \"That hedgehog\n"
+"and his ridiculous friends will pay\n"
+"dearly for this!\" Just then his scanner\n"
+"blipped as the Black Rock made its\n"
+"appearance from nowhere. Eggman looked at\n"
+"the screen, and just shrugged it off.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"It was only later\n"
+"that he had an\n"
+"idea. \"The Black\n"
+"Rock usually has a\n"
+"lot of energy\n"
+"within it... if I\n"
+"can somehow\n"
+"harness this, I\n"
+"can turn it into\n"
+"the ultimate\n"
+"battle station,\n"
+"and every last\n"
+"person will be\n"
+"begging for mercy,\n"
+"including Sonic!\"\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\n"
+"\n"
+"Before beginning his scheme,\n"
+"Eggman decided to give Sonic\n"
+"a reunion party...\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\"We're ready to fire in 15 seconds!\"\n"
+"The robot said, his voice crackling a\n"
+"little down the com-link. \"Good!\"\n"
+"Eggman sat back in his Egg-Mobile and\n"
+"began to count down as he saw the\n"
+"GreenFlower city on the main monitor.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\"10...9...8...\"\n"
+"Meanwhile, Sonic was tearing across the\n"
+"zones, and everything became nothing but\n"
+"a blur as he ran around loops, skimmed\n"
+"over water, and catapulted himself off\n"
+"rocks with his phenomenal speed.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\"5...4...3...\"\n"
+"Sonic knew he was getting closer to the\n"
+"City, and pushed himself harder. Finally,\n"
+"the city appeared in the horizon.\n"
+"\"2...1...Zero.\"\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"GreenFlower City was gone.\n"
+"Sonic arrived just in time to see what\n"
+"little of the 'ruins' were left. Everyone\n"
+"and everything in the city had been\n"
+"obliterated.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\"You're not quite as dead as we thought,\n"
+"huh? Are you going to tell us your plan as\n"
+"usual or will I 'have to work it out' or\n"
+"something?\"                         \n"
+"\"We'll see... let's give you a quick warm\n"
+"up, Sonic! JETTYSYNS! Open fire!\"\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"Eggman took this\n"
+"as his cue and\n"
+"blasted off,\n"
+"leaving Sonic\n"
+"and Tails behind.\n"
+"Tails looked at\n"
+"the ruins of the\n"
+"Greenflower City\n"
+"with a grim face\n"
+"and sighed.           \n"
+"\"Now what do we\n"
+"do?\", he asked.\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\"Easy! We go\n"
+"find Eggman\n"
+"and stop his\n"
+"latest\n"
+"insane plan.\n"
+"Just like\n"
+"we've always\n"
+"done, right?                 \n"
+"\n"
+"...                    \n"
+"\n"
+"\"Tails,what\n"
+"*ARE* you\n"
+"doing?\"\n"
+"#"
+msgstr ""
+
+
+msgid ""
+"\"I'm just finding what mission obje...\n"
+"a-ha! Here it is! This will only give\n"
+"the robot's primary objective. It says,\n"
+"* LOCATE AND RETRIEVE CHAOS EMERALD.\n"
+"ESTIMATED LOCATION: GREENFLOWER ZONE *\"\n"
+"\"All right, then let's go!\"\n"
+"#"
+msgstr ""
+
+
+
+msgid "Viewpoint: %s\n"
+msgstr ""
+
+
+
+msgid "Current mare is %d\n"
+msgstr ""
+
+
+msgid "No deathmatch start in this map - shifting to player starts to avoid crash...\n"
+msgstr ""
+
+
+msgid "There aren't enough starts in this map!\n"
+msgstr ""
+
+
+msgid "No Red Team start in this map, resorting to Deathmatch starts!\n"
+msgstr ""
+
+
+msgid "No Blue Team start in this map, resorting to Deathmatch starts!\n"
+msgstr ""
+
+
+msgid "The round has ended.\n"
+msgstr ""
+
+
+
+msgid "Unknown gametype! %d\n"
+msgstr ""
+
+
+
+msgid "Next map given (MAP %d) doesn't exist! Reverting to MAP01.\n"
+msgstr ""
+
+
+
+msgid "Warning: Can't find a compatible map after map %d; using map %d even though it is not compatible with the current gametype\n"
+msgstr ""
+
+
+msgid "No more free memory for saving game data\n"
+msgstr ""
+
+
+
+msgid "Couldn't read file %s\n"
+msgstr ""
+
+
+msgid "Game saved.\n"
+msgstr ""
+
+
+
+msgid "Error while writing to %s for save slot %u, base: %s\n"
+msgstr ""
+
+
+
+msgid "ERROR: cannot open file '%s'.\n"
+msgstr ""
+
+
+msgid "Movie mode enabled.\n"
+msgstr ""
+
+
+msgid "Movie mode disabled.\n"
+msgstr ""
+
+
+
+msgid "Loaded level in %f sec\n"
+msgstr ""
+
+
+
+msgid ""
+"timed %u gametics in %d realtics\n"
+"%f seconds, %f avg fps\n"
+msgstr ""
+
+
+
+msgid "Demo %s recorded\n"
+msgstr ""
+
+
+
+msgid "Demo %s not saved\n"
+msgstr ""
+
+
+
+msgid "Control '%s' unknown\n"
+msgstr ""
+
+
+msgid "setcontrol <controlname> <keyname> [<2nd keyname>]\n"
+msgstr ""
+
+
+msgid "setcontrol2 <controlname> <keyname> [<2nd keyname>]\n"
+msgstr ""
+
+
+
+msgid "Patch info headers: %7s kb\n"
+msgstr ""
+
+
+
+msgid "3D Texture cache  : %7s kb\n"
+msgstr ""
+
+
+
+msgid "Plane polygon     : %7s kb\n"
+msgstr ""
+
+
+msgid "Error while loading md2.dat\n"
+msgstr ""
+
+
+
+msgid "    Not found: %s\n"
+msgstr ""
+
+
+
+msgid "Done\n"
+msgstr ""
+
+
+msgid "Failed\n"
+msgstr ""
+
+
+msgid "The chat is muted. You can't say anything at the moment.\n"
+msgstr ""
+
+
+msgid "say <message>: send a message\n"
+msgstr ""
+
+
+msgid "sayto <playername|playernum> <message>: send a message to a player\n"
+msgstr ""
+
+
+msgid "sayto: No player with that name!\n"
+msgstr ""
+
+
+msgid "sayteam <message>: send a message to your team\n"
+msgstr ""
+
+
+msgid "Dedicated servers can't send team messages. Use \"say\".\n"
+msgstr ""
+
+
+msgid "csay <message>: send a message to be shown in the middle of the screen\n"
+msgstr ""
+
+
+msgid "Only servers and admins can use csay.\n"
+msgstr ""
+
+
+
+msgid "Illegal csay command received from non-admin %s\n"
+msgstr ""
+
+
+
+msgid "Illegal say command received from %s while muted\n"
+msgstr ""
+
+
+
+msgid "Illegal say command received from %s containing invalid characters\n"
+msgstr ""
+
+
+msgid "[Message unsent]\n"
+msgstr ""
+
+
+msgid "failed to bind with IPv6 stack"
+msgstr ""
+
+
+msgid "UDP_Socket error. Could not set socket to non blocking mode"
+msgstr ""
+
+
+msgid "UDP_Socket error. Could not set socket to allow broadcast"
+msgstr ""
+
+
+
+msgid "Network system buffer: %dKb\n"
+msgstr ""
+
+
+msgid "Can't set buffer length to 64k, file transfer will be bad\n"
+msgstr ""
+
+
+
+msgid "Network system buffer set to: %dKb\n"
+msgstr ""
+
+
+
+msgid "Network system receive buffer: %dKb\n"
+msgstr ""
+
+
+
+msgid "Network system receive buffer set to: %dKb\n"
+msgstr ""
+
+
+msgid "Can't set receive buffer length to 64k, file transfer will be bad\n"
+msgstr ""
+
+
+
+msgid "shut down\n"
+msgstr ""
+
+
+
+msgid "Resolving %s\n"
+msgstr ""
+
+
+
+msgid "%s unknown\n"
+msgstr ""
+
+
+
+msgid "Resolved %s\n"
+msgstr ""
+
+
+
+msgid "Response file %s not found"
+msgstr ""
+
+
+
+msgid "Found response file %s\n"
+msgstr ""
+
+
+msgid "No more free memory for the respone file"
+msgstr ""
+
+
+
+msgid "Couldn't read response file because %s"
+msgstr ""
+
+
+msgid "Not enough memory to read response file"
+msgstr ""
+
+
+
+msgid "%d command-line args:\n"
+msgstr ""
+
+
+
+msgid "No Clipping %s\n"
+msgstr ""
+
+
+msgid "Off"
+msgstr ""
+
+
+msgid "On"
+msgstr ""
+
+
+
+msgid "Cheese Mode %s\n"
+msgstr ""
+
+
+
+msgid "This only works in single player.\n"
+msgstr ""
+
+
+msgid "scale <value> (5-400): set player scale size\n"
+msgstr ""
+
+
+
+msgid "Scale set to %d\n"
+msgstr ""
+
+
+msgid "hurtme <damage>\n"
+msgstr ""
+
+
+msgid "charability <1/2> <value>\n"
+msgstr ""
+
+
+msgid "charspeed <normalspeed/runspeed/thrustfactor/accelstart/acceleration/actionspd> <value>\n"
+msgstr ""
+
+
+msgid "Your reality is everyone's reality. Therefore, you should not use this command.\n"
+msgstr ""
+
+
+
+msgid "Temporary checkpoint created at %d, %d, %d\n"
+msgstr ""
+
+
+msgid "You now have all 7 emeralds.\n"
+msgstr ""
+
+
+msgid "Emeralds reset to zero.\n"
+msgstr ""
+
+
+msgid "All secrets unlocked.\n"
+msgstr ""
+
+
+
+msgid ""
+"You are in a network game.\n"
+"End it?\n"
+"(Y/N).\n"
+msgstr ""
+
+
+msgid ""
+"Only the server can do a load net game!\n"
+"\n"
+"press a key."
+msgstr ""
+
+
+msgid ""
+"Are you sure you want to end the game?\n"
+"\n"
+"press Y or N."
+msgstr ""
+
+
+
+msgid ""
+"%s\n"
+"\n"
+"(Press 'Y' to quit)"
+msgstr ""
+
+
+msgid ""
+"Eggman's tied explosives\n"
+"to your girlfriend, and\n"
+"will activate them if\n"
+"you press the 'Y' key!\n"
+"Press 'N' to save her!"
+msgstr ""
+
+
+msgid ""
+"What would Tails say if\n"
+"he saw you quitting the game?"
+msgstr ""
+
+
+msgid ""
+"Hey!\n"
+"Where do ya think you're goin'?"
+msgstr ""
+
+
+msgid ""
+"Forget your studies!\n"
+"Play some more!"
+msgstr ""
+
+
+msgid ""
+"You're trying to say you\n"
+"like Sonic 2K6 better than\n"
+"this, right?"
+msgstr ""
+
+
+msgid ""
+"Don't leave yet -- there's a\n"
+"super emerald around that corner!"
+msgstr ""
+
+
+msgid "You'd rather work than play?"
+msgstr ""
+
+
+msgid ""
+"Go ahead and leave. See if I care...\n"
+"*sniffle*"
+msgstr ""
+
+
+msgid ""
+"If you leave now,\n"
+"Eggman will take over the world!"
+msgstr ""
+
+
+msgid ""
+"Don't quit!\n"
+"There are animals\n"
+"to save!"
+msgstr ""
+
+
+msgid ""
+"Aw c'mon, just bop\n"
+"a few more robots!"
+msgstr ""
+
+
+msgid "Did you get all those Chaos Emeralds?"
+msgstr ""
+
+
+msgid ""
+"If you leave, I'll use\n"
+"my spin attack on you!"
+msgstr ""
+
+
+msgid ""
+"Don't go!\n"
+"You might find the hidden\n"
+"levels!"
+msgstr ""
+
+
+msgid ""
+"Hit the 'N' key, Sonic!\n"
+"The 'N' key!"
+msgstr ""
+
+
+msgid ""
+"Are you really going to\n"
+"give up?\n"
+"We certainly would never give you up."
+msgstr ""
+
+
+msgid "Come on, just ONE more netgame!"
+msgstr ""
+
+
+msgid ""
+"Press 'N' to unlock\n"
+"the Ultimate Cheat!"
+msgstr ""
+
+
+msgid ""
+"Why don't you go back and try\n"
+"jumping on that house to\n"
+"see what happens?"
+msgstr ""
+
+
+msgid ""
+"Every time you press 'Y', an\n"
+"SRB2 Developer cries..."
+msgstr ""
+
+
+msgid ""
+"You'll be back to play soon, though...\n"
+"......right?"
+msgstr ""
+
+
+msgid ""
+"Aww, is Egg Rock Zone too\n"
+"difficult for you?"
+msgstr ""
+
+
+msgid "saveconfig <filename[.cfg]> [-silent] : save config to a file\n"
+msgstr ""
+
+
+
+msgid "config saved as %s\n"
+msgstr ""
+
+
+msgid "loadconfig <filename[.cfg]> : load config from a file\n"
+msgstr ""
+
+
+msgid "changeconfig <filename[.cfg]> : save current config and load another\n"
+msgstr ""
+
+
+
+msgid "config file: %s\n"
+msgstr ""
+
+
+msgid "Config filename must be .cfg\n"
+msgstr ""
+
+
+
+msgid "Couldn't save game config file %s\n"
+msgstr ""
+
+
+msgid "Recording into next new file\n"
+msgstr ""
+
+
+
+msgid "screen shot %s saved in %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't create screen shot %s in %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't create screen shot (all 10000 slots used!) in %s\n"
+msgstr ""
+
+
+msgid "No servers currently running.\n"
+msgstr ""
+
+
+msgid "cannot connect to the master server\n"
+msgstr ""
+
+
+msgid ""
+"There was a problem connecting to\n"
+"the Master Server"
+msgstr ""
+
+
+
+msgid ""
+"You have been banned from\n"
+"hosting netgames.\n"
+"\n"
+"Under the following IP Range:\n"
+"%s - %s\n"
+"\n"
+"For the following reason:\n"
+"%s\n"
+"\n"
+"Your ban will expire on:\n"
+"%s"
+msgstr ""
+
+
+
+msgid ""
+"You have been banned from\n"
+"joining netgames.\n"
+"\n"
+"Under the following IP Range:\n"
+"%s - %s\n"
+"\n"
+"For the following reason:\n"
+"%s\n"
+"\n"
+"Your ban will expire on:\n"
+"%s"
+msgstr ""
+
+
+msgid "Master Server Offline."
+msgstr ""
+
+
+msgid "Offline"
+msgstr ""
+
+
+msgid "Not yet registered to the master server.\n"
+msgstr ""
+
+
+msgid "Retrieving server list...\n"
+msgstr ""
+
+
+msgid "cannot get server list\n"
+msgstr ""
+
+
+msgid "Connection to master server failed\n"
+msgstr ""
+
+
+msgid "Timeout on masterserver\n"
+msgstr ""
+
+
+
+msgid "Masterserver error on select #%u: %s\n"
+msgstr ""
+
+
+
+msgid "Masterserver getsockopt error #%u: %s\n"
+msgstr ""
+
+
+msgid "Dedicated internet servers must use the -room parameter!"
+msgstr ""
+
+
+msgid "Master Server Updated Successfully!\n"
+msgstr ""
+
+
+msgid "Registering this server to the master server...\n"
+msgstr ""
+
+
+msgid "Unregistering this server to the master server...\n"
+msgstr ""
+
+
+msgid "cannot remove this server from the master server\n"
+msgstr ""
+
+
+msgid "You cannot register on the Master Server mid-game,  please end your current session and re-host ifyou wish to advertise your server on the Master Server.\n"
+msgstr ""
+
+
+msgid "Note: All monitors turned off.\n"
+msgstr ""
+
+
+
+
+msgid "ERROR: Powerup has no target!\n"
+msgstr ""
+
+
+
+msgid "Power #%d out of range!\n"
+msgstr ""
+
+
+
+msgid "Weapon #%d out of range!\n"
+msgstr ""
+
+
+
+msgid "%s returned the red flag to base.\n"
+msgstr ""
+
+
+
+msgid "%s picked up the red flag!\n"
+msgstr ""
+
+
+
+msgid "%s returned the blue flag to base.\n"
+msgstr ""
+
+
+
+msgid "%s picked up the blue flag!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s died.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s crushed %s%s%s with a heavy object!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s suicided.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was fried by %s%s%s's fire trail.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sbounce ring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sautomatic ring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sscatter ring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sexplosion ring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sgrenade ring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sturbo ring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %smine ring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sBFR blast.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sBFR laser.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %srail ring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s's %sring.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by %s%s%s.\n"
+msgstr ""
+
+
+msgid "killed"
+msgstr ""
+
+
+msgid "reflected "
+msgstr ""
+
+
+
+msgid "%s%s%s drowned.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was impaled by spikes!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was crushed.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by a blue crawla!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by a red crawla!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by a jetty-syn gunner!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by a jetty-syn bomber!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by a crawla commander!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by the Egg Mobile!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was %s by the Egg Slimer!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s fell in some nasty goop!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s burned to death!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was electrocuted!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s fell into a bottomless pit.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s asphyxiated in space!\n"
+msgstr ""
+
+
+
+msgid "%s got a game over.\n"
+msgstr ""
+
+
+
+msgid "%s has %d lives remaining.\n"
+msgstr ""
+
+
+
+msgid "%s%s%s got nuked by %s%s%s!\n"
+msgstr ""
+
+
+
+msgid "%s%s%s was burnt by %s%s%s's fire trail.\n"
+msgstr ""
+
+
+msgid "hit"
+msgstr ""
+
+
+msgid "The IT player has left the game.\n"
+msgstr ""
+
+
+msgid "All players have been tagged!\n"
+msgstr ""
+
+
+msgid "There are no players able to become IT.\n"
+msgstr ""
+
+
+
+msgid "%s was found!\n"
+msgstr ""
+
+
+
+msgid "%s tossed the %s flag.\n"
+msgstr ""
+
+
+
+msgid "%s dropped the %s flag.\n"
+msgstr ""
+
+
+msgid "Warning: State Cycle Detected\n"
+msgstr ""
+
+
+msgid "The red flag has returned to base.\n"
+msgstr ""
+
+
+msgid "The blue flag has returned to base.\n"
+msgstr ""
+
+
+msgid "You need to unlock this level first!\n"
+msgstr ""
+
+
+msgid "You need to unlock this level in single player first!\n"
+msgstr ""
+
+
+msgid "No more free memory for thing writing!\n"
+msgstr ""
+
+
+
+msgid "newthings%d.lmp saved.\n"
+msgstr ""
+
+
+msgid "No player currently available to become IT. Awaiting available players.\n"
+msgstr ""
+
+
+
+msgid "Loading SOC lump: %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't load wad file %s\n"
+msgstr ""
+
+
+
+msgid "%s sounds replaced\n"
+msgstr ""
+
+
+
+msgid "%s musics replaced\n"
+msgstr ""
+
+
+msgid "No maps added\n"
+msgstr ""
+
+
+
+msgid "Current map %d replaced by added file, ending the level to ensure consistiency.\n"
+msgstr ""
+
+
+
+msgid "%s\\captured the blue flag.\\\\\\\\"
+msgstr ""
+
+
+msgid "the enemy has returned\\their flag.\\\\\\\\"
+msgstr ""
+
+
+msgid "your flag was returned\\to base.\\\\\\\\"
+msgstr ""
+
+
+
+msgid "%s\\captured the red flag.\\\\\\\\"
+msgstr ""
+
+
+
+msgid "%s has finished the race.\n"
+msgstr ""
+
+
+
+msgid "%s started lap %d\n"
+msgstr ""
+
+
+
+msgid "%s recieved double points for surviving the round.\n"
+msgstr ""
+
+
+msgid ""
+"numthinkers <#>: Count number of thinkers\n"
+"\t1: P_MobjThinker\n"
+"\t2: P_RainThinker\n"
+"\t3: P_SnowThinker\n"
+"\t4: P_NullPrecipThinker\n"
+"\t5: T_Friction\n"
+"\t6: T_Pusher\n"
+"\t7: P_RemoveThinkerDelayed\n"
+msgstr ""
+
+
+msgid "Number of P_MobjThinker: "
+msgstr ""
+
+
+msgid "Number of P_RainThinker: "
+msgstr ""
+
+
+msgid "Number of P_SnowThinker: "
+msgstr ""
+
+
+msgid "Number of P_NullPrecipThinker: "
+msgstr ""
+
+
+msgid "Number of T_Friction: "
+msgstr ""
+
+
+msgid "Number of T_Pusher: "
+msgstr ""
+
+
+msgid "Number of P_RemoveThinkerDelayed: "
+msgstr ""
+
+
+msgid "That is not a valid number.\n"
+msgstr ""
+
+
+
+msgid "Object number %d out of range (max %d).\n"
+msgstr ""
+
+
+
+msgid "There are %d objects of type %d currently in the level.\n"
+msgstr ""
+
+
+msgid "Count of active objects in level:\n"
+msgstr ""
+
+
+
+msgid "%s got a chain of %u!\n"
+msgstr ""
+
+
+
+msgid "%s has completed the level.\n"
+msgstr ""
+
+
+msgid "Sorry, you're too high to place this object (max: 4095 above bottom floor).\n"
+msgstr ""
+
+
+msgid "Sorry, you're too high to place this object (max: 2047 above bottom floor).\n"
+msgstr ""
+
+
+
+msgid "Spawned at %d\n"
+msgstr ""
+
+
+
+msgid "Current mapthing is %d\n"
+msgstr ""
+
+
+
+msgid "Sorry, you're too %s to place this object (max: %d %s).\n"
+msgstr ""
+
+
+msgid "high"
+msgstr ""
+
+
+msgid "low"
+msgstr ""
+
+
+msgid "above bottom floor"
+msgstr ""
+
+
+msgid "below top ceiling"
+msgstr ""
+
+
+
+msgid "Placed object mapthingum %d, not the one below.\n"
+msgstr ""
+
+
+
+msgid "Placed object type %d at %d, %d, %d, %d\n"
+msgstr ""
+
+
+msgid "Deleting...\n"
+msgstr ""
+
+
+msgid "Deleted.\n"
+msgstr ""
+
+
+msgid "You cannot delete this item because it doesn't have a mapthing!\n"
+msgstr ""
+
+
+msgid "You must wait until next round to enter the game.\n"
+msgstr ""
+
+
+msgid "Server does not allow team change.\n"
+msgstr ""
+
+
+
+msgid "%s caused a world of pain.\n"
+msgstr ""
+
+
+
+msgid "%s ran out of time.\n"
+msgstr ""
+
+
+
+msgid "Number of Extra Colormaps: %s\n"
+msgstr ""
+
+
+msgid "Splitscreen not supported in netplay, sorry!\n"
+msgstr ""
+
+
+
+msgid "sprite %s set in pwad %d\n"
+msgstr ""
+
+
+
+msgid "%s sprites added from file %s\n"
+msgstr ""
+
+
+
+msgid "%s sprites removed from file %s\n"
+msgstr ""
+
+
+
+msgid "Skin %s not found\n"
+msgstr ""
+
+
+
+msgid "Skin %d not found\n"
+msgstr ""
+
+
+
+msgid "Added skin '%s'\n"
+msgstr ""
+
+
+
+msgid "Removed skin '%s'\n"
+msgstr ""
+
+
+msgid "Loading sounds... "
+msgstr ""
+
+
+msgid " pre-cached all sound data\n"
+msgstr ""
+
+
+
+msgid "ERROR: Music lump %.6s not found!\n"
+msgstr ""
+
+
+
+msgid ""
+"WARNING: Resolution is not aspect-correct!\n"
+"Use a multiple of %dx%d\n"
+msgstr ""
+
+
+
+msgid "Using resolution: %d x %d\n"
+msgstr ""
+
+
+
+msgid "Default resolution: %d x %d (%d bits)\n"
+msgstr ""
+
+
+msgid "No CD in drive\n"
+msgstr ""
+
+
+
+msgid "CD Error: %s\n"
+msgstr ""
+
+
+msgid "CD eject failed\n"
+msgstr ""
+
+
+msgid ""
+"cd [on] [off] [remap] [reset] [select]\n"
+"   [open] [info] [play <track>] [resume]\n"
+"   [stop] [pause] [loop <track>]\n"
+msgstr ""
+
+
+
+msgid "Opened CD-ROM drive %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't open CD-ROM drive %s: %s\n"
+msgstr ""
+
+
+
+msgid "%u tracks\n"
+msgstr ""
+
+
+
+msgid "Currently %s track %u\n"
+msgstr ""
+
+
+msgid "looping"
+msgstr ""
+
+
+msgid "playing"
+msgstr ""
+
+
+
+msgid "Paused %s track %u\n"
+msgstr ""
+
+
+
+msgid "Volume is %d\n"
+msgstr ""
+
+
+
+msgid "Invalid CD command \"CD %s\"\n"
+msgstr ""
+
+
+msgid "I_InitCD: Init CD audio\n"
+msgstr ""
+
+
+
+msgid "Couldn't initialize SDL CDROM: %s\n"
+msgstr ""
+
+
+msgid "CD audio Initialized\n"
+msgstr ""
+
+
+
+msgid "Bad track number %u.\n"
+msgstr ""
+
+
+
+msgid "Track %u is not audio\n"
+msgstr ""
+
+
+
+msgid "Error playing track %d: %s\n"
+msgstr ""
+
+
+msgid "Setting up SRB2...\n"
+msgstr ""
+
+
+msgid "Entering main game loop...\n"
+msgstr ""
+
+
+
+msgid " requested frequency of %d hz\n"
+msgstr ""
+
+
+msgid " Using 3D sound driver\n"
+msgstr ""
+
+
+msgid " Failed loading 3D sound driver\n"
+msgstr ""
+
+
+msgid " couldn't open audio with desired format\n"
+msgstr ""
+
+
+
+msgid " Starting up with audio driver : %s\n"
+msgstr ""
+
+
+
+msgid " configured audio device with %d samples/slice at %ikhz(%dms buffer)\n"
+msgstr ""
+
+
+msgid " Sound module ready\n"
+msgstr ""
+
+
+
+msgid "Couldn't load music lump: %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't load music data: %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't open file %s to write music in\n"
+msgstr ""
+
+
+
+msgid "Couldn't write music into file %s because %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't load music file %s: %s\n"
+msgstr ""
+
+
+msgid "I_ShutdownMusic: "
+msgstr ""
+
+
+msgid " disabled loading FMOD\n"
+msgstr ""
+
+
+msgid " failed to load FMOD\n"
+msgstr ""
+
+
+
+msgid ""
+"Wrong FMOD DLL version.\n"
+"You should be using FMOD %s\n"
+msgstr ""
+
+
+msgid "I_InitMusic:"
+msgstr ""
+
+
+msgid " Unable to load FLAC support\n"
+msgstr ""
+
+
+msgid " Unable to load MOD support\n"
+msgstr ""
+
+
+msgid " Unable to load MP3 support\n"
+msgstr ""
+
+
+msgid " Unable to load OGG support\n"
+msgstr ""
+
+
+
+msgid " Unable to open music: %s\n"
+msgstr ""
+
+
+
+msgid " Starting with audio driver : %s\n"
+msgstr ""
+
+
+
+msgid " Starting up with audio driver : %s with SDL_Mixer\n"
+msgstr ""
+
+
+msgid "Music initialized\n"
+msgstr ""
+
+
+
+msgid "Couldn't play song because %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't load MIDI: %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't initialize joystick: %s\n"
+msgstr ""
+
+
+
+msgid "Cannot use joystick #%d/(%s), it doesn't exist\n"
+msgstr ""
+
+
+
+msgid "Found %d joysticks on this system\n"
+msgstr ""
+
+
+msgid "Found no joysticks on this system\n"
+msgstr ""
+
+
+
+msgid "Joystick: %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't open joystick: %s\n"
+msgstr ""
+
+
+
+msgid "Joystick2: %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't open joystick2: %s\n"
+msgstr ""
+
+
+msgid "Read Error on secondary mouse port\n"
+msgstr ""
+
+
+
+msgid "Error opening %s!\n"
+msgstr ""
+
+
+
+msgid "Can't open %s: Access denied\n"
+msgstr ""
+
+
+
+msgid "Can't open %s: error %d\n"
+msgstr ""
+
+
+msgid "Using GetTickCount()\n"
+msgstr ""
+
+
+
+msgid "%d video mode(s) available(s)\n"
+msgstr ""
+
+
+msgid "Unknown Surface"
+msgstr ""
+
+
+
+msgid " %ix%i at %i bit color\n"
+msgstr ""
+
+
+msgid " Stored in video memory\n"
+msgstr ""
+
+
+msgid " Stored in an OpenGL context\n"
+msgstr ""
+
+
+msgid " Uses preallocated memory\n"
+msgstr ""
+
+
+msgid " Stored in system memory\n"
+msgstr ""
+
+
+msgid " Uses asynchronous blits if possible\n"
+msgstr ""
+
+
+msgid " Uses synchronous blits if possible\n"
+msgstr ""
+
+
+msgid " Allows any pixel-format\n"
+msgstr ""
+
+
+msgid " Has exclusive palette access\n"
+msgstr ""
+
+
+msgid " Has nonexclusive palette access\n"
+msgstr ""
+
+
+msgid " Double buffered\n"
+msgstr ""
+
+
+msgid " No hardware flipping\n"
+msgstr ""
+
+
+msgid " Full screen\n"
+msgstr ""
+
+
+msgid " Resizable window\n"
+msgstr ""
+
+
+msgid " Nonresizable window\n"
+msgstr ""
+
+
+msgid " Uses hardware acceleration blit\n"
+msgstr ""
+
+
+msgid " Use colorkey blitting\n"
+msgstr ""
+
+
+msgid " Colorkey RLE acceleration blit\n"
+msgstr ""
+
+
+msgid " Use alpha blending acceleration blit\n"
+msgstr ""
+
+
+msgid "Video Interface Capabilities:\n"
+msgstr ""
+
+
+msgid " Hardware surfaces\n"
+msgstr ""
+
+
+msgid " Window manager\n"
+msgstr ""
+
+
+msgid " Accelerated blits HW-2-HW\n"
+msgstr ""
+
+
+msgid " Accelerated blits HW-2-HW with Colorkey\n"
+msgstr ""
+
+
+msgid " Accelerated blits HW-2-HW with Alpha\n"
+msgstr ""
+
+
+msgid " Accelerated blits SW-2-HW\n"
+msgstr ""
+
+
+msgid " Accelerated blits SW-2-HW with Colorkey\n"
+msgstr ""
+
+
+msgid " Accelerated blits SW-2-HW with Alpha\n"
+msgstr ""
+
+
+msgid " Accelerated Color filling\n"
+msgstr ""
+
+
+
+msgid " There is %i KB of video memory\n"
+msgstr ""
+
+
+msgid " There no video memory for SDL\n"
+msgstr ""
+
+
+msgid "Current Engine Mode"
+msgstr ""
+
+
+msgid "Prebuffer Mode"
+msgstr ""
+
+
+msgid "Postbuffer Mode"
+msgstr ""
+
+
+msgid "Current Video Mode"
+msgstr ""
+
+
+msgid "No video modes present\n"
+msgstr ""
+
+
+
+msgid "Found %d FullScreen Video Modes:\n"
+msgstr ""
+
+
+
+msgid "%dx%d and "
+msgstr ""
+
+
+msgid "None\n"
+msgstr ""
+
+
+
+msgid "vid_mode <modenum> : set video mode, current video mode %i\n"
+msgstr ""
+
+
+msgid "No such video mode\n"
+msgstr ""
+
+
+
+msgid "Couldn't initialize SDL's Audio System with Video System: %s\n"
+msgstr ""
+
+
+
+msgid "Couldn't initialize SDL's Video System: %s\n"
+msgstr ""
+
+
+
+msgid "Starting up with video driver : %s\n"
+msgstr ""
+
+
+msgid ""
+"The version of the renderer doesn't match the version of the executable\n"
+"Be sure you have installed SRB2 properly.\n"
+msgstr ""
+
+
+
+msgid "Could not set vidmode: %s\n"
+msgstr ""
+
+
+msgid "Not enough memory for video buffer\n"
+msgstr ""
+
+
+msgid "No more free sound slots\n"
+msgstr ""
+
+
+msgid "WAITING FOR PLAYERS TO HIDE..."
+msgstr ""
+
+
+msgid "HIDE BEFORE TIME RUNS OUT!"
+msgstr ""
+
+
+msgid "FLEE BEFORE YOU ARE HUNTED!"
+msgstr ""
+
+
+msgid "HIDE TIME REMAINING:"
+msgstr ""
+
+
+msgid "YOU'RE IT!"
+msgstr ""
+
+
+msgid "TIME REMAINING:"
+msgstr ""
+
+
+msgid "NO TIME LIMIT"
+msgstr ""
+
+
+msgid "RED TEAM"
+msgstr ""
+
+
+msgid "BLUE TEAM"
+msgstr ""
+
+
+msgid "SPECTATOR"
+msgstr ""
+
+
+msgid "TIME LEFT"
+msgstr ""
+
+
+msgid "CONTINUE?"
+msgstr ""
+
+
+msgid "OVERTIME!"
+msgstr ""
+
+
+msgid "Viewpoint:"
+msgstr ""
+
+
+msgid "I, Pope Rededict XVI proclaim"
+msgstr ""
+
+
+msgid "AJ & Amy"
+msgstr ""
+
+
+msgid "Husband & Wife"
+msgstr ""
+
+
+msgid "on this day"
+msgstr ""
+
+
+msgid "May 16, 2009"
+msgstr ""
+
+
+msgid "Oh... it's you again..."
+msgstr ""
+
+
+msgid "Look, I wanted to apologize for the way"
+msgstr ""
+
+
+msgid "I've acted in the past."
+msgstr ""
+
+
+msgid "I've seen the error of my ways"
+msgstr ""
+
+
+msgid "and turned over a new leaf."
+msgstr ""
+
+
+msgid "Instead of sending people to hell,"
+msgstr ""
+
+
+msgid "I now send them to heaven!"
+msgstr ""
+
+
+msgid "Thank you!"
+msgstr ""
+
+
+msgid "But our earless leader is in"
+msgstr ""
+
+
+msgid "another castle!"
+msgstr ""
+
+
+msgid "Press Viewpoint Key to watch a player."
+msgstr ""
+
+
+msgid "You cannot move while hiding."
+msgstr ""
+
+
+
+msgid "Respawn in: %d seconds."
+msgstr ""
+
+
+msgid "Press Jump to respawn."
+msgstr ""
+
+
+msgid "You are a spectator."
+msgstr ""
+
+
+msgid "Press Fire to be assigned to a team."
+msgstr ""
+
+
+msgid "Press Fire to enter the game."
+msgstr ""
+
+
+msgid "Press Jump to float and Spin to sink."
+msgstr ""
+
+
+
+msgid "Loading main config from %s\n"
+msgstr ""
+
+
+
+msgid "Loading object config from %s\n"
+msgstr ""
+
+
+msgid "Maximum wad files reached\n"
+msgstr ""
+
+
+
+msgid "Can't open %s\n"
+msgstr ""
+
+
+
+msgid "Can't read wad header from %s because %s\n"
+msgstr ""
+
+
+
+msgid "%s doesn't have IWAD or PWAD id\n"
+msgstr ""
+
+
+
+msgid "%s wadfile directory is corrupt; maybe %s\n"
+msgstr ""
+
+
+
+msgid "Added file %s (%u lumps)\n"
+msgstr ""
+
+
+
+msgid "You can't remove the IWAD %s!\n"
+msgstr ""
+
+
+
+msgid "Removing WAD %s...\n"
+msgstr ""
+
+
+msgid " done unloading WAD\n"
+msgstr ""
+
+
+
+msgid "File is corrupt or has been modified: %s (found md5: %s, wanted: %s)\n"
+msgstr ""
+
+
+msgid "CD tracks remapped in that order :\n"
+msgstr ""
+
+
+msgid "CD is not ready.\n"
+msgstr ""
+
+
+msgid "No audio tracks\n"
+msgstr ""
+
+
+msgid "audio"
+msgstr ""
+
+
+msgid "data "
+msgstr ""
+
+
+
+msgid "Total time : %s\n"
+msgstr ""
+
+
+msgid "Hello, it's me, SRB2's Console Window\n"
+msgstr ""
+
+
+msgid "We have a console already.\n"
+msgstr ""
+
+
+
+msgid "Using external sound driver %s\n"
+msgstr ""
+
+
+
+msgid "Not using external sound driver %s\n"
+msgstr ""
+
+
+msgid " DirectSound DLL not loaded\n"
+msgstr ""
+
+
+msgid ""
+" DirectSoundCreate FAILED\n"
+" there is no sound device or the sound device is under\n"
+" the control of another application\n"
+msgstr ""
+
+
+msgid " SetCooperativeLevel FAILED\n"
+msgstr ""
+
+
+
+msgid "CreateSoundBuffer FAILED: %s (ErrNo %ld)\n"
+msgstr ""
+
+
+msgid "Couldn't set primary buffer format.\n"
+msgstr ""
+
+
+msgid " Compacting onboard sound-memory..."
+msgstr ""
+
+
+msgid " Primary buffer continuous play FAILED\n"
+msgstr ""
+
+
+msgid "sound initialized.\n"
+msgstr ""
+
+
+
+msgid "%d mixer devices available\n"
+msgstr ""
+
+
+msgid ""
+" failed to load FMOD\n"
+" no DigiMusic support\n"
+msgstr ""
+
+
+msgid "No MIDI devices available, music is disabled\n"
+msgstr ""
+
+
+msgid "No MIDI music\n"
+msgstr ""
+
+
+msgid "midiStreamOpen FAILED\n"
+msgstr ""
+
+
+msgid "Couldn't set volume\n"
+msgstr ""
+
+
+msgid "Music lump is not MID music format\n"
+msgstr ""
+
+
+msgid "I_LoadSong: StreamBufferSetup FAILED"
+msgstr ""
+
+
+msgid "Could not create IDirectInput device 2"
+msgstr ""
+
+
+msgid "\tMouse will not use DirectInput.\n"
+msgstr ""
+
+
+
+msgid "Capabilities: %lu axes, %lu buttons, %lu POVs, poll %u, Gamepad %d\n"
+msgstr ""
+
+
+msgid "Joystick disabled\n"
+msgstr ""
+
+
+msgid "Looking for joystick devices:\n"
+msgstr ""
+
+
+msgid "Joystick initialize failed.\n"
+msgstr ""
+
+
+msgid "none found\n"
+msgstr ""
+
+
+msgid "none used\n"
+msgstr ""
+
+
+msgid "Set the use_joystick variable to one of the enumerated joystick numbers\n"
+msgstr ""
+
+
+msgid "I_InitJoystick: SetCooperativeLevel FAILED"
+msgstr ""
+
+
+msgid "Joystick already initialized\n"
+msgstr ""
+
+
+msgid "Joystick2 disabled\n"
+msgstr ""
+
+
+msgid "Set the use_joystick2 variable to one of the enumerated joysticks number\n"
+msgstr ""
+
+
+msgid "I_InitJoystick2: SetCooperativeLevel FAILED"
+msgstr ""
+
+
+
+msgid "Couldn't create DirectInput (reason: %s)"
+msgstr ""
+
+
+msgid "Using DirectX3 interface\n"
+msgstr ""
+
+
+msgid "mode skipped (too many)\n"
+msgstr ""
+
+
+msgid "WARNING: This r_opengl version is not supported, use it at your own risk.\n"
+msgstr ""
+
+
+
+msgid "Mode changed to %d (%s)\n"
+msgstr ""
+
+
+
+msgid ""
+"width: %d\n"
+"height: %d\n"
+msgstr ""
+
+
+
+msgid ""
+"bytes per scanline: %d\n"
+"bytes per pixel: %d\n"
+"numpages: %d\n"
+msgstr ""
+
+
+msgid "GOT TIME BONUS EMBLEM!"
+msgstr ""
+
+
+msgid "GOT PERFECT BONUS EMBLEM!"
+msgstr ""
+
+
+msgid "Teams will be scrambled next round!"
+msgstr ""
+
+
+
+msgid "system memory %uMB free %uMB\n"
+msgstr ""
+
+
+msgid "Memory Info\n"
+msgstr ""
+
+
+
+msgid "Total heap used   : %7s KB\n"
+msgstr ""
+
+
+
+msgid "Static            : %7s KB\n"
+msgstr ""
+
+
+
+msgid "Static (sound)    : %7s KB\n"
+msgstr ""
+
+
+
+msgid "Static (music)    : %7s KB\n"
+msgstr ""
+
+
+
+msgid "Level             : %7s KB\n"
+msgstr ""
+
+
+
+msgid "Special thinker   : %7s KB\n"
+msgstr ""
+
+
+
+msgid "All purgable      : %7s KB\n"
+msgstr ""
+
+
+
+msgid "Patch info headers: %7s KB\n"
+msgstr ""
+
+
+
+msgid "Mipmap patches    : %7s KB\n"
+msgstr ""
+
+
+
+msgid "HW Texture cache  : %7s KB\n"
+msgstr ""
+
+
+
+msgid "Plane polygons    : %7s KB\n"
+msgstr ""
+
+
+
+msgid "HW Texture used   : %7d KB\n"
+msgstr ""
+
+
+msgid "System Memory Info\n"
+msgstr ""
+
+
+
+msgid "    Total physical memory: %7u KB\n"
+msgstr ""
+
+
+
+msgid "Available physical memory: %7u KB\n"
+msgstr ""

@@ -1,0 +1,174 @@
+
+
+
+
+
+
+
+define _predecessor =
+ifdef GCC$(firstword $(1))
+GCC$(lastword $(1)):=1
+endif
+endef
+_n:=$(words $(gcc_versions))
+$(foreach v,$(join $(wordlist 2,$(_n),- $(gcc_versions)),\
+	$(addprefix =,$(wordlist 2,$(_n),$(gcc_versions)))),\
+	$(and $(findstring =,$(v)),\
+	$(eval $(call _predecessor,$(subst =, ,$(v))))))
+
+
+WFLAGS:=-Wall -Wno-trigraphs
+ifndef GCC295
+
+endif
+ifndef RELAXWARNINGS
+ WFLAGS+=-W
+
+ifndef GCC295
+ WFLAGS+=-Wno-div-by-zero
+endif
+
+WFLAGS+=-Wfloat-equal
+
+ WFLAGS+=-Wundef
+ifndef GCC295
+ WFLAGS+=-Wendif-labels
+endif
+ifdef GCC41
+ WFLAGS+=-Wshadow
+endif
+
+ WFLAGS+=-Wpointer-arith -Wbad-function-cast
+ifdef GCC45
+
+endif
+ WFLAGS+=-Wcast-qual
+ifndef NOCASTALIGNWARN
+ WFLAGS+=-Wcast-align
+endif
+ WFLAGS+=-Wwrite-strings
+ifndef ERRORMODE
+
+ifdef GCC43
+
+endif
+endif
+ WFLAGS+=-Wsign-compare
+ifdef GCC91
+ WFLAGS+=-Wno-error=address-of-packed-member
+endif
+ifdef GCC45
+ WFLAGS+=-Wlogical-op
+endif
+ WFLAGS+=-Waggregate-return
+ifdef HAIKU
+ifdef GCC41
+
+endif
+endif
+
+ifdef GCC40
+ WFLAGS+=-Wold-style-definition
+endif
+ WFLAGS+=-Wmissing-prototypes -Wmissing-declarations
+ifdef GCC40
+ WFLAGS+=-Wmissing-field-initializers
+endif
+ WFLAGS+=-Wmissing-noreturn
+
+
+
+
+
+
+ WFLAGS+=-Wnested-externs
+
+ WFLAGS+=-Winline
+ifdef DEBUGMODE
+ WFLAGS+=-Wno-error=inline
+endif
+ifdef GCC43
+ WFLAGS+=-funit-at-a-time
+ WFLAGS+=-Wlogical-op
+endif
+ifndef GCC295
+ WFLAGS+=-Wdisabled-optimization
+endif
+endif
+WFLAGS+=-Wformat-y2k
+ifdef GCC71
+WFLAGS+=-Wno-error=format-overflow=2
+endif
+WFLAGS+=-Wformat-security
+ifndef GCC29
+
+endif
+ifdef GCC46
+WFLAGS+=-Wno-suggest-attribute=noreturn
+endif
+
+ifdef NOLDWARNING
+LDFLAGS+=-Wl,--as-needed
+endif
+
+ifdef ERRORMODE
+WFLAGS+=-Werror
+endif
+
+ifdef GCC43
+
+endif
+ifdef GCC44
+
+endif
+ifdef GCC46
+ WFLAGS+=-Wno-error=suggest-attribute=noreturn
+endif
+ifdef GCC54
+ WFLAGS+=-Wno-logical-op -Wno-error=logical-op
+endif
+ifdef GCC61
+ WFLAGS+=-Wno-tautological-compare -Wno-error=tautological-compare
+endif
+ifdef GCC71
+ WFLAGS+=-Wimplicit-fallthrough=4
+endif
+ifdef GCC81
+ WFLAGS+=-Wno-error=format-overflow
+ WFLAGS+=-Wno-format-overflow
+ WFLAGS+=-Wno-error=multistatement-macros
+endif
+
+ifdef NONX86
+  ifdef X86_64  
+  opts+=-march=nocona
+  endif
+else
+  ifndef GCC29
+  opts+=-msse3 -mfpmath=sse
+  else
+  opts+=-mpentium
+  endif
+endif
+
+ifdef DEBUGMODE
+ifdef GCC48
+opts+=-Og
+else
+opts+=-O0
+endif
+endif
+
+ifdef VALGRIND
+ifdef GCC46
+WFLAGS+=-Wno-error=unused-but-set-variable
+WFLAGS+=-Wno-unused-but-set-variable
+endif
+endif
+
+
+ifdef GCC43
+ifndef GCC44
+WFLAGS+=-Wno-logical-op
+endif
+endif

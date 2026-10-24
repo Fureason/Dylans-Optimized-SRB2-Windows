@@ -1,0 +1,105 @@
+#!/bin/bash
+
+
+
+
+
+
+
+
+: ${DPL_ENABLED}                 
+: ${DPL_TAG_ENABLED}             
+: ${DPL_JOB_ENABLE_ALL}          
+: ${DPL_TERMINATE_TESTS}         
+: ${DPL_TRIGGER}                 
+: ${DPL_JOBNAMES}                
+: ${DPL_OSNAMES}                 
+: ${DPL_BRANCHES}                
+
+
+: ${_DPL_JOB_ENABLED}            
+: ${_DPL_JOB_NAME}               
+: ${_DPL_FTP_TARGET}             
+: ${_DPL_DPUT_TARGET}            
+: ${_DPL_PACKAGE_SOURCE}         
+: ${_DPL_PACKAGE_BINARY}         
+: ${_DPL_PACKAGE_MAIN:=1}        
+: ${_DPL_PACKAGE_ASSET}          
+
+
+: ${ASSET_ARCHIVE_PATH:=https://github.com/mazmazz/SRB2/releases/download/SRB2_assets_220/SRB2-v220-assets.7z}
+: ${ASSET_ARCHIVE_OPTIONAL_PATH:=https://github.com/mazmazz/SRB2/releases/download/SRB2_assets_220/SRB2-v220-optional-assets.7z}
+: ${ASSET_FILES_HASHED:=srb2.pk3 zones.pk3 player.dta}  
+: ${ASSET_FILES_DOCS:=README.txt LICENSE.txt LICENSE-3RD-PARTY.txt README-SDL.txt}
+: ${ASSET_FILES_OPTIONAL_GET:=0}
+
+
+: ${DPL_FTP_PROTOCOL}
+: ${DPL_FTP_USER}
+: ${DPL_FTP_PASS}
+: ${DPL_FTP_HOSTNAME}
+: ${DPL_FTP_PORT}
+: ${DPL_FTP_PATH}
+
+
+: ${DPL_DPUT_DOMAIN:=ppa.launchpad.net}
+: ${DPL_DPUT_METHOD:=sftp}
+: ${DPL_DPUT_INCOMING}
+: ${DPL_DPUT_LOGIN:=anonymous}
+: ${DPL_SSH_KEY_PRIVATE}         
+: ${DPL_SSH_KEY_PASSPHRASE}      
+
+
+: ${PACKAGE_NAME:=srb2}
+: ${PACKAGE_VERSION:=2.2.0}
+: ${PACKAGE_SUBVERSION}          
+: ${PACKAGE_REVISION}            
+: ${PACKAGE_INSTALL_PATH:=/usr/games/SRB2}
+: ${PACKAGE_LINK_PATH:=/usr/games}
+: ${PACKAGE_DISTRO:=trusty}
+: ${PACKAGE_URGENCY:=high}
+: ${PACKAGE_NAME_EMAIL:=Sonic Team Junior <stjr@srb2.org>}
+: ${PACKAGE_GROUP_NAME_EMAIL:=Sonic Team Junior <stjr@srb2.org>}
+: ${PACKAGE_WEBSITE:=<http://www.srb2.org>}
+
+: ${PACKAGE_ASSET_MINVERSION:=2.1.26}   
+: ${PACKAGE_ASSET_MAXVERSION:=2.2.1}   
+
+: ${PROGRAM_NAME:=Sonic Robo Blast 2}
+: ${PROGRAM_VENDOR:=Sonic Team Junior}
+: ${PROGRAM_VERSION:=2.2.0}
+: ${PROGRAM_DESCRIPTION:=A free 3D Sonic the Hedgehog fangame closely inspired by the original Sonic games on the Sega Genesis.}
+: ${PROGRAM_FILENAME:=srb2}
+
+: ${DPL_PGP_KEY_PRIVATE}         
+: ${DPL_PGP_KEY_PASSPHRASE}      
+
+
+
+export ASSET_ARCHIVE_PATH="${ASSET_ARCHIVE_PATH}"
+export ASSET_ARCHIVE_OPTIONAL_PATH="${ASSET_ARCHIVE_OPTIONAL_PATH}"
+export ASSET_FILES_HASHED="${ASSET_FILES_HASHED}"
+export ASSET_FILES_DOCS="${ASSET_FILES_DOCS}"
+export ASSET_FILES_OPTIONAL_GET="${ASSET_FILES_OPTIONAL_GET}"
+
+export PACKAGE_NAME="${PACKAGE_NAME}"
+export PACKAGE_VERSION="${PACKAGE_VERSION}"
+export PACKAGE_SUBVERSION="${PACKAGE_SUBVERSION}"  
+export PACKAGE_REVISION="${PACKAGE_REVISION}"
+export PACKAGE_ASSET_MINVERSION="${PACKAGE_ASSET_MINVERSION}"
+export PACKAGE_ASSET_MAXVERSION="${PACKAGE_ASSET_MAXVERSION}"
+export PACKAGE_INSTALL_PATH="${PACKAGE_INSTALL_PATH}"
+export PACKAGE_LINK_PATH="${PACKAGE_LINK_PATH}"
+export PACKAGE_DISTRO="${PACKAGE_DISTRO}"
+export PACKAGE_URGENCY="${PACKAGE_URGENCY}"
+export PACKAGE_NAME_EMAIL="${PACKAGE_NAME_EMAIL}"
+export PACKAGE_GROUP_NAME_EMAIL="${PACKAGE_GROUP_NAME_EMAIL}"
+export PACKAGE_WEBSITE="${PACKAGE_WEBSITE}"
+
+export PROGRAM_NAME="${PROGRAM_NAME}"
+export PROGRAM_VERSION="${PROGRAM_VERSION}"
+export PROGRAM_DESCRIPTION="${PROGRAM_DESCRIPTION}"
+export PROGRAM_FILENAME="${PROGRAM_FILENAME}"
+
+
+__DEBIAN_PARAMETERS_INITIALIZED=1

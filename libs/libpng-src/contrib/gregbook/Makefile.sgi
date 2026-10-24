@@ -1,0 +1,105 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PNGINC = -I/usr/local/include/libpng16
+PNGLIB = -L/usr/local/lib -lpng16	   
+
+
+
+
+
+
+ZINC = -I/usr/local/include
+ZLIB = -L/usr/local/lib -lz		 
+
+
+
+
+
+XINC = -I/usr/include/X11		 
+XLIB = -L/usr/lib/X11 -lX11
+
+
+
+
+
+INCS = $(PNGINC) $(ZINC) $(XINC)
+RLIBS = $(PNGLIB) $(ZLIB) $(XLIB) -lm
+WLIBS = $(PNGLIB) $(ZLIB)
+
+CC = cc
+LD = cc
+RM = rm -f
+
+ABI =
+CPPFLAGS =
+CFLAGS = $(ABI) -O -fullwarn $(INCS)
+LDFLAGS = $(ABI)
+O = .o
+E =
+
+RPNG  = rpng-x
+RPNG2 = rpng2-x
+WPNG  = wpng
+
+ROBJS  = $(RPNG)$(O) readpng$(O)
+ROBJS2 = $(RPNG2)$(O) readpng2$(O)
+WOBJS  = $(WPNG)$(O) writepng$(O)
+
+EXES = $(RPNG)$(E) $(RPNG2)$(E) $(WPNG)$(E)
+
+
+
+
+.c$(O):
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) $<
+
+
+
+
+all:  $(EXES)
+
+$(RPNG)$(E): $(ROBJS)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJS) $(RLIBS)
+
+$(RPNG2)$(E): $(ROBJS2)
+	$(LD) $(LDFLAGS) -o $@ $(ROBJS2) $(RLIBS)
+
+$(WPNG)$(E): $(WOBJS)
+	$(LD) $(LDFLAGS) -o $@ $(WOBJS) $(WLIBS)
+
+$(RPNG)$(O):	$(RPNG).c readpng.h
+$(RPNG2)$(O):	$(RPNG2).c readpng2.h
+$(WPNG)$(O):	$(WPNG).c writepng.h
+
+readpng$(O):	readpng.c readpng.h
+readpng2$(O):	readpng2.c readpng2.h
+writepng$(O):	writepng.c writepng.h
+
+
+
+
+clean:
+	$(RM) $(EXES) $(ROBJS) $(ROBJS2) $(WOBJS)

@@ -1,0 +1,158 @@
+// SONIC ROBO BLAST 2
+//-----------------------------------------------------------------------------
+// Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2018-2024 by Lactozilla.
+// Copyright (C) 2019-2024 by Sonic Team Junior.
+//
+// This program is free software distributed under the
+// terms of the GNU General Public License, version 2.
+// See the 'LICENSE' file for more details.
+//-----------------------------------------------------------------------------
+
+
+
+#ifndef __R_PICFORMATS__
+#define __R_PICFORMATS__
+
+#include "doomdef.h"
+#include "r_defs.h"
+
+typedef enum
+{
+	PICFMT_NONE = 0,
+
+
+	PICFMT_PATCH,
+	PICFMT_FLAT,
+	PICFMT_DOOMPATCH,
+
+
+	PICFMT_PNG,
+
+
+	PICFMT_PATCH16,
+	PICFMT_FLAT16,
+	PICFMT_DOOMPATCH16,
+
+
+	PICFMT_PATCH32,
+	PICFMT_FLAT32,
+	PICFMT_DOOMPATCH32
+} pictureformat_t;
+
+typedef enum
+{
+	PICFLAGS_XFLIP                = 1,
+	PICFLAGS_YFLIP                = 1<<1,
+	PICFLAGS_USE_TRANSPARENTPIXEL = 1<<2
+} pictureflags_t;
+
+enum
+{
+	PICDEPTH_NONE = 0,
+	PICDEPTH_8BPP = 8,
+	PICDEPTH_16BPP = 16,
+	PICDEPTH_32BPP = 32
+};
+
+
+#define MAX_PATCH_DIMENSIONS 8192
+
+
+#define MIN_PATCH_LUMP_HEADER_SIZE ((sizeof(INT16) * 4) + sizeof(INT32))
+
+
+#define MIN_PATCH_LUMP_SIZE (MIN_PATCH_LUMP_HEADER_SIZE + 1)
+
+#define FIRST_PATCH_LUMP_COLUMN(width) ((sizeof(INT16) * 4) + ((width) * sizeof(INT32)))
+#define VALID_PATCH_LUMP_SIZE(lumplen, width) ((lumplen) >= FIRST_PATCH_LUMP_COLUMN(width))
+
+
+#define PNG_MIN_SIZE 67
+#define PNG_HEADER_SIZE 8
+
+                                                                             
+                                                                             
+                                                                       
+                              
+#define MAX_PNG_DIMENSIONS MAX_PATCH_DIMENSIONS
+#define MAX_PNG_PIXELS (32U * 1024U * 1024U)
+
+void *Picture_Convert(
+	pictureformat_t informat, void *picture, pictureformat_t outformat,
+	size_t insize, size_t *outsize,
+	INT32 inwidth, INT32 inheight, INT32 inleftoffset, INT32 intopoffset,
+	pictureflags_t flags);
+
+void *Picture_PatchConvert(
+	pictureformat_t informat, size_t insize, void *picture,
+	pictureformat_t outformat, size_t *outsize,
+	INT32 inwidth, INT32 inheight, INT32 inleftoffset, INT32 intopoffset,
+	pictureflags_t flags);
+void *Picture_FlatConvert(
+	pictureformat_t informat, void *picture, pictureformat_t outformat,
+	size_t *outsize,
+	INT32 inwidth, INT32 inheight,
+	pictureflags_t flags);
+void *Picture_GetPatchPixel(
+	patch_t *patch, pictureformat_t informat,
+	INT32 x, INT32 y,
+	pictureflags_t flags);
+
+void *Picture_TextureToFlat(size_t texnum);
+
+INT32 Picture_FormatBPP(pictureformat_t format);
+boolean Picture_IsPatchFormat(pictureformat_t format);
+boolean Picture_IsInternalPatchFormat(pictureformat_t format);
+boolean Picture_IsDoomPatchFormat(pictureformat_t format);
+boolean Picture_IsFlatFormat(pictureformat_t format);
+boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size);
+
+
+typedef enum
+{
+	ROTAXIS_X,  
+	ROTAXIS_Y,  
+	ROTAXIS_Z   
+} rotaxis_t;
+
+typedef struct
+{
+	INT32 x, y;
+} spriteframepivot_t;
+
+typedef struct
+{
+	spriteframepivot_t pivot[MAXFRAMENUM];
+	boolean available;
+} spriteinfo_t;
+
+boolean Picture_IsLumpPNG(const UINT8 *d, size_t s);
+
+#define PNG_DIMENSIONS_HEADER_SIZE 24
+
+#ifndef NO_PNG_LUMPS
+boolean Picture_PNGDimensionsFromHeader(const UINT8 *png, size_t size, INT32 *width, INT32 *height);
+void *Picture_PNGConvert(
+	const UINT8 *png, pictureformat_t outformat,
+	INT32 *w, INT32 *h,
+	INT16 *topoffset, INT16 *leftoffset,
+	size_t insize, size_t *outsize,
+	pictureflags_t flags);
+void *Picture_PNGConvertWithRGBA(
+	const UINT8 *png, pictureformat_t outformat,
+	INT32 *w, INT32 *h,
+	INT16 *topoffset, INT16 *leftoffset,
+	size_t insize, size_t *outsize,
+	pictureflags_t flags, RGBA_t **rgbaout);
+boolean Picture_PNGDimensions(UINT8 *png, INT32 *width, INT32 *height, INT16 *topoffset, INT16 *leftoffset, size_t size);
+
+#define PICTURE_PNG_USELOOKUP
+#endif
+
+
+extern spriteinfo_t spriteinfo[NUMSPRITES];
+void R_LoadSpriteInfoLumps(UINT16 wadnum, UINT16 numlumps);
+void R_ParseSPRTINFOLump(UINT16 wadNum, UINT16 lumpNum);
+
+#endif  

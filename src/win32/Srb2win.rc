@@ -1,0 +1,131 @@
+
+
+#include "resource.h"
+#include "winver.h"
+#include "winuser.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+
+
+
+
+#include "afxres.h"
+
+
+#undef APSTUDIO_READONLY_SYMBOLS
+
+
+
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+               
+                                         
+                       
+                 
+
+#ifndef RT_MANIFEST
+#define RT_MANIFEST 24
+#endif
+
+#ifndef CREATEPROCESS_MANIFEST_RESOURCE_ID
+#define CREATEPROCESS_MANIFEST_RESOURCE_ID 1
+#endif
+
+ 
+
+
+
+
+
+
+
+
+IDI_ICON1               ICON    DISCARDABLE     "Srb2win.ico"
+
+#ifdef APSTUDIO_INVOKED
+
+
+
+
+
+1 TEXTINCLUDE DISCARDABLE
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif     
+
+
+#ifndef _MAC
+
+
+
+
+
+#include "../doomdef.h"  
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 2,2,14,0
+ PRODUCTVERSION 2,2,14,0
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "04090000"
+        BEGIN
+            VALUE "Comments", "Visit our web site at www.srb2.org for news and updates!\0"
+            VALUE "CompanyName", "Sonic Team Junior\0"
+            VALUE "FileDescription", "Sonic Robo Blast 2\0"
+            VALUE "FileVersion", VERSIONSTRING_RC
+            VALUE "InternalName", "srb2\0"
+            VALUE "LegalCopyright", "Copyright 1998-2025 by Sonic Team Junior\0"
+            VALUE "LegalTrademarks", "Sonic the Hedgehog and related characters are trademarks of Sega.\0"
+            VALUE "OriginalFilename", "srb2win.exe\0"
+            VALUE "PrivateBuild", "\0"
+            VALUE "ProductName", "Sonic Robo Blast 2\0"
+            VALUE "ProductVersion", VERSIONSTRING_RC
+            VALUE "SpecialBuild", "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 0
+    END
+END
+
+#endif     
+
+#endif     
+
+
+
+
+#ifndef APSTUDIO_INVOKED
+
+
+
+
+
+
+
+#endif     

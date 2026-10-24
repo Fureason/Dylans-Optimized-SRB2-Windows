@@ -1,0 +1,339 @@
+// SONIC ROBO BLAST 2
+//-----------------------------------------------------------------------------
+// Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 1998-2000 by DooM Legacy Team.
+// Copyright (C) 1999-2024 by Sonic Team Junior.
+//
+// This program is free software distributed under the
+// terms of the GNU General Public License, version 2.
+// See the 'LICENSE' file for more details.
+//-----------------------------------------------------------------------------
+
+
+
+#ifndef __S_SOUND__
+#define __S_SOUND__
+
+#include "i_sound.h"  
+#include "sounds.h"
+#include "m_fixed.h"
+#include "command.h"
+#include "tables.h"  
+
+struct mobj_s;
+
+#ifdef HAVE_OPENMPT
+#include "libopenmpt/libopenmpt.h"
+extern openmpt_module *openmpt_mhandle;
+#endif
+
+
+#define PICKUP_SOUND 0x8000
+
+extern consvar_t stereoreverse;
+extern consvar_t cv_soundvolume, cv_closedcaptioning, cv_captionscale, cv_digmusicvolume, cv_midimusicvolume;
+extern consvar_t cv_precachelevelsounds;
+extern consvar_t cv_numChannels;
+
+extern consvar_t cv_resetmusic;
+extern consvar_t cv_resetmusicbyheader;
+
+extern consvar_t cv_1upsound;
+
+#define RESETMUSIC (!modeattacking && \
+	(cv_resetmusicbyheader.value ? \
+		(mapheaderinfo[gamemap-1]->musforcereset != -1 ? mapheaderinfo[gamemap-1]->musforcereset : cv_resetmusic.value) \
+		: cv_resetmusic.value) \
+	)
+
+extern consvar_t cv_gamedigimusic;
+extern consvar_t cv_gamemidimusic;
+extern consvar_t cv_gamesounds;
+extern consvar_t cv_musicpref;
+
+extern consvar_t cv_playmusicifunfocused;
+extern consvar_t cv_playsoundsifunfocused;
+
+#ifdef HAVE_OPENMPT
+extern consvar_t cv_modfilter;
+#endif
+
+#ifdef HAVE_MIXERX
+extern consvar_t cv_midiplayer;
+extern consvar_t cv_midisoundfontpath;
+extern consvar_t cv_miditimiditypath;
+#endif
+
+extern CV_PossibleValue_t soundvolume_cons_t[];
+
+typedef enum
+{
+	SF_TOTALLYSINGLE =  1,  
+	SF_NOMULTIPLESOUND =  2,  
+	SF_OUTSIDESOUND  =  4,  
+	SF_X4AWAYSOUND   =  8,  
+	SF_X8AWAYSOUND   = 16,  
+	SF_NOINTERRUPT   = 32,  
+	SF_X2AWAYSOUND   = 64,  
+} soundflags_t;
+
+typedef struct {
+	fixed_t x, y, z;
+	angle_t angle;
+} listener_t;
+
+typedef struct
+{
+
+	sfxinfo_t *sfxinfo;
+
+
+	const void *origin;
+
+
+	INT32 volume;
+
+
+	INT32 handle;
+
+} channel_t;
+
+typedef struct {
+	channel_t *c;
+	sfxinfo_t *s;
+	UINT16 t;
+	UINT8 b;
+} caption_t;
+
+#define NUMCAPTIONS 8
+#define MAXCAPTIONTICS (2*TICRATE)
+#define CAPTIONFADETICS 20
+
+extern caption_t closedcaptions[NUMCAPTIONS];
+void S_StartCaption(sfxenum_t sfx_id, INT32 cnum, UINT16 lifespan);
+void S_ResetCaptions(void);
+
+
+void S_RegisterSoundStuff(void);
+
+
+
+
+
+void S_InitSfxChannels(INT32 sfxVolume);
+
+
+
+
+
+void S_StopSounds(void);
+void S_ClearSfx(void);
+void S_ResetSoundPrecacheQueue(void);
+void S_PrecacheLevelSounds(void);
+void S_QueueSoundPrecache(sfxenum_t sfx_id);
+void S_QueueMobjSoundPrecache(const struct mobj_s *mobj);
+void S_StartEx(boolean reset);
+#define S_Start() S_StartEx(false)
+
+
+
+
+lumpnum_t S_GetSfxLumpNum(sfxinfo_t *sfx);
+
+
+
+
+
+boolean S_SoundDisabled(void);
+
+
+
+
+void S_StartSound(const void *origin, sfxenum_t sound_id);
+
+
+void S_StartSoundAtVolume(const void *origin, sfxenum_t sound_id, INT32 volume);
+
+
+void S_StopSound(void *origin);
+
+
+
+
+
+boolean S_DigMusicDisabled(void);
+boolean S_MIDIMusicDisabled(void);
+boolean S_MusicDisabled(void);
+boolean S_MusicPlaying(void);
+boolean S_MusicPaused(void);
+boolean S_MusicNotInFocus(void);
+musictype_t S_MusicType(void);
+const char *S_MusicName(void);
+boolean S_MusicExists(const char *mname, boolean checkMIDI, boolean checkDigi);
+#define S_DigExists(a) S_MusicExists(a, false, true)
+#define S_MIDIExists(a) S_MusicExists(a, true, false)
+
+
+
+#define S_PrefAvailable(a, b) (a ? \
+	(!S_MIDIMusicDisabled() && S_MIDIExists(b)) : \
+	(!S_DigMusicDisabled() && S_DigExists(b)))
+
+
+
+
+
+
+boolean S_SpeedMusic(float speed);
+
+
+typedef struct musicdef_s
+{
+	char name[7];
+	char title[32];
+	char alttitle[64];
+	char authors[256];
+
+	  
+                                                            
+                                                             
+                                                            
+   
+
+	UINT8 soundtestpage;
+	INT16 soundtestcond;  
+	tic_t stoppingtics;
+	fixed_t bpm;
+	UINT32 loop_ms; 
+	boolean allowed;  
+	struct musicdef_s *next;
+} musicdef_t;
+
+extern musicdef_t soundtestsfx;
+extern musicdef_t *musicdefstart;
+extern musicdef_t **soundtestdefs;
+extern INT32 numsoundtestdefs;
+extern UINT8 soundtestpage;
+
+void S_LoadMusicDefs(UINT16 wadnum);
+void S_InitMusicDefs(void);
+
+boolean S_PrepareSoundTest(void);
+
+
+
+
+
+
+UINT32 S_GetMusicLength(void);
+
+
+boolean S_SetMusicLoopPoint(UINT32 looppoint);
+
+
+UINT32 S_GetMusicLoopPoint(void);
+
+
+boolean S_SetMusicPosition(UINT32 position);
+
+
+UINT32 S_GetMusicPosition(void);
+
+
+
+
+
+typedef struct musicstack_s
+{
+	char musname[7+1];
+	UINT16 musflags;
+	boolean looping;
+	UINT32 position;
+	tic_t tic;
+	UINT16 status;
+	lumpnum_t mlumpnum;
+	boolean noposition;  
+
+    struct musicstack_s *prev;
+    struct musicstack_s *next;
+} musicstack_t;
+
+extern char music_stack_nextmusname[7];
+extern boolean music_stack_noposition;
+extern UINT32 music_stack_fadeout;
+extern UINT32 music_stack_fadein;
+
+void S_SetStackAdjustmentStart(void);
+void S_AdjustMusicStackTics(void);
+void S_RetainMusic(const char *mname, UINT16 mflags, boolean looping, UINT32 position, UINT16 status);
+boolean S_RecallMusic(UINT16 status, boolean fromfirst);
+
+
+
+
+
+ 
+struct MusicChange {
+	char    * newname;
+	UINT16  * mflags;
+	boolean * looping;
+	UINT32  * position;
+	UINT32  * prefadems;
+	UINT32  * fadeinms;
+};
+
+
+
+
+
+void S_ChangeMusicEx(const char *mmusic, UINT16 mflags, boolean looping, UINT32 position, UINT32 prefadems, UINT32 fadeinms);
+#define S_ChangeMusicInternal(a,b) S_ChangeMusicEx(a,0,b,0,0,0)
+#define S_ChangeMusic(a,b,c) S_ChangeMusicEx(a,b,c,0,0,0)
+
+
+void S_StopMusic(void);
+
+
+void S_PauseAudio(void);
+void S_ResumeAudio(void);
+
+
+
+
+
+void S_SetInternalMusicVolume(INT32 volume);
+void S_StopFadingMusic(void);
+boolean S_FadeMusicFromVolume(UINT8 target_volume, INT16 source_volume, UINT32 ms);
+#define S_FadeMusic(a, b) S_FadeMusicFromVolume(a, -1, b)
+#define S_FadeInChangeMusic(a,b,c,d) S_ChangeMusicEx(a,b,c,0,0,d)
+boolean S_FadeOutStopMusic(UINT32 ms);
+
+
+
+
+void S_UpdateSounds(void);
+void S_UpdateClosedCaptions(void);
+
+FUNCMATH fixed_t S_CalculateSoundDistance(fixed_t px1, fixed_t py1, fixed_t pz1, fixed_t px2, fixed_t py2, fixed_t pz2);
+
+void S_SetSfxVolume(INT32 volume);
+void S_SetMusicVolume(INT32 digvolume, INT32 seqvolume);
+#define S_SetDigMusicVolume(a) S_SetMusicVolume(a,-1)
+#define S_SetMIDIMusicVolume(a) S_SetMusicVolume(-1,a)
+#define S_InitMusicVolume() S_SetMusicVolume(-1,-1)
+
+INT32 S_OriginPlaying(void *origin);
+INT32 S_IdPlaying(sfxenum_t id);
+INT32 S_SoundPlaying(void *origin, sfxenum_t id);
+
+void S_StartSoundName(void *mo, const  char *soundname);
+
+void S_StopSoundByID(void *origin, sfxenum_t sfx_id);
+void S_StopSoundByNum(sfxenum_t sfxnum);
+
+#ifndef HW3SOUND
+#define S_StartAttackSound S_StartSound
+#define S_StartScreamSound S_StartSound
+#endif
+
+#endif

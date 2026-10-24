@@ -1,0 +1,114 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+!include <ntwin32.mak>
+
+
+
+
+PNGPATH = ../libpng
+PNGINC = -I$(PNGPATH)
+
+PNGLIB = $(PNGPATH)/libpng.lib
+
+ZPATH = ../zlib
+ZINC = -I$(ZPATH)
+
+ZLIB = $(ZPATH)/zlibstat.lib
+
+WINLIBS = -defaultlib:user32.lib gdi32.lib
+
+
+INCS = $(PNGINC) $(ZINC)
+RLIBS = $(PNGLIB) $(ZLIB) $(WINLIBS)
+WLIBS = $(PNGLIB) $(ZLIB)
+
+CC = cl
+LD = link
+RM = del
+CPPFLAGS = $(INCS)
+CFLAGS = -nologo -O -W3 $(cvars)
+
+
+O = .obj
+E = .exe
+
+RLDFLAGS = -nologo -subsystem:windows
+WLDFLAGS = -nologo
+
+RPNG  = rpng-win
+RPNG2 = rpng2-win
+WPNG  = wpng
+
+ROBJS  = $(RPNG)$(O) readpng$(O)
+ROBJS2 = $(RPNG2)$(O) readpng2$(O)
+WOBJS  = $(WPNG)$(O) writepng$(O)
+
+EXES = $(RPNG)$(E) $(RPNG2)$(E) $(WPNG)$(E)
+
+
+
+
+.c$(O):
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) $<
+
+
+
+
+all:  $(EXES)
+
+$(RPNG)$(E): $(ROBJS)
+	$(LD) $(RLDFLAGS) -out:$@ $(ROBJS) $(RLIBS)
+
+$(RPNG2)$(E): $(ROBJS2)
+	$(LD) $(RLDFLAGS) -out:$@ $(ROBJS2) $(RLIBS)
+
+$(WPNG)$(E): $(WOBJS)
+	$(LD) $(WLDFLAGS) -out:$@ $(WOBJS) $(WLIBS)
+
+$(RPNG)$(O):	$(RPNG).c readpng.h
+$(RPNG2)$(O):	$(RPNG2).c readpng2.h
+$(WPNG)$(O):	$(WPNG).c writepng.h
+
+readpng$(O):	readpng.c readpng.h
+readpng2$(O):	readpng2.c readpng2.h
+writepng$(O):	writepng.c writepng.h
+
+
+
+
+clean:
+
+
+
+	$(RM) r*$(E)
+	$(RM) w*$(E)
+	$(RM) r*$(O)
+	$(RM) w*$(O)
