@@ -7,13 +7,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_translation.c
+/// \brief Translation table handling
 
 #include "r_translation.h"
 #include "r_data.h"
 #include "r_draw.h"
-#include "v_video.h"  
+#include "v_video.h" // pMasterPalette
 #include "z_zone.h"
 #include "w_wad.h"
 #include "m_tokenizer.h"
@@ -63,29 +63,29 @@ static paletteremap_t *AddSource(remaptable_t *tr, paletteremaptype_t type, int 
 
 void PaletteRemap_Init(void)
 {
-
+	// First translation must be the identity one.
 	remaptable_t *base = PaletteRemap_New();
 	PaletteRemap_SetIdentity(base);
 	PaletteRemap_Add(base);
 
-
+	// Grayscale translation
 	MakeGrayscaleRemap();
 
-
+	// All white (TC_ALLWHITE)
 	remaptable_t *allWhite = PaletteRemap_New();
 	memset(allWhite->remap, 0, NUM_PALETTE_ENTRIES * sizeof(UINT8));
 	allWhiteRemap = PaletteRemap_Add(allWhite);
 	R_AddCustomTranslation("AllWhite", allWhiteRemap);
 
-
+	// All black
 	remaptable_t *allBlack = PaletteRemap_New();
 	memset(allBlack->remap, 31, NUM_PALETTE_ENTRIES * sizeof(UINT8));
 	R_AddCustomTranslation("AllBlack", PaletteRemap_Add(allBlack));
 
-
+	// Invert
 	MakeInvertRemap();
 
-
+	// Dash mode (TC_DASHMODE)
 	MakeDashModeRemap();
 }
 
@@ -169,7 +169,7 @@ static void MakeInvertRemap(void)
 	R_AddCustomTranslation("Invert", PaletteRemap_Add(invertRemap));
 }
 
-
+// This is a long one, because MotorRoach basically hand-picked the indices
 static void MakeDashModeRemap(void)
 {
 	remaptable_t *dashmode = PaletteRemap_New();
@@ -178,7 +178,7 @@ static void MakeDashModeRemap(void)
 
 	UINT8 *dest_colormap = dashmode->remap;
 
-
+	// greens -> ketchups
 	dest_colormap[96] = dest_colormap[97] = 48;
 	dest_colormap[98] = 49;
 	dest_colormap[99] = 51;
@@ -191,7 +191,7 @@ static void MakeDashModeRemap(void)
 	for (unsigned i = 0; i < 5; i++)
 		dest_colormap[107 + i] = 43 + i;
 
-
+	// reds -> steel blues
 	dest_colormap[32] = 146;
 	dest_colormap[33] = 147;
 	dest_colormap[34] = dest_colormap[35] = 170;
@@ -202,7 +202,7 @@ static void MakeDashModeRemap(void)
 	dest_colormap[45] = dest_colormap[46] = dest_colormap[47] = 175;
 	dest_colormap[71] = 139;
 
-
+	// steel blues -> oranges
 	dest_colormap[170] = 52;
 	dest_colormap[171] = 54;
 	dest_colormap[172] = 56;
@@ -602,11 +602,11 @@ static struct PaletteRemapParseResult *PaletteRemap_ParseString(tokenizer_t *sc)
 
 	if (strcmp(tkn, "[") == 0)
 	{
-
+		// translation using RGB values
 		int r1, g1, b1;
 		int r2, g2, b2;
 
-
+		// start
 		if (!ParseNumber(sc, &r1))
 			return ThrowError("expected a number for starting red");
 		if (!ExpectToken(sc, ","))
@@ -629,7 +629,7 @@ static struct PaletteRemapParseResult *PaletteRemap_ParseString(tokenizer_t *sc)
 		if (!ExpectToken(sc, "["))
 			return ThrowError("expected '[");
 
-
+		// end
 		if (!ParseNumber(sc, &r2))
 			return ThrowError("expected a number for ending red");
 		if (!ExpectToken(sc, ","))
@@ -656,14 +656,14 @@ static struct PaletteRemapParseResult *PaletteRemap_ParseString(tokenizer_t *sc)
 	}
 	else if (strcmp(tkn, "%") == 0)
 	{
-
+		// translation using RGB values (desaturation)
 		double r1, g1, b1;
 		double r2, g2, b2;
 
 		if (!ExpectToken(sc, "["))
 			return ThrowError("expected '[");
 
-
+		// start
 		if (!ParseDecimal(sc, &r1))
 			return ThrowError("expected a number for starting red");
 		if (!ExpectToken(sc, ","))
@@ -684,7 +684,7 @@ static struct PaletteRemapParseResult *PaletteRemap_ParseString(tokenizer_t *sc)
 		if (!ExpectToken(sc, "["))
 			return ThrowError("expected '[");
 
-
+		// end
 		if (!ParseDecimal(sc, &r2))
 			return ThrowError("expected a number for ending red");
 		if (!ExpectToken(sc, ","))
@@ -711,7 +711,7 @@ static struct PaletteRemapParseResult *PaletteRemap_ParseString(tokenizer_t *sc)
 	}
 	else if (strcmp(tkn, "#") == 0)
 	{
-
+		// Colourise translation
 		int r, g, b;
 
 		if (!ExpectToken(sc, "["))
@@ -737,7 +737,7 @@ static struct PaletteRemapParseResult *PaletteRemap_ParseString(tokenizer_t *sc)
 	}
 	else if (strcmp(tkn, "@") == 0)
 	{
-
+		// Tint translation
 		int a, r, g, b;
 
 		if (!ParseNumber(sc, &a))
@@ -886,8 +886,8 @@ static void PrepareNewTranslations(struct NewTranslation *list, size_t count)
 				base_translation = R_GetTranslationByID(base_translation_id);
 		}
 
-
-
+		// The translation is not generated until later, because the palette may not have been loaded.
+		// We store the result for when it's needed.
 		tr->sources = Z_Malloc(entry->num_results * sizeof(paletteremap_t), PU_STATIC, NULL);
 		tr->num_sources = entry->num_results;
 
@@ -961,7 +961,7 @@ void R_ParseTrnslate(INT32 wadNum, UINT16 lumpnum)
 
 		int existing_id = R_FindCustomTranslation(name);
 
-
+		// Parse all of the translations
 		do {
 			struct PaletteRemapParseResult *parse_result = PaletteRemap_ParseTranslation(tkn, strlen(tkn));
 			if (parse_result->error)
@@ -985,12 +985,12 @@ void R_ParseTrnslate(INT32 wadNum, UINT16 lumpnum)
 				goto fail;
 			}
 
-
+			// Get ',' or parse the next line
 			tkn = sc->get(sc, 0);
 			if (!tkn || strcmp(tkn, ",") != 0)
 				break;
 
-
+			// Get '"'
 			tkn = sc->get(sc, 0);
 			if (!tkn || strcmp(tkn, "\"") != 0)
 			{
@@ -1006,7 +1006,7 @@ void R_ParseTrnslate(INT32 wadNum, UINT16 lumpnum)
 	}
 
 fail:
-
+	// Now add all of the new translations
 	if (list)
 		PrepareNewTranslations(list, list_count);
 
@@ -1040,7 +1040,7 @@ int R_FindCustomTranslation(const char *name)
 	return -1;
 }
 
-
+// This is needed for SOC (which is case insensitive)
 int R_FindCustomTranslation_CaseInsensitive(const char *name)
 {
 	for (unsigned i = 0; i < numcustomtranslations; i++)

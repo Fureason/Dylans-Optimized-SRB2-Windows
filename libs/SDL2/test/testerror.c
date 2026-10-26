@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple test of the SDL threading code and error handling */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +19,7 @@
 
 static int alive = 0;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -30,7 +30,7 @@ quit(int rc)
 int SDLCALL
 ThreadFunc(void *data)
 {
-     
+    /* Set the child thread error string */
     SDL_SetError("Thread %s (%lu) had a problem: %s",
                  (char *)data, SDL_ThreadID(), "nevermind");
     while (alive) {
@@ -45,16 +45,16 @@ int main(int argc, char *argv[])
 {
     SDL_Thread *thread;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(0) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
     }
 
-     
+    /* Set the error value for the main thread */
     SDL_SetError("No worries");
 
     if (SDL_getenv("SDL_TESTS_QUICK") != NULL) {

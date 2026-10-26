@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_script.c
+/// \brief Lua scripting basics
 
 #include "doomdef.h"
 #include "fastcmp.h"
@@ -25,10 +25,10 @@
 #include "byteptr.h"
 #include "p_saveg.h"
 #include "p_local.h"
-#include "p_slopes.h"  
-#include "p_polyobj.h"  
+#include "p_slopes.h" // for P_SlopeById and slopelist
+#include "p_polyobj.h" // polyobj_t, PolyObjects
 #ifdef LUA_ALLOW_BYTECODE
-#include "netcode/d_netfil.h"  
+#include "netcode/d_netfil.h" // for LUA_DumpFile
 #endif
 
 #include "lua_script.h"
@@ -42,30 +42,30 @@
 
 lua_State *gL = NULL;
 
-
+// List of internal libraries to load from SRB2
 static lua_CFunction liblist[] = {
-	LUA_EnumLib,  
-	LUA_SOCLib,  
-	LUA_BaseLib,  
-	LUA_MathLib,  
-	LUA_HookLib,  
-	LUA_ConsoleLib,  
-	LUA_InfoLib,  
-	LUA_MobjLib,  
-	LUA_PlayerLib,  
-	LUA_SkinLib,  
-	LUA_ThinkerLib,  
-	LUA_MapLib,  
-	LUA_TagLib,  
-	LUA_PolyObjLib,  
-	LUA_BlockmapLib,  
-	LUA_HudLib,  
-	LUA_ColorLib,  
-	LUA_InputLib,  
+	LUA_EnumLib, // global metatable for enums
+	LUA_SOCLib, // A_Action functions, freeslot
+	LUA_BaseLib, // string concatination by +, CONS_Printf, p_local.h stuff (P_InstaThrust, P_Move), etc.
+	LUA_MathLib, // fixed_t and angle_t math functions
+	LUA_HookLib, // hookAdd and hook-calling functions
+	LUA_ConsoleLib, // console command/variable functions and structs
+	LUA_InfoLib, // info.h stuff: mobjinfo_t, mobjinfo[], state_t, states[]
+	LUA_MobjLib, // mobj_t, mapthing_t
+	LUA_PlayerLib, // player_t
+	LUA_SkinLib, // skin_t, skins[]
+	LUA_ThinkerLib, // thinker_t
+	LUA_MapLib, // line_t, side_t, sector_t, subsector_t
+	LUA_TagLib, // tags
+	LUA_PolyObjLib, // polyobj_t
+	LUA_BlockmapLib, // blockmap stuff
+	LUA_HudLib, // HUD stuff
+	LUA_ColorLib, // general color functions
+	LUA_InputLib, // inputs
 	NULL
 };
 
-
+// Lua asks for memory using this.
 static void *LUA_Alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 {
 	(void)ud;
@@ -77,8 +77,8 @@ static void *LUA_Alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 		return Z_Realloc(ptr, nsize, PU_LUA, NULL);
 }
 
-
-
+// Panic function Lua calls when there's an unprotected error.
+// This function cannot return. Lua would kill the application anyway if it did.
 FUNCNORETURN static int LUA_Panic(lua_State *L)
 {
 	CONS_Alert(CONS_ERROR,"LUA PANIC! %s\n",lua_tostring(L,-1));
@@ -88,16 +88,16 @@ FUNCNORETURN static int LUA_Panic(lua_State *L)
 #endif
 }
 
-#define LEVELS1 12  
-#define LEVELS2 10  
+#define LEVELS1 12 // size of the first part of the stack
+#define LEVELS2 10 // size of the second part of the stack
 
-
-
-
+// Error handler used with pcall() when loading scripts or calling hooks
+// Takes a string with the original error message,
+// appends the traceback to it, and return the result
 int LUA_GetErrorMessage(lua_State *L)
 {
 	int level = 1;
-	int firstpart = 1;  
+	int firstpart = 1; // still before eventual `...'
 	lua_Debug ar;
 
 	lua_pushliteral(L, "\nstack traceback:");
@@ -105,13 +105,13 @@ int LUA_GetErrorMessage(lua_State *L)
 	{
 		if (level > LEVELS1 && firstpart)
 		{
-
+			// no more than `LEVELS2' more levels?
 			if (!lua_getstack(L, level + LEVELS2, &ar))
-				level--;  
+				level--; // keep going
 			else
 			{
-				lua_pushliteral(L, "\n    ...");  
-				while (lua_getstack(L, level + LEVELS2, &ar))  
+				lua_pushliteral(L, "\n    ..."); // too many levels
+				while (lua_getstack(L, level + LEVELS2, &ar)) // find last levels
 					level++;
 			}
 			firstpart = 0;
@@ -122,14 +122,14 @@ int LUA_GetErrorMessage(lua_State *L)
 		lua_pushfstring(L, "%s:", ar.short_src);
 		if (ar.currentline > 0)
 			lua_pushfstring(L, "%d:", ar.currentline);
-		if (*ar.namewhat != '\0')  
+		if (*ar.namewhat != '\0') // is there a name?
 			lua_pushfstring(L, " in function " LUA_QS, ar.name);
 		else
 		{
-			if (*ar.what == 'm')  
+			if (*ar.what == 'm') // main?
 				lua_pushfstring(L, " in main chunk");
 			else if (*ar.what == 'C' || *ar.what == 't')
-				lua_pushliteral(L, " ?");  
+				lua_pushliteral(L, " ?"); // C function or tail call
 			else
 				lua_pushfstring(L, " in function <%s:%d>",
 					ar.short_src, ar.linedefined);
@@ -153,7 +153,7 @@ int LUA_Call(lua_State *L, int nargs, int nresults, int errorhandlerindex)
 	return err;
 }
 
-
+// Moved here from lib_getenum.
 int LUA_PushGlobals(lua_State *L, const char *word)
 {
 	if (fastcmp(word,"gamemap")) {
@@ -240,7 +240,7 @@ int LUA_PushGlobals(lua_State *L, const char *word)
 	} else if (fastcmp(word, "bflagpoint")) {
 		LUA_PushUserdata(L, bflagpoint, META_MAPTHING);
 		return 1;
-
+	// begin map vars
 	} else if (fastcmp(word,"spstage_start")) {
 		lua_pushinteger(L, spstage_start);
 		return 1;
@@ -274,8 +274,8 @@ int LUA_PushGlobals(lua_State *L, const char *word)
 	} else if (fastcmp(word,"tutorialmode")) {
 		lua_pushboolean(L, tutorialmode);
 		return 1;
-
-
+	// end map vars
+	// begin CTF colors
 	} else if (fastcmp(word,"skincolor_redteam")) {
 		lua_pushinteger(L, skincolor_redteam);
 		return 1;
@@ -288,8 +288,8 @@ int LUA_PushGlobals(lua_State *L, const char *word)
 	} else if (fastcmp(word,"skincolor_bluering")) {
 		lua_pushinteger(L, skincolor_bluering);
 		return 1;
-
-
+	// end CTF colors
+	// begin timers
 	} else if (fastcmp(word,"invulntics")) {
 		lua_pushinteger(L, invulntics);
 		return 1;
@@ -320,7 +320,7 @@ int LUA_PushGlobals(lua_State *L, const char *word)
 	} else if (fastcmp(word,"ammoremovaltics")) {
 		lua_pushinteger(L, ammoremovaltics);
 		return 1;
-
+	// end timers
 	} else if (fastcmp(word,"use1upSound")) {
 		lua_pushinteger(L, use1upSound);
 		return 1;
@@ -366,18 +366,18 @@ int LUA_PushGlobals(lua_State *L, const char *word)
 	} else if (fastcmp(word,"mapmusposition")) {
 		lua_pushinteger(L, mapmusposition);
 		return 1;
-
-	} else if (fastcmp(word,"consoleplayer")) {  
+	// local player variables, by popular request
+	} else if (fastcmp(word,"consoleplayer")) { // player controlling console (aka local player 1)
 		if (!addedtogame || consoleplayer < 0 || !playeringame[consoleplayer])
 			return 0;
 		LUA_PushUserdata(L, &players[consoleplayer], META_PLAYER);
 		return 1;
-	} else if (fastcmp(word,"displayplayer")) {  
+	} else if (fastcmp(word,"displayplayer")) { // player visible on screen (aka display player 1)
 		if (displayplayer < 0 || !playeringame[displayplayer])
 			return 0;
 		LUA_PushUserdata(L, &players[displayplayer], META_PLAYER);
 		return 1;
-	} else if (fastcmp(word,"secondarydisplayplayer")) {  
+	} else if (fastcmp(word,"secondarydisplayplayer")) { // local/display player 2, for splitscreen
 		if (!splitscreen || secondarydisplayplayer < 0 || !playeringame[secondarydisplayplayer])
 			return 0;
 		LUA_PushUserdata(L, &players[secondarydisplayplayer], META_PLAYER);
@@ -388,7 +388,7 @@ int LUA_PushGlobals(lua_State *L, const char *word)
 	} else if (fastcmp(word,"isdedicatedserver")) {
 		lua_pushboolean(L, dedicated);
 		return 1;
-
+	// end local player variables
 	} else if (fastcmp(word,"server")) {
 		if ((!multiplayer || !netgame) && !playeringame[serverplayer])
 			return 0;
@@ -418,11 +418,11 @@ int LUA_PushGlobals(lua_State *L, const char *word)
 	} else if (fastcmp(word, "stagefailed")) {
 		lua_pushboolean(L, stagefailed);
 		return 1;
-
+	// TODO: 2.3: Deprecated (moved to the input library)
 	} else if (fastcmp(word, "mouse")) {
 		LUA_PushUserdata(L, &mouse, META_MOUSE);
 		return 1;
-
+	// TODO: 2.3: Deprecated (moved to the input library)
 	} else if (fastcmp(word, "mouse2")) {
 		LUA_PushUserdata(L, &mouse2, META_MOUSE);
 		return 1;
@@ -441,7 +441,7 @@ int LUA_PushGlobals(lua_State *L, const char *word)
 	return 0;
 }
 
-
+// See the above.
 int LUA_CheckGlobals(lua_State *L, const char *word)
 {
 	if (fastcmp(word, "redscore"))
@@ -491,33 +491,33 @@ int LUA_CheckGlobals(lua_State *L, const char *word)
 	else
 		return 0;
 
-
+	// Global variable set, so return and don't error.
 	return 1;
 }
 
-
+// This function decides which global variables you are allowed to set.
 static int setglobals(lua_State *L)
 {
 	const char *csname;
 	char *name;
 	enum actionnum actionnum;
 
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // we're not gonna be using _G
 	csname = lua_tostring(L, 1);
 
-
+	// make an uppercase copy of the name
 	name = Z_StrDup(csname);
 	strupr(name);
 
 	if (fastncmp(name, "A_", 2) && lua_isfunction(L, 2))
 	{
-
-
+		// Accept new A_Action functions
+		// Add the action to Lua actions refrence table
 		lua_getfield(L, LUA_REGISTRYINDEX, LREG_ACTIONS);
-		lua_pushstring(L, name);  
-		lua_pushvalue(L, 2);  
-		lua_rawset(L, -3);  
-
+		lua_pushstring(L, name); // "A_ACTION"
+		lua_pushvalue(L, 2); // function
+		lua_rawset(L, -3); // rawset doesn't trigger this metatable again.
+		// otherwise we would've used setfield, obviously.
 
 		actionnum = LUA_GetActionNumByName(name);
 		if (actionnum < NUMACTIONS)
@@ -526,11 +526,11 @@ static int setglobals(lua_State *L)
 
 			for (i = MAX_ACTION_RECURSION-1; i > 0; i--)
 			{
-
+				// Move other references deeper.
 				actionsoverridden[actionnum][i] = actionsoverridden[actionnum][i - 1];
 			}
 
-
+			// Add the new reference.
 			lua_pushvalue(L, 2);
 			actionsoverridden[actionnum][0] = luaL_ref(L, LUA_REGISTRYINDEX);
 		}
@@ -546,50 +546,50 @@ static int setglobals(lua_State *L)
 	return luaL_error(L, "Implicit global " LUA_QS " prevented. Create a local variable instead.", csname);
 }
 
-
-
+// Clear and create a new Lua state, laddo!
+// There's SCRIPTIN to be had!
 static void LUA_ClearState(void)
 {
 	lua_State *L;
 	int i;
 
-
+	// close previous state
 	if (gL)
 		lua_close(gL);
 	gL = NULL;
 
 	CONS_Printf(M_GetText("Pardon me while I initialize the Lua scripting interface...\n"));
 
-
+	// allocate state
 	L = lua_newstate(LUA_Alloc, NULL);
 	lua_atpanic(L, LUA_Panic);
 
-
+	// open base libraries
 	luaL_openlibs(L);
 	lua_settop(L, 0);
 
-
+	// make LREG_VALID table for all pushed userdata cache.
 	lua_newtable(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, LREG_VALID);
 
-
+	// make LREG_METATABLES table for all registered metatables
 	lua_newtable(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, LREG_METATABLES);
 
-
+	// open srb2 libraries
 	for(i = 0; liblist[i]; i++) {
 		lua_pushcfunction(L, liblist[i]);
 		lua_call(L, 0, 0);
 	}
 
-
+	// lock the global namespace
 	lua_getmetatable(L, LUA_GLOBALSINDEX);
 		LUA_SetCFunctionField(L, "__newindex", setglobals);
 		lua_newtable(L);
 		lua_setfield(L, -2, "__metatable");
 	lua_pop(L, 1);
 
-
+	// lua state is ready!
 	gL = L;
 }
 
@@ -603,12 +603,12 @@ void LUA_ClearExtVars(void)
 }
 #endif
 
-
-
-
+// Use this variable to prevent certain functions from running
+// if they were not called on lump load
+// (i.e. they were called in hooks or coroutines etc)
 INT32 lua_lumploading = 0;
 
-
+// Load a script from a MYFILE
 static inline boolean LUA_LoadFile(MYFILE *f, char *name)
 {
 	int errorhandlerindex;
@@ -619,7 +619,7 @@ static inline boolean LUA_LoadFile(MYFILE *f, char *name)
 
 	CONS_Printf("Loading Lua script from %s\n", name);
 
-	if (!gL)  
+	if (!gL) // Lua needs to be initialized
 		LUA_ClearState();
 
 	lua_pushcfunction(gL, LUA_GetErrorMessage);
@@ -638,18 +638,18 @@ static inline boolean LUA_LoadFile(MYFILE *f, char *name)
 	return success;
 }
 
-
+// Runs a script loaded by LUA_LoadFile.
 static inline void LUA_DoFile(boolean noresults)
 {
 	int errorhandlerindex;
 
-	if (!gL)  
+	if (!gL) // LUA_LoadFile should've allocated gL for us!
 		return;
 
-	lua_lumploading++;  
+	lua_lumploading++; // turn on loading flag
 
 	lua_pushcfunction(gL, LUA_GetErrorMessage);
-	lua_insert(gL, -2);  
+	lua_insert(gL, -2); // move the function we're calling to the top.
 	errorhandlerindex = lua_gettop(gL) - 1;
 
 	if (lua_pcall(gL, 0, noresults ? 0 : LUA_MULTRET, lua_gettop(gL) - 1)) {
@@ -660,7 +660,7 @@ static inline void LUA_DoFile(boolean noresults)
 	lua_gc(gL, LUA_GCCOLLECT, 0);
 	lua_remove(gL, errorhandlerindex);
 
-	lua_lumploading--;  
+	lua_lumploading--; // turn off again
 }
 
 static inline MYFILE *LUA_GetFile(UINT16 wad, UINT16 lump, char **name)
@@ -674,31 +674,31 @@ static inline MYFILE *LUA_GetFile(UINT16 wad, UINT16 lump, char **name)
 	W_ReadLumpPwad(wad, lump, f->data);
 	f->curpos = f->data;
 
-	len = strlen(wadfiles[wad]->filename);  
+	len = strlen(wadfiles[wad]->filename); // length of file name
 
 	if (wadfiles[wad]->type == RET_LUA)
 	{
 		*name = malloc(len+1);
 		strcpy(*name, wadfiles[wad]->filename);
 	}
-	else  
+	else // If it's not a .lua file, copy the lump name in too.
 	{
 		lumpinfo_t *lump_p = &wadfiles[wad]->lumpinfo[lump];
-		len += 1 + strlen(lump_p->fullname);  
+		len += 1 + strlen(lump_p->fullname); // length of file name, '|', and lump name
 		*name = malloc(len+1);
 		sprintf(*name, "%s|%s", wadfiles[wad]->filename, lump_p->fullname);
-		(*name)[len] = '\0';  
+		(*name)[len] = '\0'; // annoying that index takes priority over dereference, but w/e
 	}
 
 	return f;
 }
 
-
+// Load a script from a lump
 boolean LUA_LoadLump(UINT16 wad, UINT16 lump)
 {
 	char *name = NULL;
 	MYFILE *f = LUA_GetFile(wad, lump, &name);
-	boolean success = LUA_LoadFile(f, name);  
+	boolean success = LUA_LoadFile(f, name); // actually load file!
 
 	free(name);
 
@@ -713,41 +713,41 @@ void LUA_DoLump(UINT16 wad, UINT16 lump, boolean noresults)
 	boolean success = LUA_LoadLump(wad, lump);
 
 	if (success)
-		LUA_DoFile(noresults);  
+		LUA_DoFile(noresults); // run it
 }
 
 #ifdef LUA_ALLOW_BYTECODE
-
+// must match lua_Writer
 static int dumpWriter(lua_State *L, const void *p, size_t sz, void *ud)
 {
 	FILE *handle = (FILE*)ud;
 	I_Assert(handle != NULL);
 	(void)L;
-	if (!sz) return 0;  
-	return (fwrite(p, 1, sz, handle) != sz);  
+	if (!sz) return 0; // nothing to write? can't fail that! :D
+	return (fwrite(p, 1, sz, handle) != sz); // if fwrite != sz, we've failed.
 }
 
-
+// Compile a script by name and dump it back to disk.
 void LUA_DumpFile(const char *filename)
 {
 	FILE *handle;
 	char filenamebuf[MAX_WADPATH];
 
-	if (!gL)  
+	if (!gL) // Lua needs to be initialized
 		LUA_ClearState(false);
 
-
+	// find the file the SRB2 way
 	strncpy(filenamebuf, filename, MAX_WADPATH);
 	filenamebuf[MAX_WADPATH - 1] = '\0';
 	filename = filenamebuf;
 	if ((handle = fopen(filename, "rb")) == NULL)
 	{
-
-
+		// If we failed to load the file with the path as specified by
+		// the user, strip the directories and search for the file.
 		nameonly(filenamebuf);
 
-
-
+		// If findfile finds the file, the full path will be returned
+		// in filenamebuf == filename.
 		if (findfile(filenamebuf, NULL, true))
 		{
 			if ((handle = fopen(filename, "rb")) == NULL)
@@ -764,15 +764,15 @@ void LUA_DumpFile(const char *filename)
 	}
 	fclose(handle);
 
-
-
+	// pass the path we found to Lua
+	// luaL_loadfile will open and read the file in as a Lua function
 	if (luaL_loadfile(gL, filename)) {
 		CONS_Alert(CONS_ERROR,"%s\n",lua_tostring(gL,-1));
 		lua_pop(gL, 1);
 		return;
 	}
 
-
+	// dump it back to disk
 	if ((handle = fopen(filename, "wb")) == NULL)
 		CONS_Alert(CONS_ERROR, M_GetText("Can't write to %s\n"), filename);
 	if (lua_dump(gL, dumpWriter, handle))
@@ -780,7 +780,7 @@ void LUA_DumpFile(const char *filename)
 	else
 		CONS_Printf("Successfully compiled %s into bytecode.\n", filename);
 	fclose(handle);
-	lua_pop(gL, 1);  
+	lua_pop(gL, 1); // function is still on stack after lua_dump
 	lua_gc(gL, LUA_GCCOLLECT, 0);
 	return;
 }
@@ -795,18 +795,18 @@ fixed_t LUA_EvalMath(const char *word)
 
 	if (!L)
 	{
-
-
+		// make a new state so SOC can't interefere with scripts
+		// allocate state
 		L = lua_newstate(LUA_Alloc, NULL);
 		lua_atpanic(L, LUA_Panic);
 
-
+		// open only enum lib
 		lua_pushcfunction(L, LUA_EnumLib);
 		lua_pushboolean(L, true);
 		lua_call(L, 1, 0);
 	}
 
-
+	// change ^ into ^^ for Lua.
 	strcpy(buf, "return ");
 	b = buf+strlen(buf);
 	for (p = word; *p && b < &buf[1022]; p++)
@@ -817,13 +817,13 @@ fixed_t LUA_EvalMath(const char *word)
 	}
 	*b = '\0';
 
-
+	// eval string.
 	lua_settop(L, 0);
 	if (luaL_dostring(L, buf))
 	{
 		p = lua_tostring(L, -1);
 		while (*p++ != ':' && *p) ;
-		p += 3;  
+		p += 3; // "1: "
 		CONS_Alert(CONS_WARNING, "%s\n", p);
 	}
 	else
@@ -832,9 +832,9 @@ fixed_t LUA_EvalMath(const char *word)
 	return res;
 }
 
-
-
-
+// Takes a pointer, any pointer, and a metatable name
+// Creates a userdata for that pointer with the given metatable
+// Pushes it to the stack and stores it in the registry.
 void LUA_PushUserdata(lua_State *L, void *data, const char *meta)
 {
 	if (LUA_RawPushUserdata(L, data) == LPUSHED_NEW)
@@ -844,14 +844,14 @@ void LUA_PushUserdata(lua_State *L, void *data, const char *meta)
 	}
 }
 
-
+// Same as LUA_PushUserdata but don't set a metatable yet.
 lpushed_t LUA_RawPushUserdata(lua_State *L, void *data)
 {
 	lpushed_t status = LPUSHED_NIL;
 
 	void **userdata;
 
-	if (!data) {  
+	if (!data) { // push a NULL
 		lua_pushnil(L);
 		return status;
 	}
@@ -862,48 +862,48 @@ lpushed_t LUA_RawPushUserdata(lua_State *L, void *data)
 	lua_pushlightuserdata(L, data);
 	lua_rawget(L, -2);
 
-	if (lua_isnil(L, -1)) {  
-		lua_pop(L, 1);  
+	if (lua_isnil(L, -1)) { // no userdata? deary me, we'll have to make one.
+		lua_pop(L, 1); // pop the nil
 
-
+		// create the userdata
 		userdata = lua_newuserdata(L, sizeof(void *));
 		*userdata = data;
 
-
-		lua_pushlightuserdata(L, data);  
-		lua_pushvalue(L, -2);  
+		// Set it in the registry so we can find it again
+		lua_pushlightuserdata(L, data); // k (store the userdata via the data's pointer)
+		lua_pushvalue(L, -2); // v (copy of the userdata)
 		lua_rawset(L, -4);
 
-
+		// stack is left with the userdata on top, as if getting it had originally succeeded.
 
 		status = LPUSHED_NEW;
 	}
 	else
 		status = LPUSHED_EXISTING;
 
-	lua_remove(L, -2);  
+	lua_remove(L, -2); // remove LREG_VALID
 
 	return status;
 }
 
-
+// When userdata is freed, use this function to remove it from Lua.
 void LUA_InvalidateUserdata(void *data)
 {
 	void **userdata;
 	if (!gL)
 		return;
 
-
+	// fetch the userdata
 	lua_getfield(gL, LUA_REGISTRYINDEX, LREG_VALID);
 	I_Assert(lua_istable(gL, -1));
 		lua_pushlightuserdata(gL, data);
 		lua_rawget(gL, -2);
-			if (lua_isnil(gL, -1)) {  
-				lua_pop(gL, 2);  
+			if (lua_isnil(gL, -1)) { // not found, not in lua
+				lua_pop(gL, 2); // pop nil and LREG_VALID
 				return;
 			}
 
-
+			// nullify any additional data
 			lua_getfield(gL, LUA_REGISTRYINDEX, LREG_EXTVARS);
 			I_Assert(lua_istable(gL, -1));
 				lua_pushlightuserdata(gL, data);
@@ -911,19 +911,19 @@ void LUA_InvalidateUserdata(void *data)
 				lua_rawset(gL, -3);
 			lua_pop(gL, 1);
 
-
+			// invalidate the userdata
 			userdata = lua_touserdata(gL, -1);
 			*userdata = NULL;
 		lua_pop(gL, 1);
 
-
+		// remove it from the registry
 		lua_pushlightuserdata(gL, data);
 		lua_pushnil(gL);
 		lua_rawset(gL, -3);
-	lua_pop(gL, 1);  
+	lua_pop(gL, 1); // pop LREG_VALID
 }
 
-
+// Invalidate level data arrays
 void LUA_InvalidateLevel(void)
 {
 	thinker_t *th;
@@ -1108,7 +1108,7 @@ static UINT8 ArchiveValue(save_t *save_p, int TABLESINDEX, int myindex)
 	case LUA_TNIL:
 		P_WriteUINT8(save_p, ARCH_NULL);
 		break;
-
+	// This might be a problem. D:
 	case LUA_TLIGHTUSERDATA:
 	case LUA_TTHREAD:
 	case LUA_TFUNCTION:
@@ -1139,28 +1139,28 @@ static UINT8 ArchiveValue(save_t *save_p, int TABLESINDEX, int myindex)
 	}
 	case LUA_TSTRING:
 	{
-		UINT32 len = (UINT32)lua_objlen(gL, myindex);  
+		UINT32 len = (UINT32)lua_objlen(gL, myindex); // get length of string, including embedded zeros
 		const char *s = lua_tostring(gL, myindex);
 		UINT32 i = 0;
-
-
-
-
-
-
-
+		// if you're wondering why we're writing a string to save_p this way,
+		// it turns out that Lua can have embedded zeros ('\0') in the strings,
+		// so we can't use P_WriteString as that cuts off when it finds a '\0'.
+		// Saving the size of the string also allows us to get the size of the string on the other end,
+		// fixing the awful crashes previously encountered for reading strings longer than 1024
+		// (yes I know that's kind of a stupid thing to care about, but it'd be evil to trim or ignore them?)
+		// -- Monster Iestyn 05/08/18
 		if (len < 255)
 		{
 			P_WriteUINT8(save_p, ARCH_SMALLSTRING);
-			P_WriteUINT8(save_p, len);  
+			P_WriteUINT8(save_p, len); // save size of string
 		}
 		else
 		{
 			P_WriteUINT8(save_p, ARCH_LARGESTRING);
-			P_WriteUINT32(save_p, len);  
+			P_WriteUINT32(save_p, len); // save size of string
 		}
 		while (i < len)
-			P_WriteChar(save_p, s[i++]);  
+			P_WriteChar(save_p, s[i++]); // write chars individually, including the embedded zeros
 		break;
 	}
 	case LUA_TTABLE:
@@ -1338,7 +1338,7 @@ static UINT8 ArchiveValue(save_t *save_p, int TABLESINDEX, int myindex)
 				P_WriteUINT8(save_p, ARCH_NULL);
 			else {
 				UINT16 i = P_GetFFloorID(rover);
-				if (i == UINT16_MAX)  
+				if (i == UINT16_MAX) // invalid ID
 					P_WriteUINT8(save_p, ARCH_NULL);
 				else
 				{
@@ -1400,7 +1400,7 @@ static UINT8 ArchiveValue(save_t *save_p, int TABLESINDEX, int myindex)
 		{
 			skin_t *skin = *((skin_t **)lua_touserdata(gL, myindex));
 			P_WriteUINT8(save_p, ARCH_SKIN);
-			P_WriteUINT8(save_p, skin->skinnum);  
+			P_WriteUINT8(save_p, skin->skinnum); // UINT8 because MAXSKINS must be <= 256
 			break;
 		}
 		default:
@@ -1418,7 +1418,7 @@ static void ArchiveExtVars(save_t *save_p, void *pointer, const char *ptype)
 	UINT16 i;
 
 	if (!gL) {
-		if (fastcmp(ptype,"player"))  
+		if (fastcmp(ptype,"player")) // players must always be included, even if no vars
 			P_WriteUINT16(save_p, 0);
 		return;
 	}
@@ -1429,12 +1429,12 @@ static void ArchiveExtVars(save_t *save_p, void *pointer, const char *ptype)
 	I_Assert(lua_istable(gL, -1));
 	lua_pushlightuserdata(gL, pointer);
 	lua_rawget(gL, -2);
-	lua_remove(gL, -2);  
+	lua_remove(gL, -2); // pop LREG_EXTVARS
 
 	if (!lua_istable(gL, -1))
-	{  
+	{ // no extra values table
 		lua_pop(gL, 1);
-		if (fastcmp(ptype,"player"))  
+		if (fastcmp(ptype,"player")) // players must always be included, even if no vars
 			P_WriteUINT16(save_p, 0);
 		return;
 	}
@@ -1443,16 +1443,16 @@ static void ArchiveExtVars(save_t *save_p, void *pointer, const char *ptype)
 	for (i = 0; lua_next(gL, -2); i++)
 		lua_pop(gL, 1);
 
-
+	// skip anything that has an empty table and isn't a player.
 	if (i == 0)
 	{
-		if (fastcmp(ptype,"player"))  
+		if (fastcmp(ptype,"player")) // always include players even if they have no extra variables
 			P_WriteUINT16(save_p, 0);
 		lua_pop(gL, 1);
 		return;
 	}
 
-	if (fastcmp(ptype,"mobj"))  
+	if (fastcmp(ptype,"mobj")) // mobjs must write their mobjnum as a header
 		P_WriteUINT32(save_p, ((mobj_t *)pointer)->mobjnum);
 	P_WriteUINT16(save_p, i);
 	lua_pushnil(gL);
@@ -1468,7 +1468,7 @@ static void ArchiveExtVars(save_t *save_p, void *pointer, const char *ptype)
 	lua_pop(gL, 1);
 }
 
-
+// FIXME: remove and pass as local variable
 static save_t *lua_save_p;
 
 static int NetArchive(lua_State *L)
@@ -1498,28 +1498,28 @@ static void ArchiveTables(save_t *save_p)
 		lua_pushnil(gL);
 		while (lua_next(gL, -2))
 		{
-
-			e = ArchiveValue(save_p, TABLESINDEX, -2);  
+			// Write key
+			e = ArchiveValue(save_p, TABLESINDEX, -2); // key should be either a number or a string, ArchiveValue can handle this.
 			if (e == 1)
-				n++;  
-			else if (e == 2)  
+				n++; // the table contained a new table we'll have to archive. :(
+			else if (e == 2) // invalid key type (function, thread, lightuserdata, or anything we don't recognise)
 				CONS_Alert(CONS_ERROR, "Index '%s' (%s) of table %d could not be archived!\n", lua_tostring(gL, -2), luaL_typename(gL, -2), i);
 
-
+			// Write value
 			e = ArchiveValue(save_p, TABLESINDEX, -1);
 			if (e == 1)
-				n++;  
-			else if (e == 2)  
+				n++; // the table contained a new table we'll have to archive. :(
+			else if (e == 2) // invalid value type
 				CONS_Alert(CONS_ERROR, "Type of value for table %d entry '%s' (%s) could not be archived!\n", i, lua_tostring(gL, -2), luaL_typename(gL, -1));
 
 			lua_pop(gL, 1);
 		}
 		P_WriteUINT8(save_p, ARCH_TEND);
 
-
+		// Write metatable ID
 		if (lua_getmetatable(gL, -1))
 		{
-
+			// registry.metatables[metatable]
 			lua_getfield(gL, LUA_REGISTRYINDEX, LREG_METATABLES);
 			lua_pushvalue(gL, -2);
 			lua_gettable(gL, -2);
@@ -1927,13 +1927,13 @@ void LUA_Archive(save_t *save_p)
 	thinker_t *th;
 
 	if (gL)
-		lua_newtable(gL);  
+		lua_newtable(gL); // tables to be archived.
 
 	for (i = 0; i < MAXPLAYERS; i++)
 	{
-		if (!playeringame[i] && i > 0)  
+		if (!playeringame[i] && i > 0) // dedicated servers...
 			continue;
-
+		// all players in game will be archived, even if they just add a 0.
 		ArchiveExtVars(save_p, &players[i], "player");
 	}
 
@@ -1942,19 +1942,19 @@ void LUA_Archive(save_t *save_p)
 		if (th->removing)
 			continue;
 
-
-
+		// archive function will determine when to skip mobjs,
+		// and write mobjnum in otherwise.
 		ArchiveExtVars(save_p, th, "mobj");
 	}
 
-	P_WriteUINT32(save_p, UINT32_MAX);  
+	P_WriteUINT32(save_p, UINT32_MAX); // end of mobjs marker, replaces mobjnum.
 
 	lua_save_p = save_p;
-	LUA_HookNetArchive(NetArchive);  
+	LUA_HookNetArchive(NetArchive); // call the NetArchive hook in archive mode
 	ArchiveTables(save_p);
 
 	if (gL)
-		lua_pop(gL, 1);  
+		lua_pop(gL, 1); // pop tables
 }
 
 boolean LUA_UnArchive(save_t *save_p)
@@ -1967,38 +1967,38 @@ boolean LUA_UnArchive(save_t *save_p)
 	lua_unarchive_failed = false;
 
 	if (gL)
-		lua_newtable(gL);  
+		lua_newtable(gL); // tables to be read
 
 	for (i = 0; i < MAXPLAYERS; i++)
 	{
-		if (!playeringame[i] && i > 0)  
+		if (!playeringame[i] && i > 0) // dedicated servers...
 			continue;
 		if (!UnArchiveExtVars(save_p, &players[i]))
 			goto corrupt;
 	}
 
 	do {
-		mobjnum = P_ReadUINT32(save_p);  
+		mobjnum = P_ReadUINT32(save_p); // read a mobjnum
 		if (P_SaveBufferReadError(save_p))
 			goto corrupt;
 		for (th = thlist[THINK_MOBJ].next; th != &thlist[THINK_MOBJ]; th = th->next)
 		{
 			if (th->removing)
 				continue;
-			if (((mobj_t *)th)->mobjnum != mobjnum)  
+			if (((mobj_t *)th)->mobjnum != mobjnum) // find matching mobj
 				continue;
-			if (!UnArchiveExtVars(save_p, th))  
+			if (!UnArchiveExtVars(save_p, th)) // apply variables
 				goto corrupt;
 		}
-	} while(mobjnum != UINT32_MAX);  
+	} while(mobjnum != UINT32_MAX); // repeat until end of mobjs marker.
 
 	lua_save_p = save_p;
-	LUA_HookNetArchive(NetUnArchive);  
+	LUA_HookNetArchive(NetUnArchive); // call the NetArchive hook in unarchive mode
 	if (lua_unarchive_failed || P_SaveBufferReadError(save_p) || !UnArchiveTables(save_p))
 		goto corrupt;
 
 	if (gL)
-		lua_pop(gL, 1);  
+		lua_pop(gL, 1); // pop tables
 	return true;
 
 corrupt:
@@ -2008,7 +2008,7 @@ corrupt:
 	return false;
 }
 
-
+// For mobj_t, player_t, etc. to take custom variables.
 int Lua_optoption(lua_State *L, int narg, int def, int list_ref)
 {
 	if (lua_isnoneornil(L, narg))
@@ -2106,8 +2106,8 @@ void LUA_RegisterUserdataMetatable(
 	lua_pop(L, 1);
 }
 
-
-
+// If keep is true, leaves the metatable on the stack.
+// Otherwise, the stack size remains unchanged.
 void LUA_CreateAndSetMetatable(
 	lua_State *L,
 	lua_CFunction get,
@@ -2126,8 +2126,8 @@ void LUA_CreateAndSetMetatable(
 		lua_pop(L, 1);
 }
 
-
-
+// If keep is true, leaves the userdata and metatable on the stack.
+// Otherwise, the stack size remains unchanged.
 void LUA_CreateAndSetUserdataField(
 	lua_State *L,
 	int index,

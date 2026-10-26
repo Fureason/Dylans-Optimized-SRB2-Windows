@@ -7,36 +7,36 @@
 
 #ifdef NEED_ERR
 
-  
-                                                                    
-                      
-  
-                                                                         
-  
-                                                              
-   
+/*
+ * Implementation of the err/errx/verr/verrx/warn/warnx/vwarn/vwarnx
+ * functions from BSD.
+ *
+ * This file is public-domain; anyone may deal in it without restriction.
+ *
+ * Written by Graue <graue@oceanbase.org> on January 16, 2006.
+ */
 
-  
-                                         
+/*
+err/warn family of functions cheat sheet:
 
-      
-                                  
-                        
-            
-                                   
-     
-                                        
-            
-                       
-     
-           
+Print:
+    last component of program name
+    [ if fmt is non-NULL
+        ": "
+        the formatted error message
+    ]
+    [ if function name does not end in x
+        ": "
+        strerror(errno)
+    ]
+    newline
 
-                                                                  
+Then if function name has "err" in it, quit with exit code `eval'.
 
-                                                                     
-                                                                        
-       
-  
+BSD's -x versions actually print ": " at the end if passed NULL, so I
+duplicate that behavior. Passing these functions NULL is kind of useless
+though.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,7 +107,7 @@ void err(int eval, const char *fmt, ...)
 	va_list argptr;
 	va_start(argptr, fmt);
 	verr(eval, fmt, argptr);
-	 
+	/* NOTREACHED, so don't worry about va_end() */
 }
 
 void errx(int eval, const char *fmt, ...)
@@ -115,7 +115,7 @@ void errx(int eval, const char *fmt, ...)
 	va_list argptr;
 	va_start(argptr, fmt);
 	verrx(eval, fmt, argptr);
-	 
+	/* NOTREACHED, so don't worry about va_end() */
 }
 
 #endif

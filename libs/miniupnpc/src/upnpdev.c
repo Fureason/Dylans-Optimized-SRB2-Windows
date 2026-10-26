@@ -1,4 +1,4 @@
- 
+/* $Id: upnpdev.c,v 1.1 2015/08/28 12:14:19 nanard Exp $ */
 /* Project : miniupnp
  * Web : http://miniupnp.free.fr/
  * Author : Thomas BERNARD
@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include "upnpdev.h"
 
-                                      
-                                                      
+/* freeUPNPDevlist() should be used to
+ * free the chained list returned by upnpDiscover() */
 void freeUPNPDevlist(struct UPNPDev * devlist)
 {
 	struct UPNPDev * next;

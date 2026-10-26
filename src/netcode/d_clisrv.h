@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  d_clisrv.h
+/// \brief high level networking stuff
 
 #ifndef __D_CLISRV__
 #define __D_CLISRV__
@@ -34,7 +34,7 @@ void Command_Numnodes(void);
 
 extern INT32 mapchangepending;
 
-
+// Points inside doomcom
 extern doomdata_t *netbuffer;
 
 #define BASEPACKETSIZE      offsetof(doomdata_t, u)
@@ -42,23 +42,23 @@ extern doomdata_t *netbuffer;
 
 typedef enum
 {
-	KR_KICK          = 1,  
-	KR_PINGLIMIT     = 2,  
-	KR_SYNCH         = 3,  
-	KR_TIMEOUT       = 4,  
-	KR_BAN           = 5,  
-	KR_LEAVE         = 6,  
-	KR_IDLE          = 7,  
+	KR_KICK          = 1, //Kicked by server
+	KR_PINGLIMIT     = 2, //Broke Ping Limit
+	KR_SYNCH         = 3, //Synch Failure
+	KR_TIMEOUT       = 4, //Connection Timeout
+	KR_BAN           = 5, //Banned by server
+	KR_LEAVE         = 6, //Quit the game
+	KR_IDLE          = 7, //Remained still for too long
 } kickreason_t;
 
- 
+/* the max number of name changes in some time period */
 #define MAXNAMECHANGES (5)
 #define NAMECHANGERATE (60*TICRATE)
 
 extern boolean server;
 extern boolean serverrunning;
 #define client (!server)
-extern boolean dedicated;  
+extern boolean dedicated; // For dedicated server
 extern UINT16 software_MAXPACKETLENGTH;
 extern boolean acceptnewnode;
 extern SINT8 servernode;
@@ -76,13 +76,13 @@ extern tic_t servermaxping;
 extern consvar_t cv_netticbuffer, cv_netlowlatency, cv_resynchattempts, cv_blamecfail, cv_playbackspeed, cv_idletime, cv_idleaction, cv_dedicatedidletime;
 extern consvar_t cv_httpsource;
 
-
+// Used in d_net, the only dependence
 void D_ClientServerInit(void);
 
-
+// Create any new ticcmds and broadcast to other players.
 void NetUpdate(void);
 
-
+// Maintain connections to nodes without timing them all out.
 void NetKeepAlive(void);
 
 void GetPackets(void);
@@ -103,23 +103,23 @@ void CL_Reset(void);
 void CL_ClearPlayer(INT32 playernum);
 void CL_RemovePlayer(INT32 playernum, kickreason_t reason);
 void CL_HandleTimeout(void);
-
+// Is there a game running
 boolean Playing(void);
 
-
-
+// Broadcasts special packets to other players
+//  to notify of game exit
 void D_QuitNetGame(void);
 
-
+//? How many ticks to run?
 boolean TryRunTics(tic_t realtic);
 
+// extra data for lmps
+// these functions scare me. they contain magic.
+/*boolean AddLmpExtradata(UINT8 **demo_p, INT32 playernum);
+void ReadLmpExtraData(UINT8 **demo_pointer, INT32 playernum);*/
 
-
-                                                           
-                                                               
-
-
-
+// translate a playername in a player number return -1 if not found and
+// print a error message in the console
 SINT8 nametonum(const char *name);
 
 extern char motd[254], server_context[8];

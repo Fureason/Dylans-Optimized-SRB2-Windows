@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw_glob.h
+/// \brief globals (shared data & code) for hw_ modules
 
 #ifndef _HWR_GLOB_H_
 #define _HWR_GLOB_H_
@@ -18,17 +18,17 @@
 #include "../m_misc.h"
 #include "../p_setup.h"
 
-
+// the original aspect ratio of Doom graphics isn't square
 #define ORIGINAL_ASPECT (320.0f/200.0f)
 
+// Uncomment this to enable the OpenGL loading screen
+//#define HWR_LOADING_SCREEN
 
+// -----------
+// structures
+// -----------
 
-
-
-
-
-
-
+// a vertex of a Doom 'plane' polygon
 typedef struct
 {
 	float x;
@@ -40,7 +40,7 @@ typedef struct
 #pragma warning(disable :  4200)
 #endif
 
-
+// a convex 'plane' polygon, clockwise order
 typedef struct
 {
 	INT32 numpts;
@@ -51,14 +51,14 @@ typedef struct
 #pragma warning(default :  4200)
 #endif
 
-
+// holds extra info for 3D render, for each subsector in subsectors[]
 typedef struct
 {
-	poly_t *planepoly;   
+	poly_t *planepoly;  // the generated convex polygon
 } extrasubsector_t;
 
-
-
+// needed for sprite rendering
+// equivalent of the software renderer's vissprites
 typedef struct gl_vissprite_s
 {
 	float x1, x2;
@@ -66,7 +66,7 @@ typedef struct gl_vissprite_s
 	float gz, gzt;
 
 	float tz;
-	float tracertz;  
+	float tracertz; // for MF2_LINKDRAW sprites, this contains tracer's tz for use in sorting
 
 	float scale;
 	float shadowheight, shadowscale;
@@ -78,28 +78,28 @@ typedef struct gl_vissprite_s
 	UINT8 rotateflags;
 
 	boolean flip, vflip;
-	boolean precip;  
+	boolean precip; // Tails 08-25-2002
 	boolean bbox;
 	boolean rotated;
-	                                                                           
-                                                               
+	/* Cached by HWR_SortVisSprites. Comparing thousands of translucent sprites
+	 * should not repeatedly inspect the same mobj/frame flags. */
 	boolean sortblended;
 	boolean sorttracerblended;
-	UINT8 translucency;        
+	UINT8 translucency;       //alpha level 0-255
 
-	angle_t angle;  
+	angle_t angle; // for splats
 
-
+	//Hurdler: 25/04/2000: now support colormap in hardware mode
 	UINT8 *colormap;
-	INT32 dispoffset;  
+	INT32 dispoffset; // copy of mobj->dispoffset, affects ordering but not drawing
 
 	patch_t *gpatch;
-	mobj_t *mobj;  
+	mobj_t *mobj; // NOTE: This is a precipmobj_t if precip is true !!! Watch out.
 } gl_vissprite_t;
 
-
-
-
+// --------
+// hw_bsp.c
+// --------
 extern extrasubsector_t *extrasubsectors;
 extern size_t addsubsector;
 
@@ -108,9 +108,9 @@ void HWR_FreePolyPool(void);
 
 void HWR_FreeExtraSubsectors(void);
 
-
-
-
+// --------
+// hw_cache.c
+// --------
 RGBA_t *HWR_GetTexturePalette(void);
 
 void HWR_InitMapTextures(void);
@@ -147,15 +147,15 @@ UINT32 HWR_GetLightTableID(extracolormap_t *colormap);
 void HWR_ClearLightTables(void);
 
 
-
-
-
+// --------
+// hw_draw.c
+// --------
 extern INT32 patchformat;
 extern INT32 textureformat;
 
-
-
-
+// --------
+// hw_shaders.c
+// --------
 boolean HWR_InitShaders(void);
 void HWR_CompileShaders(void);
 
@@ -167,4 +167,4 @@ const char *HWR_GetShaderName(INT32 shader);
 
 extern customshaderxlat_t shaderxlat[];
 
-#endif  
+#endif //_HW_GLOB_

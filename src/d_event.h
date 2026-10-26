@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  d_event.h
+/// \brief Event handling
 
 #ifndef __D_EVENT__
 #define __D_EVENT__
@@ -17,7 +17,7 @@
 #include "doomtype.h"
 #include "g_state.h"
 
-
+// Input event types.
 typedef enum
 {
 	ev_keydown,
@@ -30,19 +30,19 @@ typedef enum
 	ev_joystick2,
 } evtype_t;
 
-
+// Event structure.
 typedef struct
 {
 	evtype_t type;
-	INT32 key;  
-	INT32 x;  
-	INT32 y;  
-	boolean repeated;  
+	INT32 key; // keys/mouse/joystick buttons
+	INT32 x; // mouse/joystick x move
+	INT32 y; // mouse/joystick y move
+	boolean repeated; // key repeat
 } event_t;
 
-
-
-
+//
+// GLOBAL VARIABLES
+//
 #define MAXEVENTS 128
 
 extern event_t events[MAXEVENTS];

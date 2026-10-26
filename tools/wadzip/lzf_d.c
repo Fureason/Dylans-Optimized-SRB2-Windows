@@ -58,7 +58,7 @@ lzf_decompress (const void *const in_data,  unsigned int in_len,
     {
       unsigned int ctrl = *ip++;
 
-      if (ctrl < (1 << 5))  
+      if (ctrl < (1 << 5)) /* literal run */
         {
           ctrl++;
 
@@ -86,7 +86,7 @@ lzf_decompress (const void *const in_data,  unsigned int in_len,
           while (--ctrl);
 #endif
         }
-      else  
+      else /* back reference */
         {
           unsigned int len = ctrl >> 5;
 

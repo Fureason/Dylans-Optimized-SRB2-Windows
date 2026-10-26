@@ -18,11 +18,11 @@ void MyDoMinus64(LARGE_INTEGER *R,LARGE_INTEGER A,LARGE_INTEGER B)
 }
 
 #ifdef _M_X64
-
+// see http://msdn2.microsoft.com/library/twchhe95(en-us,vs.80).aspx for __rdtsc
 unsigned __int64 __rdtsc(void);
 void BeginCountRdtsc(LARGE_INTEGER * pbeginTime64)
 {
-
+ //   printf("rdtsc = %I64x\n",__rdtsc());
    pbeginTime64->QuadPart=__rdtsc();
 }
 
@@ -31,7 +31,7 @@ LARGE_INTEGER GetResRdtsc(LARGE_INTEGER beginTime64,BOOL fComputeTimeQueryPerf)
     LARGE_INTEGER LIres;
     unsigned _int64 res=__rdtsc()-((unsigned _int64)(beginTime64.QuadPart));
     LIres.QuadPart=res;
-
+   // printf("rdtsc = %I64x\n",__rdtsc());
     return LIres;
 }
 #else

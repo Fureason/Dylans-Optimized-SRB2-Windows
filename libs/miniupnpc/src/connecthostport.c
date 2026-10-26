@@ -1,4 +1,4 @@
- 
+/* $Id: connecthostport.c,v 1.24 2020/11/09 19:26:53 nanard Exp $ */
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * Project : miniupnp
  * Author : Thomas Bernard
@@ -6,8 +6,8 @@
  * This software is subject to the conditions detailed in the
  * LICENCE file provided in this distribution. */
 
-                                       
-                                                                  
+/* use getaddrinfo() or gethostbyname()
+ * uncomment the following line in order to use gethostbyname() */
 #ifdef NO_GETADDRINFO
 #define USE_GETHOSTBYNAME
 #endif
@@ -22,24 +22,24 @@
 #include "win32_snprintf.h"
 #define herror
 #define socklen_t int
-#else  
+#else /* #ifdef _WIN32 */
 #include <unistd.h>
 #include <sys/types.h>
 #ifdef MINIUPNPC_SET_SOCKET_TIMEOUT
 #include <sys/time.h>
-#endif  
+#endif /* #ifdef MINIUPNPC_SET_SOCKET_TIMEOUT */
 #include <sys/param.h>
 #include <sys/select.h>
 #include <errno.h>
 #define closesocket close
 #include <netdb.h>
 #include <netinet/in.h>
-                                                                     
-                               
+/* defining MINIUPNPC_IGNORE_EINTR enable the ignore of interruptions
+ * during the connect() call */
 #define MINIUPNPC_IGNORE_EINTR
 #include <sys/socket.h>
 #include <sys/select.h>
-#endif  
+#endif /* #else _WIN32 */
 
 #if defined(__amigaos__) || defined(__amigaos4__)
 #define herror(A) printf("%s\n", A)
@@ -51,9 +51,9 @@
 #define MAXHOSTNAMELEN 64
 #endif
 
-                    
-                                                       
-                            
+/* connecthostport()
+ * return a socket connected (TCP) to the host and port
+ * or -1 in case of error */
 SOCKET connecthostport(const char * host, unsigned short port,
                        unsigned int scope_id)
 {
@@ -62,15 +62,15 @@ SOCKET connecthostport(const char * host, unsigned short port,
 #ifdef USE_GETHOSTBYNAME
 	struct sockaddr_in dest;
 	struct hostent *hp;
-#else  
+#else /* #ifdef USE_GETHOSTBYNAME */
 	char tmp_host[MAXHOSTNAMELEN+1];
 	char port_str[8];
 	struct addrinfo *ai, *p;
 	struct addrinfo hints;
-#endif  
+#endif /* #ifdef USE_GETHOSTBYNAME */
 #ifdef MINIUPNPC_SET_SOCKET_TIMEOUT
 	struct timeval timeout;
-#endif  
+#endif /* #ifdef MINIUPNPC_SET_SOCKET_TIMEOUT */
 
 #ifdef USE_GETHOSTBYNAME
 	hp = gethostbyname(host);
@@ -88,7 +88,7 @@ SOCKET connecthostport(const char * host, unsigned short port,
 		return INVALID_SOCKET;
 	}
 #ifdef MINIUPNPC_SET_SOCKET_TIMEOUT
-	 
+	/* setting a 3 seconds timeout for the connect() call */
 	timeout.tv_sec = 3;
 	timeout.tv_usec = 0;
 	if(setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) < 0)
@@ -101,14 +101,14 @@ SOCKET connecthostport(const char * host, unsigned short port,
 	{
 		PRINT_SOCKET_ERROR("setsockopt SO_SNDTIMEO");
 	}
-#endif  
+#endif /* #ifdef MINIUPNPC_SET_SOCKET_TIMEOUT */
 	dest.sin_family = AF_INET;
 	dest.sin_port = htons(port);
 	n = connect(s, (struct sockaddr *)&dest, sizeof(struct sockaddr_in));
 #ifdef MINIUPNPC_IGNORE_EINTR
-	                                                                    
-                                                                   
-                                            
+	/* EINTR The system call was interrupted by a signal that was caught
+	 * EINPROGRESS The socket is nonblocking and the connection cannot
+	 *             be completed immediately. */
 	while(n < 0 && (errno == EINTR || errno == EINPROGRESS))
 	{
 		socklen_t len;
@@ -132,8 +132,8 @@ SOCKET connecthostport(const char * host, unsigned short port,
 			break;
 		}
 #endif
-		 
-		 
+		/*len = 0;*/
+		/*n = getpeername(s, NULL, &len);*/
 		len = sizeof(err);
 		if(getsockopt(s, SOL_SOCKET, SO_ERROR, &err, &len) < 0) {
 			PRINT_SOCKET_ERROR("getsockopt");
@@ -145,33 +145,33 @@ SOCKET connecthostport(const char * host, unsigned short port,
 			n = -1;
 		}
 	}
-#endif  
+#endif /* #ifdef MINIUPNPC_IGNORE_EINTR */
 	if(n<0)
 	{
 		PRINT_SOCKET_ERROR("connect");
 		closesocket(s);
 		return INVALID_SOCKET;
 	}
-#else  
-	 
+#else /* #ifdef USE_GETHOSTBYNAME */
+	/* use getaddrinfo() instead of gethostbyname() */
 	memset(&hints, 0, sizeof(hints));
-	 
+	/* hints.ai_flags = AI_ADDRCONFIG; */
 #ifdef AI_NUMERICSERV
 	hints.ai_flags = AI_NUMERICSERV;
 #endif
 	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_family = AF_UNSPEC;  
-	 
+	hints.ai_family = AF_UNSPEC; /* AF_INET, AF_INET6 or AF_UNSPEC */
+	/* hints.ai_protocol = IPPROTO_TCP; */
 	snprintf(port_str, sizeof(port_str), "%hu", port);
 	if(host[0] == '[')
 	{
-		 
+		/* literal ip v6 address */
 		int i, j;
 		for(i = 0, j = 1; host[j] && (host[j] != ']') && i < MAXHOSTNAMELEN; i++, j++)
 		{
 			tmp_host[i] = host[j];
-			if(0 == strncmp(host+j, "%25", 3))	 
-				j+=2;							 
+			if(0 == strncmp(host+j, "%25", 3))	/* %25 is just url encoding for '%' */
+				j+=2;							/* skip "25" */
 		}
 		tmp_host[i] = '\0';
 	}
@@ -207,7 +207,7 @@ SOCKET connecthostport(const char * host, unsigned short port,
 			addr6->sin6_scope_id = scope_id;
 		}
 #ifdef MINIUPNPC_SET_SOCKET_TIMEOUT
-		 
+		/* setting a 3 seconds timeout for the connect() call */
 		timeout.tv_sec = 3;
 		timeout.tv_usec = 0;
 		if(setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) < 0)
@@ -220,12 +220,12 @@ SOCKET connecthostport(const char * host, unsigned short port,
 		{
 			PRINT_SOCKET_ERROR("setsockopt");
 		}
-#endif  
+#endif /* #ifdef MINIUPNPC_SET_SOCKET_TIMEOUT */
 		n = connect(s, p->ai_addr, MSC_CAST_INT p->ai_addrlen);
 #ifdef MINIUPNPC_IGNORE_EINTR
-		                                                                    
-                                                                    
-                                             
+		/* EINTR The system call was interrupted by a signal that was caught
+		 * EINPROGRESS The socket is nonblocking and the connection cannot
+		 *             be completed immediately. */
 		while(n < 0 && (errno == EINTR || errno == EINPROGRESS))
 		{
 			socklen_t len;
@@ -249,8 +249,8 @@ SOCKET connecthostport(const char * host, unsigned short port,
 				break;
 			}
 #endif
-			 
-			 
+			/*len = 0;*/
+			/*n = getpeername(s, NULL, &len);*/
 			len = sizeof(err);
 			if(getsockopt(s, SOL_SOCKET, SO_ERROR, &err, &len) < 0) {
 				PRINT_SOCKET_ERROR("getsockopt");
@@ -263,8 +263,8 @@ SOCKET connecthostport(const char * host, unsigned short port,
 				n = -1;
 			}
 		}
-#endif  
-		if(n >= 0)	 
+#endif /* #ifdef MINIUPNPC_IGNORE_EINTR */
+		if(n >= 0)	/* connect() was successful */
 			break;
 	}
 	freeaddrinfo(ai);
@@ -279,6 +279,6 @@ SOCKET connecthostport(const char * host, unsigned short port,
 		closesocket(s);
 		return INVALID_SOCKET;
 	}
-#endif  
+#endif /* #ifdef USE_GETHOSTBYNAME */
 	return s;
 }

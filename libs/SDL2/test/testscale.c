@@ -9,7 +9,7 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* Simple program:  Move N sprites around on the screen as fast as possible */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -40,7 +40,7 @@ typedef struct
 DrawState *drawstates;
 int done;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -54,10 +54,10 @@ void Draw(DrawState *s)
 
     SDL_RenderGetViewport(s->renderer, &viewport);
 
-     
+    /* Draw the background */
     SDL_RenderCopy(s->renderer, s->background, NULL, NULL);
 
-     
+    /* Scale and draw the sprite */
     s->sprite_rect.w += s->scale_direction;
     s->sprite_rect.h += s->scale_direction;
     if (s->scale_direction > 0) {
@@ -74,7 +74,7 @@ void Draw(DrawState *s)
 
     SDL_RenderCopy(s->renderer, s->sprite, NULL, &s->sprite_rect);
 
-     
+    /* Update the screen! */
     SDL_RenderPresent(s->renderer);
 }
 
@@ -83,7 +83,7 @@ void loop()
     int i;
     SDL_Event event;
 
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &done);
     }
@@ -106,10 +106,10 @@ int main(int argc, char *argv[])
     int frames;
     Uint32 then, now;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
         drawstate->scale_direction = 1;
     }
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         double fps = ((double)frames * 1000) / (now - then);
@@ -163,4 +163,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

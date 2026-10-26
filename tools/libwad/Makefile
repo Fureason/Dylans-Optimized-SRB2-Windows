@@ -13,43 +13,43 @@
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
 
-
+# Library name.
 LIBNAME = wad
-
+# Library version.
 LIBVERM = 1
 LIBVER	= $(LIBVERM).0.0
 
-
+# Library default options.
 CPPFLAGS	+= -DLIBNAME="$(LIBNAME)" -DLIBVER="$(LIBVER)"
 
-
+# Source files and directory.
 SRCDIR	= src
 SRC	= $(SRCDIR)/wad.c $(SRCDIR)/lump.c $(SRCDIR)/wad_static.c
 
-
+# Compiled files directory.
 BINDIR	= bin
 INCDIR	= include
 
+#
+## Variables that shouldn't be edited unless
+## you know what you are doing start here.
+#
 
-
-
-
-
-
+# Makefile pretty text output variables.
 PRAR     	= AR      
 PRCC     	= CC      
 PRINSTALL	= INSTALL 
 PRCLEAN  	= CLEAN   
 
-
+# Library name prefix.
 LIBPFX	= lib
 
-
+# Library installation directory.
 PREFIX	?= /usr/local
 LIBDIR	:= $(PREFIX)/lib
 INCLUDE := $(PREFIX)/include
 
-
+# Variables created during compilation.
 OBJ	= $(SRC:.c=.o)
 DEP	= $(BINDIR)/$(LIBPFX)$(LIBNAME).d
 ifdef MINGW
@@ -62,7 +62,7 @@ BIN	= $(BINDIR)/$(LIBPFX)$(LIBNAME).so.$(LIBVER)
 endif
 STABIN	= $(BINDIR)/$(LIBPFX)$(LIBNAME).a
 
-
+# Compilation programs.
 ECHO	:= echo
 RM	:= $(RM) -r
 FIND	:= find
@@ -74,7 +74,7 @@ SED	:= sed
 AR	:= $(CROSS_COMPILE)$(AR)
 CC	:= $(CROSS_COMPILE)$(CC)
 
-
+# Shell programs.
 SHECHO   	:= $(ECHO)
 SHFIND   	:= $(FIND)
 SHGREP   	:= $(GREP)
@@ -82,7 +82,7 @@ SHINSTALL	:= $(INSTALL)
 SHSED    	:= $(SED)
 SHCC     	:= $(CC)
 
-
+# Quiet compiling programs during pretty text output.
 ECHO    	:= @$(ECHO)
 ifndef V
 RM      	:= @$(RM)
@@ -100,7 +100,7 @@ endif
 LIBS	= $(BIN) $(STABIN)
 HEADERS	= $(shell $(SHFIND) $(CURDIR) | $(SHGREP) -e "$(INCDIR)/.*.h" | $(SHGREP) -v ".svn" | $(SHSED) "s:$(CURDIR)/::")
 
-
+# Compiler default flags.
 ifndef MINGW
 CFLAGS	+= -fPIC
 LDFLAGS	+= -fPIC
@@ -109,7 +109,7 @@ ifdef DEBUG
 CFLAGS	+= -g $(M5) -O0 -Wall
 endif
 
-
+# Linker flags.
 LDFLAGS	+= -shared
 ifdef MINGW
 LDFLAGS += -Wl,--output-def,$(DEFN),--out-implib,$(LIBN)
@@ -117,14 +117,14 @@ else
 LDFLAGS += -Wl,-soname,$(SONAME)
 endif
 
+#
+## Makefile targets.
+#
 
-
-
-
-
+# all is dependent on $(BIN) to be complete
 all: $(DEP) $(BIN) $(STABIN)
 
-
+# $(EXE) is dependent on all of the files in $(OBJ) to exist
 $(DEP): $(SRC)
 ifndef V
 	$(ECHO) "  $(PRCC)$@"

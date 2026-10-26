@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple program to test the SDL joystick routines */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,7 +108,7 @@ void loop(void *arg)
     SDL_Event event;
     int i;
 
-     
+    /* blank screen, set up for drawing this frame. */
     SDL_SetRenderDrawColor(screen, 0x0, 0x0, 0x0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(screen);
 
@@ -168,7 +168,7 @@ void loop(void *arg)
         case SDL_JOYBUTTONDOWN:
             SDL_Log("Joystick %" SDL_PRIs32 " button %d down\n",
                     event.jbutton.which, event.jbutton.button);
-             
+            /* First button triggers a 0.5 second full strength rumble */
             if (event.jbutton.button == 0) {
                 SDL_JoystickRumble(joystick, 0xFFFF, 0xFFFF, 500);
             }
@@ -178,8 +178,8 @@ void loop(void *arg)
                     event.jbutton.which, event.jbutton.button);
             break;
         case SDL_KEYDOWN:
-                                                                        
-                                                                   
+            /* Press the L key to lag for 3 seconds, to see what happens
+                when SDL doesn't service the event loop quickly. */
             if (event.key.keysym.sym == SDLK_l) {
                 SDL_Log("Lagging for 3 seconds...\n");
                 SDL_Delay(3000);
@@ -205,7 +205,7 @@ void loop(void *arg)
         const int BUTTONS_PER_LINE = ((SCREEN_WIDTH - 4) / 34);
         int x, y;
 
-         
+        /* Update visual joystick state */
         SDL_SetRenderDrawColor(screen, 0x00, 0xFF, 0x00, SDL_ALPHA_OPAQUE);
         y = SCREEN_HEIGHT - ((((SDL_JoystickNumButtons(joystick) + (BUTTONS_PER_LINE - 1)) / BUTTONS_PER_LINE) + 1) * 34);
         for (i = 0; i < SDL_JoystickNumButtons(joystick); ++i) {
@@ -220,7 +220,7 @@ void loop(void *arg)
 
         SDL_SetRenderDrawColor(screen, 0xFF, 0x00, 0x00, SDL_ALPHA_OPAQUE);
         for (i = 0; i < SDL_JoystickNumAxes(joystick); ++i) {
-             
+            /* Draw the X/Y axis */
             x = (((int)SDL_JoystickGetAxis(joystick, i)) + 32768);
             x *= SCREEN_WIDTH;
             x /= 65535;
@@ -248,7 +248,7 @@ void loop(void *arg)
 
         SDL_SetRenderDrawColor(screen, 0x00, 0x00, 0xFF, SDL_ALPHA_OPAQUE);
         for (i = 0; i < SDL_JoystickNumHats(joystick); ++i) {
-             
+            /* Derive the new position */
             const Uint8 hat_pos = SDL_JoystickGetHat(joystick, i);
             x = SCREEN_WIDTH / 2;
             y = SCREEN_HEIGHT / 2;
@@ -283,16 +283,16 @@ int main(int argc, char *argv[])
 {
     SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize SDL (Note: video is required to start event loop) */
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         exit(1);
     }
 
-     
+    /* Create a window to display joystick axis position */
     window = SDL_CreateWindow("Joystick Test", SDL_WINDOWPOS_CENTERED,
                               SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH,
                               SCREEN_HEIGHT, 0);
@@ -312,7 +312,7 @@ int main(int argc, char *argv[])
     SDL_RenderClear(screen);
     SDL_RenderPresent(screen);
 
-     
+    /* Loop, getting joystick events! */
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(loop, NULL, 0, 1);
 #else
@@ -340,4 +340,4 @@ main(int argc, char *argv[])
 
 #endif
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

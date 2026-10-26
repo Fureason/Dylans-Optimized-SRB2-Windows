@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  gamestate.h
+/// \brief Gamestate (re)sending
 
 #ifndef __GAMESTATE__
 #define __GAMESTATE__

@@ -7,26 +7,26 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  g_input.c
+/// \brief handle mouse/keyboard/joystick inputs,
+///        maps inputs to game controls (forward, spin, jump...)
 
 #include "doomdef.h"
 #include "doomstat.h"
 #include "g_input.h"
 #include "keys.h"
-#include "hu_stuff.h"  
+#include "hu_stuff.h" // need HUFONT start & end
 #include "netcode/d_net.h"
 #include "console.h"
 #include "lua_script.h"
 #include "lua_libs.h"
 
-#define MAXMOUSESENSITIVITY 100  
+#define MAXMOUSESENSITIVITY 100 // sensitivity steps
 
 static CV_PossibleValue_t mousesens_cons_t[] = {{1, "MIN"}, {MAXMOUSESENSITIVITY, "MAX"}, {0, NULL}};
 static CV_PossibleValue_t onecontrolperkey_cons_t[] = {{1, "One"}, {2, "Several"}, {0, NULL}};
 
-
+// mouse values are used once
 consvar_t cv_mousesens = CVAR_INIT ("mousesens", "20", CV_SAVE, mousesens_cons_t, NULL);
 consvar_t cv_mousesens2 = CVAR_INIT ("mousesens2", "20", CV_SAVE, mousesens_cons_t, NULL);
 consvar_t cv_mouseysens = CVAR_INIT ("mouseysens", "20", CV_SAVE, mousesens_cons_t, NULL);
@@ -36,19 +36,19 @@ consvar_t cv_controlperkey = CVAR_INIT ("controlperkey", "One", CV_SAVE, onecont
 mouse_t mouse;
 mouse_t mouse2;
 
-
+// joystick values are repeated
 INT32 joyxmove[JOYAXISSET], joyymove[JOYAXISSET], joy2xmove[JOYAXISSET], joy2ymove[JOYAXISSET];
 
-
+// current state of the keys: true if pushed
 UINT8 gamekeydown[NUMINPUTS];
 
-
+// two key codes (or virtual key) per game control
 INT32 gamecontrol[NUM_GAMECONTROLS][2];
-INT32 gamecontrolbis[NUM_GAMECONTROLS][2];  
-INT32 gamecontroldefault[num_gamecontrolschemes][NUM_GAMECONTROLS][2];  
+INT32 gamecontrolbis[NUM_GAMECONTROLS][2]; // secondary splitscreen player
+INT32 gamecontroldefault[num_gamecontrolschemes][NUM_GAMECONTROLS][2]; // default control storage, use 0 (gcs_custom) for memory retention
 INT32 gamecontrolbisdefault[num_gamecontrolschemes][NUM_GAMECONTROLS][2];
 
-
+// lists of GC codes for selective operation
 const INT32 gcl_tutorial_check[num_gcl_tutorial_check] = {
 	GC_FORWARD, GC_BACKWARD, GC_STRAFELEFT, GC_STRAFERIGHT,
 	GC_TURNLEFT, GC_TURNRIGHT
@@ -99,16 +99,16 @@ static dclick_t joydclicks[JOYBUTTONS + JOYHATS*4];
 static dclick_t mouse2dclicks[MOUSEBUTTONS];
 static dclick_t joy2dclicks[JOYBUTTONS + JOYHATS*4];
 
-
+// protos
 static UINT8 G_CheckDoubleClick(UINT8 state, dclick_t *dt);
 
-
-
-
-
-
-
-
+//
+// Remaps the inputs to game controls.
+//
+// A game control can be triggered by one or more keys/buttons.
+//
+// Each key/mousebutton/joybutton triggers ONLY ONE game control.
+//
 void G_MapEventsToControls(event_t *ev)
 {
 	INT32 i;
@@ -142,12 +142,12 @@ void G_MapEventsToControls(event_t *ev)
 #endif
 			break;
 
-		case ev_mouse:  
+		case ev_mouse: // buttons are virtual keys
 			mouse.rdx = ev->x;
 			mouse.rdy = ev->y;
 			break;
 
-		case ev_joystick:  
+		case ev_joystick: // buttons are virtual keys
 			i = ev->key;
 			if (i >= JOYAXISSET || menuactive || CON_Ready() || chat_on || ignoregameinputs)
 				break;
@@ -155,7 +155,7 @@ void G_MapEventsToControls(event_t *ev)
 			if (ev->y != INT32_MAX) joyymove[i] = ev->y;
 			break;
 
-		case ev_joystick2:  
+		case ev_joystick2: // buttons are virtual keys
 			i = ev->key;
 			if (i >= JOYAXISSET || menuactive || CON_Ready() || chat_on || ignoregameinputs)
 				break;
@@ -163,7 +163,7 @@ void G_MapEventsToControls(event_t *ev)
 			if (ev->y != INT32_MAX) joy2ymove[i] = ev->y;
 			break;
 
-		case ev_mouse2:  
+		case ev_mouse2: // buttons are virtual keys
 			if (menuactive || CON_Ready() || chat_on)
 				break;
 			mouse2.rdx = ev->x;
@@ -174,7 +174,7 @@ void G_MapEventsToControls(event_t *ev)
 			break;
 	}
 
-
+	// ALWAYS check for mouse & joystick double-clicks even if no mouse event
 	for (i = 0; i < MOUSEBUTTONS; i++)
 	{
 		flag = G_CheckDoubleClick(gamekeydown[KEY_MOUSE1+i], &mousedclicks[i]);
@@ -200,9 +200,9 @@ void G_MapEventsToControls(event_t *ev)
 	}
 }
 
-
-
-
+//
+// General double-click detection routine for any kind of input.
+//
 static UINT8 G_CheckDoubleClick(UINT8 state, dclick_t *dt)
 {
 	if (state != dt->state && dt->time > 1)
@@ -248,7 +248,7 @@ static keyname_t keynames[] =
 	{KEY_NUMLOCK, "numlock"},
 	{KEY_SCROLLLOCK, "scrolllock"},
 
-
+	// bill gates keys
 	{KEY_LEFTWIN, "leftwin"},
 	{KEY_RIGHTWIN, "rightwin"},
 	{KEY_MENU, "menu"},
@@ -263,7 +263,7 @@ static keyname_t keynames[] =
 	{KEY_RALT, "ralt"},
 	{KEY_LALT, "alt"},
 
-
+	// keypad keys
 	{KEY_KPADSLASH, "keypad /"},
 	{KEY_KEYPAD7, "keypad 7"},
 	{KEY_KEYPAD8, "keypad 8"},
@@ -279,7 +279,7 @@ static keyname_t keynames[] =
 	{KEY_KEYPAD0, "keypad 0"},
 	{KEY_KPADDEL, "keypad ."},
 
-
+	// extended keys (not keypad)
 	{KEY_HOME, "home"},
 	{KEY_UPARROW, "up arrow"},
 	{KEY_PGUP, "pgup"},
@@ -291,7 +291,7 @@ static keyname_t keynames[] =
 	{KEY_INS, "ins"},
 	{KEY_DEL, "del"},
 
-
+	// other keys
 	{KEY_F1, "f1"},
 	{KEY_F2, "f2"},
 	{KEY_F3, "f3"},
@@ -305,11 +305,11 @@ static keyname_t keynames[] =
 	{KEY_F11, "f11"},
 	{KEY_F12, "f12"},
 
-
+	// KEY_CONSOLE has an exception in the keyname code
 	{'`', "TILDE"},
 	{KEY_PAUSE, "pause/break"},
 
-
+	// virtual keys for mouse buttons and joystick buttons
 	{KEY_MOUSE1+0,"mouse1"},
 	{KEY_MOUSE1+1,"mouse2"},
 	{KEY_MOUSE1+2,"mouse3"},
@@ -318,7 +318,7 @@ static keyname_t keynames[] =
 	{KEY_MOUSE1+5,"mouse6"},
 	{KEY_MOUSE1+6,"mouse7"},
 	{KEY_MOUSE1+7,"mouse8"},
-	{KEY_2MOUSE1+0,"sec_mouse2"},  
+	{KEY_2MOUSE1+0,"sec_mouse2"}, // BP: sorry my mouse handler swap button 1 and 2
 	{KEY_2MOUSE1+1,"sec_mouse1"},
 	{KEY_2MOUSE1+2,"sec_mouse3"},
 	{KEY_2MOUSE1+3,"sec_mouse4"},
@@ -341,7 +341,7 @@ static keyname_t keynames[] =
 	{KEY_JOY1+7, "joy8"},
 	{KEY_JOY1+8, "joy9"},
 #if !defined (NOMOREJOYBTN_1S)
-
+	// we use up to 32 buttons in DirectInput
 	{KEY_JOY1+9, "joy10"},
 	{KEY_JOY1+10, "joy11"},
 	{KEY_JOY1+11, "joy12"},
@@ -366,7 +366,7 @@ static keyname_t keynames[] =
 	{KEY_JOY1+30, "joy31"},
 	{KEY_JOY1+31, "joy32"},
 #endif
-
+	// the DOS version uses Allegro's joystick support
 	{KEY_HAT1+0, "hatup"},
 	{KEY_HAT1+1, "hatdown"},
 	{KEY_HAT1+2, "hatleft"},
@@ -392,7 +392,7 @@ static keyname_t keynames[] =
 	{KEY_DBLMOUSE1+5, "dblmouse6"},
 	{KEY_DBLMOUSE1+6, "dblmouse7"},
 	{KEY_DBLMOUSE1+7, "dblmouse8"},
-	{KEY_DBL2MOUSE1+0, "dblsec_mouse2"},  
+	{KEY_DBL2MOUSE1+0, "dblsec_mouse2"}, // BP: sorry my mouse handler swap button 1 and 2
 	{KEY_DBL2MOUSE1+1, "dblsec_mouse1"},
 	{KEY_DBL2MOUSE1+2, "dblsec_mouse3"},
 	{KEY_DBL2MOUSE1+3, "dblsec_mouse4"},
@@ -461,7 +461,7 @@ static keyname_t keynames[] =
 	{KEY_2JOY1+6, "sec_joy7"},
 	{KEY_2JOY1+7, "sec_joy8"},
 #if !defined (NOMOREJOYBTN_2S)
-
+	// we use up to 32 buttons in DirectInput
 	{KEY_2JOY1+8, "sec_joy9"},
 	{KEY_2JOY1+9, "sec_joy10"},
 	{KEY_2JOY1+10, "sec_joy11"},
@@ -487,7 +487,7 @@ static keyname_t keynames[] =
 	{KEY_2JOY1+30, "sec_joy31"},
 	{KEY_2JOY1+31, "sec_joy32"},
 #endif
-
+	// the DOS version uses Allegro's joystick support
 	{KEY_2HAT1+0,  "sec_hatup"},
 	{KEY_2HAT1+1,  "sec_hatdown"},
 	{KEY_2HAT1+2,  "sec_hatleft"},
@@ -560,7 +560,7 @@ static keyname_t keynames[] =
 
 static const char *gamecontrolname[NUM_GAMECONTROLS] =
 {
-	"nothing",  
+	"nothing", // a key/button mapped to GC_NULL has no effect
 	"forward",
 	"backward",
 	"strafeleft",
@@ -598,7 +598,7 @@ static const char *gamecontrolname[NUM_GAMECONTROLS] =
 	"systemmenu",
 	"screenshot",
 	"recordgif",
-	"viewpoint",  
+	"viewpoint", // Rename this to "viewpointnext" for the next major version
 	"viewpointprev",
 	"custom1",
 	"custom2",
@@ -607,9 +607,9 @@ static const char *gamecontrolname[NUM_GAMECONTROLS] =
 
 #define NUMKEYNAMES (sizeof (keynames)/sizeof (keyname_t))
 
-
-
-
+//
+// Detach any keys associated to the given game control
+// - pass the pointer to the gamecontrol table for the player being edited
 void G_ClearControlKeys(INT32 (*setupcontrols)[2], INT32 control)
 {
 	setupcontrols[control][0] = KEY_NULL;
@@ -626,17 +626,17 @@ void G_ClearAllControlKeys(void)
 	}
 }
 
-
-
-
-
+//
+// Returns the name of a key (or virtual key for mouse and joy)
+// the input value being an keynum
+//
 const char *G_KeyNumToName(INT32 keynum)
 {
 	static char keynamestr[8];
 
 	UINT32 j;
 
-
+	// return a string with the ascii char if displayable
 	if (keynum > ' ' && keynum <= 'z' && keynum != KEY_CONSOLE)
 	{
 		keynamestr[0] = (char)keynum;
@@ -644,12 +644,12 @@ const char *G_KeyNumToName(INT32 keynum)
 		return keynamestr;
 	}
 
-
+	// find a description for special keys
 	for (j = 0; j < NUMKEYNAMES; j++)
 		if (keynames[j].keynum == keynum)
 			return keynames[j].name;
 
-
+	// create a name for unknown keys
 	sprintf(keynamestr, "KEY%d", keynum);
 	return keynamestr;
 }
@@ -663,7 +663,7 @@ INT32 G_KeyNameToNum(const char *keystr)
 
 	if (!strncmp(keystr, "KEY", 3) && keystr[3] >= '0' && keystr[3] <= '9')
 	{
-		 
+		/* what if we out of range bruh? */
 		j = atoi(&keystr[3]);
 		if (j < NUMINPUTS)
 			return j;
@@ -681,7 +681,7 @@ void G_DefineDefaultControls(void)
 {
 	INT32 i;
 
-
+	// FPS game controls (WASD)
 	gamecontroldefault[gcs_fps][GC_FORWARD    ][0] = 'w';
 	gamecontroldefault[gcs_fps][GC_BACKWARD   ][0] = 's';
 	gamecontroldefault[gcs_fps][GC_STRAFELEFT ][0] = 'a';
@@ -701,7 +701,7 @@ void G_DefineDefaultControls(void)
 	gamecontroldefault[gcs_fps][GC_CUSTOM2    ][0] = 'x';
 	gamecontroldefault[gcs_fps][GC_CUSTOM3    ][0] = 'c';
 
-
+	// Platform game controls (arrow keys), currently unused
 	gamecontroldefault[gcs_platform][GC_FORWARD    ][0] = KEY_UPARROW;
 	gamecontroldefault[gcs_platform][GC_BACKWARD   ][0] = KEY_DOWNARROW;
 	gamecontroldefault[gcs_platform][GC_STRAFELEFT ][0] = 'a';
@@ -717,7 +717,7 @@ void G_DefineDefaultControls(void)
 	gamecontroldefault[gcs_platform][GC_FIRE       ][1] = KEY_MOUSE1+0;
 	gamecontroldefault[gcs_platform][GC_FIRENORMAL ][0] = 'w';
 
-	for (i = 1; i < num_gamecontrolschemes; i++)  
+	for (i = 1; i < num_gamecontrolschemes; i++) // skip gcs_custom (0)
 	{
 		gamecontroldefault[i][GC_WEAPONNEXT   ][0] = KEY_MOUSEWHEELUP+0;
 		gamecontroldefault[i][GC_WEAPONPREV   ][0] = KEY_MOUSEWHEELDOWN+0;
@@ -743,37 +743,37 @@ void G_DefineDefaultControls(void)
 		gamecontroldefault[i][GC_RECORDGIF    ][0] = KEY_F9;
 		gamecontroldefault[i][GC_VIEWPOINTNEXT][0] = KEY_F12;
 
+		// Gamepad controls -- same for both schemes
+		gamecontroldefault[i][GC_JUMP         ][1] = KEY_JOY1+0; // A
+		gamecontroldefault[i][GC_SPIN         ][1] = KEY_JOY1+2; // X
+		gamecontroldefault[i][GC_CUSTOM1      ][1] = KEY_JOY1+1; // B
+		gamecontroldefault[i][GC_CUSTOM2      ][1] = KEY_JOY1+3; // Y
+		gamecontroldefault[i][GC_CUSTOM3      ][1] = KEY_JOY1+8; // Left Stick
+		gamecontroldefault[i][GC_CAMTOGGLE    ][1] = KEY_JOY1+4; // LB
+		gamecontroldefault[i][GC_CENTERVIEW   ][1] = KEY_JOY1+5; // RB
+		gamecontroldefault[i][GC_SCREENSHOT   ][1] = KEY_JOY1+6; // Back
+		gamecontroldefault[i][GC_SYSTEMMENU   ][0] = KEY_JOY1+7; // Start
+		gamecontroldefault[i][GC_WEAPONPREV   ][1] = KEY_HAT1+2; // D-Pad Left
+		gamecontroldefault[i][GC_WEAPONNEXT   ][1] = KEY_HAT1+3; // D-Pad Right
+		gamecontroldefault[i][GC_VIEWPOINTNEXT][1] = KEY_JOY1+9; // Right Stick
+		gamecontroldefault[i][GC_TOSSFLAG     ][1] = KEY_HAT1+0; // D-Pad Up
+		gamecontroldefault[i][GC_SCORES       ][1] = KEY_HAT1+1; // D-Pad Down
 
-		gamecontroldefault[i][GC_JUMP         ][1] = KEY_JOY1+0;  
-		gamecontroldefault[i][GC_SPIN         ][1] = KEY_JOY1+2;  
-		gamecontroldefault[i][GC_CUSTOM1      ][1] = KEY_JOY1+1;  
-		gamecontroldefault[i][GC_CUSTOM2      ][1] = KEY_JOY1+3;  
-		gamecontroldefault[i][GC_CUSTOM3      ][1] = KEY_JOY1+8;  
-		gamecontroldefault[i][GC_CAMTOGGLE    ][1] = KEY_JOY1+4;  
-		gamecontroldefault[i][GC_CENTERVIEW   ][1] = KEY_JOY1+5;  
-		gamecontroldefault[i][GC_SCREENSHOT   ][1] = KEY_JOY1+6;  
-		gamecontroldefault[i][GC_SYSTEMMENU   ][0] = KEY_JOY1+7;  
-		gamecontroldefault[i][GC_WEAPONPREV   ][1] = KEY_HAT1+2;  
-		gamecontroldefault[i][GC_WEAPONNEXT   ][1] = KEY_HAT1+3;  
-		gamecontroldefault[i][GC_VIEWPOINTNEXT][1] = KEY_JOY1+9;  
-		gamecontroldefault[i][GC_TOSSFLAG     ][1] = KEY_HAT1+0;  
-		gamecontroldefault[i][GC_SCORES       ][1] = KEY_HAT1+1;  
-
-
-		gamecontrolbisdefault[i][GC_JUMP         ][1] = KEY_2JOY1+0;  
-		gamecontrolbisdefault[i][GC_SPIN         ][1] = KEY_2JOY1+2;  
-		gamecontrolbisdefault[i][GC_CUSTOM1      ][1] = KEY_2JOY1+1;  
-		gamecontrolbisdefault[i][GC_CUSTOM2      ][1] = KEY_2JOY1+3;  
-		gamecontrolbisdefault[i][GC_CUSTOM3      ][1] = KEY_2JOY1+8;  
-		gamecontrolbisdefault[i][GC_CAMTOGGLE    ][1] = KEY_2JOY1+4;  
-		gamecontrolbisdefault[i][GC_CENTERVIEW   ][1] = KEY_2JOY1+5;  
-		gamecontrolbisdefault[i][GC_SCREENSHOT   ][1] = KEY_2JOY1+6;  
-
-		gamecontrolbisdefault[i][GC_WEAPONPREV   ][1] = KEY_2HAT1+2;  
-		gamecontrolbisdefault[i][GC_WEAPONNEXT   ][1] = KEY_2HAT1+3;  
-		gamecontrolbisdefault[i][GC_VIEWPOINTNEXT][1] = KEY_2JOY1+9;  
-		gamecontrolbisdefault[i][GC_TOSSFLAG     ][1] = KEY_2HAT1+0;  
-
+		// Second player controls only have joypad defaults
+		gamecontrolbisdefault[i][GC_JUMP         ][1] = KEY_2JOY1+0; // A
+		gamecontrolbisdefault[i][GC_SPIN         ][1] = KEY_2JOY1+2; // X
+		gamecontrolbisdefault[i][GC_CUSTOM1      ][1] = KEY_2JOY1+1; // B
+		gamecontrolbisdefault[i][GC_CUSTOM2      ][1] = KEY_2JOY1+3; // Y
+		gamecontrolbisdefault[i][GC_CUSTOM3      ][1] = KEY_2JOY1+8; // Left Stick
+		gamecontrolbisdefault[i][GC_CAMTOGGLE    ][1] = KEY_2JOY1+4; // LB
+		gamecontrolbisdefault[i][GC_CENTERVIEW   ][1] = KEY_2JOY1+5; // RB
+		gamecontrolbisdefault[i][GC_SCREENSHOT   ][1] = KEY_2JOY1+6; // Back
+		//gamecontrolbisdefault[i][GC_SYSTEMMENU   ][0] = KEY_2JOY1+7; // Start
+		gamecontrolbisdefault[i][GC_WEAPONPREV   ][1] = KEY_2HAT1+2; // D-Pad Left
+		gamecontrolbisdefault[i][GC_WEAPONNEXT   ][1] = KEY_2HAT1+3; // D-Pad Right
+		gamecontrolbisdefault[i][GC_VIEWPOINTNEXT][1] = KEY_2JOY1+9; // Right Stick
+		gamecontrolbisdefault[i][GC_TOSSFLAG     ][1] = KEY_2HAT1+0; // D-Pad Up
+		//gamecontrolbisdefault[i][GC_SCORES       ][1] = KEY_2HAT1+1; // D-Pad Down
 	}
 }
 
@@ -782,7 +782,7 @@ INT32 G_GetControlScheme(INT32 (*fromcontrols)[2], const INT32 *gclist, INT32 gc
 	INT32 i, j, gc;
 	boolean skipscheme;
 
-	for (i = 1; i < num_gamecontrolschemes; i++)  
+	for (i = 1; i < num_gamecontrolschemes; i++) // skip gcs_custom (0)
 	{
 		skipscheme = false;
 		for (j = 0; j < (gclist && gclen ? gclen : NUM_GAMECONTROLS); j++)
@@ -880,21 +880,21 @@ INT32 G_CheckDoubleUsage(INT32 keynum, boolean modify)
 
 static INT32 G_FilterKeyByVersion(INT32 numctrl, INT32 keyidx, INT32 player, INT32 *keynum1, INT32 *keynum2, boolean *nestedoverride)
 {
-
+	// Special case: ignore KEY_PAUSE because it's hardcoded
 	if (keyidx == 0 && *keynum1 == KEY_PAUSE)
 	{
 		if (*keynum2 != KEY_PAUSE)
 		{
-			*keynum1 = *keynum2;  
+			*keynum1 = *keynum2; // shift down keynum2 and continue
 			*keynum2 = 0;
 		}
 		else
-			return -1;  
+			return -1; // skip setting control
 	}
 	else if (keyidx == 1 && *keynum2 == KEY_PAUSE)
-		return -1;  
+		return -1; // skip setting control
 
-	if (GETMAJOREXECVERSION(cv_execversion.value) < 27 && (  
+	if (GETMAJOREXECVERSION(cv_execversion.value) < 27 && ( // v2.1.22
 		numctrl == GC_WEAPONNEXT || numctrl == GC_WEAPONPREV || numctrl == GC_TOSSFLAG ||
 		numctrl == GC_SPIN || numctrl == GC_CAMRESET || numctrl == GC_JUMP ||
 		numctrl == GC_PAUSE || numctrl == GC_SYSTEMMENU || numctrl == GC_CAMTOGGLE ||
@@ -906,21 +906,21 @@ static INT32 G_FilterKeyByVersion(INT32 numctrl, INT32 keyidx, INT32 player, INT
 		INT32 defaultkey;
 		boolean defaultoverride = false;
 
-
+		// get the default gamecontrol
 		if (player == 0 && numctrl == GC_SYSTEMMENU)
 			defaultkey = gamecontrol[numctrl][0];
 		else
 			defaultkey = (player == 1 ? gamecontrolbis[numctrl][0] : gamecontrol[numctrl][1]);
 
-
-
-
-
-
-
+		// Assign joypad button defaults if there is an open slot.
+		// At this point, gamecontrol/bis should have the default controls
+		// (unless LOADCONFIG is being run)
+		//
+		// If the player runs SETCONTROL in-game, this block should not be reached
+		// because EXECVERSION is locked onto the latest version.
 		if (keyidx == 0 && !*keynum1)
 		{
-			if (*keynum2)  
+			if (*keynum2) // push keynum2 down; this is an edge case
 			{
 				*keynum1 = *keynum2;
 				*keynum2 = 0;
@@ -932,30 +932,30 @@ static INT32 G_FilterKeyByVersion(INT32 numctrl, INT32 keyidx, INT32 player, INT
 				defaultoverride = true;
 			}
 		}
-		else if (keyidx == 1 && (!*keynum2 || (!*keynum1 && *keynum2)))  
+		else if (keyidx == 1 && (!*keynum2 || (!*keynum1 && *keynum2))) // last one is the same edge case as above
 		{
 			keynum = defaultkey;
 			defaultoverride = true;
 		}
-		else  
+		else // default to the specified keynum
 			keynum = (keyidx == 1 ? *keynum2 : *keynum1);
 
-
+		// Did our last call override keynum2?
 		if (*nestedoverride)
 		{
 			defaultoverride = true;
 			*nestedoverride = false;
 		}
 
-
+		// Fill keynum2 with the default control
 		if (keyidx == 0 && !*keynum2)
 		{
 			*keynum2 = defaultkey;
-
+			// Tell the next call that this is an override
 			*nestedoverride = true;
 
-
-
+			// if keynum2 already matches keynum1, we probably recursed
+			// so unset it
 			if (*keynum1 == *keynum2)
 			{
 				*keynum2 = 0;
@@ -963,12 +963,12 @@ static INT32 G_FilterKeyByVersion(INT32 numctrl, INT32 keyidx, INT32 player, INT
 		}
 		}
 
-
-
-
-
-
-
+		// check if the key is being used somewhere else before passing it
+		// pass it through if it's the same numctrl. This is an edge case -- when using
+		// LOADCONFIG, gamecontrol is not reset with default.
+		//
+		// Also, only check if we're actually overriding, to preserve behavior where
+		// config'd keys overwrite default keys.
 		if (defaultoverride)
 			existingctrl = G_CheckDoubleUsage(keynum, false);
 
@@ -976,21 +976,21 @@ static INT32 G_FilterKeyByVersion(INT32 numctrl, INT32 keyidx, INT32 player, INT
 			return keynum;
 		else if (keyidx == 0 && *keynum2)
 		{
-
+			// try it again and push down keynum2
 			*keynum1 = *keynum2;
 			*keynum2 = 0;
 			return G_FilterKeyByVersion(numctrl, keyidx, player, keynum1, keynum2, nestedoverride);
-
-
+			// recursion *should* be safe because we only assign keynum2 to a joy default
+			// and then clear it if we find that keynum1 already has the joy default.
 		}
 		else
 			return 0;
 	}
 
-
+	// All's good, so pass the keynum as-is
 	if (keyidx == 1)
 		return *keynum2;
-	else  
+	else //if (keyidx == 0)
 		return *keynum1;
 }
 
@@ -1002,7 +1002,7 @@ static void setcontrol(INT32 (*gc)[2])
 	INT32 player = ((void*)gc == (void*)&gamecontrolbis ? 1 : 0);
 	boolean nestedoverride = false;
 
-
+	// TODO: 2.3: Delete the "use" alias
 	namectrl = (stricmp(COM_Argv(1), "use")) ? COM_Argv(1) : "spin";
 
 	for (numctrl = 0; numctrl < NUM_GAMECONTROLS && stricmp(namectrl, gamecontrolname[numctrl]);
@@ -1022,10 +1022,10 @@ static void setcontrol(INT32 (*gc)[2])
 	{
 		(void)G_CheckDoubleUsage(keynum, true);
 
-
+		// if keynum was rejected, try it again with keynum2
 		if (!keynum && keynum2)
 		{
-			keynum1 = keynum2;  
+			keynum1 = keynum2; // push down keynum2
 			keynum2 = 0;
 			keynum = G_FilterKeyByVersion(numctrl, 0, player, &keynum1, &keynum2, &nestedoverride);
 			if (keynum >= 0)

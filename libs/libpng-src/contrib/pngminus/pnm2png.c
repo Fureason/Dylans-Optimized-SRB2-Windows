@@ -20,14 +20,14 @@
 #define FALSE (BOOL) 0
 #endif
 
- 
+/* make pnm2png verbose so we can find problems (needs to be before png.h) */
 #ifndef PNG_DEBUG
 #define PNG_DEBUG 0
 #endif
 
 #include "png.h"
 
- 
+/* function prototypes */
 
 int main (int argc, char *argv[]);
 void usage ();
@@ -37,9 +37,9 @@ void get_token (FILE *pnm_file, char *token_buf, size_t token_buf_size);
 png_uint_32 get_data (FILE *pnm_file, int depth);
 png_uint_32 get_value (FILE *pnm_file, int depth);
 
-  
-        
-   
+/*
+ *  main
+ */
 
 int main (int argc, char *argv[])
 {
@@ -81,7 +81,7 @@ int main (int argc, char *argv[])
           usage ();
           exit (1);
           break;
-      }  
+      } /* end switch */
     }
     else if (fp_rd == stdin)
     {
@@ -108,19 +108,19 @@ int main (int argc, char *argv[])
       usage ();
       exit (1);
     }
-  }  
+  } /* end for */
 
 #if defined(O_BINARY) && (O_BINARY != 0)
-                                
-                                                   
-     
+  /* set stdin/stdout to binary,
+   * we're reading the PNM always! in binary format
+   */
   if (fp_rd == stdin)
     setmode (fileno (stdin), O_BINARY);
   if (fp_wr == stdout)
     setmode (fileno (stdout), O_BINARY);
 #endif
 
-   
+  /* call the conversion program itself */
   if (pnm2png (fp_rd, fp_wr, fp_al, interlace, alpha) == FALSE)
   {
     fprintf (stderr, "PNM2PNG\n");
@@ -128,20 +128,20 @@ int main (int argc, char *argv[])
     exit (1);
   }
 
-   
+  /* close input file */
   fclose (fp_rd);
-   
+  /* close output file */
   fclose (fp_wr);
-   
+  /* close alpha file */
   if (alpha)
     fclose (fp_al);
 
   return 0;
 }
 
-  
-         
-   
+/*
+ *  usage
+ */
 
 void usage ()
 {
@@ -156,9 +156,9 @@ void usage ()
   fprintf (stderr, "   -h | -?  print this help-information\n");
 }
 
-  
-           
-   
+/*
+ *  pnm2png
+ */
 
 BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
               BOOL interlace, BOOL alpha)
@@ -193,7 +193,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
   png_uint_32   tmp16;
   int           i;
 
-   
+  /* read header of PNM file */
 
   get_token (pnm_file, type_token, sizeof (type_token));
   if (type_token[0] != 'P')
@@ -243,7 +243,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
       bit_depth = 8;
     else if (maxval <= 65535U)
       bit_depth = 16;
-    else  
+    else /* maxval > 65535U */
       return FALSE;
   }
   else if ((type_token[1] == '3') || (type_token[1] == '6'))
@@ -269,7 +269,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
       bit_depth = 8;
     else if (maxval <= 65535U)
       bit_depth = 16;
-    else  
+    else /* maxval > 65535U */
       return FALSE;
   }
   else
@@ -277,7 +277,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
     return FALSE;
   }
 
-   
+  /* read header of PGM file with alpha channel */
 
   if (alpha)
   {
@@ -317,7 +317,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
         alpha_depth = 8;
       else if (maxval <= 65535U)
         alpha_depth = 16;
-      else  
+      else /* maxval > 65535U */
         return FALSE;
       if (alpha_depth != bit_depth)
         return FALSE;
@@ -326,9 +326,9 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
     {
       return FALSE;
     }
-  }  
+  } /* end if alpha */
 
-   
+  /* calculate the number of channels and store alpha-presence */
   if (color_type == PNG_COLOR_TYPE_GRAY)
     channels = 1;
   else if (color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
@@ -339,7 +339,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
     channels = 4;
 #if 0
   else
-    channels = 0;  
+    channels = 0; /* cannot happen */
 #endif
 
   alpha_present = (channels - 1) % 2;
@@ -347,30 +347,30 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
 #if defined(PNG_WRITE_INVERT_SUPPORTED) || defined(PNG_WRITE_PACK_SUPPORTED)
   if (packed_bitmap)
   {
-     
+    /* row data is as many bytes as can fit width x channels x bit_depth */
     row_bytes = (width * channels * bit_depth + 7) / 8;
   }
   else
 #endif
   {
-     
+    /* row_bytes is the width x number of channels x (bit-depth / 8) */
     row_bytes = width * channels * ((bit_depth <= 8) ? 1 : 2);
   }
 
   if ((row_bytes == 0) ||
       ((size_t) height > (size_t) (-1) / (size_t) row_bytes))
   {
-     
+    /* too big */
     return FALSE;
   }
   if ((png_pixels = (png_byte *)
        malloc ((size_t) row_bytes * (size_t) height)) == NULL)
   {
-     
+    /* out of memory */
     return FALSE;
   }
 
-   
+  /* read data from PNM file */
   pix_ptr = png_pixels;
 
   for (row = 0; row < (int) height; row++)
@@ -380,7 +380,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
     {
       for (i = 0; i < (int) row_bytes; i++)
       {
-         
+        /* png supports this format natively so no conversion is needed */
         *pix_ptr++ = get_data (pnm_file, 8);
       }
     }
@@ -412,7 +412,7 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
           }
         }
 
-        if (alpha)  
+        if (alpha) /* read alpha-channel from pgm file */
         {
           if (alpha_raw)
           {
@@ -431,12 +431,12 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
               *pix_ptr++ = (png_byte) (tmp16 & 0xFF);
             }
           }
-        }  
-      }  
-    }  
-  }  
+        } /* end if alpha */
+      } /* end if packed_bitmap */
+    } /* end for col */
+  } /* end for row */
 
-   
+  /* prepare the standard PNG structures */
   png_ptr = png_create_write_struct (png_get_libpng_ver(NULL),
                                      NULL, NULL, NULL);
   if (!png_ptr)
@@ -467,18 +467,18 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
     return FALSE;
   }
 
-   
+  /* initialize the png structure */
   png_init_io (png_ptr, png_file);
 
-   
+  /* we're going to write more or less the same PNG as the input file */
   png_set_IHDR (png_ptr, info_ptr, width, height, bit_depth, color_type,
                 (!interlace) ? PNG_INTERLACE_NONE : PNG_INTERLACE_ADAM7,
                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
-   
+  /* write the file header information */
   png_write_info (png_ptr, info_ptr);
 
-   
+  /* if needed we will allocate memory for an new array of row-pointers */
   if (row_pointers == NULL)
   {
     if ((row_pointers = (png_byte **)
@@ -490,17 +490,17 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
     }
   }
 
-   
+  /* set the individual row_pointers to point at the correct offsets */
   for (i = 0; i < (int) height; i++)
     row_pointers[i] = png_pixels + i * row_bytes;
 
-   
+  /* write out the entire image data in one call */
   png_write_image (png_ptr, row_pointers);
 
-   
+  /* write the additional chunks to the PNG file (not really needed) */
   png_write_end (png_ptr, info_ptr);
 
-   
+  /* clean up after the write, and free any memory allocated */
   png_destroy_write_struct (&png_ptr, &info_ptr);
 
   if (row_pointers != NULL)
@@ -509,24 +509,24 @@ BOOL pnm2png (FILE *pnm_file, FILE *png_file, FILE *alpha_file,
     free (png_pixels);
 
   return TRUE;
-}  
+} /* end of pnm2png */
 
-  
-                                                     
-   
+/*
+ * get_token - gets the first string after whitespace
+ */
 
 void get_token (FILE *pnm_file, char *token_buf, size_t token_buf_size)
 {
   size_t i = 0;
   int ret;
 
-   
+  /* remove white-space and comment lines */
   do
   {
     ret = fgetc (pnm_file);
     if (ret == '#')
     {
-       
+      /* the rest of this line is a comment */
       do
       {
         ret = fgetc (pnm_file);
@@ -538,7 +538,7 @@ void get_token (FILE *pnm_file, char *token_buf, size_t token_buf_size)
   }
   while ((ret == '\n') || (ret == '\r') || (ret == ' '));
 
-   
+  /* read string */
   do
   {
     ret = fgetc (pnm_file);
@@ -553,11 +553,11 @@ void get_token (FILE *pnm_file, char *token_buf, size_t token_buf_size)
   return;
 }
 
-  
-                                                                   
-                                                              
-                                                                 
-   
+/*
+ *  get_data - takes first byte and converts into next pixel value,
+ *             taking as much bits as defined by bit-depth and
+ *             using the bit-depth to fill up a byte (0Ah -> AAh)
+ */
 
 png_uint_32 get_data (FILE *pnm_file, int depth)
 {
@@ -587,10 +587,10 @@ png_uint_32 get_data (FILE *pnm_file, int depth)
   return ret_value;
 }
 
-  
-                                                                      
-                                                                  
-   
+/*
+ *  get_value - takes first (numeric) string and converts into number,
+ *              using the bit-depth to fill up a byte (0Ah -> AAh)
+ */
 
 png_uint_32 get_value (FILE *pnm_file, int depth)
 {
@@ -617,4 +617,4 @@ png_uint_32 get_value (FILE *pnm_file, int depth)
   return ret_value;
 }
 
- 
+/* end of source */

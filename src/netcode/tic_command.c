@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  tic_command.c
+/// \brief Tic command handling
 
 #include "tic_command.h"
 #include "d_clisrv.h"
@@ -25,8 +25,8 @@
 #include "../doomstat.h"
 #include "../doomtype.h"
 
-tic_t firstticstosend;  
-tic_t tictoclear = 0;  
+tic_t firstticstosend; // Smallest netnode.tic
+tic_t tictoclear = 0; // Optimize D_ClearTiccmd
 ticcmd_t localcmds;
 ticcmd_t localcmds2;
 boolean cl_packetmissed;
@@ -40,9 +40,9 @@ typedef struct
 	UINT8 resyncs;
 } consistency_mismatch_tracker_t;
 
-                                                                           
-                                                                            
-                                                                 
+/* A lone stale/corrupt consistency sample should not force a full savegame
+ * transfer. Real simulation divergence persists into the next distinct tic,
+ * so confirm it twice before resyncing or kicking the player. */
 static consistency_mismatch_tracker_t consistency_mismatches[MAXNETNODES];
 #define CONSISTENCY_MISMATCH_CONFIRMATIONS 2
 #define CONSISTENCY_ATTEMPT_RESET_TIME (5*60*TICRATE)
@@ -55,14 +55,14 @@ typedef struct
 	boolean seen[MAXNETNODES];
 } consistency_cluster_t;
 
-                                                                            
-                                                                             
-                                                                       
+/* When several independent clients report the same checksum offset within a
+ * few seconds, they agree with one another and the authoritative host is the
+ * outlier. Surface that distinction instead of blaming packet loss. */
 static consistency_cluster_t consistency_cluster;
 
-                                                                           
-                                                                             
-                                                                              
+/* Return a nearby server tic whose checksum matches the client's sample. A
+ * one-tic association slip is recoverable as command delivery catches up and
+ * should receive one extra confirmation before sending an entire savegame. */
 static SINT8 NearbyConsistencyMatch(tic_t tic, INT16 value)
 {
 	INT32 delta;
@@ -106,13 +106,13 @@ static inline void *G_ScpyTiccmd(ticcmd_t* dest, void* src, const size_t n)
 	return ret+n;
 }
 
-                                                                             
-   
-                                               
-                                              
-                              
-   
-    
+/** Guesses the full value of a tic from its lowest byte, for a specific node
+  *
+  * \param low The lowest byte of the tic value
+  * \param node The node to deduce the tic for
+  * \return The full tic value
+  *
+  */
 tic_t ExpandTics(INT32 low, INT32 node)
 {
 	INT32 delta;
@@ -123,7 +123,7 @@ tic_t ExpandTics(INT32 low, INT32 node)
 		return (netnodes[node].tic & ~UINT8_MAX) + low;
 	else if (delta > 64)
 		return (netnodes[node].tic & ~UINT8_MAX) - 256 + low;
-	else  
+	else //if (delta < -64)
 		return (netnodes[node].tic & ~UINT8_MAX) + 256 + low;
 }
 
@@ -144,7 +144,7 @@ void D_ResetTiccmds(void)
 	memset(consistency_mismatches, 0, sizeof(consistency_mismatches));
 	memset(&consistency_cluster, 0, sizeof(consistency_cluster));
 
-
+	// Reset the net command list
 	for (INT32 i = 0; i < TEXTCMD_HASH_SIZE; i++)
 		while (textcmds[i])
 			D_Clearticcmd(textcmds[i]->tic);
@@ -157,7 +157,7 @@ void D_ResetConsistencyTracker(INT32 node)
 			sizeof(consistency_mismatches[node]));
 }
 
-
+// Check ticcmd for "speed hacks"
 static void CheckTiccmdHacks(INT32 playernum, const ticcmd_t *cmd)
 {
 	if (cmd->forwardmove > MAXPLMOVE || cmd->forwardmove < -MAXPLMOVE
@@ -168,7 +168,7 @@ static void CheckTiccmdHacks(INT32 playernum, const ticcmd_t *cmd)
 	}
 }
 
-
+// Check player consistancy during the level
 static void CheckConsistancy(SINT8 nodenum, tic_t tic)
 {
 	netnode_t *node = &netnodes[nodenum];
@@ -180,12 +180,12 @@ static void CheckConsistancy(SINT8 nodenum, tic_t tic)
 
 	if (tic > gametic || tic + BACKUPTICS - 1 <= gametic || gamestate != GS_LEVEL
 		|| SV_ResendingSavegameToAnyone() || node->resendingsavegame
-		                                                                      
-                                                                         
-                                                                         
-                                                                            
-                                                                           
-                                                          
+		/* Runtime Lua file distribution deliberately leaves peers at slightly
+		 * different points until every client has the same file and the shared
+		 * XD_LUAFILE command runs.  Treating that hand-off as a gameplay split
+		 * starts a needless savegame-resend loop and can make the transfer itself
+		 * take longer.  The per-node cooldown installed when a transfer finishes
+		 * covers the first few synchronized tics afterwards. */
 		|| luafiletransfers
 		|| node->savegameresendcooldown > I_GetTime())
 	{
@@ -196,10 +196,10 @@ static void CheckConsistancy(SINT8 nodenum, tic_t tic)
 	if (neededconsistancy == clientconsistancy)
 	{
 		tracker->samples = 0;
-		                                                                   
-                                                                      
-                                                                           
-                                                                         
+		/* Do not make a player carry occasional old failures forever. Five
+		 * stable minutes earns a fresh recovery budget, while a client that
+		 * immediately diverges after every savegame still reaches the configured
+		 * resync-attempt limit instead of consuming bandwidth indefinitely. */
 		if (tracker->resyncs && tracker->lastfailuretime
 			&& I_GetTime() - tracker->lastfailuretime >= CONSISTENCY_ATTEMPT_RESET_TIME)
 			tracker->resyncs = 0;
@@ -273,7 +273,7 @@ static void CheckConsistancy(SINT8 nodenum, tic_t tic)
 			cv_resynchattempts.value, (unsigned)tic,
 			neededconsistancy, clientconsistancy);
 
-
+		// Tell the client we are about to resend them the gamestate
 		netbuffer->packettype = PT_WILLRESENDGAMESTATE;
 		HSendPacket(nodenum, true, 0, 0);
 
@@ -309,8 +309,8 @@ void PT_ClientCmd(SINT8 nodenum, INT32 netconsole)
 	if (client)
 		return;
 
-
-
+	// To save bytes, only the low byte of tic numbers are sent
+	// Use ExpandTics to figure out what the rest of the bytes are
 	realstart = ExpandTics(netbuffer->u.clientpak.client_tic, nodenum);
 	realend = ExpandTics(netbuffer->u.clientpak.resendfrom, nodenum);
 
@@ -320,36 +320,36 @@ void PT_ClientCmd(SINT8 nodenum, INT32 netconsole)
 	{
 		node->supposedtic = realend;
 	}
-
+	// Discard out of order packet
 	if (node->tic > realend)
 	{
 		DEBFILE(va("out of order ticcmd discarded nettics = %u\n", node->tic));
 		return;
 	}
 
-
+	// Update the nettics
 	node->tic = realend;
 
-
+	// This should probably still timeout though, as the node should always have a player 1 number
 	if (netconsole == -1)
 		return;
 
-
-
+	// As long as clients send valid ticcmds, the server can keep running, so reset the timeout
+	/// \todo Use a separate cvar for that kind of timeout?
 	node->freezetimeout = I_GetTime() + connectiontimeout;
 
-
-
+	// Don't do anything for packets of type NODEKEEPALIVE?
+	// Sryder 2018/07/01: Update the freezetimeout still!
 	if (netbuffer->packettype == PT_NODEKEEPALIVE
 		|| netbuffer->packettype == PT_NODEKEEPALIVEMIS)
 		return;
 
-	                                                                        
-                                                                           
-                                                                       
-                                                                             
-                                                                          
-                                                          
+	/* Preserve SRB2's deterministic command-to-tic assignment. A client may
+	 * already have simulated its first local command for maketic when another
+	 * packet reaches the host during the same server tick. Replacing that
+	 * command makes the host and client execute different input for one tic and
+	 * eventually causes a consistency failure. Queue the second command into
+	 * the following tic, as the network protocol expects. */
 	tic_t faketic = maketic;
 	if ((netcmds[maketic % BACKUPTICS][netconsole].angleturn & TICCMD_RECEIVED)
 	&& maketic - firstticstosend < BACKUPTICS - 1)
@@ -358,7 +358,7 @@ void PT_ClientCmd(SINT8 nodenum, INT32 netconsole)
 	G_MoveTiccmd(&netcmds[faketic%BACKUPTICS][netconsole],
 		&netbuffer->u.clientpak.cmd, 1);
 
-
+	// Splitscreen cmd
 	if ((netbuffer->packettype == PT_CLIENT2CMD || netbuffer->packettype == PT_CLIENT2MIS)
 		&& node->player2 >= 0)
 		G_MoveTiccmd(&netcmds[faketic%BACKUPTICS][(UINT8)node->player2],
@@ -379,7 +379,7 @@ void PT_ServerTics(SINT8 node, INT32 netconsole)
 
 	if (!netnodes[node].ingame)
 	{
-
+		// Do not remove my own server (we have just get a out of order packet)
 		if (node != servernode)
 		{
 			DEBFILE(va("unknown packet received (%d) from unknown host\n",netbuffer->packettype));
@@ -388,7 +388,7 @@ void PT_ServerTics(SINT8 node, INT32 netconsole)
 		return;
 	}
 
-
+	// Only accept PT_SERVERTICS from the server.
 	if (node != servernode)
 	{
 		CONS_Alert(CONS_WARNING, M_GetText("%s received from non-host %d\n"), "PT_SERVERTICS", node);
@@ -410,10 +410,10 @@ void PT_ServerTics(SINT8 node, INT32 netconsole)
 
 		for (tic_t i = realstart; i < realend; i++)
 		{
-
+			// clear first
 			D_Clearticcmd(i);
 
-
+			// copy the tics
 			pak = G_ScpyTiccmd(netcmds[i%BACKUPTICS], pak,
 				packet->numslots*sizeof (ticcmd_t));
 
@@ -428,7 +428,7 @@ void PT_ServerTics(SINT8 node, INT32 netconsole)
 	}
 }
 
-
+// send the client packet to the server
 void CL_SendClientCmd(void)
 {
 	size_t packetsize = 0;
@@ -447,7 +447,7 @@ void CL_SendClientCmd(void)
 
 	if (gamestate == GS_WAITINGPLAYERS)
 	{
-
+		// Send PT_NODEKEEPALIVE packet
 		netbuffer->packettype = (mis ? PT_NODEKEEPALIVEMIS : PT_NODEKEEPALIVE);
 		packetsize = sizeof (clientcmd_pak) - sizeof (ticcmd_t) - sizeof (INT16);
 		HSendPacket(servernode, false, 0, packetsize);
@@ -458,7 +458,7 @@ void CL_SendClientCmd(void)
 		G_MoveTiccmd(&netbuffer->u.clientpak.cmd, &localcmds, 1);
 		netbuffer->u.clientpak.consistancy = SHORT(consistancy[gametic%BACKUPTICS]);
 
-
+		// Send a special packet with 2 cmd for splitscreen
 		if (splitscreen || botingame)
 		{
 			netbuffer->packettype = (mis ? PT_CLIENT2MIS : PT_CLIENT2CMD);
@@ -473,9 +473,9 @@ void CL_SendClientCmd(void)
 		CL_SendNetCommands();
 }
 
-
-
-
+// PT_SERVERTICS packets can grow too large for a single UDP packet,
+// So this checks how many tics worth of data can be sent in one packet.
+// The rest can be sent later, usually the next tic.
 static tic_t SV_CalculateNumTicsForPacket(SINT8 nodenum, tic_t firsttic, tic_t lasttic)
 {
 	size_t size = BASESERVERTICSSIZE;
@@ -491,9 +491,9 @@ static tic_t SV_CalculateNumTicsForPacket(SINT8 nodenum, tic_t firsttic, tic_t l
 				sizeu1(size), tic, firsttic, lasttic));
 			lasttic = tic;
 
-
-
-
+			// Too bad: too many players have sent extra data
+			// and there is too much data for a single tic.
+			// To avoid that, keep the data for the next tic (see PT_TEXTCMD).
 			if (lasttic == firsttic)
 			{
 				if (size > MAXPACKETLENGTH)
@@ -502,7 +502,7 @@ static tic_t SV_CalculateNumTicsForPacket(SINT8 nodenum, tic_t firsttic, tic_t l
 							sizeu1(size), doomcom->numslots, nodenum);
 				else
 				{
-					lasttic++;  
+					lasttic++; // send it anyway!
 					DEBFILE("sending it anyway\n");
 				}
 			}
@@ -513,37 +513,37 @@ static tic_t SV_CalculateNumTicsForPacket(SINT8 nodenum, tic_t firsttic, tic_t l
 	return lasttic - firsttic;
 }
 
-
-
+// Sends the server packet
+// Sends tic/net commands from firstticstosend to maketic-1
 void SV_SendTics(void)
 {
 	tic_t realfirsttic, lasttictosend;
 
-
-
-
+	// Send to all clients except yourself
+	// For each node, create a packet with x tics and send it
+	// x is computed using node.supposedtic, max packet size and maketic
 	for (INT32 n = 1; n < MAXNETNODES; n++)
 		if (netnodes[n].ingame)
 		{
 			netnode_t *node = &netnodes[n];
 
-
+			// assert node->supposedtic>=node->tic
 			realfirsttic = node->supposedtic;
 			lasttictosend = min(maketic, node->tic + CLIENTBACKUPTICS);
 
 			if (realfirsttic >= lasttictosend)
 			{
-
-
-
-
+				// Well, we have sent all the tics, so we will use extra bandwidth
+				// to resend packets that are supposed lost.
+				// This is necessary since lost packet detection
+				// works when we receive a packet with firsttic > neededtic (PT_SERVERTICS)
 				DEBFILE(va("Nothing to send node %u mak=%u sup=%u net=%u \n",
 					n, maketic, node->supposedtic, node->tic));
 
 				realfirsttic = node->tic;
 
 				if (realfirsttic >= lasttictosend || (I_GetTime() + n)&3)
-
+					// All tics are Ok
 					continue;
 
 				DEBFILE(va("Sent %d anyway\n", realfirsttic));
@@ -552,13 +552,13 @@ void SV_SendTics(void)
 
 			lasttictosend = realfirsttic + SV_CalculateNumTicsForPacket(n, realfirsttic, lasttictosend);
 
-
+			// Prepare the packet header
 			netbuffer->packettype = PT_SERVERTICS;
 			netbuffer->u.serverpak.starttic = realfirsttic;
 			netbuffer->u.serverpak.numtics = (UINT8)(lasttictosend - realfirsttic);
 			netbuffer->u.serverpak.numslots = (UINT8)SHORT(doomcom->numslots);
 
-
+			// Fill and send the packet
 			UINT8 *bufpos = (UINT8 *)&netbuffer->u.serverpak.cmds;
 			for (tic_t i = realfirsttic; i < lasttictosend; i++)
 				bufpos = G_DcpyTiccmd(bufpos, netcmds[i%BACKUPTICS], doomcom->numslots * sizeof (ticcmd_t));
@@ -567,7 +567,7 @@ void SV_SendTics(void)
 			size_t packsize = bufpos - (UINT8 *)&(netbuffer->u);
 			HSendPacket(n, false, 0, packsize);
 
-
+			// When tics are too large, only one tic is sent so don't go backwards!
 			if (lasttictosend-doomcom->extratics > realfirsttic)
 				node->supposedtic = lasttictosend-doomcom->extratics;
 			else
@@ -575,19 +575,19 @@ void SV_SendTics(void)
 			node->supposedtic = max(node->supposedtic, node->tic);
 		}
 
-
+	// node 0 is me!
 	netnodes[0].supposedtic = maketic;
 }
 
 void Local_Maketic(INT32 realtics)
 {
-	I_OsPolling();  
-	D_ProcessEvents();  
-
-
+	I_OsPolling(); // I_Getevent
+	D_ProcessEvents(); // menu responder, cons responder,
+	                   // game responder calls HU_Responder, AM_Responder,
+	                   // and G_MapEventsToControls
 	if (!dedicated)
 		rendergametic = gametic;
-
+	// translate inputs (keyboard/mouse/joystick) into game controls
 	G_BuildTiccmd(&localcmds, realtics, 1);
 	if (splitscreen || botingame)
 		G_BuildTiccmd(&localcmds2, realtics, 2);
@@ -596,7 +596,7 @@ void Local_Maketic(INT32 realtics)
 	localcmds2.angleturn |= TICCMD_RECEIVED;
 }
 
-
+// create missed tic
 void SV_Maketic(void)
 {
 	for (INT32 i = 0; i < MAXPLAYERS; i++)
@@ -604,7 +604,7 @@ void SV_Maketic(void)
 		if (!playeringame[i])
 			continue;
 
-
+		// We didn't receive this tic
 		if ((netcmds[maketic % BACKUPTICS][i].angleturn & TICCMD_RECEIVED) == 0)
 		{
 			ticcmd_t *    ticcmd = &netcmds[(maketic    ) % BACKUPTICS][i];
@@ -612,8 +612,8 @@ void SV_Maketic(void)
 
 			if (players[i].quittime)
 			{
-
-
+				// Copy the angle/aiming from the previous tic
+				// and empty the other inputs
 				memset(ticcmd, 0, sizeof(netcmds[0][0]));
 				ticcmd->angleturn = prevticcmd->angleturn | TICCMD_RECEIVED;
 				ticcmd->aiming = prevticcmd->aiming;
@@ -621,13 +621,13 @@ void SV_Maketic(void)
 			else
 			{
 				DEBFILE(va("MISS tic%4d for player %d\n", maketic, i));
-
+				// Copy the input from the previous tic
 				*ticcmd = *prevticcmd;
 				ticcmd->angleturn &= ~TICCMD_RECEIVED;
 			}
 		}
 	}
 
-
+	// All tics have been processed, make the next
 	maketic++;
 }

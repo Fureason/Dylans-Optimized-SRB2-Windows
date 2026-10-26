@@ -6,13 +6,13 @@
 --  Open source license information is in the zlib.ads file.  --
 ----------------------------------------------------------------
 
+--  $Id: test.adb,v 1.17 2003/08/12 12:13:30 vagul Exp $
 
-
-
-
-
-
-
+--  The program has a few aims.
+--  1. Test ZLib.Ada95 thick binding functionality.
+--  2. Show the example of use main functionality of the ZLib.Ada95 binding.
+--  3. Build this program automatically compile all ZLib.Ada95 packages under
+--     GNAT Ada95 compiler.
 
 with ZLib.Streams;
 with Ada.Streams.Stream_IO;
@@ -27,33 +27,33 @@ procedure Test is
    use Ada.Streams;
    use Stream_IO;
 
-
-
-
+   ------------------------------------
+   --  Test configuration parameters --
+   ------------------------------------
 
    File_Size   : Count   := 100_000;
    Continuous  : constant Boolean := False;
 
    Header      : constant ZLib.Header_Type := ZLib.Default;
-
-
-
-
-
+                                              --  ZLib.None;
+                                              --  ZLib.Auto;
+                                              --  ZLib.GZip;
+   --  Do not use Header other then Default in ZLib versions 1.1.4
+   --  and older.
 
    Strategy    : constant ZLib.Strategy_Type := ZLib.Default_Strategy;
    Init_Random : constant := 10;
 
-
+   -- End --
 
    In_File_Name  : constant String := "testzlib.in";
-
+   --  Name of the input file
 
    Z_File_Name   : constant String := "testzlib.zlb";
-
+   --  Name of the compressed file.
 
    Out_File_Name : constant String := "testzlib.out";
-
+   --  Name of the decompressed file.
 
    File_In   : File_Type;
    File_Out  : File_Type;
@@ -65,8 +65,8 @@ procedure Test is
    Time_Stamp : Ada.Calendar.Time;
 
    procedure Generate_File;
-
-
+   --  Generate file of specified size with some random data.
+   --  The random data is repeatable, for the good compression.
 
    procedure Compare_Streams
      (Left, Right : in out Root_Stream_Type'Class);
@@ -79,37 +79,37 @@ procedure Test is
    procedure Copy_Streams
      (Source, Target : in out Root_Stream_Type'Class;
       Buffer_Size    : in     Stream_Element_Offset := 1024);
-
-
+   --  Copying data from one stream to another. It is for test stream
+   --  interface of the library.
 
    procedure Data_In
      (Item : out Stream_Element_Array;
       Last : out Stream_Element_Offset);
-
-
-
+   --  this procedure is for generic instantiation of
+   --  ZLib.Generic_Translate.
+   --  reading data from the File_In.
 
    procedure Data_Out (Item : in Stream_Element_Array);
-
-
-
+   --  this procedure is for generic instantiation of
+   --  ZLib.Generic_Translate.
+   --  writing data to the File_Out.
 
    procedure Stamp;
-
+   --  Store the timestamp to the local variable.
 
    procedure Print_Statistic (Msg : String; Data_Size : ZLib.Count);
-
+   --  Print the time statistic with the message.
 
    procedure Translate is new ZLib.Generic_Translate
                                 (Data_In  => Data_In,
                                  Data_Out => Data_Out);
+   --  This procedure is moving data from File_In to File_Out
+   --  with compression or decompression, depend on initialization of
+   --  Filter parameter.
 
-
-
-
-
-
-
+   -------------------
+   -- Compare_Files --
+   -------------------
 
    procedure Compare_Files (Left, Right : String) is
       Left_File, Right_File : File_Type;
@@ -121,9 +121,9 @@ procedure Test is
       Close (Right_File);
    end Compare_Files;
 
-
-
-
+   ---------------------
+   -- Compare_Streams --
+   ---------------------
 
    procedure Compare_Streams
      (Left, Right : in out Ada.Streams.Root_Stream_Type'Class)
@@ -155,9 +155,9 @@ procedure Test is
       end loop;
    end Compare_Streams;
 
-
-
-
+   ------------------
+   -- Copy_Streams --
+   ------------------
 
    procedure Copy_Streams
      (Source, Target : in out Ada.Streams.Root_Stream_Type'Class;
@@ -174,9 +174,9 @@ procedure Test is
       end loop;
    end Copy_Streams;
 
-
-
-
+   -------------
+   -- Data_In --
+   -------------
 
    procedure Data_In
      (Item : out Stream_Element_Array;
@@ -185,18 +185,18 @@ procedure Test is
       Read (File_In, Item, Last);
    end Data_In;
 
-
-
-
+   --------------
+   -- Data_Out --
+   --------------
 
    procedure Data_Out (Item : in Stream_Element_Array) is
    begin
       Write (File_Out, Item);
    end Data_Out;
 
-
-
-
+   -------------------
+   -- Generate_File --
+   -------------------
 
    procedure Generate_File is
       subtype Visible_Symbols is Stream_Element range 16#20# .. 16#7E#;
@@ -213,11 +213,11 @@ procedure Test is
       Density : constant Count := 30; --  from 0 to Buffer'Length - 2;
 
       procedure Fill_Buffer (J, D : in Count);
+      --  Change the part of the buffer.
 
-
-
-
-
+      -----------------
+      -- Fill_Buffer --
+      -----------------
 
       procedure Fill_Buffer (J, D : in Count) is
       begin
@@ -242,7 +242,7 @@ procedure Test is
          Fill_Buffer (J, Density);
       end loop;
 
-
+      --  fill remain size.
 
       Write
         (File_In,
@@ -278,9 +278,9 @@ procedure Test is
       Put_Line (" duration =" & Duration'Image (Curr_Dur));
    end Print_Statistic;
 
-
-
-
+   -----------
+   -- Stamp --
+   -----------
 
    procedure Stamp is
    begin
@@ -298,13 +298,13 @@ begin
          Ada.Text_IO.Put_Line ("Level ="
             & ZLib.Compression_Level'Image (Level));
 
-
+         --  Test generic interface.
          Open   (File_In, In_File, In_File_Name);
          Create (File_Out, Out_File, Z_File_Name);
 
          Stamp;
 
-
+         --  Deflate using generic instantiation.
 
          ZLib.Deflate_Init
                (Filter   => Filter,
@@ -324,7 +324,7 @@ begin
 
          Stamp;
 
-
+         --  Inflate using generic instantiation.
 
          ZLib.Inflate_Init (Filter, Header => Header);
 
@@ -338,9 +338,9 @@ begin
 
          Compare_Files (In_File_Name, Out_File_Name);
 
+         --  Test stream interface.
 
-
-
+         --  Compress to the back stream.
 
          Open   (File_In, In_File, In_File_Name);
          Create (File_Back, Out_File, Z_File_Name);
@@ -361,7 +361,7 @@ begin
            (Source => Stream (File_In).all,
             Target => File_Z);
 
-
+         --  Flushing internal buffers to the back stream.
 
          ZLib.Streams.Flush (File_Z, ZLib.Finish);
 
@@ -373,8 +373,8 @@ begin
          Close (File_In);
          Close (File_Back);
 
-
-
+         --  Compare reading from original file and from
+         --  decompression stream.
 
          Open (File_In,   In_File, In_File_Name);
          Open (File_Back, In_File, Z_File_Name);
@@ -397,7 +397,7 @@ begin
          Close (File_In);
          Close (File_Back);
 
-
+         --  Compress by reading from compression stream.
 
          Open (File_Back, In_File, In_File_Name);
          Create (File_Out, Out_File, Z_File_Name);
@@ -425,7 +425,7 @@ begin
          Close (File_Out);
          Close (File_Back);
 
-
+         --  Decompress to decompression stream.
 
          Open   (File_In,   In_File, Z_File_Name);
          Create (File_Back, Out_File, Out_File_Name);

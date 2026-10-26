@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  net_command.h
+/// \brief Net command handling
 
 #ifndef __D_NET_COMMAND__
 #define __D_NET_COMMAND__
@@ -16,7 +16,7 @@
 #include "d_clisrv.h"
 #include "../doomtype.h"
 
-
+// Must be a power of two
 #define TEXTCMD_HASH_SIZE 4
 
 typedef struct textcmdplayer_s
@@ -36,28 +36,28 @@ typedef struct textcmdtic_s
 extern textcmdtic_t *textcmds[TEXTCMD_HASH_SIZE];
 
 extern UINT8 localtextcmd[MAXTEXTCMD];
-extern UINT8 localtextcmd2[MAXTEXTCMD];  
+extern UINT8 localtextcmd2[MAXTEXTCMD]; // splitscreen
 
 void RegisterNetXCmd(netxcmd_t id, void (*cmd_f)(UINT8 **p, INT32 playernum));
 void SendNetXCmd(netxcmd_t id, const void *param, size_t nparam);
-void SendNetXCmd2(netxcmd_t id, const void *param, size_t nparam);  
+void SendNetXCmd2(netxcmd_t id, const void *param, size_t nparam); // splitsreen player
 
 UINT8 GetFreeXCmdSize(void);
 void D_FreeTextcmd(tic_t tic);
 
-
+// Gets the buffer for the specified ticcmd, or NULL if there isn't one
 UINT8* D_GetExistingTextcmd(tic_t tic, INT32 playernum);
 
-
+// Gets the buffer for the specified ticcmd, creating one if necessary
 UINT8* D_GetTextcmd(tic_t tic, INT32 playernum);
 
 void ExtraDataTicker(void);
 
-
+// Shows a local, delayed notice after a synchronized add-on has finished loading.
 void D_QueueAddonNotice(const char *actor, const char *filename);
 void D_ClearAddonNotices(void);
 
-
+// used at txtcmds received to check packetsize bound
 size_t TotalTextCmdPerTic(tic_t tic);
 
 void PT_TextCmd(SINT8 node, INT32 netconsole);

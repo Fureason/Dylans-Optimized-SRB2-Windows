@@ -1,4 +1,4 @@
- 
+/* $Id: connecthostport.h,v 1.4 2018/04/06 10:53:13 nanard Exp $ */
 /* Project: miniupnp
  * http://miniupnp.free.fr/
  * Author: Thomas Bernard
@@ -10,9 +10,9 @@
 
 #include "miniupnpc_socketdef.h"
 
-                    
-                                                       
-                                        
+/* connecthostport()
+ * return a socket connected (TCP) to the host and port
+ * or INVALID_SOCKET in case of error */
 SOCKET connecthostport(const char * host, unsigned short port,
                        unsigned int scope_id);
 

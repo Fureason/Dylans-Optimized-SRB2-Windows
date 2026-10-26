@@ -29,11 +29,11 @@ typedef struct LoadedPicture
 
 void render(SDL_Renderer *renderer, SDL_Texture *texture, SDL_Rect texture_dimensions)
 {
-     
+    /* Clear render-target to blue. */
     SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xff, 0xff);
     SDL_RenderClear(renderer);
 
-     
+    /* Render the texture. */
     SDL_RenderCopy(renderer, texture, &texture_dimensions, &texture_dimensions);
 
     SDL_RenderPresent(renderer);
@@ -56,7 +56,7 @@ int main(int argc, char **argv)
     int access = 0;
     SDL_Rect texture_dimensions;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (argc < 2) {
@@ -190,22 +190,22 @@ int main(int argc, char **argv)
         SDL_Delay(10);
     }
 
-     
+    /* Free the textures. */
     for (i = 0; i < num_pictures; i++) {
         SDL_DestroyTexture(pictures[i].texture);
     }
     SDL_DestroyRenderer(renderer);
-     
+    /* Destroy the window. */
     SDL_DestroyWindow(window);
-     
+    /* Free the original surfaces backing the textures. */
     for (i = 0; i < num_pictures; i++) {
         SDL_FreeSurface(pictures[i].surface);
     }
     SDL_free(pictures);
-     
+    /* Call SDL_VideoQuit() before quitting. */
     SDL_VideoQuit();
 
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

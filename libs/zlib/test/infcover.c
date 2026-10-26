@@ -3,7 +3,7 @@
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
- 
+/* to use, do: ./configure --cover && make cover */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,63 +11,63 @@
 #include <assert.h>
 #include "zlib.h"
 
-                                                                            
-                                                       
+/* get definition of internal structure so we can mess with it (see pull()),
+   and so we can call inflate_trees() (see cover5()) */
 #define ZLIB_INTERNAL
 #include "inftrees.h"
 #include "inflate.h"
 
 #define local static
 
- 
+/* -- memory tracking routines -- */
 
-  
-                                                                              
-                                                                           
-                                                                              
-                                                                            
+/*
+   These memory tracking routines are provided to zlib and track all of zlib's
+   allocations and deallocations, check for LIFO operations, keep a current
+   and high water mark of total bytes requested, optionally set a limit on the
+   total memory that can be allocated, and when done check for memory leaks.
 
-                            
+   They are used as follows:
 
-                 
-                                                                        
-                                                                            
-                                                                           
-                                                                          
-                                                                             
-                                                                            
-                                                                              
-                                             
-                                                                           
-                                                                          
-                                                                          
-                                                                              
-                                                                               
-                                                                             
-                                                                           
-                                                                           
-                                                                           
-                                                                            
-                                                                               
-                                       
-   
+   z_stream strm;
+   mem_setup(&strm)         initializes the memory tracking and sets the
+                            zalloc, zfree, and opaque members of strm to use
+                            memory tracking for all zlib operations on strm
+   mem_limit(&strm, limit)  sets a limit on the total bytes requested -- a
+                            request that exceeds this limit will result in an
+                            allocation failure (returns NULL) -- setting the
+                            limit to zero means no limit, which is the default
+                            after mem_setup()
+   mem_used(&strm, "msg")   prints to stderr "msg" and the total bytes used
+   mem_high(&strm, "msg")   prints to stderr "msg" and the high water mark
+   mem_done(&strm, "msg")   ends memory tracking, releases all allocations
+                            for the tracking as well as leaked zlib blocks, if
+                            any.  If there was anything unusual, such as leaked
+                            blocks, non-FIFO frees, or frees of addresses not
+                            allocated, then "msg" and information about the
+                            problem is printed to stderr.  If everything is
+                            normal, nothing is printed. mem_done resets the
+                            strm members to Z_NULL to use the default memory
+                            allocation routines on the next zlib initialization
+                            using strm.
+ */
 
- 
+/* these items are strung together in a linked list, one for each allocation */
 struct mem_item {
-    void *ptr;                   
-    size_t size;                 
-    struct mem_item *next;       
+    void *ptr;                  /* pointer to allocated memory */
+    size_t size;                /* requested size of allocation */
+    struct mem_item *next;      /* pointer to next item in list, or NULL */
 };
 
- 
+/* this structure is at the root of the linked list, and tracks statistics */
 struct mem_zone {
-    struct mem_item *first;      
-    size_t total, highwater;     
-    size_t limit;                
-    int notlifo, rogue;          
+    struct mem_item *first;     /* pointer to first item in list, or NULL */
+    size_t total, highwater;    /* total allocations, and largest total */
+    size_t limit;               /* memory allocation limit, or 0 if no limit */
+    int notlifo, rogue;         /* counts of non-LIFO frees and rogue frees */
 };
 
- 
+/* memory allocation routine to pass to zlib */
 local void *mem_alloc(void *mem, unsigned count, unsigned size)
 {
     void *ptr;
@@ -75,18 +75,18 @@ local void *mem_alloc(void *mem, unsigned count, unsigned size)
     struct mem_zone *zone = mem;
     size_t len = count * (size_t)size;
 
-     
+    /* induced allocation failure */
     if (zone == NULL || (zone->limit && zone->total + len > zone->limit))
         return NULL;
 
-                                                                        
-                                                                            
+    /* perform allocation using the standard library, fill memory with a
+       non-zero value to make sure that the code isn't depending on zeros */
     ptr = malloc(len);
     if (ptr == NULL)
         return NULL;
     memset(ptr, 0xa5, len);
 
-     
+    /* create a new item for the list */
     item = malloc(sizeof(struct mem_item));
     if (item == NULL) {
         free(ptr);
@@ -95,66 +95,66 @@ local void *mem_alloc(void *mem, unsigned count, unsigned size)
     item->ptr = ptr;
     item->size = len;
 
-     
+    /* insert item at the beginning of the list */
     item->next = zone->first;
     zone->first = item;
 
-     
+    /* update the statistics */
     zone->total += item->size;
     if (zone->total > zone->highwater)
         zone->highwater = zone->total;
 
-     
+    /* return the allocated memory */
     return ptr;
 }
 
- 
+/* memory free routine to pass to zlib */
 local void mem_free(void *mem, void *ptr)
 {
     struct mem_item *item, *next;
     struct mem_zone *zone = mem;
 
-     
+    /* if no zone, just do a free */
     if (zone == NULL) {
         free(ptr);
         return;
     }
 
-                                                                              
-                                                
+    /* point next to the item that matches ptr, or NULL if not found -- remove
+       the item from the linked list if found */
     next = zone->first;
     if (next) {
         if (next->ptr == ptr)
-            zone->first = next->next;    
+            zone->first = next->next;   /* first one is it, remove from list */
         else {
-            do {                         
+            do {                        /* search the linked list */
                 item = next;
                 next = item->next;
             } while (next != NULL && next->ptr != ptr);
-            if (next) {                  
+            if (next) {                 /* if found, remove from linked list */
                 item->next = next->next;
-                zone->notlifo++;         
+                zone->notlifo++;        /* not a LIFO free */
             }
 
         }
     }
 
-     
+    /* if found, update the statistics and free the item */
     if (next) {
         zone->total -= next->size;
         free(next);
     }
 
-     
+    /* if not found, update the rogue count */
     else
         zone->rogue++;
 
-     
+    /* in any case, do the requested free with the standard library function */
     free(ptr);
 }
 
-                                                                             
-                                                                              
+/* set up a controlled memory allocation space for monitoring, set the stream
+   parameters to the controlled routines, with opaque pointing to the space */
 local void mem_setup(z_stream *strm)
 {
     struct mem_zone *zone;
@@ -172,7 +172,7 @@ local void mem_setup(z_stream *strm)
     strm->zfree = mem_free;
 }
 
- 
+/* set a limit on the total memory allocation, or 0 to remove the limit */
 local void mem_limit(z_stream *strm, size_t limit)
 {
     struct mem_zone *zone = strm->opaque;
@@ -180,7 +180,7 @@ local void mem_limit(z_stream *strm, size_t limit)
     zone->limit = limit;
 }
 
- 
+/* show the current total requested allocations in bytes */
 local void mem_used(z_stream *strm, char *prefix)
 {
     struct mem_zone *zone = strm->opaque;
@@ -188,7 +188,7 @@ local void mem_used(z_stream *strm, char *prefix)
     fprintf(stderr, "%s: %lu allocated\n", prefix, zone->total);
 }
 
- 
+/* show the high water allocation in bytes */
 local void mem_high(z_stream *strm, char *prefix)
 {
     struct mem_zone *zone = strm->opaque;
@@ -196,17 +196,17 @@ local void mem_high(z_stream *strm, char *prefix)
     fprintf(stderr, "%s: %lu high water mark\n", prefix, zone->highwater);
 }
 
- 
+/* release the memory allocation zone -- if there are any surprises, notify */
 local void mem_done(z_stream *strm, char *prefix)
 {
     int count = 0;
     struct mem_item *item, *next;
     struct mem_zone *zone = strm->opaque;
 
-     
+    /* show high water mark */
     mem_high(strm, prefix);
 
-     
+    /* free leftover allocations and item structures, if any */
     item = zone->first;
     while (item != NULL) {
         free(item->ptr);
@@ -216,7 +216,7 @@ local void mem_done(z_stream *strm, char *prefix)
         count++;
     }
 
-     
+    /* issue alerts about anything unexpected */
     if (count || zone->total)
         fprintf(stderr, "** %s: %lu bytes in %d blocks not freed\n",
                 prefix, zone->total, count);
@@ -226,22 +226,22 @@ local void mem_done(z_stream *strm, char *prefix)
         fprintf(stderr, "** %s: %d frees not recognized\n",
                 prefix, zone->rogue);
 
-     
+    /* free the zone and delete from the stream */
     free(zone);
     strm->opaque = Z_NULL;
     strm->zalloc = Z_NULL;
     strm->zfree = Z_NULL;
 }
 
- 
+/* -- inflate test routines -- */
 
-                                                                            
-                                                                              
-                                                                           
-                                                                              
-                                                                               
-                                                                              
-                                                        
+/* Decode a hexadecimal string, set *len to length, in[] to the bytes.  This
+   decodes liberally, in that hex digits can be adjacent, in which case two in
+   a row writes a byte.  Or they can be delimited by any non-hex character,
+   where the delimiters are ignored except when a single hex digit is followed
+   by a delimiter, where that single digit writes a byte.  The returned data is
+   allocated and must eventually be freed.  NULL is returned if out of memory.
+   If the length is not needed, then len can be NULL. */
 local unsigned char *h2b(const char *hex, unsigned *len)
 {
     unsigned char *in, *re;
@@ -259,28 +259,28 @@ local unsigned char *h2b(const char *hex, unsigned *len)
             val = (val << 4) + *hex - 'A' + 10;
         else if (*hex >= 'a' && *hex <= 'f')
             val = (val << 4) + *hex - 'a' + 10;
-        else if (val != 1 && val < 32)   
-            val += 240;                  
-        if (val > 255) {                 
-            in[next++] = val & 0xff;     
-            val = 1;                     
+        else if (val != 1 && val < 32)  /* one digit followed by delimiter */
+            val += 240;                 /* make it look like two digits */
+        if (val > 255) {                /* have two digits */
+            in[next++] = val & 0xff;    /* save the decoded byte */
+            val = 1;                    /* start over */
         }
-    } while (*hex++);        
+    } while (*hex++);       /* go through the loop with the terminating null */
     if (len != NULL)
         *len = next;
     re = realloc(in, next);
     return re == NULL ? in : re;
 }
 
-                                                                              
-                                                                           
-                                                                         
-                                                                             
-                                                                       
-                                                                          
-                                                                             
-                                                                     
-                                                               
+/* generic inflate() run, where hex is the hexadecimal input data, what is the
+   text to include in an error message, step is how much input data to feed
+   inflate() on each call, or zero to feed it all, win is the window bits
+   parameter to inflateInit2(), len is the size of the output buffer, and err
+   is the error code expected from the first inflate() call (the second
+   inflate() call is expected to return Z_STREAM_END).  If win is 47, then
+   header information is collected with inflateGetHeader().  If a zlib stream
+   is looking for a dictionary, then an empty dictionary is provided.
+   inflate() is run until all of the input data is consumed. */
 local void inf(char *hex, char *what, unsigned step, int win, unsigned len,
                int err)
 {
@@ -334,7 +334,7 @@ local void inf(char *hex, char *what, unsigned step, int win, unsigned len,
         }
         ret = inflateCopy(&copy, &strm);        assert(ret == Z_OK);
         ret = inflateEnd(&copy);                assert(ret == Z_OK);
-        err = 9;                         
+        err = 9;                        /* don't care next time around */
         have += strm.avail_in;
         strm.avail_in = step > have ? have : step;
         have -= strm.avail_in;
@@ -346,7 +346,7 @@ local void inf(char *hex, char *what, unsigned step, int win, unsigned len,
     mem_done(&strm, what);
 }
 
- 
+/* cover all of the lines in inflate.c up to inflate() */
 local void cover_support(void)
 {
     int ret;
@@ -384,7 +384,7 @@ local void cover_support(void)
     fputs("inflate built-in memory routines\n", stderr);
 }
 
- 
+/* cover all inflate() header and trailer cases and code after inflate() */
 local void cover_wrap(void)
 {
     int ret;
@@ -443,7 +443,7 @@ local void cover_wrap(void)
     mem_done(&strm, "miscellaneous, force memory errors");
 }
 
- 
+/* input and output functions for inflateBack() */
 local unsigned pull(void *desc, unsigned char **buf)
 {
     static unsigned int next = 0;
@@ -452,11 +452,11 @@ local unsigned pull(void *desc, unsigned char **buf)
 
     if (desc == Z_NULL) {
         next = 0;
-        return 0;    
+        return 0;   /* no input (already provided at next_in) */
     }
     state = (void *)((z_stream *)desc)->state;
     if (state != Z_NULL)
-        state->mode = SYNC;      
+        state->mode = SYNC;     /* force an otherwise impossible situation */
     return next < sizeof(dat) ? (*buf = dat + next++, 1) : 0;
 }
 
@@ -464,10 +464,10 @@ local int push(void *desc, unsigned char *buf, unsigned len)
 {
     (void)buf;
     (void)len;
-    return desc != Z_NULL;       
+    return desc != Z_NULL;      /* force error if desc not null */
 }
 
- 
+/* cover inflateBack() up to common deflate data cases and after those */
 local void cover_back(void)
 {
     int ret;
@@ -488,12 +488,12 @@ local void cover_back(void)
     strm.next_in = (void *)"\x03";
     ret = inflateBack(&strm, pull, Z_NULL, push, Z_NULL);
                                                 assert(ret == Z_STREAM_END);
-         
+        /* force output error */
     strm.avail_in = 3;
     strm.next_in = (void *)"\x63\x00";
     ret = inflateBack(&strm, pull, Z_NULL, push, &strm);
                                                 assert(ret == Z_BUF_ERROR);
-         
+        /* force mode error by mucking with state */
     ret = inflateBack(&strm, pull, &strm, push, Z_NULL);
                                                 assert(ret == Z_STREAM_ERROR);
     ret = inflateBackEnd(&strm);                assert(ret == Z_OK);
@@ -504,7 +504,7 @@ local void cover_back(void)
     fputs("inflateBack built-in memory routines\n", stderr);
 }
 
- 
+/* do a raw inflate of data in hexadecimal with both inflate and inflateBack */
 local int try(char *hex, char *id, int err)
 {
     int ret;
@@ -513,11 +513,11 @@ local int try(char *hex, char *id, int err)
     char *prefix;
     z_stream strm;
 
-     
+    /* convert to hex */
     in = h2b(hex, &len);
     assert(in != NULL);
 
-     
+    /* allocate work areas */
     size = len << 3;
     out = malloc(size);
     assert(out != NULL);
@@ -526,7 +526,7 @@ local int try(char *hex, char *id, int err)
     prefix = malloc(strlen(id) + 6);
     assert(prefix != NULL);
 
-     
+    /* first with inflate */
     strcpy(prefix, id);
     strcat(prefix, "-late");
     mem_setup(&strm);
@@ -551,7 +551,7 @@ local int try(char *hex, char *id, int err)
     inflateEnd(&strm);
     mem_done(&strm, prefix);
 
-     
+    /* then with inflateBack */
     if (err >= 0) {
         strcpy(prefix, id);
         strcat(prefix, "-back");
@@ -570,7 +570,7 @@ local int try(char *hex, char *id, int err)
         mem_done(&strm, prefix);
     }
 
-     
+    /* clean up */
     free(prefix);
     free(win);
     free(out);
@@ -578,7 +578,7 @@ local int try(char *hex, char *id, int err)
     return ret;
 }
 
- 
+/* cover deflate data cases in both inflate() and inflateBack() */
 local void cover_inflate(void)
 {
     try("0 0 0 0 0", "invalid stored block lengths", 1);
@@ -597,7 +597,7 @@ local void cover_inflate(void)
     try("2 7e ff ff", "invalid distance code", 1);
     try("c c0 81 0 0 0 0 0 90 ff 6b 4 0", "invalid distance too far back", 1);
 
-     
+    /* also trailer mismatch just in inflate() */
     try("1f 8b 8 0 0 0 0 0 0 0 3 0 0 0 0 1", "incorrect data check", -1);
     try("1f 8b 8 0 0 0 0 0 0 0 3 0 0 0 0 0 0 0 0 1",
         "incorrect length check", -1);
@@ -614,7 +614,7 @@ local void cover_inflate(void)
     inf("63 18 5 40 c 0", "window wrap", 3, -8, 300, Z_OK);
 }
 
- 
+/* cover remaining lines in inftrees.c */
 local void cover_trees(void)
 {
     int ret;
@@ -622,8 +622,8 @@ local void cover_trees(void)
     unsigned short lens[16], work[16];
     code *next, table[ENOUGH_DISTS];
 
-                                                                         
-                                                                        
+    /* we need to call inflate_table() directly in order to manifest not-
+       enough errors, since zlib insures that enough is always enough */
     for (bits = 0; bits < 15; bits++)
         lens[bits] = (unsigned short)(bits + 1);
     lens[15] = 15;
@@ -638,7 +638,7 @@ local void cover_trees(void)
     fputs("inflate_table not enough errors\n", stderr);
 }
 
- 
+/* cover remaining inffast.c decoding and window copying */
 local void cover_fast(void)
 {
     inf("e5 e0 81 ad 6d cb b2 2c c9 01 1e 59 63 ae 7d ee fb 4d fd b5 35 41 68"

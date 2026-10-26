@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw_draw.c
+/// \brief miscellaneous drawing (mainly 2d)
 
 #ifdef __GNUC__
 #include <unistd.h>
@@ -21,15 +21,15 @@
 #include "hw_glob.h"
 #include "hw_drv.h"
 
-#include "../m_misc.h"  
+#include "../m_misc.h" //FIL_WriteFile()
 #include "../r_main.h"
 #include "../w_wad.h"
 #include "../z_zone.h"
 #include "../v_video.h"
 #include "../st_stuff.h"
-#include "../p_local.h"  
-#include "../g_game.h"  
-#include "../f_finale.h"  
+#include "../p_local.h" // stplyr
+#include "../g_game.h" // players
+#include "../f_finale.h" // fade color factors
 
 #include <fcntl.h>
 #include "../i_video.h"
@@ -39,17 +39,17 @@
 #endif
 typedef struct
 {
-	UINT8 id_field_length ;  
-	UINT8 color_map_type  ;  
-	UINT8 image_type      ;  
-	UINT8 dummy[5]        ;  
-	INT16 x_origin        ;  
-	INT16 y_origin        ;  
-	INT16 width           ;  
-	INT16 height          ;  
-	UINT8 image_pix_size  ;  
-	UINT8 image_descriptor;  
-} ATTRPACK TGAHeader;  
+	UINT8 id_field_length ; // 1
+	UINT8 color_map_type  ; // 2
+	UINT8 image_type      ; // 3
+	UINT8 dummy[5]        ; // 4,  8
+	INT16 x_origin        ; // 9, 10
+	INT16 y_origin        ; //11, 12
+	INT16 width           ; //13, 14
+	INT16 height          ; //15, 16
+	UINT8 image_pix_size  ; //17
+	UINT8 image_descriptor; //18
+} ATTRPACK TGAHeader; // sizeof is 18
 #if defined(_MSC_VER)
 #pragma pack()
 #endif
@@ -69,15 +69,15 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 	UINT8 opacity = 0xFF;
 	GLPatch_t *hwrPatch;
 
-
-
-
-
+//  3--2
+//  | /|
+//  |/ |
+//  0--1
 	float dup, fscalew, fscaleh, fwidth, fheight;
 
 	UINT8 perplayershuffle = 0;
 
-
+	// make patch ready in hardware cache
 	if (!colormap)
 		HWR_GetPatch(gpatch);
 	else
@@ -87,9 +87,9 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 
 	if (alphalevel)
 	{
-		if (alphalevel == 10) opacity = softwaretranstogl_lo[st_translucency];  
-		else if (alphalevel == 11) opacity = softwaretranstogl[st_translucency];  
-		else if (alphalevel == 12) opacity = softwaretranstogl_hi[st_translucency];  
+		if (alphalevel == 10) opacity = softwaretranstogl_lo[st_translucency]; // V_HUDTRANSHALF
+		else if (alphalevel == 11) opacity = softwaretranstogl[st_translucency]; // V_HUDTRANS
+		else if (alphalevel == 12) opacity = softwaretranstogl_hi[st_translucency]; // V_HUDTRANSDOUBLE
 		else opacity = softwaretranstogl[10-alphalevel];
 	}
 
@@ -112,19 +112,19 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 	if (vscale != pscale)
 		fscaleh = FIXED_TO_FLOAT(vscale);
 
-
-
+	// See my comments in v_video.c's V_DrawFixedPatch
+	// -- Monster Iestyn 29/10/18
 	{
 		float offsetx = 0.0f, offsety = 0.0f;
 
-
+		// left offset
 		if (option & V_FLIP)
 			offsetx = (float)(gpatch->width - gpatch->leftoffset) * fscalew;
 		else
 			offsetx = (float)(gpatch->leftoffset) * fscalew;
 
-
-
+		// top offset
+		// TODO: make some kind of vertical version of V_FLIP
 		offsety = (float)(gpatch->topoffset) * fscaleh;
 
 		cx -= offsetx;
@@ -137,7 +137,7 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 		fscaleh /= 2;
 		cy /= 2;
 #ifdef QUADS
-		if (splitscreen > 1)  
+		if (splitscreen > 1) // 3 or 4 players
 		{
 			float adjustx = ((option & V_NOSCALESTART) ? vid.width : BASEVIDWIDTH)/2.0f;
 			fscalew /= 2;
@@ -181,7 +181,7 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 		}
 		else
 #endif
-
+		// 2 players
 		{
 			if (stplyr == &players[displayplayer])
 			{
@@ -189,7 +189,7 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 					perplayershuffle = 1;
 				option &= ~V_SNAPTOBOTTOM;
 			}
-			else  
+			else //if (stplyr == &players[secondarydisplayplayer])
 			{
 				if (!(option & (V_SNAPTOTOP|V_SNAPTOBOTTOM)))
 					perplayershuffle = 2;
@@ -206,9 +206,9 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 
 		if (!(option & V_SCALEPATCHMASK))
 		{
-
-
-
+			// if it's meant to cover the whole screen, black out the rest (ONLY IF TOP LEFT ISN'T TRANSPARENT)
+			// cx and cy are possibly *slightly* off from float maths
+			// This is done before here compared to software because we directly alter cx and cy to centre
 			if (opacity == 0xFF && cx >= -0.1f && cx <= 0.1f && gpatch->width == BASEVIDWIDTH && cy >= -0.1f && cy <= 0.1f && gpatch->height == BASEVIDHEIGHT)
 			{
 				const column_t *column = &gpatch->columns[0];
@@ -218,7 +218,7 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 					HWR_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, source[0]);
 				}
 			}
-
+			// centre screen
 			if (fabsf((float)vid.width - (float)BASEVIDWIDTH * dup) > 1.0E-36f)
 			{
 				if (option & V_SNAPTORIGHT)
@@ -255,15 +255,15 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 		fheight = (float)(gpatch->height) * dup;
 	}
 
-
+	// positions of the cx, cy, are between 0 and vid.width/vid.height now, we need them to be between -1 and 1
 	cx = -1 + (cx / (vid.width/2));
 	cy = 1 - (cy / (vid.height/2));
 
-
+	// fwidth and fheight are similar
 	fwidth /= vid.width / 2;
 	fheight /= vid.height / 2;
 
-
+	// set the polygon vertices to the right positions
 	v[0].x = v[3].x = cx;
 	v[2].x = v[1].x = cx + fwidth;
 
@@ -286,7 +286,7 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 	v[0].t = v[1].t = 0.0f;
 	v[2].t = v[3].t = hwrPatch->max_t;
 
-
+	// clip it since it is used for bunny scroll in doom I
 	flags = HWR_GetBlendModeFlag(blendmode+1)|PF_NoDepthTest;
 
 	if (alphalevel)
@@ -311,15 +311,15 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 	UINT8 blendmode = ((option & V_BLENDMASK) >> V_BLENDSHIFT);
 	GLPatch_t *hwrPatch;
 
-
-
-
-
+//  3--2
+//  | /|
+//  |/ |
+//  0--1
 	float dup, fscalew, fscaleh, fwidth, fheight;
 
 	UINT8 perplayershuffle = 0;
 
-
+	// make patch ready in hardware cache
 	if (!colormap)
 		HWR_GetPatch(gpatch);
 	else
@@ -355,7 +355,7 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		fscaleh /= 2;
 		cy /= 2;
 #ifdef QUADS
-		if (splitscreen > 1)  
+		if (splitscreen > 1) // 3 or 4 players
 		{
 			float adjustx = ((option & V_NOSCALESTART) ? vid.width : BASEVIDWIDTH)/2.0f;
 			fscalew /= 2;
@@ -399,7 +399,7 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		}
 		else
 #endif
-
+		// 2 players
 		{
 			if (stplyr == &players[displayplayer])
 			{
@@ -407,7 +407,7 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 					perplayershuffle = 1;
 				option &= ~V_SNAPTOBOTTOM;
 			}
-			else  
+			else //if (stplyr == &players[secondarydisplayplayer])
 			{
 				if (!(option & (V_SNAPTOTOP|V_SNAPTOBOTTOM)))
 					perplayershuffle = 2;
@@ -424,10 +424,10 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 
 		if (!(option & V_SCALEPATCHMASK))
 		{
+			// if it's meant to cover the whole screen, black out the rest
+			// no the patch is cropped do not do this ever
 
-
-
-
+			// centre screen
 			if (fabsf((float)vid.width - (float)BASEVIDWIDTH * dup) > 1.0E-36f)
 			{
 				if (option & V_SNAPTORIGHT)
@@ -473,15 +473,15 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		fheight *= dup;
 	}
 
-
+	// positions of the cx, cy, are between 0 and vid.width/vid.height now, we need them to be between -1 and 1
 	cx = -1 + (cx / (vid.width/2));
 	cy = 1 - (cy / (vid.height/2));
 
-
+	// fwidth and fheight are similar
 	fwidth /= vid.width / 2;
 	fheight /= vid.height / 2;
 
-
+	// set the polygon vertices to the right positions
 	v[0].x = v[3].x = cx;
 	v[2].x = v[1].x = cx + fwidth;
 
@@ -502,68 +502,68 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 	else
 		v[2].t = v[3].t = (FIXED_TO_FLOAT(sy+h)/(float)(gpatch->height))*hwrPatch->max_t;
 
-
+	// Auto-crop at splitscreen borders!
 	if (splitscreen && (option & V_PERPLAYER))
 	{
-#define flerp(a,b,amount) (((a) * (1.0f - (amount))) + ((b) * (amount)))  
+#define flerp(a,b,amount) (((a) * (1.0f - (amount))) + ((b) * (amount))) // Float lerp
 
 #ifdef QUADS
-		if (splitscreen > 1)  
+		if (splitscreen > 1) // 3 or 4 players
 		{
 			#error Auto-cropping doesnt take quadscreen into account! Fix it!
-
-
+			// Hint: For player 1/2, copy player 1's code below. For player 3/4, copy player 2's code below
+			// For player 1/3 and 2/4, mangle the below code to apply horizontally instead of vertically
 		}
 		else
 #endif
-
+		// 2 players
 		{
-			if (stplyr == &players[displayplayer])  
+			if (stplyr == &players[displayplayer]) // Player 1's screen, crop at the bottom
 			{
-				if ((cy - fheight) < 0)  
+				if ((cy - fheight) < 0) // If the bottom is below the border
 				{
-					if (cy <= 0)  
-						return;  
+					if (cy <= 0) // If the whole patch is beyond the border...
+						return; // ...crop away the entire patch, don't draw anything
 
-					if (fheight <= 0)  
+					if (fheight <= 0) // Don't divide by zero
 						return;
 
-					v[2].y = v[3].y = 0;  
+					v[2].y = v[3].y = 0; // Clamp the polygon edge vertex position
+					// Now for the UV-map... Uh-oh, math time!
 
-
-
-
-
-
-
-
-
-
-
+					// On second thought, a basic linear interpolation suffices
+					//float full_height = fheight;
+					//float cropped_height = fheight - cy;
+					//float remaining_height = cy;
+					//float cropped_percentage = (fheight - cy) / fheight;
+					//float remaining_percentage = cy / fheight;
+					//v[2].t = v[3].t = lerp(v[2].t, v[0].t, cropped_percentage);
+					// By swapping v[2] and v[0], we can use remaining_percentage for less operations
+					//v[2].t = v[3].t = lerp(v[0].t, v[2].t, remaining_percentage);
 
 					v[2].t = v[3].t = flerp(v[0].t, v[2].t, cy/fheight);
 				}
 			}
-			else  
+			else //if (stplyr == &players[secondarydisplayplayer]) // Player 2's screen, crop at the top
 			{
-				if (cy > 0)  
+				if (cy > 0) // If the top is above the border
 				{
-					if ((cy - fheight) >= 0)  
-						return;  
+					if ((cy - fheight) >= 0) // If the whole patch is beyond the border...
+						return; // ...crop away the entire patch, don't draw anything
 
-					if (fheight <= 0)  
+					if (fheight <= 0) // Don't divide by zero
 						return;
 
-					v[0].y = v[1].y = 0;  
+					v[0].y = v[1].y = 0; // Clamp the polygon edge vertex position
+					// Now for the UV-map... Uh-oh, math time!
 
-
-
-
-
-
-
-
-
+					// On second thought, a basic linear interpolation suffices
+					//float full_height = fheight;
+					//float cropped_height = cy;
+					//float remaining_height = fheight - cy;
+					//float cropped_percentage = cy / fheight;
+					//float remaining_percentage = (fheight - cy) / fheight;
+					//v[0].t = v[1].t = lerp(v[0].t, v[2].t, cropped_percentage);
 
 					v[0].t = v[1].t = flerp(v[0].t, v[2].t, cy/fheight);
 				}
@@ -572,7 +572,7 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 #undef flerp
 	}
 
-
+	// clip it since it is used for bunny scroll in doom I
 	flags = HWR_GetBlendModeFlag(blendmode+1)|PF_NoDepthTest;
 
 	if (alphalevel)
@@ -580,9 +580,9 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		FSurfaceInfo Surf;
 		Surf.PolyColor.s.red = Surf.PolyColor.s.green = Surf.PolyColor.s.blue = 0xff;
 
-		if (alphalevel == 10) Surf.PolyColor.s.alpha = softwaretranstogl_lo[st_translucency];  
-		else if (alphalevel == 11) Surf.PolyColor.s.alpha = softwaretranstogl[st_translucency];  
-		else if (alphalevel == 12) Surf.PolyColor.s.alpha = softwaretranstogl_hi[st_translucency];  
+		if (alphalevel == 10) Surf.PolyColor.s.alpha = softwaretranstogl_lo[st_translucency]; // V_HUDTRANSHALF
+		else if (alphalevel == 11) Surf.PolyColor.s.alpha = softwaretranstogl[st_translucency]; // V_HUDTRANS
+		else if (alphalevel == 12) Surf.PolyColor.s.alpha = softwaretranstogl_hi[st_translucency]; // V_HUDTRANSDOUBLE
 		else Surf.PolyColor.s.alpha = softwaretranstogl[10-alphalevel];
 
 		flags |= PF_Modulated;
@@ -592,13 +592,13 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		HWD.pfnDrawPolygon(NULL, v, 4, flags);
 }
 
+// ==========================================================================
+//                                                            V_VIDEO.C STUFF
+// ==========================================================================
 
-
-
-
-
-
-
+// --------------------------------------------------------------------------
+// Fills a box of pixels using a flat texture as a pattern
+// --------------------------------------------------------------------------
 void HWR_DrawFlatFill (INT32 x, INT32 y, INT32 w, INT32 h, lumpnum_t flatlumpnum)
 {
 	FOutVector v[4];
@@ -606,10 +606,10 @@ void HWR_DrawFlatFill (INT32 x, INT32 y, INT32 w, INT32 h, lumpnum_t flatlumpnum
 	UINT16 flatflag = R_GetFlatSize(len) - 1;
 	double dflatsize = (double)(flatflag + 1);
 
-
-
-
-
+//  3--2
+//  | /|
+//  |/ |
+//  0--1
 
 	v[0].x = v[3].x = (x - 160.0f)/160.0f;
 	v[2].x = v[1].x = ((x+w) - 160.0f)/160.0f;
@@ -625,23 +625,23 @@ void HWR_DrawFlatFill (INT32 x, INT32 y, INT32 w, INT32 h, lumpnum_t flatlumpnum
 
 	HWR_GetRawFlat(flatlumpnum);
 
-
-
-
-
-
-
-	HWD.pfnDrawPolygon(NULL, v, 4, PF_NoDepthTest);  
+	//Hurdler: Boris, the same comment as above... but maybe for pics
+	// it not a problem since they don't have any transparent pixel
+	// if I'm right !?
+	// BTW, I see we put 0 for PFs, and If I'm right, that
+	// means we take the previous PFs as default
+	// how can we be sure they are ok?
+	HWD.pfnDrawPolygon(NULL, v, 4, PF_NoDepthTest); //PF_Translucent);
 }
 
 
-
-
-
-
-
-
-
+// --------------------------------------------------------------------------
+// Fade down the screen so that the menu drawn on top of it looks brighter
+// --------------------------------------------------------------------------
+//  3--2
+//  | /|
+//  |/ |
+//  0--1
 void HWR_FadeScreenMenuBack(UINT16 color, UINT8 strength)
 {
 	FOutVector  v[4];
@@ -659,10 +659,10 @@ void HWR_FadeScreenMenuBack(UINT16 color, UINT8 strength)
 	v[0].t = v[1].t = 1.0f;
 	v[2].t = v[3].t = 0.0f;
 
-	if (color & 0xFF00)  
+	if (color & 0xFF00) // Special fade options
 	{
 		UINT16 option = color & 0x0F00;
-		if (option == 0x0A00 || option == 0x0B00)  
+		if (option == 0x0A00 || option == 0x0B00) // Tinted fades
 		{
 			INT32 r, g, b;
 			int fade = strength * 8;
@@ -676,12 +676,12 @@ void HWR_FadeScreenMenuBack(UINT16 color, UINT8 strength)
 			Surf.PolyColor.s.blue = min(b, 255);
 			Surf.PolyColor.s.alpha = 255;
 
-			if (option == 0x0A00)  
+			if (option == 0x0A00) // Tinted subtractive fade
 				poly_flags |= PF_ReverseSubtract;
-			else if (option == 0x0B00)  
+			else if (option == 0x0B00) // Tinted additive fade
 				poly_flags |= PF_Additive;
 		}
-		else  
+		else // COLORMAP fade
 		{
 			if (HWR_ShouldUsePaletteRendering())
 			{
@@ -704,7 +704,7 @@ void HWR_FadeScreenMenuBack(UINT16 color, UINT8 strength)
 			}
 		}
 	}
-	else  
+	else // Do TRANSMAP** fade.
 	{
 		RGBA_t *palette = HWR_GetTexturePalette();
 		Surf.PolyColor.rgba = palette[color&0xFF].rgba;
@@ -714,9 +714,9 @@ void HWR_FadeScreenMenuBack(UINT16 color, UINT8 strength)
 	HWD.pfnDrawPolygon(&Surf, v, 4, poly_flags);
 }
 
-
-
-
+// -----------------+
+// HWR_DrawFadeFill : draw flat coloured rectangle, with transparency
+// -----------------+
 void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 actualcolor, UINT8 strength)
 {
 	FOutVector v[4];
@@ -725,10 +725,10 @@ void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 ac
 
 	UINT8 perplayershuffle = 0;
 
-
-
-
-
+//  3--2
+//  | /|
+//  |/ |
+//  0--1
 
 	if (splitscreen && (color & V_PERPLAYER))
 	{
@@ -736,7 +736,7 @@ void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 ac
 		h >>= 1;
 		y >>= 1;
 #ifdef QUADS
-		if (splitscreen > 1)  
+		if (splitscreen > 1) // 3 or 4 players
 		{
 			fixed_t adjustx = ((color & V_NOSCALESTART) ? vid.height : BASEVIDHEIGHT)/2.0f;
 			w >>= 1;
@@ -767,7 +767,7 @@ void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 ac
 				y += adjusty;
 				color &= ~V_SNAPTOTOP|V_SNAPTORIGHT;
 			}
-			else  
+			else //if (stplyr == &players[fourthdisplayplayer])
 			{
 				if (!(color & (V_SNAPTOTOP|V_SNAPTOBOTTOM)))
 					perplayershuffle |= 2;
@@ -780,7 +780,7 @@ void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 ac
 		}
 		else
 #endif
-
+		// 2 players
 		{
 			if (stplyr == &players[displayplayer])
 			{
@@ -788,7 +788,7 @@ void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 ac
 					perplayershuffle |= 1;
 				color &= ~V_SNAPTOBOTTOM;
 			}
-			else  
+			else //if (stplyr == &players[secondarydisplayplayer])
 			{
 				if (!(color & (V_SNAPTOTOP|V_SNAPTOBOTTOM)))
 					perplayershuffle |= 2;
@@ -823,7 +823,7 @@ void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 ac
 		}
 		if (fabsf((float)vid.height - (float)BASEVIDHEIGHT * vid.dup) > 1.0E-36f)
 		{
-
+			// same thing here
 			if (color & V_SNAPTOBOTTOM)
 				fy += ((float)vid.height - ((float)BASEVIDHEIGHT * vid.dup));
 			else if (!(color & V_SNAPTOTOP))
@@ -872,12 +872,12 @@ void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 ac
 	v[0].t = v[1].t = 0.0f;
 	v[2].t = v[3].t = 1.0f;
 
-	if (actualcolor & 0xFF00)  
+	if (actualcolor & 0xFF00) // Do COLORMAP fade.
 	{
 		Surf.PolyColor.rgba = UINT2RGBA(0x01010160);
 		Surf.PolyColor.s.alpha = (strength*8);
 	}
-	else  
+	else // Do TRANSMAP** fade.
 	{
 		RGBA_t *palette = HWR_GetTexturePalette();
 		Surf.PolyColor.rgba = palette[actualcolor&0xFF].rgba;
@@ -886,14 +886,14 @@ void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 ac
 	HWD.pfnDrawPolygon(&Surf, v, 4, PF_NoTexture|PF_Modulated|PF_Translucent|PF_NoDepthTest);
 }
 
-
+// Draw the console background with translucency support
 void HWR_DrawConsoleBack(UINT32 color, INT32 height)
 {
 	FOutVector  v[4];
 	FSurfaceInfo Surf;
 
-
-	if (!height)  
+	// setup some neat-o translucency effect
+	if (!height) //cool hack 0 height is full height
 		height = vid.height;
 
 	v[0].x = v[3].x = -1.0f;
@@ -913,7 +913,7 @@ void HWR_DrawConsoleBack(UINT32 color, INT32 height)
 	HWD.pfnDrawPolygon(&Surf, v, 4, PF_NoTexture|PF_Modulated|PF_Translucent|PF_NoDepthTest);
 }
 
-
+// Very similar to HWR_DrawConsoleBack, except we draw from the middle(-ish) of the screen to the bottom.
 void HWR_DrawTutorialBack(UINT32 color, INT32 boxheight)
 {
 	FOutVector  v[4];
@@ -922,9 +922,9 @@ void HWR_DrawTutorialBack(UINT32 color, INT32 boxheight)
 	if (boxheight < 0)
 		height = -boxheight;
 	else
-		height = (boxheight * 4) + (boxheight/2)*5;  
+		height = (boxheight * 4) + (boxheight/2)*5; // 4 lines of space plus gaps between and some leeway
 
-
+	// setup some neat-o translucency effect
 
 	v[0].x = v[3].x = -1.0f;
 	v[2].x = v[1].x =  1.0f;
@@ -938,19 +938,19 @@ void HWR_DrawTutorialBack(UINT32 color, INT32 boxheight)
 	v[2].t = v[3].t = 0.0f;
 
 	Surf.PolyColor.rgba = UINT2RGBA(color);
-	Surf.PolyColor.s.alpha = (color == 0 ? 0xC0 : 0x80);  
+	Surf.PolyColor.s.alpha = (color == 0 ? 0xC0 : 0x80); // make black darker, like software
 
 	HWD.pfnDrawPolygon(&Surf, v, 4, PF_NoTexture|PF_Modulated|PF_Translucent|PF_NoDepthTest);
 }
 
+// ==========================================================================
+//                                                     AM_MAP.C DRAWING STUFF
+// ==========================================================================
 
-
-
-
-
-
-
-
+// -----------------+
+// HWR_drawAMline   : draw a line of the automap (the clipping is already done in automap code)
+// Arg              : color is a RGB 888 value
+// -----------------+
 static F2DCoord *amline_vertices;
 static UINT8 *amline_colors;
 static size_t amline_count;
@@ -981,9 +981,9 @@ void HWR_EndAMLineBatch(void)
 		return;
 	}
 
-	                                                                        
-                                                                          
-                                                                      
+	/* Counting-sort by palette entry so the entire development map takes at
+	 * most 256 existing indexed-triangle calls instead of one call per line.
+	 * Keeping this above the driver API also avoids changing its ABI. */
 	for (i = 0; i < amline_count; i++)
 		counts[amline_colors[i]]++;
 	offsets[0] = 0;
@@ -1091,9 +1091,9 @@ void HWR_drawAMline(const fline_t *fl, INT32 color)
 		HWD.pfnDraw2DLine(&v1, &v2, HWR_GetTexturePalette()[color&0xFF]);
 }
 
-
-
-
+// -------------------+
+// HWR_DrawConsoleFill     : draw flat coloured transparent rectangle because that's cool, and hw sucks less than sw for that.
+// -------------------+
 void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32 actualcolor)
 {
 	FOutVector v[4];
@@ -1102,10 +1102,10 @@ void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32
 
 	UINT8 perplayershuffle = 0;
 
-
-
-
-
+//  3--2
+//  | /|
+//  |/ |
+//  0--1
 
 	if (splitscreen && (color & V_PERPLAYER))
 	{
@@ -1113,7 +1113,7 @@ void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32
 		h >>= 1;
 		y >>= 1;
 #ifdef QUADS
-		if (splitscreen > 1)  
+		if (splitscreen > 1) // 3 or 4 players
 		{
 			fixed_t adjustx = ((color & V_NOSCALESTART) ? vid.height : BASEVIDHEIGHT)/2.0f;
 			w >>= 1;
@@ -1144,7 +1144,7 @@ void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32
 				y += adjusty;
 				color &= ~V_SNAPTOTOP|V_SNAPTORIGHT;
 			}
-			else  
+			else //if (stplyr == &players[fourthdisplayplayer])
 			{
 				if (!(color & (V_SNAPTOTOP|V_SNAPTOBOTTOM)))
 					perplayershuffle |= 2;
@@ -1157,7 +1157,7 @@ void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32
 		}
 		else
 #endif
-
+		// 2 players
 		{
 			if (stplyr == &players[displayplayer])
 			{
@@ -1165,7 +1165,7 @@ void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32
 					perplayershuffle |= 1;
 				color &= ~V_SNAPTOBOTTOM;
 			}
-			else  
+			else //if (stplyr == &players[secondarydisplayplayer])
 			{
 				if (!(color & (V_SNAPTOTOP|V_SNAPTOBOTTOM)))
 					perplayershuffle |= 2;
@@ -1202,7 +1202,7 @@ void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32
 		}
 		if (fabsf((float)vid.height - (float)BASEVIDHEIGHT * dup) > 1.0E-36f)
 		{
-
+			// same thing here
 			if (color & V_SNAPTOBOTTOM)
 				fy += ((float)vid.height - ((float)BASEVIDHEIGHT * dup));
 			else if (!(color & V_SNAPTOTOP))
@@ -1257,9 +1257,9 @@ void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32
 	HWD.pfnDrawPolygon(&Surf, v, 4, PF_NoTexture|PF_Modulated|PF_Translucent|PF_NoDepthTest);
 }
 
-
-
-
+// -----------------+
+// HWR_DrawFill     : draw flat coloured rectangle, with no texture
+// -----------------+
 void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 {
 	FOutVector v[4];
@@ -1270,10 +1270,10 @@ void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 
 	UINT8 perplayershuffle = 0;
 
-
-
-
-
+//  3--2
+//  | /|
+//  |/ |
+//  0--1
 
 	if (splitscreen && (color & V_PERPLAYER))
 	{
@@ -1281,7 +1281,7 @@ void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 		h >>= 1;
 		y >>= 1;
 #ifdef QUADS
-		if (splitscreen > 1)  
+		if (splitscreen > 1) // 3 or 4 players
 		{
 			fixed_t adjustx = ((color & V_NOSCALESTART) ? vid.height : BASEVIDHEIGHT)/2.0f;
 			w >>= 1;
@@ -1312,7 +1312,7 @@ void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 				y += adjusty;
 				color &= ~V_SNAPTOTOP|V_SNAPTORIGHT;
 			}
-			else  
+			else //if (stplyr == &players[fourthdisplayplayer])
 			{
 				if (!(color & (V_SNAPTOTOP|V_SNAPTOBOTTOM)))
 					perplayershuffle |= 2;
@@ -1325,7 +1325,7 @@ void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 		}
 		else
 #endif
-
+		// 2 players
 		{
 			if (stplyr == &players[displayplayer])
 			{
@@ -1333,7 +1333,7 @@ void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 					perplayershuffle |= 1;
 				color &= ~V_SNAPTOBOTTOM;
 			}
-			else  
+			else //if (stplyr == &players[secondarydisplayplayer])
 			{
 				if (!(color & (V_SNAPTOTOP|V_SNAPTOBOTTOM)))
 					perplayershuffle |= 2;
@@ -1380,7 +1380,7 @@ void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 		}
 		if (fabsf((float)vid.height - (float)BASEVIDHEIGHT * vid.dup) > 1.0E-36f)
 		{
-
+			// same thing here
 			if (color & V_SNAPTOBOTTOM)
 				fy += ((float)vid.height - ((float)BASEVIDHEIGHT * vid.dup));
 			else if (!(color & V_SNAPTOTOP))
@@ -1433,9 +1433,9 @@ void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 
 	if (alphalevel)
 	{
-		if (alphalevel == 10) Surf.PolyColor.s.alpha = softwaretranstogl_lo[st_translucency];  
-		else if (alphalevel == 11) Surf.PolyColor.s.alpha = softwaretranstogl[st_translucency];  
-		else if (alphalevel == 12) Surf.PolyColor.s.alpha = softwaretranstogl_hi[st_translucency];  
+		if (alphalevel == 10) Surf.PolyColor.s.alpha = softwaretranstogl_lo[st_translucency]; // V_HUDTRANSHALF
+		else if (alphalevel == 11) Surf.PolyColor.s.alpha = softwaretranstogl[st_translucency]; // V_HUDTRANS
+		else if (alphalevel == 12) Surf.PolyColor.s.alpha = softwaretranstogl_hi[st_translucency]; // V_HUDTRANSDOUBLE
 		else Surf.PolyColor.s.alpha = softwaretranstogl[10-alphalevel];
 	}
 
@@ -1461,14 +1461,14 @@ void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 
  #include "png.h"
  #ifdef PNG_WRITE_SUPPORTED
-  #define USE_PNG  
+  #define USE_PNG // PNG is only used if write is supported (see ../m_misc.c)
  #endif
 #endif
 
 #ifndef USE_PNG
-
-
-
+// --------------------------------------------------------------------------
+// save screenshots with TGA format
+// --------------------------------------------------------------------------
 static inline boolean saveTGA(const char *file_name, void *buffer,
 	INT32 width, INT32 height)
 {
@@ -1493,7 +1493,7 @@ static inline boolean saveTGA(const char *file_name, void *buffer,
 		close(fd);
 		return false;
 	}
-
+	// format to 888 BGR
 	for (i = 0; i < width * height * 3; i+=3)
 	{
 		const UINT8 temp = buf8[i];
@@ -1510,9 +1510,9 @@ static inline boolean saveTGA(const char *file_name, void *buffer,
 }
 #endif
 
-
-
-
+// --------------------------------------------------------------------------
+// screen shot
+// --------------------------------------------------------------------------
 
 UINT8 *HWR_GetScreenshot(void)
 {
@@ -1521,7 +1521,7 @@ UINT8 *HWR_GetScreenshot(void)
 
 	if (!buf)
 		return NULL;
-
+	// returns 24bit 888 RGB
 	HWD.pfnReadScreenTexture(tex, (void *)buf);
 	return buf;
 }
@@ -1538,7 +1538,7 @@ boolean HWR_Screenshot(const char *pathname)
 		return false;
 	}
 
-
+	// returns 24bit 888 RGB
 	HWD.pfnReadScreenTexture(tex, (void *)buf);
 
 #ifdef USE_PNG
@@ -1550,4 +1550,4 @@ boolean HWR_Screenshot(const char *pathname)
 	return ret;
 }
 
-#endif  
+#endif //HWRENDER

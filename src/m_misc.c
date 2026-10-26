@@ -8,15 +8,15 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  m_misc.h
+/// \brief Commonly used routines
+///        Default config file, PCX screenshots, file i/o
 
 #ifdef __GNUC__
 
 #if (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
-
-
+// Ignore "argument might be clobbered by longjmp" warning in GCC
+// (if libpng is compiled with setjmp error handling)
 #pragma GCC diagnostic ignored "-Wclobbered"
 #endif
 
@@ -25,7 +25,7 @@
 
 #include <errno.h>
 
-
+// Extended map support.
 #include <ctype.h>
 
 #include "doomdef.h"
@@ -46,11 +46,11 @@
 #ifdef HAVE_THREADS
 #include "i_threads.h"
 #endif
-#include "command.h"  
+#include "command.h" // cv_execversion
 
 #include "m_anigif.h"
 
-
+// So that the screenshot menu auto-updates...
 #include "m_menu.h"
 
 #ifdef HWRENDER
@@ -93,15 +93,15 @@ typedef off_t off64_t;
  #include "zlib.h"
  #include "png.h"
  #if (PNG_LIBPNG_VER_MAJOR > 1) || (PNG_LIBPNG_VER_MAJOR == 1 && PNG_LIBPNG_VER_MINOR >= 4)
-  #define NO_PNG_DEBUG  
+  #define NO_PNG_DEBUG // 1.4.0 move png_debug to pngpriv.h
  #endif
  #ifdef PNG_WRITE_SUPPORTED
-  #define USE_PNG  
-  #if defined (PNG_WRITE_APNG_SUPPORTED)  
+  #define USE_PNG // Only actually use PNG if write is supported.
+  #if defined (PNG_WRITE_APNG_SUPPORTED) //|| !defined(PNG_STATIC)
     #include "apng.h"
     #define USE_APNG
   #endif
-
+  // See hardware/hw_draw.c for a similar check to this one.
  #endif
 #endif
 
@@ -125,24 +125,24 @@ consvar_t cv_movie_resolution = CVAR_INIT ("movie_resolution", "720p", CV_SAVE,
 static CV_PossibleValue_t zlib_mem_level_t[] = {
 	{1, "(Min Memory) 1"},
 	{2, "2"}, {3, "3"}, {4, "4"}, {5, "5"}, {6, "6"}, {7, "7"},
-	{8, "(Optimal) 8"},  
+	{8, "(Optimal) 8"}, //libpng Default
 	{9, "(Max Memory) 9"}, {0, NULL}};
 
 static CV_PossibleValue_t zlib_level_t[] = {
-	{0, "No Compression"},   
-	{1, "(Fastest) 1"},  
+	{0, "No Compression"},  //Z_NO_COMPRESSION
+	{1, "(Fastest) 1"}, //Z_BEST_SPEED
 	{2, "2"}, {3, "3"}, {4, "4"}, {5, "5"},
-	{6, "(Optimal) 6"},  
+	{6, "(Optimal) 6"}, //Zlib Default
 	{7, "7"}, {8, "8"},
-	{9, "(Maximum) 9"},  
+	{9, "(Maximum) 9"}, //Z_BEST_COMPRESSION
 	{0, NULL}};
 
 static CV_PossibleValue_t zlib_strategy_t[] = {
-	{0, "Normal"},  
-	{1, "Filtered"},  
-	{2, "Huffman Only"},  
-	{3, "RLE"},  
-	{4, "Fixed"},  
+	{0, "Normal"}, //Z_DEFAULT_STRATEGY
+	{1, "Filtered"}, //Z_FILTERED
+	{2, "Huffman Only"}, //Z_HUFFMAN_ONLY
+	{3, "RLE"}, //Z_RLE
+	{4, "Fixed"}, //Z_FIXED
 	{0, NULL}};
 
 static CV_PossibleValue_t zlib_window_bits_t[] = {
@@ -160,8 +160,8 @@ static CV_PossibleValue_t apng_delay_t[] = {
 	{4, "1/4x"},
 	{0, NULL}};
 
-
-
+// zlib memory usage is as follows:
+// (1 << (zlib_window_bits+2)) +  (1 << (zlib_level+9))
 consvar_t cv_zlib_memory = CVAR_INIT ("png_memory_level", "7", CV_SAVE, zlib_mem_level_t, NULL);
 consvar_t cv_zlib_level = CVAR_INIT ("png_compress_level", "(Optimal) 6", CV_SAVE, zlib_level_t, NULL);
 consvar_t cv_zlib_strategy = CVAR_INIT ("png_strategy", "Normal", CV_SAVE, zlib_strategy_t, NULL);
@@ -175,10 +175,10 @@ consvar_t cv_apng_delay = CVAR_INIT ("apng_speed", "1x", CV_SAVE, apng_delay_t, 
 consvar_t cv_apng_downscale = CVAR_INIT ("apng_downscale", "On", CV_SAVE, CV_OnOff, NULL);
 
 #ifdef USE_APNG
-static boolean apng_downscale = false;  
+static boolean apng_downscale = false; // So nobody can do something dumb like changing cvars mid output
 #endif
 
-boolean takescreenshot = false;  
+boolean takescreenshot = false; // Take a screenshot this tic
 
 moviemode_t moviemode = MM_OFF;
 static precise_t movie_prevcapturetime = 0;
@@ -221,14 +221,14 @@ static INT32 movie_capture_height = 0;
 static INT32 movie_capture_fps = 30;
 #endif
 
-                                                                             
-             
-   
-                                                
-                                                 
-                                                                           
-                      
-    
+/** Returns the map number for a map identified by the last two characters in
+  * its name.
+  *
+  * \param first  The first character after MAP.
+  * \param second The second character after MAP.
+  * \return The map number, or 0 if no map corresponds to these characters.
+  * \sa G_BuildMapName
+  */
 INT32 M_MapNumber(char first, char second)
 {
 	if (isdigit(first))
@@ -247,23 +247,23 @@ INT32 M_MapNumber(char first, char second)
 		((INT32)tolower(second) - 'a') + 10);
 }
 
+// ==========================================================================
+//                         FILE INPUT / OUTPUT
+// ==========================================================================
 
-
-
-
-
+// some libcs has no access function, make our own
 #if 0
 int access(const char *path, int amode)
 {
 	int accesshandle = -1;
 	FILE *handle = NULL;
-	if (amode == 6)  
+	if (amode == 6) // W_OK|R_OK
 		handle = fopen(path, "r+");
-	else if (amode == 4)  
+	else if (amode == 4) // R_OK
 		handle = fopen(path, "r");
-	else if (amode == 2)  
+	else if (amode == 2) // W_OK
 		handle = fopen(path, "a+");
-	else if (amode == 0)  
+	else if (amode == 0) //F_OK
 		handle = fopen(path, "rb");
 	if (handle)
 	{
@@ -275,26 +275,26 @@ int access(const char *path, int amode)
 #endif
 
 
-
-
-
+//
+// FIL_WriteFile
+//
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
 
-                      
-   
-                                            
-                                                
-                                          
-                                              
-    
+/** Writes out a file.
+  *
+  * \param name   Name of the file to write.
+  * \param source Memory location to write from.
+  * \param length How many bytes to write.
+  * \return True on success, false on failure.
+  */
 boolean FIL_WriteFile(char const *name, const void *source, size_t length)
 {
 	FILE *handle = NULL;
 	size_t count;
 
-
+	//if (FIL_WriteFileOK(name))
 		handle = fopen(name, "w+b");
 
 	if (!handle)
@@ -309,21 +309,21 @@ boolean FIL_WriteFile(char const *name, const void *source, size_t length)
 	return true;
 }
 
-                                                      
-   
-                                   
-                                                                              
-                                                                     
-                                                                              
-                          
-    
+/** Reads in a file, appending a zero byte at the end.
+  *
+  * \param name   Filename to read.
+  * \param buffer Pointer to a pointer, which will be set to the location of a
+  *               newly allocated buffer holding the file's contents.
+  * \return Number of bytes read, not counting the zero byte added to the end,
+  *         or 0 on error.
+  */
 size_t FIL_ReadFileTag(char const *name, UINT8 **buffer, INT32 tag)
 {
 	FILE *handle = NULL;
 	size_t count, length;
 	UINT8 *buf;
 
-
+	//if (FIL_ReadFileOK(name))
 		handle = fopenfile(name, "rb");
 
 	if (!handle)
@@ -343,18 +343,18 @@ size_t FIL_ReadFileTag(char const *name, UINT8 **buffer, INT32 tag)
 		return 0;
 	}
 
-
+	// append 0 byte for script text files
 	buf[length] = 0;
 
 	*buffer = buf;
 	return length;
 }
 
-                                                                             
-   
-                                                   
-                                                       
-    
+/** Makes a copy of a text file with all newlines converted into LF newlines.
+  *
+  * \param textfilename The name of the source file
+  * \param binfilename The name of the destination file
+  */
 boolean FIL_ConvertTextFileToBinary(const char *textfilename, const char *binfilename)
 {
 	FILE *textfile;
@@ -388,66 +388,66 @@ boolean FIL_ConvertTextFileToBinary(const char *textfilename, const char *binfil
 	return success;
 }
 
-                                
-   
-                                    
-                                                     
-    
+/** Check if the filename exists
+  *
+  * \param name   Filename to check.
+  * \return true if file exists, false if it doesn't.
+  */
 boolean FIL_FileExists(char const *name)
 {
-	return access(name,0)+1;  
+	return access(name,0)+1; //F_OK
 }
 
 
-                                     
-   
-                                    
-                                                         
-    
+/** Check if the filename OK to write
+  *
+  * \param name   Filename to check.
+  * \return true if file write-able, false if it doesn't.
+  */
 boolean FIL_WriteFileOK(char const *name)
 {
-	return access(name,2)+1;  
+	return access(name,2)+1; //W_OK
 }
 
 
-                                    
-   
-                                    
-                                                        
-    
+/** Check if the filename OK to read
+  *
+  * \param name   Filename to check.
+  * \return true if file read-able, false if it doesn't.
+  */
 boolean FIL_ReadFileOK(char const *name)
 {
-	return access(name,4)+1;  
+	return access(name,4)+1; //R_OK
 }
 
-                                          
-   
-                                    
-                                                                
-    
+/** Check if the filename OK to read/write
+  *
+  * \param name   Filename to check.
+  * \return true if file (read/write)-able, false if it doesn't.
+  */
 boolean FIL_FileOK(char const *name)
 {
-	return access(name,6)+1;  
+	return access(name,6)+1; //R_OK|W_OK
 }
 
 
-                                                                             
-           
-   
-                                       
-                                                               
-    
+/** Checks if a pathname has a file extension and adds the extension provided
+  * if not.
+  *
+  * \param path      Pathname to check.
+  * \param extension Extension to add if no extension is there.
+  */
 void FIL_DefaultExtension(char *path, const char *extension)
 {
 	char *src;
 
-
+	// search for '.' from end to begin, add .EXT only when not found
 	src = path + strlen(path) - 1;
 
 	while (*src != '/' && src != path)
 	{
 		if (*src == '.')
-			return;  
+			return; // it has an extension
 		src--;
 	}
 
@@ -458,7 +458,7 @@ void FIL_ForceExtension(char *path, const char *extension)
 {
 	char *src;
 
-
+	// search for '.' from end to begin, add .EXT only when not found
 	src = path + strlen(path) - 1;
 
 	while (*src != '/' && src != path)
@@ -466,7 +466,7 @@ void FIL_ForceExtension(char *path, const char *extension)
 		if (*src == '.')
 		{
 			*src = '\0';
-			break;  
+			break; // it has an extension
 		}
 		src--;
 	}
@@ -474,12 +474,12 @@ void FIL_ForceExtension(char *path, const char *extension)
 	strcat(path, extension);
 }
 
-                                                              
-                                              
-   
-                              
-                                                                 
-    
+/** Returns a pointer to the file extension in a given string.
+  * If none is present, NULL will be returned.
+  *
+  * \param in String to check.
+  * \return The pointer to the file extension, including the dot.
+  */
 const char *FIL_GetExtension(const char *in)
 {
 	const char *out = NULL;
@@ -489,12 +489,12 @@ const char *FIL_GetExtension(const char *in)
 	return out;
 }
 
-                                            
-                                   
-   
-                              
-                                                           
-    
+/** Checks if a filename extension is found.
+  * Lump names do not contain dots.
+  *
+  * \param in String to check.
+  * \return True if an extension is found, otherwise false.
+  */
 boolean FIL_CheckExtension(const char *in)
 {
 	while (*in++)
@@ -504,25 +504,25 @@ boolean FIL_CheckExtension(const char *in)
 	return false;
 }
 
+// ==========================================================================
+//                        CONFIGURATION FILE
+// ==========================================================================
 
-
-
-
-
-
-
+//
+// DEFAULTS
+//
 
 char configfile[MAX_WADPATH];
 
+// ==========================================================================
+//                          CONFIGURATION
+// ==========================================================================
+static boolean gameconfig_loaded = false; // true once config.cfg loaded AND executed
 
-
-
-static boolean gameconfig_loaded = false;  
-
-                                                           
-   
-                            
-    
+/** Saves a player's config, possibly to a particular file.
+  *
+  * \sa Command_LoadConfig_f
+  */
 void Command_SaveConfig_f(void)
 {
 	char tmpstr[MAX_WADPATH];
@@ -541,10 +541,10 @@ void Command_SaveConfig_f(void)
 		CONS_Printf(M_GetText("config saved as %s\n"), configfile);
 }
 
-                                                         
-   
-                                                    
-    
+/** Loads a game config, possibly from a particular file.
+  *
+  * \sa Command_SaveConfig_f, Command_ChangeConfig_f
+  */
 void Command_LoadConfig_f(void)
 {
 	if (COM_Argc() != 2)
@@ -556,28 +556,28 @@ void Command_LoadConfig_f(void)
 	strcpy(configfile, COM_Argv(1));
 	FIL_ForceExtension(configfile, ".cfg");
 
-
+	// load default control
 	G_ClearAllControlKeys();
 	G_CopyControls(gamecontrol, gamecontroldefault[gcs_fps], NULL, 0);
 	G_CopyControls(gamecontrolbis, gamecontrolbisdefault[gcs_fps], NULL, 0);
 
-
+	// temporarily reset execversion to default
 	CV_ToggleExecVersion(true);
 	COM_BufInsertText(va("%s \"%s\"\n", cv_execversion.name, cv_execversion.defaultvalue));
 	CV_InitFilterVar();
 
-
+	// exec the config
 	COM_BufInsertText(va("exec \"%s\"\n", configfile));
 
-
+	// don't filter anymore vars and don't let this convsvar be changed
 	COM_BufInsertText(va("%s \"%d\"\n", cv_execversion.name, EXECVERSION));
 	CV_ToggleExecVersion(false);
 }
 
-                                                      
-   
-                                                  
-    
+/** Saves the current configuration and loads another.
+  *
+  * \sa Command_LoadConfig_f, Command_SaveConfig_f
+  */
 void Command_ChangeConfig_f(void)
 {
 	if (COM_Argc() != 2)
@@ -590,48 +590,48 @@ void Command_ChangeConfig_f(void)
 	COM_BufAddText(va("loadconfig \"%s\"\n", COM_Argv(1)));
 }
 
-                                  
-   
-                            
-    
+/** Loads the default config file.
+  *
+  * \sa Command_LoadConfig_f
+  */
 void M_FirstLoadConfig(void)
 {
+	// configfile is initialised by d_main when searching for the wad?
 
-
-
+	// check for a custom config file
 	if (M_CheckParm("-config") && M_IsNextParm())
 	{
 		strcpy(configfile, M_GetNextParm());
 		CONS_Printf(M_GetText("config file: %s\n"), configfile);
 	}
 
-
+	// load default control
 	G_DefineDefaultControls();
 	G_CopyControls(gamecontrol, gamecontroldefault[gcs_fps], NULL, 0);
 	G_CopyControls(gamecontrolbis, gamecontrolbisdefault[gcs_fps], NULL, 0);
 
-
+	// register execversion here before we load any configs
 	CV_RegisterVar(&cv_execversion);
 
-
-
+	// temporarily reset execversion to default
+	// we shouldn't need to do this, but JUST in case...
 	CV_ToggleExecVersion(true);
 	COM_BufInsertText(va("%s \"%s\"\n", cv_execversion.name, cv_execversion.defaultvalue));
 	CV_InitFilterVar();
 
-
+	// load config, make sure those commands doesnt require the screen...
 	COM_BufInsertText(va("exec \"%s\"\n", configfile));
+	// no COM_BufExecute() needed; that does it right away
 
-
-
+	// don't filter anymore vars and don't let this convsvar be changed
 	COM_BufInsertText(va("%s \"%d\"\n", cv_execversion.name, EXECVERSION));
 	CV_ToggleExecVersion(false);
 
-
-
+	// make sure I_Quit() will write back the correct config
+	// (do not write back the config if it crash before)
 	gameconfig_loaded = true;
 
-
+	// reset to default player stuff
 	if (!dedicated)
 	{
 		COM_BufAddText (va("%s \"%s\"\n",cv_skin.name,cv_defaultskin.string));
@@ -641,20 +641,20 @@ void M_FirstLoadConfig(void)
 	}
 }
 
-                                 
-   
-                            
-    
+/** Saves the game configuration.
+  *
+  * \sa Command_SaveConfig_f
+  */
 void M_SaveConfig(const char *filename)
 {
 	FILE *f;
 	char *filepath;
 
-
+	// make sure not to write back the config until it's been correctly loaded
 	if (!gameconfig_loaded)
 		return;
 
-
+	// can change the file name
 	if (filename)
 	{
 		if (!strstr(filename, ".cfg"))
@@ -663,15 +663,15 @@ void M_SaveConfig(const char *filename)
 			return;
 		}
 
-
-
+		// append srb2home to beginning of filename
+		// but check if srb2home isn't already there, first
 		if (!strstr(filename, srb2home))
 			filepath = va(pandf,srb2home, filename);
 		else
 			filepath = Z_StrDup(filename);
 
 		f = fopen(filepath, "w");
-
+		// change it only if valid
 		if (f)
 			strcpy(configfile, filepath);
 		else
@@ -696,14 +696,14 @@ void M_SaveConfig(const char *filename)
 		}
 	}
 
-
+	// header message
 	fprintf(f, "// SRB2 configuration file.\n");
 
-
-
+	// print execversion FIRST, because subsequent consvars need to be filtered
+	// always print current EXECVERSION
 	fprintf(f, "%s \"%d\"\n", cv_execversion.name, EXECVERSION);
 
-
+	// FIXME: save key aliases if ever implemented..
 
 	if (tutorialmode && tutorialgcs)
 	{
@@ -723,7 +723,7 @@ void M_SaveConfig(const char *filename)
 	if (!dedicated)
 	{
 		if (tutorialmode && tutorialgcs)
-			G_SaveKeySetting(f, gamecontroldefault[gcs_custom], gamecontrolbis);  
+			G_SaveKeySetting(f, gamecontroldefault[gcs_custom], gamecontrolbis); // using gcs_custom as temp storage
 		else
 			G_SaveKeySetting(f, gamecontrol, gamecontrolbis);
 	}
@@ -731,9 +731,9 @@ void M_SaveConfig(const char *filename)
 	fclose(f);
 }
 
-
-
-
+// ==========================================================================
+//                              SCREENSHOTS
+// ==========================================================================
 static UINT8 screenshot_palette[768];
 static void M_CreateScreenShotPalette(void)
 {
@@ -753,11 +753,11 @@ static void M_CreateScreenShotPalette(void)
 static const char *Newsnapshotfile(const char *pathname, const char *ext)
 {
 	static char freename[13] = "srb2XXXX.ext";
-	int i = 5000;  
-	int add = i;  
-	int result;  
+	int i = 5000; // start in the middle: num screenshots divided by 2
+	int add = i; // how much to add or subtract if wrong; gets divided by 2 each time
+	int result; // -1 = guess too high, 0 = correct, 1 = guess too low
 
-
+	// find a file name to save it to
 	strcpy(freename+9,ext);
 
 	for (;;)
@@ -767,26 +767,26 @@ static const char *Newsnapshotfile(const char *pathname, const char *ext)
 		freename[6] = (char)('0' + (char)((i/10)%10));
 		freename[7] = (char)('0' + (char)(i%10));
 
-		if (FIL_WriteFileOK(va(pandf,pathname,freename)))  
-			result = 1;  
-		else  
+		if (FIL_WriteFileOK(va(pandf,pathname,freename))) // access succeeds
+			result = 1; // too low
+		else // access fails: equal or too high
 		{
 			if (!i)
-				break;  
+				break; // not too high, so it must be equal! YAY!
 
 			freename[4] = (char)('0' + (char)((i-1)/1000));
 			freename[5] = (char)('0' + (char)(((i-1)/100)%10));
 			freename[6] = (char)('0' + (char)(((i-1)/10)%10));
 			freename[7] = (char)('0' + (char)((i-1)%10));
-			if (!FIL_WriteFileOK(va(pandf,pathname,freename)))  
-				result = -1;  
+			if (!FIL_WriteFileOK(va(pandf,pathname,freename))) // access fails
+				result = -1; // too high
 			else
-				break;  
+				break; // not too high, so equal, YAY!
 		}
 
 		add /= 2;
 
-		if (!add)  
+		if (!add) // don't get stuck at 5 due to truncation!
 			add = 1;
 
 		i += add * result;
@@ -807,7 +807,7 @@ static const char *Newsnapshotfile(const char *pathname, const char *ext)
 #ifdef HAVE_PNG
 FUNCNORETURN static void PNG_error(png_structp PNG, png_const_charp pngtext)
 {
-
+	//CONS_Debug(DBG_RENDER, "libpng error at %p: %s", PNG, pngtext);
 	I_Error("libpng error at %p: %s", PNG, pngtext);
 }
 
@@ -818,10 +818,10 @@ static void PNG_warn(png_structp PNG, png_const_charp pngtext)
 
 static void M_PNGhdr(png_structp png_ptr, png_infop png_info_ptr, PNG_CONST png_uint_32 width, PNG_CONST png_uint_32 height, PNG_CONST png_byte *palette)
 {
-	const png_byte png_interlace = PNG_INTERLACE_NONE;  
+	const png_byte png_interlace = PNG_INTERLACE_NONE; //PNG_INTERLACE_ADAM7
 	if (palette)
 	{
-		png_colorp png_PLTE = png_malloc(png_ptr, sizeof(png_color)*256);  
+		png_colorp png_PLTE = png_malloc(png_ptr, sizeof(png_color)*256); //palette
 		const png_byte *pal = palette;
 		png_uint_16 i;
 		for (i = 0; i < 256; i++)
@@ -834,7 +834,7 @@ static void M_PNGhdr(png_structp png_ptr, png_infop png_info_ptr, PNG_CONST png_
 		 png_interlace, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 		png_write_info_before_PLTE(png_ptr, png_info_ptr);
 		png_set_PLTE(png_ptr, png_info_ptr, png_PLTE, 256);
-		png_free(png_ptr, (png_voidp)png_PLTE);  
+		png_free(png_ptr, (png_voidp)png_PLTE); // safe in libpng-1.2.1+
 		png_set_filter(png_ptr, PNG_FILTER_TYPE_BASE, PNG_FILTER_NONE);
 		png_set_compression_strategy(png_ptr, Z_DEFAULT_STRATEGY);
 	}
@@ -847,7 +847,7 @@ static void M_PNGhdr(png_structp png_ptr, png_infop png_info_ptr, PNG_CONST png_
 	}
 }
 
-#define SRB2PNGTXT 11  
+#define SRB2PNGTXT 11 //PNG_KEYWORD_MAX_LENGTH(79) is the max
 typedef struct
 {
 	char text[SRB2PNGTXT][96];
@@ -903,7 +903,7 @@ static void M_CapturePNGText(pngtextsnapshot_t *snapshot, PNG_CONST png_byte mov
 		case render_opengl:
 			snprintf(snapshot->text[7], sizeof snapshot->text[7], "OpenGL");
 			break;
-		default:  
+		default: // Just in case
 			snprintf(snapshot->text[7], sizeof snapshot->text[7], "None");
 			break;
 	}
@@ -967,13 +967,13 @@ static png_infop   apng_info_ptr = NULL;
 static apng_infop  apng_ainfo_ptr = NULL;
 static png_FILE_p  apng_FILE = NULL;
 static png_uint_32 apng_frames = 0;
-#ifdef PNG_STATIC  
+#ifdef PNG_STATIC // Win32 build have static libpng
 #define aPNG_set_acTL png_set_acTL
 #define aPNG_write_frame_head png_write_frame_head
 #define aPNG_write_frame_tail png_write_frame_tail
-#else  
+#else // outside libpng may not have apng support
 
-#ifndef PNG_WRITE_APNG_SUPPORTED  
+#ifndef PNG_WRITE_APNG_SUPPORTED // libpng header may not have apng patch
 
 #ifndef PNG_INFO_acTL
 #define PNG_INFO_acTL 0x10000L
@@ -1025,7 +1025,7 @@ static P_png_write_frame_tail aPNG_write_frame_tail = NULL;
 
 static inline boolean M_PNGLib(void)
 {
-#ifdef PNG_STATIC  
+#ifdef PNG_STATIC // Win32 build have static libpng
 	return true;
 #else
 	static void *pnglib = NULL;
@@ -1083,26 +1083,26 @@ static void M_PNGFrame(png_structp png_ptr, png_infop png_info_ptr, png_bytep pn
 			row_pointers[y][x] = png_buf[x * downscale];
 		png_buf += pitch * (downscale * downscale);
 	}
-
-
-
-
-
-	                                                  
-                       
-    
+		//for (x = 0; x < width; x++)
+		//{
+		//	printf("%d", x);
+		//	row_pointers[y][x] = 0;
+		//}
+	/*	row_pointers[y] = calloc(1, sizeof(png_bytep));
+		png_buf += pitch * 2;
+	}*/
 
 #ifndef PNG_STATIC
 	if (aPNG_write_frame_head)
 #endif
 		aPNG_write_frame_head(apng_ptr, apng_info_ptr, row_pointers,
-			width,      
-			height,     
-			0,          
-			0,          
-			framedelay, max(cv_gif_maxfps.value, 1), 
-			PNG_DISPOSE_OP_BACKGROUND,  
-			PNG_BLEND_OP_SOURCE         
+			width,     /* width */
+			height,    /* height */
+			0,         /* x offset */
+			0,         /* y offset */
+			framedelay, max(cv_gif_maxfps.value, 1),/* delay numerator and denominator */
+			PNG_DISPOSE_OP_BACKGROUND, /* dispose */
+			PNG_BLEND_OP_SOURCE        /* blend */
 		                     );
 
 	png_write_image(png_ptr, row_pointers);
@@ -1133,7 +1133,7 @@ static boolean M_SetupaPNG(png_const_charp filename, png_bytep pal)
 
 	downscale = apng_downscale ? vid.dup : 1;
 
-	apng_FILE = fopen(filename,"wb+");  
+	apng_FILE = fopen(filename,"wb+"); // + mode for reading
 	if (!apng_FILE)
 	{
 		CONS_Debug(DBG_RENDER, "M_StartMovie: Error on opening %s for write\n", filename);
@@ -1176,7 +1176,7 @@ static boolean M_SetupaPNG(png_const_charp filename, png_bytep pal)
 	png_set_user_limits(apng_ptr, MAXVIDWIDTH, MAXVIDHEIGHT);
 #endif
 
-
+	//png_set_filter(apng_ptr, 0, PNG_ALL_FILTERS);
 
 	png_set_compression_level(apng_ptr, cv_zlib_levela.value);
 	png_set_compression_mem_level(apng_ptr, cv_zlib_memorya.value);
@@ -1200,9 +1200,9 @@ static boolean M_SetupaPNG(png_const_charp filename, png_bytep pal)
 #endif
 #endif
 
-
-
-
+// ==========================================================================
+//                             MOVIE MODE
+// ==========================================================================
 #if NUMSCREENS > 2
 static inline moviemode_t M_StartMovieAPNG(const char *pathname)
 {
@@ -1238,7 +1238,7 @@ static inline moviemode_t M_StartMovieAPNG(const char *pathname)
 	}
 	return MM_APNG;
 #else
-
+	// no APNG support exists
 	(void)pathname;
 	CONS_Alert(CONS_ERROR, "Couldn't create aPNG: this build lacks aPNG support\n");
 	return MM_OFF;
@@ -1263,7 +1263,7 @@ static inline moviemode_t M_StartMovieGIF(const char *pathname)
 	}
 	return MM_GIF;
 #else
-
+	// no GIF support exists
 	(void)pathname;
 	CONS_Alert(CONS_ERROR, "Couldn't create GIF: this build lacks GIF support\n");
 	return MM_OFF;
@@ -1711,7 +1711,7 @@ void M_StartMovie(void)
 		case MM_SCREENSHOT:
 			moviemode = MM_SCREENSHOT;
 			break;
-		default:  
+		default: //???
 			return;
 	}
 
@@ -1729,7 +1729,7 @@ void M_StartMovie(void)
 		CONS_Printf(M_GetText("Movie mode enabled (%s).\n"), "screenshots");
 	movie_prevcapturetime = 0;
 
-
+	//singletics = (moviemode != MM_OFF);
 #endif
 }
 
@@ -1743,8 +1743,8 @@ void M_SaveFrame(void)
 	if (movie_video_recording)
 		I_UpdateMovieAudioCapture();
 
-	                                                                            
-                                                                    
+	/* Capture follows rendered frames rather than the 35 Hz game clock. This is
+	 * what makes 60 FPS recording possible with uncapped rendering. */
 	if (!singletics && movie_prevcapturetime
 	&& now - movie_prevcapturetime < interval)
 		return;
@@ -1753,8 +1753,8 @@ void M_SaveFrame(void)
 		const UINT64 elapsed = now - movie_prevcapturetime;
 		const UINT64 delay = (elapsed * (UINT64)max(cv_gif_maxfps.value, 1)
 			+ precision / 2) / precision;
-		                                                                      
-                                                                           
+		/* Preserve real elapsed time if the game misses one or more requested
+		 * capture intervals, keeping the final MP4 synchronized with its WAV. */
 		movie_video_framedelay = (UINT16)min((UINT64)UINT16_MAX,
 			max(1ULL, delay));
 	}
@@ -1795,7 +1795,7 @@ void M_SaveFrame(void)
 #ifdef USE_APNG
 			{
 				UINT8 *linear = NULL;
-				if (!apng_FILE)  
+				if (!apng_FILE) // should not happen!!
 				{
 					moviemode = MM_OFF;
 					return;
@@ -1803,7 +1803,7 @@ void M_SaveFrame(void)
 
 				if (rendermode == render_soft)
 				{
-
+					// munge planar buffer to linear
 					linear = screens[2];
 					I_ReadScreen(linear);
 				}
@@ -1922,19 +1922,19 @@ void M_StopMovie(void)
 #endif
 }
 
-
-
-
+// ==========================================================================
+//                            SCREEN SHOTS
+// ==========================================================================
 #ifdef USE_PNG
-                              
-   
-                                         
-                                   
-                                         
-                                          
-                                          
-                                            
-    
+/** Writes a PNG file to disk.
+  *
+  * \param filename Filename to write to.
+  * \param data     The image data.
+  * \param width    Width of the picture.
+  * \param height   Height of the picture.
+  * \param palette  Palette of image data.
+  *  \note if palette is NULL, BGR888 format
+  */
 static void PNG_file_error(png_structp PNG, png_const_charp pngtext)
 {
 	(void)pngtext;
@@ -1993,7 +1993,7 @@ static boolean M_SavePNGConfigured(const char *filename, void *data, int width, 
 	if (setjmp(png_jmpbuf(png_ptr)))
 #endif
 	{
-
+		//CONS_Debug(DBG_RENDER, "libpng write error on %s\n", filename);
 		png_destroy_write_struct(&png_ptr, &png_info_ptr);
 		fclose(png_FILE);
 		remove(filename);
@@ -2008,7 +2008,7 @@ static boolean M_SavePNGConfigured(const char *filename, void *data, int width, 
 	png_set_user_limits(png_ptr, MAXVIDWIDTH, MAXVIDHEIGHT);
 #endif
 
-
+	//png_set_filter(png_ptr, 0, PNG_ALL_FILTERS);
 
 	png_set_compression_level(png_ptr, compression_level);
 	png_set_compression_mem_level(png_ptr, memory_level);
@@ -2144,8 +2144,8 @@ void M_PollAsyncScreenshots(void)
 }
 #endif
 #else
-                       
-    
+/** PCX file structure.
+  */
 typedef struct
 {
 	UINT8 manufacturer;
@@ -2164,17 +2164,17 @@ typedef struct
 	UINT16 palette_type;
 
 	char filler[58];
-	UINT8 data;  
+	UINT8 data; ///< Unbounded; used for all picture data.
 } pcx_t;
 
-                              
-   
-                                         
-                                   
-                                         
-                                          
-                                         
-    
+/** Writes a PCX file to disk.
+  *
+  * \param filename Filename to write to.
+  * \param data     The image data.
+  * \param width    Width of the picture.
+  * \param height   Height of the picture.
+  * \param palette  Palette of image data
+  */
 #if NUMSCREENS > 2
 static boolean WritePCXfile(const char *filename, const UINT8 *data, int width, int height, const UINT8 *pal)
 {
@@ -2185,10 +2185,10 @@ static boolean WritePCXfile(const char *filename, const UINT8 *data, int width, 
 
 	pcx = Z_Malloc(width*height*2 + 1000, PU_STATIC, NULL);
 
-	pcx->manufacturer = 0x0a;  
-	pcx->version = 5;  
-	pcx->encoding = 1;  
-	pcx->bits_per_pixel = 8;  
+	pcx->manufacturer = 0x0a; // PCX id
+	pcx->version = 5; // 256 color
+	pcx->encoding = 1; // uncompressed
+	pcx->bits_per_pixel = 8; // 256 color
 	pcx->xmin = pcx->ymin = 0;
 	pcx->xmax = SHORT(width - 1);
 	pcx->ymax = SHORT(height - 1);
@@ -2196,12 +2196,12 @@ static boolean WritePCXfile(const char *filename, const UINT8 *data, int width, 
 	pcx->vres = SHORT(height);
 	memset(pcx->palette, 0, sizeof (pcx->palette));
 	pcx->reserved = 0;
-	pcx->color_planes = 1;  
+	pcx->color_planes = 1; // chunky image
 	pcx->bytes_per_line = SHORT(width);
-	pcx->palette_type = SHORT(1);  
+	pcx->palette_type = SHORT(1); // not a grey scale
 	memset(pcx->filler, 0, sizeof (pcx->filler));
 
-
+	// pack the image
 	pack = &pcx->data;
 
 	for (i = 0; i < width*height; i++)
@@ -2215,10 +2215,10 @@ static boolean WritePCXfile(const char *filename, const UINT8 *data, int width, 
 		}
 	}
 
+	// write the palette
+	*pack++ = 0x0c; // palette ID byte
 
-	*pack++ = 0x0c;  
-
-
+	// write color table
 	{
 		for (i = 0; i < 256; i++)
 		{
@@ -2228,7 +2228,7 @@ static boolean WritePCXfile(const char *filename, const UINT8 *data, int width, 
 		}
 	}
 
-
+	// write output file
 	length = pack - (UINT8 *)pcx;
 	i = FIL_WriteFile(filename, pcx, length);
 
@@ -2249,12 +2249,12 @@ void M_ScreenShot(void)
 	takescreenshot = true;
 }
 
-                       
-                                                                      
-                                                              
-   
-                      
-    
+/** Takes a screenshot.
+  * The screenshot is saved as "srb2xxxx.png" where xxxx is the lowest
+  * four-digit number for which a file does not already exist.
+  *
+  * \sa HWR_ScreenShot
+  */
 void M_DoScreenShot(void)
 {
 #if NUMSCREENS > 2
@@ -2263,11 +2263,11 @@ void M_DoScreenShot(void)
 	boolean ret = false;
 	UINT8 *linear = NULL;
 
-
+	// Don't take multiple screenshots, obviously
 	takescreenshot = false;
 	M_PollAsyncScreenshots();
 
-
+	// how does one take a screenshot without a render system?
 	if (rendermode == render_none)
 		return;
 
@@ -2307,9 +2307,9 @@ void M_DoScreenShot(void)
 		goto failure;
 
 #if defined(USE_PNG) && defined(HAVE_THREADS)
-
-
-
+	// F8 captures the pixels now, then compresses and writes the PNG on a worker.
+	// Screenshot movie mode remains synchronous so its ordered frame stream is
+	// unchanged.
 	if (moviemode != MM_SCREENSHOT)
 	{
 		boolean paletted = (rendermode == render_soft);
@@ -2338,12 +2338,12 @@ void M_DoScreenShot(void)
 
 	if (rendermode == render_soft)
 	{
-
+		// munge planar buffer to linear
 		linear = screens[2];
 		I_ReadScreen(linear);
 	}
 
-
+	// save the pcx file
 #ifdef HWRENDER
 	if (rendermode == render_opengl)
 		ret = HWR_Screenshot(va(pandf,pathname,freename));
@@ -2385,24 +2385,24 @@ boolean M_ScreenshotResponder(event_t *ev)
 
 	ch = ev->key;
 
-	if (ch >= KEY_MOUSE1 && menuactive)  
+	if (ch >= KEY_MOUSE1 && menuactive) // If it's not a keyboard key, then don't allow it in the menus!
 		return false;
 
-	if (ch == KEY_F8 || ch == gamecontrol[GC_SCREENSHOT][0] || ch == gamecontrol[GC_SCREENSHOT][1])  
+	if (ch == KEY_F8 || ch == gamecontrol[GC_SCREENSHOT][0] || ch == gamecontrol[GC_SCREENSHOT][1]) // remappable F8
 		M_ScreenShot();
-	else if (ch == KEY_F9 || ch == gamecontrol[GC_RECORDGIF][0] || ch == gamecontrol[GC_RECORDGIF][1])  
+	else if (ch == KEY_F9 || ch == gamecontrol[GC_RECORDGIF][0] || ch == gamecontrol[GC_RECORDGIF][1]) // remappable F9
 		((moviemode) ? M_StopMovie : M_StartMovie)();
 	else
 		return false;
 	return true;
 }
 
+// ==========================================================================
+//                       TRANSLATION FUNCTIONS
+// ==========================================================================
 
-
-
-
-
-
+// M_StartupLocale.
+// Sets up gettext to translate SRB2's strings.
 #ifdef GETTEXT
 	#if defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON)
 		#define GETTEXTDOMAIN1 "/usr/share/locale"
@@ -2410,23 +2410,23 @@ boolean M_ScreenshotResponder(event_t *ev)
 	#elif defined (_WIN32)
 		#define GETTEXTDOMAIN1 "."
 	#endif
-#endif  
+#endif // GETTEXT
 
 void M_StartupLocale(void)
 {
 #ifdef GETTEXT
 	char *textdomhandle = NULL;
-#endif  
+#endif //GETTEXT
 
 	CONS_Printf("M_StartupLocale...\n");
 
 	setlocale(LC_ALL, "");
 
-
+	// Do not set numeric locale as that affects atof
 	setlocale(LC_NUMERIC, "C");
 
 #ifdef GETTEXT
-
+	// FIXME: global name define anywhere?
 #ifdef GETTEXTDOMAIN1
 	textdomhandle = bindtextdomain("srb2", GETTEXTDOMAIN1);
 #endif
@@ -2446,20 +2446,20 @@ void M_StartupLocale(void)
 		textdomain("srb2");
 	else
 		CONS_Printf("Could not find locale text domain!\n");
-#endif  
+#endif //GETTEXT
 }
 
+// ==========================================================================
+//                        MISC STRING FUNCTIONS
+// ==========================================================================
 
-
-
-
-                                                   
-                               
-   
-                                
-                                                                         
-                             
-    
+/** Returns a temporary string made out of varargs.
+  * For use with CONS_Printf().
+  *
+  * \param format Format string.
+  * \return Pointer to a static buffer of 1024 characters, containing the
+  *         resulting string.
+  */
 char *va(const char *format, ...)
 {
 	va_list argptr;
@@ -2472,14 +2472,14 @@ char *va(const char *format, ...)
 	return string;
 }
 
-                                                                               
-                                                         
-                                                             
-   
-                                                    
-                                                         
-                                                         
-    
+/** Creates a string in the first argument that is the second argument followed
+  * by the third argument followed by the first argument.
+  * Useful for making filenames with full path. s1 = s2+s3+s1
+  *
+  * \param s1 First string, suffix, and destination.
+  * \param s2 Second string. Ends up first in the result.
+  * \param s3 Third string. Ends up second in the result.
+  */
 void strcatbf(char *s1, const char *s2, const char *s3)
 {
 	char tmp[1024];
@@ -2490,13 +2490,13 @@ void strcatbf(char *s1, const char *s2, const char *s3)
 	strcat(s1, tmp);
 }
 
-                                                                  
-                                                                          
-                                                          
-   
-                                     
-                                                            
-    
+/** Converts an ASCII Hex string into an integer. Thanks, Borland!
+  * <Inuyasha> I don't know if this belongs here specifically, but it sure
+  *            doesn't belong in p_spec.c, that's for sure
+  *
+  * \param hexStg Hexadecimal string.
+  * \return an Integer based off the contents of the string.
+  */
 INT32 axtoi(const char *hexStg)
 {
 	INT32 n = 0;
@@ -2508,11 +2508,11 @@ INT32 axtoi(const char *hexStg)
 	{
 		if (hexStg[n] == '\0')
 			break;
-		if (hexStg[n] >= '0' && hexStg[n] <= '9')  
+		if (hexStg[n] >= '0' && hexStg[n] <= '9') // 0-9
 			digit[n] = (hexStg[n] & 0x0f);
-		else if (hexStg[n] >= 'a' && hexStg[n] <= 'f')  
+		else if (hexStg[n] >= 'a' && hexStg[n] <= 'f') // a-f
 			digit[n] = (hexStg[n] & 0x0f) + 9;
-		else if (hexStg[n] >= 'A' && hexStg[n] <= 'F')  
+		else if (hexStg[n] >= 'A' && hexStg[n] <= 'F') // A-F
 			digit[n] = (hexStg[n] & 0x0f) + 9;
 		else
 			break;
@@ -2530,28 +2530,28 @@ INT32 axtoi(const char *hexStg)
 	return intValue;
 }
 
+// Token parser variables
 
+static UINT32 oldendPos = 0; // old value of endPos, used by M_UnGetToken
+static UINT32 endPos = 0; // now external to M_GetToken, but still static
 
-static UINT32 oldendPos = 0;  
-static UINT32 endPos = 0;  
-
-                                                                                         
-                                                                                                                              
-                                                                                                                         
-                                                                                 
-               
-   
-                                                                                                                                        
-                                                                                                                                               
-                                                                                                                                               
-  
+/** Token parser for TEXTURES, ANIMDEFS, and potentially other lumps later down the line.
+  * Was originally R_GetTexturesToken when I was coding up the TEXTURES parser, until I realized I needed it for ANIMDEFS too.
+  * Parses up to the next whitespace character or comma. When finding the start of the next token, whitespace is skipped.
+  * Commas are not; if a comma is encountered, then THAT'S returned as the token.
+  * -Shadow Hog
+  *
+  * \param inputString The string to be parsed. If NULL is supplied instead of a string, it will continue parsing the last supplied one.
+  * The pointer to the last string supplied is stored as a static variable, so be careful not to free it while this function is still using it!
+  * \return A pointer to a string, containing the fetched token. This is in freshly allocated memory, so be sure to Z_Free() it as appropriate.
+*/
 char *M_GetToken(const char *inputString)
 {
-	static const char *stringToUse = NULL;  
+	static const char *stringToUse = NULL; // Populated if inputString != NULL; used otherwise
 	static UINT32 startPos = 0;
-
+//	static UINT32 endPos = 0;
 	static UINT32 stringLength = 0;
-	static UINT8 inComment = 0;  
+	static UINT8 inComment = 0; // 0 = not in comment, 1 = // Single-line, 2 = /* Multi-line */
 	char *texturesToken = NULL;
 	UINT32 texturesTokenLength = 0;
 
@@ -2569,39 +2569,39 @@ char *M_GetToken(const char *inputString)
 	if (stringToUse == NULL)
 		return NULL;
 
-
+	// Try to detect comments now, in case we're pointing right at one
 	if (startPos < stringLength - 1
 		&& inComment == 0)
 	{
 		if (stringToUse[startPos] == '/'
 			&& stringToUse[startPos+1] == '/')
 		{
-
+			//Single-line comment start
 			inComment = 1;
 		}
 		else if (stringToUse[startPos] == '/'
 			&& stringToUse[startPos+1] == '*')
 		{
-
+			//Multi-line comment start
 			inComment = 2;
 		}
 	}
 
-
+	// Find the first non-whitespace char, or else the end of the string trying
 	while ((stringToUse[startPos] == ' '
 			|| stringToUse[startPos] == '\t'
 			|| stringToUse[startPos] == '\r'
 			|| stringToUse[startPos] == '\n'
 			|| stringToUse[startPos] == '\0'
-			|| stringToUse[startPos] == '=' || stringToUse[startPos] == ';'  
+			|| stringToUse[startPos] == '=' || stringToUse[startPos] == ';' // UDMF TEXTMAP.
 			|| inComment != 0)
 			&& startPos < stringLength)
 	{
-
+		// Try to detect comment endings now
 		if (inComment == 1
 			&& stringToUse[startPos] == '\n')
 		{
-
+			// End of line for a single-line comment
 			inComment = 0;
 		}
 		else if (inComment == 2
@@ -2609,38 +2609,38 @@ char *M_GetToken(const char *inputString)
 			&& stringToUse[startPos] == '*'
 			&& stringToUse[startPos+1] == '/')
 		{
-
+			// End of multi-line comment
 			inComment = 0;
-			startPos++;  
+			startPos++; // Make damn well sure we're out of the comment ending at the end of it all
 		}
 
 		startPos++;
 
-
+		// Try to detect comment starts now
 		if (startPos < stringLength - 1
 			&& inComment == 0)
 		{
 			if (stringToUse[startPos] == '/'
 				&& stringToUse[startPos+1] == '/')
 			{
-
+				//Single-line comment start
 				inComment = 1;
 			}
 			else if (stringToUse[startPos] == '/'
 				&& stringToUse[startPos+1] == '*')
 			{
-
+				//Multi-line comment start
 				inComment = 2;
 			}
 		}
 	}
 
-
+	// If the end of the string is reached, no token is to be read
 	if (startPos == stringLength) {
 		endPos = stringLength;
 		return NULL;
 	}
-
+	// Else, if it's one of these three symbols, capture only this one character
 	else if (stringToUse[startPos] == ','
 			|| stringToUse[startPos] == '{'
 			|| stringToUse[startPos] == '}')
@@ -2651,7 +2651,7 @@ char *M_GetToken(const char *inputString)
 		texturesToken[1] = '\0';
 		return texturesToken;
 	}
-
+	// Return entire string within quotes, except without the quotes.
 	else if (stringToUse[startPos] == '"')
 	{
 		endPos = ++startPos;
@@ -2659,17 +2659,17 @@ char *M_GetToken(const char *inputString)
 			endPos++;
 
 		texturesTokenLength = endPos++ - startPos;
-
+		// Assign the memory. Don't forget an extra byte for the end of the string!
 		texturesToken = (char *)Z_Malloc((texturesTokenLength+1)*sizeof(char),PU_STATIC,NULL);
-
+		// Copy the string.
 		M_Memcpy(texturesToken, stringToUse+startPos, (size_t)texturesTokenLength);
-
+		// Make the final character NUL.
 		texturesToken[texturesTokenLength] = '\0';
 
 		return texturesToken;
 	}
 
-
+	// Now find the end of the token. This includes several additional characters that are okay to capture as one character, but not trailing at the end of another token.
 	endPos = startPos + 1;
 	while ((stringToUse[endPos] != ' '
 			&& stringToUse[endPos] != '\t'
@@ -2678,45 +2678,45 @@ char *M_GetToken(const char *inputString)
 			&& stringToUse[endPos] != ','
 			&& stringToUse[endPos] != '{'
 			&& stringToUse[endPos] != '}'
-			&& stringToUse[endPos] != '=' && stringToUse[endPos] != ';'  
+			&& stringToUse[endPos] != '=' && stringToUse[endPos] != ';' // UDMF TEXTMAP.
 			&& inComment == 0)
 			&& endPos < stringLength)
 	{
 		endPos++;
-
+		// Try to detect comment starts now; if it's in a comment, we don't want it in this token
 		if (endPos < stringLength - 1
 			&& inComment == 0)
 		{
 			if (stringToUse[endPos] == '/'
 				&& stringToUse[endPos+1] == '/')
 			{
-
+				//Single-line comment start
 				inComment = 1;
 			}
 			else if (stringToUse[endPos] == '/'
 				&& stringToUse[endPos+1] == '*')
 			{
-
+				//Multi-line comment start
 				inComment = 2;
 			}
 		}
 	}
 	texturesTokenLength = endPos - startPos;
 
-
+	// Assign the memory. Don't forget an extra byte for the end of the string!
 	texturesToken = (char *)Z_Malloc((texturesTokenLength+1)*sizeof(char),PU_STATIC,NULL);
-
+	// Copy the string.
 	M_Memcpy(texturesToken, stringToUse+startPos, (size_t)texturesTokenLength);
-
+	// Make the final character NUL.
 	texturesToken[texturesTokenLength] = '\0';
 	return texturesToken;
 }
 
-                                   
-                                                                                           
-                                                                                                      
-                              
-   
+/** Undoes the last M_GetToken call
+  * The current position along the string being parsed is reset to the last saved position.
+  * This exists mostly because of R_ParseTexture/R_ParsePatch honestly, but could be useful elsewhere?
+  * -Monster Iestyn (22/10/16)
+ */
 void M_UnGetToken(void)
 {
 	endPos = oldendPos;
@@ -2757,8 +2757,8 @@ void M_TokenizerSetEndPos(UINT32 newPos)
 		Tokenizer_SetEndPos(globalTokenizer, newPos);
 }
 
-                           
-    
+/** Count bits in a number.
+  */
 UINT8 M_CountBits(UINT32 num, UINT8 size)
 {
 	UINT8 i, sum = 0;
@@ -2784,12 +2784,12 @@ const char *GetRevisionString(void)
 	return rev;
 }
 
-                                                        
-                                                          
-                           
-                                                            
-                                 
-    
+/** Set of functions to take in a size_t as an argument,
+  * put the argument in a character buffer, and return the
+  * pointer to that buffer.
+  * This is to eliminate usage of PRIdS, so gettext can work
+  * with *all* of SRB2's strings.
+  */
 char *sizeu1(size_t num)
 {
 	static char sizeu1_buf[28];
@@ -2830,8 +2830,8 @@ void *M_Memcpy(void *dest, const void *src, size_t n)
 	return memcpy(dest, src, n);
 }
 
-                                                                   
-  
+/** Return the appropriate message for a file error or end of file.
+*/
 const char *M_FileError(FILE *fp)
 {
 	if (ferror(fp))
@@ -2840,8 +2840,8 @@ const char *M_FileError(FILE *fp)
 		return "end-of-file";
 }
 
-                                            
-  
+/** Return the number of parts of this path.
+*/
 int M_PathParts(const char *path)
 {
 	int n;
@@ -2856,7 +2856,7 @@ int M_PathParts(const char *path)
 			p += strspn(p, PATHSEP);
 		else
 		{
-			if (*t) 
+			if (*t)/* there is something after the final delimiter */
 				n++;
 			break;
 		}
@@ -2864,8 +2864,8 @@ int M_PathParts(const char *path)
 	return n;
 }
 
-                                             
-  
+/** Check whether a path is an absolute path.
+*/
 boolean M_IsPathAbsolute(const char *path)
 {
 #ifdef _WIN32
@@ -2875,8 +2875,8 @@ boolean M_IsPathAbsolute(const char *path)
 #endif
 }
 
-                                      
-  
+/** I_mkdir for each part of the path.
+*/
 void M_MkdirEachUntil(const char *cpath, int start, int end, int mode)
 {
 	char path[MAX_WADPATH];
@@ -2954,7 +2954,7 @@ int M_JumpWordReverse(const char *line, int offset)
 {
 	int (*is)(int);
 	int c;
-	if (offset == 0)  
+	if (offset == 0) // Don't let "--offset" later result in a negative value
 		return 0;
 	c = line[--offset];
 	if (isspace(c))
@@ -2972,23 +2972,23 @@ int M_JumpWordReverse(const char *line, int offset)
 
 const char * M_Ftrim (double f)
 {
-	static char dig[9]; 
+	static char dig[9];/* "0." + 6 digits (6 is printf's default) */
 	int i;
-	 
+	/* I know I said it's the default, but just in case... */
 	sprintf(dig, "%.6f", fabs(modf(f, &f)));
-	 
+	/* trim trailing zeroes */
 	for (i = strlen(dig)-1; dig[i] == '0'; --i)
 		;
-	if (dig[i] == '.') 
+	if (dig[i] == '.')/* :NOTHING: */
 		return "";
 	else
 	{
 		dig[i + 1] = '\0';
-		return &dig[1]; 
+		return &dig[1];/* skip the 0 */
 	}
 }
 
-
+// Returns true if the string is empty.
 boolean M_IsStringEmpty(const char *s)
 {
 	const char *ch = s;
@@ -3007,7 +3007,7 @@ boolean M_IsStringEmpty(const char *s)
 	return true;
 }
 
-
+// Converts a string containing a whole number into an int. Returns false if the conversion failed.
 boolean M_StringToNumber(const char *input, int *out)
 {
 	char *end_position = NULL;
@@ -3026,7 +3026,7 @@ boolean M_StringToNumber(const char *input, int *out)
 	return true;
 }
 
-
+// Converts a string containing a number into a double. Returns false if the conversion failed.
 boolean M_StringToDecimal(const char *input, double *out)
 {
 	char *end_position = NULL;
@@ -3045,7 +3045,7 @@ boolean M_StringToDecimal(const char *input, double *out)
 	return true;
 }
 
-
+// Rounds off floating numbers and checks for 0 - 255 bounds
 int M_RoundUp(double number)
 {
 	if (number > 255.0l)

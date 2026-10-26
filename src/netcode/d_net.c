@@ -8,13 +8,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
-
-
-
-
+/// \file  d_net.c
+/// \brief SRB2 network game communication and protocol, all OS independent parts.
+//
+///        Implement a Sliding window protocol without receiver window
+///        (out of order reception)
+///        This protocol uses a mix of "goback n" and "selective repeat" implementation
+///        The NOTHING packet is sent when connection is idle to acknowledge packets
 
 #include "../doomdef.h"
 #include "../g_game.h"
@@ -30,31 +30,31 @@
 #include "net_command.h"
 #include "../z_zone.h"
 #include "i_tcp.h"
-#include "../d_main.h"  
+#include "../d_main.h" // srb2home
 
-
-
-
-
-
-
-
-
-
-
-
-
+//
+// NETWORKING
+//
+// gametic is the tic about to (or currently being) run
+// Server:
+//   maketic is the tic that hasn't had control made for it yet
+//   nettics is the tic for each node
+//   firstticstosend is the lowest value of nettics
+// Client:
+//   neededtic is the tic needed by the client to run the game
+//   firstticstosend is used to optimize a condition
+// Normally maketic >= gametic > 0
 
 #define FORCECLOSE 0x8000
 tic_t connectiontimeout = (10*TICRATE);
 
-
+/// \brief network packet
 doomcom_t *doomcom = NULL;
-
+/// \brief network packet data, points inside doomcom
 doomdata_t *netbuffer = NULL;
 
 #ifdef DEBUGFILE
-FILE *debugfile = NULL;  
+FILE *debugfile = NULL; // put some net info in a file during the game
 #endif
 
 #define MAXREBOUND 8
@@ -62,7 +62,7 @@ static doomdata_t reboundstore[MAXREBOUND];
 static INT16 reboundsize[MAXREBOUND];
 static INT32 rebound_head, rebound_tail;
 
-
+/// \brief max length per packet
 INT16 hardware_MAXPACKETLENGTH;
 
 boolean (*I_NetGet)(void) = NULL;
@@ -80,7 +80,7 @@ boolean (*I_SetBanAddress) (const char *address, const char *mask) = NULL;
 boolean *bannednode = NULL;
 
 
-
+// network stats
 static tic_t statstarttic;
 INT32 getbytes = 0;
 INT64 sendbytes = 0;
@@ -88,7 +88,7 @@ static INT32 retransmit = 0, duppacket = 0;
 static INT32 sendackpacket = 0, getackpacket = 0;
 INT32 ticruned = 0, ticmiss = 0;
 
-
+// globals
 INT32 getbps, sendbps;
 float lostpercent, duppercent, gamelostpercent;
 INT32 packetheaderlength;
@@ -127,9 +127,9 @@ boolean Net_GetNetStat(void)
 	return 0;
 }
 
-
-
-
+// -----------------------------------------------------------------
+// Some structs and functions for acknowledgement of packets
+// -----------------------------------------------------------------
 #define MAXACKPACKETS 192
 #define MAXACKTOSEND 96
 #define URGENTFREESLOTNUM 10
@@ -139,10 +139,10 @@ typedef struct
 {
 	UINT8 acknum;
 	UINT8 nextacknum;
-	UINT8 destinationnode;  
-	tic_t senttime;  
-	UINT16 length;  
-	UINT16 resentnum;  
+	UINT8 destinationnode; // The node to send the ack to
+	tic_t senttime; // The time when the ack was sent
+	UINT16 length; // The packet size
+	UINT16 resentnum; // The number of times the ack has been resent
 	union {
 		SINT8 raw[MAXPACKETLENGTH];
 		doomdata_t data;
@@ -151,22 +151,22 @@ typedef struct
 
 typedef enum
 {
-	NF_CLOSE = 1,  
-	NF_TIMEOUT = 2,  
+	NF_CLOSE = 1, // Flag is set when connection is closing
+	NF_TIMEOUT = 2, // Flag is set when the node got a timeout
 } node_flags_t;
 
-
+// Table of packets that were not acknowleged can be resent (the sender window)
 static ackpak_t ackpak[MAXACKPACKETS];
 
 typedef struct
 {
-
+	// ack return to send (like sliding window protocol)
 	UINT8 firstacktosend;
 
-
+	// detect connection lost
 	tic_t lasttimepacketreceived;
 
-
+	// flow control: do not send too many packets with ack
 	UINT8 remotefirstack;
 	UINT8 nextacknum;
 
@@ -251,10 +251,10 @@ void Net_RefreshTimeouts(void)
 	}
 }
 
-
-
-
-
+// return <0 if a < b (mod 256)
+//         0 if a = n (mod 256)
+//        >0 if a > b (mod 256)
+// mnemonic: to use it compare to 0: cmpack(a,b)<0 is "a < b" ...
 FUNCMATH static INT32 cmpack(UINT8 a, UINT8 b)
 {
 	register INT32 d = a - b;
@@ -264,19 +264,19 @@ FUNCMATH static INT32 cmpack(UINT8 a, UINT8 b)
 	return d;
 }
 
-                                                                              
-   
-                                                           
-                                           
-    
+/** Sets freeack to a free acknum and copies the netbuffer in the ackpak table
+  *
+  * \param freeack  The address to store the free acknum at
+  * \return True if a free acknum was found
+  */
 static boolean GetFreeAcknum(UINT8 *freeack)
 {
 	node_t *node = &nodes[doomcom->remotenode];
 	INT32 numfreeslot = 0;
 
-	                                                                        
-                                                                       
-                                                                         
+	/* A slow node may use at most one third of the global sender window for
+	 * low-priority traffic. Urgent protocol/game-state packets retain the
+	 * original per-node window and can still get through reserved slots. */
 	if (netbuffer->packettype >= PT_CANFAIL
 	&& Net_GetReliableBacklog(doomcom->remotenode, NULL) >= MAXACKPACKETS / 3)
 		return false;
@@ -290,7 +290,7 @@ static boolean GetFreeAcknum(UINT8 *freeack)
 	for (INT32 i = 0; i < MAXACKPACKETS; i++)
 		if (!ackpak[i].acknum)
 		{
-
+			// For low priority packets, make sure to let freeslots so urgent packets can be sent
 			if (netbuffer->packettype >= PT_CANFAIL)
 			{
 				numfreeslot++;
@@ -311,7 +311,7 @@ static boolean GetFreeAcknum(UINT8 *freeack)
 
 			*freeack = ackpak[i].acknum;
 
-			sendackpacket++;  
+			sendackpacket++; // For stat
 
 			return true;
 		}
@@ -323,7 +323,7 @@ static boolean GetFreeAcknum(UINT8 *freeack)
 	return false;
 }
 
-
+// Get the latest consecutive acknowledgement for this node.
 static UINT8 GetAcktosend(INT32 node)
 {
 	return nodes[node].firstacktosend;
@@ -338,17 +338,17 @@ static void RemoveAck(INT32 i)
 		Net_CloseConnection(node);
 }
 
-
+// We have got a packet, proceed the ack request and ack return
 static boolean Processackpak(void)
 {
 	boolean goodpacket = true;
 	node_t *node = &nodes[doomcom->remotenode];
 
-
+	// Received an ack return, so remove the ack in the list
 	if (netbuffer->ackreturn && cmpack(node->remotefirstack, netbuffer->ackreturn) < 0)
 	{
 		node->remotefirstack = netbuffer->ackreturn;
-
+		// Search the ackbuffer and free it
 		for (INT32 i = 0; i < MAXACKPACKETS; i++)
 			if (ackpak[i].acknum && ackpak[i].destinationnode == node - nodes
 				&& cmpack(ackpak[i].acknum, netbuffer->ackreturn) <= 0)
@@ -357,7 +357,7 @@ static boolean Processackpak(void)
 			}
 	}
 
-
+	// Received a packet with ack, queue it to send the ack back
 	if (netbuffer->ack)
 	{
 		UINT8 ack = netbuffer->ack;
@@ -366,12 +366,12 @@ static boolean Processackpak(void)
 		{
 			DEBFILE(va("Discard(1) ack %d (duplicated)\n", ack));
 			duppacket++;
-			goodpacket = false;  
+			goodpacket = false; // Discard packet (duplicate)
 		}
 		else
 		{
-
-
+			// Only accept the next consecutive reliable packet. If one arrives
+			// out of order, discard it so the sender reliably retransmits it.
 			UINT8 nextfirstack = (UINT8)(node->firstacktosend + 1);
 			if (!nextfirstack)
 				nextfirstack = 1;
@@ -380,7 +380,7 @@ static boolean Processackpak(void)
 			{
 				node->firstacktosend = nextfirstack;
 			}
-			else  
+			else // Out of order packet
 			{
 				DEBFILE(va("out of order packet (%d expected)\n", nextfirstack));
 				goodpacket = false;
@@ -392,7 +392,7 @@ static boolean Processackpak(void)
 
 void Net_ConnectionTimeout(INT32 node)
 {
-
+	// Don't timeout several times
 	if (nodes[node].flags & NF_TIMEOUT)
 		return;
 	nodes[node].flags |= NF_TIMEOUT;
@@ -407,9 +407,9 @@ void Net_ConnectionTimeout(INT32 node)
 		&& playeringame[netnodes[node].player2])
 			hasplayer = true;
 
-
-
-
+		// A half-connected client can already have netnodes[node].ingame set even
+		// though no XD_ADDPLAYER ever completed. There is nobody for SendKick to
+		// remove in that state, so close both transport and game-node state.
 		if (netnodes[node].ingame && hasplayer)
 			SendKicksForNode(node, KICK_MSG_TIMEOUT | KICK_MSG_KEEP_BODY);
 		else
@@ -421,19 +421,19 @@ void Net_ConnectionTimeout(INT32 node)
 	else
 		CL_HandleTimeout();
 
-
-
+	// Do not redo it quickly (if we do not close connection it is
+	// for a good reason!)
 	nodes[node].lasttimepacketreceived = I_GetTime();
 
-
-
-
+	// Give the timeout/close packets a fresh retry budget. Without this, a
+	// connection that had already accumulated retries could be dropped before
+	// its final state reached the other side.
 	for (INT32 i = 0; i < MAXACKPACKETS; i++)
 		if (ackpak[i].acknum && ackpak[i].destinationnode == node)
 			ackpak[i].resentnum = 0;
 }
 
-
+// Resend the data if needed
 void Net_AckTicker(void)
 {
 	static tic_t next_congestion_notice[MAXNETNODES];
@@ -459,7 +459,7 @@ void Net_AckTicker(void)
 			ackpak[i].senttime = I_GetTime();
 			ackpak[i].resentnum++;
 			ackpak[i].nextacknum = node->nextacknum;
-			retransmit++;  
+			retransmit++; // For stat
 			HSendPacket((INT32)(node - nodes), false, ackpak[i].acknum,
 				(size_t)(ackpak[i].length - BASEPACKETSIZE));
 		}
@@ -467,7 +467,7 @@ void Net_AckTicker(void)
 
 	for (INT32 i = 1; i < MAXNETNODES; i++)
 	{
-
+		// This is something like node open flag
 		if (nodes[i].firstacktosend)
 		{
 			UINT16 retries;
@@ -491,8 +491,8 @@ void Net_AckTicker(void)
 	}
 }
 
-
-
+// Remove last packet received ack before resending the ackreturn
+// (the higher layer doesn't have room, or something else ....)
 void Net_UnAcknowledgePacket(INT32 node)
 {
 	DEBFILE(va("UnAcknowledge node %d\n", node));
@@ -503,11 +503,11 @@ void Net_UnAcknowledgePacket(INT32 node)
 		nodes[node].firstacktosend = UINT8_MAX;
 }
 
-                                         
-   
-                                               
-   
-    
+/** Checks if all acks have been received
+  *
+  * \return True if all acks have been received
+  *
+  */
 static boolean Net_AllAcksReceived(void)
 {
 	for (INT32 i = 0; i < MAXACKPACKETS; i++)
@@ -517,11 +517,11 @@ static boolean Net_AllAcksReceived(void)
 	return true;
 }
 
-                            
-   
-                                     
-   
-    
+/** Waits for all ackreturns
+  *
+  * \param timeout Timeout in seconds
+  *
+  */
 void Net_WaitAllAckReceived(UINT32 timeout)
 {
 	tic_t tictac = I_GetTime();
@@ -558,11 +558,11 @@ static void InitAck(void)
 		InitNode(&nodes[i]);
 }
 
-                                           
-   
-                                               
-   
-    
+/** Removes all acks of a given packet type
+  *
+  * \param packettype The packet type to forget
+  *
+  */
 void Net_AbortPacketType(UINT8 packettype)
 {
 	for (INT32 i = 0; i < MAXACKPACKETS; i++)
@@ -573,11 +573,11 @@ void Net_AbortPacketType(UINT8 packettype)
 		}
 }
 
+// -----------------------------------------------------------------
+// end of acknowledge function
+// -----------------------------------------------------------------
 
-
-
-
-
+// remove a node, clear all ack from this node and reset askret
 void Net_CloseConnection(INT32 node)
 {
 	boolean forceclose = (node & FORCECLOSE) != 0;
@@ -585,7 +585,7 @@ void Net_CloseConnection(INT32 node)
 	if (node == -1)
 	{
 		DEBFILE(M_GetText("Net_CloseConnection: node -1 detected!\n"));
-		return;  
+		return; // nope, just ignore it
 	}
 
 	node &= ~FORCECLOSE;
@@ -593,7 +593,7 @@ void Net_CloseConnection(INT32 node)
 	if (!node)
 		return;
 
-	if (node < 0 || node >= MAXNETNODES)  
+	if (node < 0 || node >= MAXNETNODES) // prevent invalid nodes from crashing the game
 	{
 		DEBFILE(va(M_GetText("Net_CloseConnection: invalid node %d detected!\n"), node));
 		return;
@@ -601,19 +601,19 @@ void Net_CloseConnection(INT32 node)
 
 	nodes[node].flags |= NF_CLOSE;
 
-
+	// Send a final empty packet carrying our latest acknowledgement.
 	if (GetAcktosend(node))
 	{
 		netbuffer->packettype = PT_NOTHING;
 		HSendPacket(node, false, 0, 0);
 	}
 
-
+	// check if we are waiting for an ack from this node
 	for (INT32 i = 0; i < MAXACKPACKETS; i++)
 		if (ackpak[i].acknum && ackpak[i].destinationnode == node)
 		{
 			if (!forceclose)
-				return;  
+				return; // connection will be closed when ack is returned
 			else
 				ackpak[i].acknum = 0;
 		}
@@ -630,9 +630,9 @@ void Net_ForceCloseConnection(INT32 node)
 	Net_CloseConnection(node | FORCECLOSE);
 }
 
-
-
-
+//
+// Checksum
+//
 static UINT32 NetbufferChecksum(void)
 {
 	UINT32 c = 0x1234567;
@@ -681,7 +681,7 @@ static void fprintfstringnewline(char *s, size_t len)
 	fprintf(debugfile, "\n");
 }
 
-
+/// \warning Keep this up-to-date if you add/remove/rename packet types
 static const char *packettypename[NUMPACKETTYPE] =
 {
 	"NOTHING",
@@ -750,15 +750,15 @@ static void DebugPrintpacket(const char *header)
 
 			fprintf(debugfile, "    firsttic %u ply %d tics %d ntxtcmd %s\n    ",
 				(UINT32)serverpak->starttic, serverpak->numslots, serverpak->numtics, sizeu1(ntxtcmd));
-
+			/// \todo Display more readable information about net commands
 			fprintfstringnewline((char *)cmd, ntxtcmd);
-			                                
-                   
-    
-                                                               
-                                                  
-    
-                              
+			/*fprintfstring((char *)cmd, 3);
+			if (ntxtcmd > 4)
+			{
+				fprintf(debugfile, "[%s]", netxcmdnames[*((cmd) + 3) - 1]);
+				fprintfstring(((char *)cmd) + 4, ntxtcmd - 4);
+			}
+			fprintf(debugfile, "\n");*/
 			break;
 		}
 		case PT_CLIENTCMD:
@@ -807,7 +807,7 @@ static void DebugPrintpacket(const char *header)
 				(UINT32)LONG(netbuffer->u.filetxpak.position));
 			break;
 		case PT_REQUESTFILE:
-		default:  
+		default: // write as a raw packet
 			fprintfstringnewline((char *)netbuffer->u.textcmd,
 				(UINT8)((UINT8 *)netbuffer + doomcom->datalength - (UINT8 *)netbuffer->u.textcmd));
 			break;
@@ -894,13 +894,13 @@ static boolean ShouldDropPacket(void)
 }
 #endif
 
-
-
-
+//
+// HSendPacket
+//
 boolean HSendPacket(INT32 node, boolean reliable, UINT8 acknum, size_t packetlength)
 {
 	doomcom->datalength = (INT16)(packetlength + BASEPACKETSIZE);
-	if (node == 0)  
+	if (node == 0) // Packet is to go back to us
 	{
 		if ((rebound_head+1) % MAXREBOUND == rebound_tail)
 		{
@@ -909,7 +909,7 @@ boolean HSendPacket(INT32 node, boolean reliable, UINT8 acknum, size_t packetlen
 #endif
 			return false;
 		}
-		netbuffer->ack = netbuffer->ackreturn = 0;  
+		netbuffer->ack = netbuffer->ackreturn = 0; // don't hold over values from last packet sent/received
 		M_Memcpy(&reboundstore[rebound_head], netbuffer,
 			doomcom->datalength);
 		reboundsize[rebound_head] = doomcom->datalength;
@@ -927,8 +927,8 @@ boolean HSendPacket(INT32 node, boolean reliable, UINT8 acknum, size_t packetlen
 	if (!netgame)
 		I_Error("Tried to transmit to another node");
 
-
-
+	// do this before GetFreeAcknum because this function backups
+	// the current packet
 	doomcom->remotenode = (INT16)node;
 	if (doomcom->datalength <= 0)
 	{
@@ -940,7 +940,7 @@ boolean HSendPacket(INT32 node, boolean reliable, UINT8 acknum, size_t packetlen
 		return false;
 	}
 
-	if (node < MAXNETNODES)  
+	if (node < MAXNETNODES) // Can be a broadcast
 		netbuffer->ackreturn = GetAcktosend(node);
 	else
 		netbuffer->ackreturn = 0;
@@ -953,11 +953,11 @@ boolean HSendPacket(INT32 node, boolean reliable, UINT8 acknum, size_t packetlen
 		netbuffer->ack = acknum;
 
 	netbuffer->checksum = NetbufferChecksum();
-	sendbytes += packetheaderlength + doomcom->datalength;  
+	sendbytes += packetheaderlength + doomcom->datalength; // For stat
 
 #ifdef PACKETDROP
-
-
+	// Simulate internet :)
+	//if (rand() >= (INT32)(RAND_MAX * (PACKETLOSSRATE / 100.f)))
 	if (!ShouldDropPacket())
 	{
 #endif
@@ -982,16 +982,16 @@ boolean HSendPacket(INT32 node, boolean reliable, UINT8 acknum, size_t packetlen
 	return true;
 }
 
-
-
-
-
-
+//
+// HGetPacket
+// Returns false if no packet is waiting
+// Check Datalength and checksum
+//
 boolean HGetPacket(void)
 {
+	//boolean nodejustjoined;
 
-
-
+	// Get a packet from self
 	if (rebound_tail != rebound_head)
 	{
 		M_Memcpy(netbuffer, &reboundstore[rebound_tail], reboundsize[rebound_tail]);
@@ -1011,13 +1011,13 @@ boolean HGetPacket(void)
 
 	while(true)
 	{
-
+		//nodejustjoined = I_NetGet();
 		I_NetGet();
 
-		if (doomcom->remotenode == -1)  
+		if (doomcom->remotenode == -1) // No packet received
 			return false;
 
-		getbytes += packetheaderlength + doomcom->datalength;  
+		getbytes += packetheaderlength + doomcom->datalength; // For stat
 
 		if (doomcom->remotenode >= MAXNETNODES)
 		{
@@ -1030,9 +1030,9 @@ boolean HGetPacket(void)
 		if (netbuffer->checksum != NetbufferChecksum())
 		{
 			DEBFILE("Bad packet checksum\n");
-
-
-
+			// Do not disconnect or anything, just ignore the packet.
+			// Bad checksums with UDP tend to happen very scarcely
+			// so they are not normally an issue.
 			continue;
 		}
 
@@ -1041,26 +1041,26 @@ boolean HGetPacket(void)
 			DebugPrintpacket("GET");
 #endif
 
-		                                                             
-                              
-                                           
-                                             
-                                             
-                                              
-                                               
-                                               
-   
-                                                                                                 
-                                                                                                               
-                                                         
-            
-     
+		/*// If a new node sends an unexpected packet, just ignore it
+		if (nodejustjoined && server
+			&& !(netbuffer->packettype == PT_ASKINFO
+				|| netbuffer->packettype == PT_SERVERINFO
+				|| netbuffer->packettype == PT_PLAYERINFO
+				|| netbuffer->packettype == PT_REQUESTFILE
+				|| netbuffer->packettype == PT_ASKINFOVIAMS
+				|| netbuffer->packettype == PT_CLIENTJOIN))
+		{
+			DEBFILE(va("New node sent an unexpected %s packet\n", packettypename[netbuffer->packettype]));
+			//CONS_Alert(CONS_NOTICE, "New node sent an unexpected %s packet\n", packettypename[netbuffer->packettype]);
+			Net_CloseConnection(doomcom->remotenode | FORCECLOSE);
+			continue;
+		}*/
 
-
+		// Proceed the ack and ackreturn field
 		if (!Processackpak())
-			continue;  
+			continue; // discarded (duplicated)
 
-
+		// A packet with just ackreturn
 		if (netbuffer->packettype == PT_NOTHING)
 			continue;
 		break;
@@ -1107,7 +1107,7 @@ SINT8 I_NetMakeNode(const char *hostname)
 		if (!localhostname)
 			return newnode;
 
-
+		// retrieve portnum from address!
 		hostname = I_NetSplitAddress(localhostname, &port);
 
 		newnode = I_NetMakeNodewPort(hostname, port);
@@ -1124,10 +1124,10 @@ void D_SetDoomcom(void)
 	doomcom->extratics = 0;
 }
 
-
-
-
-
+//
+// D_CheckNetGame
+// Works out player numbers among the net participants
+//
 boolean D_CheckNetGame(void)
 {
 	boolean ret = false;
@@ -1144,11 +1144,11 @@ boolean D_CheckNetGame(void)
 	I_NetMakeNodewPort = NULL;
 
 	hardware_MAXPACKETLENGTH = MAXPACKETLENGTH;
-
-
+	// I_InitNetwork sets doomcom and netgame
+	// check and initialize the network driver
 	multiplayer = false;
 
-
+	// only dos version with external driver will return true
 	netgame = I_InitNetwork();
 	if (!netgame && !I_NetOpenSocket)
 	{
@@ -1160,9 +1160,9 @@ boolean D_CheckNetGame(void)
 		ret = true;
 	if (client && netgame)
 		netgame = false;
-	server = true;  
-
-
+	server = true; // WTF? server always true???
+		// no! The deault mode is server. Client is set elsewhere
+		// when the client executes connect command.
 
 	if (M_CheckParm("-extratic"))
 	{
@@ -1236,12 +1236,12 @@ static int pingcellcmp(const void *va, const void *vb)
 	return ( a->ms - b->ms );
 }
 
-  
-                                                    
-                                                 
-                                                     
-            
-  
+/*
+New ping command formatted nicely to present ping in
+ascending order. And with equally spaced columns.
+The caller's ping is presented at the bottom too, for
+convenience.
+*/
 
 void Command_Ping_f(void)
 {
@@ -1294,10 +1294,10 @@ void D_CloseConnection(void)
 {
 	if (netgame)
 	{
-
+		// wait the ackreturn with timout of 5 Sec
 		Net_WaitAllAckReceived(5);
 
-
+		// close all connection
 		for (INT32 i = 0; i < MAXNETNODES; i++)
 			Net_CloseConnection(i|FORCECLOSE);
 

@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Music_Emu.h"
 
@@ -93,7 +93,7 @@ static void to_uppercase( const char* in, int len, char* out )
 		if ( !(out [i] = toupper( in [i] )) )
 			return;
 	}
-	*out = 0;  
+	*out = 0; // extension too long
 }
 
 BLARGG_EXPORT gme_type_t gme_identify_extension( const char* extension_ )
@@ -114,7 +114,7 @@ BLARGG_EXPORT gme_type_t gme_identify_extension( const char* extension_ )
 BLARGG_EXPORT gme_err_t gme_identify_file( const char* path, gme_type_t* type_out )
 {
 	*type_out = gme_identify_extension( path );
-
+	// TODO: don't examine header if file has extension?
 	if ( !*type_out )
 	{
 		char header [4];
@@ -174,7 +174,7 @@ BLARGG_EXPORT gme_err_t gme_open_file( const char* path, Music_Emu** out, int sa
 	Music_Emu* emu = gme_new_emu( file_type, sample_rate );
 	CHECK_ALLOC( emu );
 	
-
+	// optimization: avoids seeking/re-reading header
 	Remaining_Reader rem( header, header_size, &in );
 	gme_err_t err = emu->load( rem );
 	in.close();
@@ -305,9 +305,9 @@ BLARGG_EXPORT gme_err_t gme_track_info( Music_Emu const* me, gme_info_t** out, i
 	info->play_length = info->length;
 	if ( info->play_length <= 0 )
 	{
-		info->play_length = info->intro_length + 2 * info->loop_length;  
+		info->play_length = info->intro_length + 2 * info->loop_length; // intro + 2 loops
 		if ( info->play_length <= 0 )
-			info->play_length = 150 * 1000;  
+			info->play_length = 150 * 1000; // 2.5 minutes
 	}
 	
 	*out = info;
@@ -359,7 +359,7 @@ BLARGG_EXPORT void      gme_set_equalizer  ( Music_Emu* me, gme_equalizer_t cons
 
 BLARGG_EXPORT void gme_equalizer( Music_Emu const* me, gme_equalizer_t* out )
 {
-	gme_equalizer_t e = gme_equalizer_t();  
+	gme_equalizer_t e = gme_equalizer_t(); // Default-init all fields to 0.0f
 	e.treble = me->equalizer().treble;
 	e.bass   = me->equalizer().bass;
 	*out = e;

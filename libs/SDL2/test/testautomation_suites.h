@@ -1,14 +1,14 @@
-   
-                                
-  
-   
+/**
+ * Reference to all test suites.
+ *
+ */
 
 #ifndef _testsuites_h
 #define _testsuites_h
 
 #include "SDL_test.h"
 
- 
+/* Test collections */
 extern SDLTest_TestSuiteReference audioTestSuite;
 extern SDLTest_TestSuiteReference clipboardTestSuite;
 extern SDLTest_TestSuiteReference eventsTestSuite;
@@ -31,7 +31,7 @@ extern SDLTest_TestSuiteReference syswmTestSuite;
 extern SDLTest_TestSuiteReference timerTestSuite;
 extern SDLTest_TestSuiteReference videoTestSuite;
 
- 
+/* All test suites */
 SDLTest_TestSuiteReference *testSuites[] = {
     &audioTestSuite,
     &clipboardTestSuite,

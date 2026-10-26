@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Hes_Apu.h"
 
@@ -17,7 +17,7 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
-bool const center_waves = true;  
+bool const center_waves = true; // reduces asymmetry and clamping when starting notes
 
 Hes_Apu::Hes_Apu()
 {
@@ -71,7 +71,7 @@ void Hes_Apu::osc_output( int index, Blip_Buffer* center, Blip_Buffer* left, Bli
 
 void Hes_Osc::run_until( synth_t& synth_, blip_time_t end_time )
 {
-	Blip_Buffer* const osc_outputs_0 = outputs [0];  
+	Blip_Buffer* const osc_outputs_0 = outputs [0]; // cache often-used values
 	if ( osc_outputs_0 && control & 0x80 )
 	{
 		int dac = this->dac;
@@ -101,16 +101,16 @@ void Hes_Osc::run_until( synth_t& synth_, blip_time_t end_time )
 			{
 				if ( volume_0 | volume_1 )
 				{
-
-					int const period = (32 - (noise & 0x1F)) * 64;  
+					// noise
+					int const period = (32 - (noise & 0x1F)) * 64; // TODO: correct?
 					unsigned noise_lfsr = this->noise_lfsr;
 					do
 					{
 						int new_dac = 0x1F & -(noise_lfsr >> 1 & 1);
-
-
+						// Implemented using "Galios configuration"
+						// TODO: find correct LFSR algorithm
 						noise_lfsr = (noise_lfsr >> 1) ^ (0xE008 & -(noise_lfsr & 1));
-
+						//noise_lfsr = (noise_lfsr >> 1) ^ (0x6000 & -(noise_lfsr & 1));
 						int delta = new_dac - dac;
 						if ( delta )
 						{
@@ -129,8 +129,8 @@ void Hes_Osc::run_until( synth_t& synth_, blip_time_t end_time )
 			}
 			else if ( !(control & 0x40) )
 			{
-
-				int phase = (this->phase + 1) & 0x1F;  
+				// wave
+				int phase = (this->phase + 1) & 0x1F; // pre-advance for optimal inner loop
 				int period = this->period * 2;
 				if ( period >= 14 && (volume_0 | volume_1) )
 				{
@@ -154,19 +154,19 @@ void Hes_Osc::run_until( synth_t& synth_, blip_time_t end_time )
 				{
 					if ( !period )
 					{
-
-
+						// TODO: Gekisha Boy assumes that period = 0 silences wave
+						//period = 0x1000 * 2;
 						period = 1;
-
-
+						//if ( !(volume_0 | volume_1) )
+						//  debug_printf( "Used period 0\n" );
 					}
 					
-
+					// maintain phase when silent
 					blargg_long count = (end_time - time + period - 1) / period;
-					phase += count;  
+					phase += count; // phase will be masked below
 					time += count * period;
 				}
-				this->phase = (phase - 1) & 0x1F;  
+				this->phase = (phase - 1) & 0x1F; // undo pre-advance
 			}
 		}
 		time -= end_time;
@@ -183,7 +183,7 @@ void Hes_Osc::run_until( synth_t& synth_, blip_time_t end_time )
 
 void Hes_Apu::balance_changed( Hes_Osc& osc )
 {
-	static short const log_table [32] = {  
+	static short const log_table [32] = { // ~1.5 db per step
 		#define ENTRY( factor ) short (factor * Hes_Osc::amp_range / 31.0 + 0.5)
 		ENTRY( 0.000000 ),ENTRY( 0.005524 ),ENTRY( 0.006570 ),ENTRY( 0.007813 ),
 		ENTRY( 0.009291 ),ENTRY( 0.011049 ),ENTRY( 0.013139 ),ENTRY( 0.015625 ),
@@ -207,14 +207,14 @@ void Hes_Apu::balance_changed( Hes_Osc& osc )
 	left  = log_table [left ];
 	right = log_table [right];
 	
-
-
-	osc.outputs [0] = osc.chans [0];  
+	// optimizing for the common case of being centered also allows easy
+	// panning using Effects_Buffer
+	osc.outputs [0] = osc.chans [0]; // center
 	osc.outputs [1] = 0;
 	if ( left != right )
 	{
-		osc.outputs [0] = osc.chans [1];  
-		osc.outputs [1] = osc.chans [2];  
+		osc.outputs [0] = osc.chans [1]; // left
+		osc.outputs [1] = osc.chans [2]; // right
 	}
 	
 	if ( center_waves )

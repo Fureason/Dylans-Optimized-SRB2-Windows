@@ -1,4 +1,4 @@
-
+// Gb_Snd_Emu 0.1.5. http://www.slack.net/~ant/
 
 #include "Gb_Apu.h"
 
@@ -17,7 +17,7 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
-
+// Gb_Osc
 
 void Gb_Osc::reset()
 {
@@ -34,7 +34,7 @@ void Gb_Osc::clock_length()
 		length--;
 }
 
-
+// Gb_Env
 
 void Gb_Env::clock_envelope()
 {
@@ -74,7 +74,7 @@ bool Gb_Env::write_register( int reg, int data )
 	return false;
 }
 
-
+// Gb_Square
 
 void Gb_Square::reset()
 {
@@ -104,8 +104,8 @@ void Gb_Square::clock_sweep()
 		}
 		else if ( sweep_freq >= 2048 )
 		{
-			sweep_delay = 0;  
-			sweep_freq = 2048;  
+			sweep_delay = 0; // don't modify channel frequency any further
+			sweep_freq = 2048; // silence sound immediately
 		}
 	}
 }
@@ -122,9 +122,9 @@ void Gb_Square::run( blip_time_t time, blip_time_t end_time, int playing )
 		amp = -amp;
 	
 	int frequency = this->frequency();
-	if ( unsigned (frequency - 1) > 2040 )  
+	if ( unsigned (frequency - 1) > 2040 ) // frequency < 1 || frequency > 2041
 	{
-
+		// really high frequency results in DC at half volume
 		amp = volume >> 1;
 		playing = false;
 	}
@@ -166,7 +166,7 @@ void Gb_Square::run( blip_time_t time, blip_time_t end_time, int playing )
 	delay = time - end_time;
 }
 
-
+// Gb_Noise
 
 void Gb_Noise::run( blip_time_t time, blip_time_t end_time, int playing )
 {
@@ -193,7 +193,7 @@ void Gb_Noise::run( blip_time_t time, blip_time_t end_time, int playing )
 		static unsigned char const table [8] = { 8, 16, 32, 48, 64, 80, 96, 112 };
 		int period = table [regs [3] & 7] << (regs [3] >> 4);
 		
-
+		// keep parallel resampled time to eliminate time conversion in the loop
 		Blip_Buffer* const output = this->output;
 		const blip_resampled_time_t resampled_period =
 				output->resampled_duration( period );
@@ -222,7 +222,7 @@ void Gb_Noise::run( blip_time_t time, blip_time_t end_time, int playing )
 	delay = time - end_time;
 }
 
-
+// Gb_Wave
 
 inline void Gb_Wave::write_register( int reg, int data )
 {
@@ -254,13 +254,13 @@ inline void Gb_Wave::write_register( int reg, int data )
 
 void Gb_Wave::run( blip_time_t time, blip_time_t end_time, int playing )
 {
-	int volume_shift = (volume - 1) & 7;  
+	int volume_shift = (volume - 1) & 7; // volume = 0 causes shift = 7
 	int frequency;
 	{
 		int amp = (wave [wave_pos] >> volume_shift & playing) * 2;
 		
 		frequency = this->frequency();
-		if ( unsigned (frequency - 1) > 2044 )  
+		if ( unsigned (frequency - 1) > 2044 ) // frequency < 1 || frequency > 2045
 		{
 			amp = 30 >> volume_shift & playing;
 			playing = false;
@@ -303,7 +303,7 @@ void Gb_Wave::run( blip_time_t time, blip_time_t end_time, int playing )
 	delay = time - end_time;
 }
 
-
+// Gb_Apu::write_osc
 
 void Gb_Apu::write_osc( int index, int reg, int data )
 {
@@ -319,7 +319,7 @@ void Gb_Apu::write_osc( int index, int reg, int data )
 			square1.sweep_freq = square1.frequency();
 			if ( (regs [0] & sq->period_mask) && (regs [0] & sq->shift_mask) )
 			{
-				square1.sweep_delay = 1;  
+				square1.sweep_delay = 1; // cause sweep to recalculate now
 				square1.clock_sweep();
 			}
 		}

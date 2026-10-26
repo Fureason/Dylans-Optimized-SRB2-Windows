@@ -40,7 +40,7 @@ extract(FILE *fp, png_uint_32 *proflen)
    png_infop info_ptr = NULL;
    png_bytep result = NULL;
 
-    
+   /* Initialize for error or no profile: */
    *proflen = 0;
 
    if (png_ptr == NULL)
@@ -130,7 +130,7 @@ extract_one_file(const char *filename)
                {
                   if (verbose)
                      printf("%s -> %s\n", filename, output);
-                   
+                  /* Success return */
                   result = 1;
                }
 
@@ -179,7 +179,7 @@ main(int argc, char **argv)
          extracted = 1;
    }
 
-    
+   /* Exit code is true if any extract succeeds */
    return extracted == 0;
 }
-#endif  
+#endif /* READ && STDIO && iCCP */

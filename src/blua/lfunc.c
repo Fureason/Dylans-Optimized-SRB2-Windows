@@ -57,20 +57,20 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
   UpVal *uv;
   while (*pp != NULL && (p = ngcotouv(*pp))->v >= level) {
     lua_assert(p->v != &p->u.value);
-    if (p->v == level) {   
-      if (isdead(g, obj2gco(p)))   
-        changewhite(obj2gco(p));   
+    if (p->v == level) {  /* found a corresponding upvalue? */
+      if (isdead(g, obj2gco(p)))  /* is it dead? */
+        changewhite(obj2gco(p));  /* ressurect it */
       return p;
     }
     pp = &p->next;
   }
-  uv = luaM_new(L, UpVal);   
+  uv = luaM_new(L, UpVal);  /* not found: create a new one */
   uv->tt = LUA_TUPVAL;
   uv->marked = luaC_white(g);
-  uv->v = level;   
-  uv->next = *pp;   
+  uv->v = level;  /* current value lives in the stack */
+  uv->next = *pp;  /* chain it in the proper position */
   *pp = obj2gco(uv);
-  uv->u.l.prev = &g->uvhead;   
+  uv->u.l.prev = &g->uvhead;  /* double link it in `uvhead' list */
   uv->u.l.next = g->uvhead.u.l.next;
   uv->u.l.next->u.l.prev = uv;
   g->uvhead.u.l.next = uv;
@@ -81,15 +81,15 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
 
 static void unlinkupval (UpVal *uv) {
   lua_assert(uv->u.l.next->u.l.prev == uv && uv->u.l.prev->u.l.next == uv);
-  uv->u.l.next->u.l.prev = uv->u.l.prev;   
+  uv->u.l.next->u.l.prev = uv->u.l.prev;  /* remove from `uvhead' list */
   uv->u.l.prev->u.l.next = uv->u.l.next;
 }
 
 
 void luaF_freeupval (lua_State *L, UpVal *uv) {
-  if (uv->v != &uv->u.value)   
-    unlinkupval(uv);   
-  luaM_free(L, uv);   
+  if (uv->v != &uv->u.value)  /* is it open? */
+    unlinkupval(uv);  /* remove from open list */
+  luaM_free(L, uv);  /* free upvalue */
 }
 
 
@@ -99,14 +99,14 @@ void luaF_close (lua_State *L, StkId level) {
   while (L->openupval != NULL && (uv = ngcotouv(L->openupval))->v >= level) {
     GCObject *o = obj2gco(uv);
     lua_assert(!isblack(o) && uv->v != &uv->u.value);
-    L->openupval = uv->next;   
+    L->openupval = uv->next;  /* remove from `open' list */
     if (isdead(g, o))
-      luaF_freeupval(L, uv);   
+      luaF_freeupval(L, uv);  /* free upvalue */
     else {
       unlinkupval(uv);
       setobj(L, &uv->u.value, uv->v);
-      uv->v = &uv->u.value;   
-      luaC_linkupval(L, uv);   
+      uv->v = &uv->u.value;  /* now current value lives here */
+      luaC_linkupval(L, uv);  /* link upvalue into `gcroot' list */
     }
   }
 }
@@ -156,18 +156,18 @@ void luaF_freeclosure (lua_State *L, Closure *c) {
 }
 
 
-  
-                                                                  
-                             
-  
+/*
+** Look for n-th local variable at line `line' in function `func'.
+** Returns NULL if not found.
+*/
 const char *luaF_getlocalname (const Proto *f, int local_number, int pc) {
   int i;
   for (i = 0; i<f->sizelocvars && f->locvars[i].startpc <= pc; i++) {
-    if (pc < f->locvars[i].endpc) {   
+    if (pc < f->locvars[i].endpc) {  /* is variable active? */
       local_number--;
       if (local_number == 0)
         return getstr(f->locvars[i].varname);
     }
   }
-  return NULL;   
+  return NULL;  /* not found */
 }

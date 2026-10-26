@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_hudlib_drawlist.c
+/// \brief a data structure for managing cached drawlists for the Lua hud lib
 
 #include "lua_hudlib_drawlist.h"
 
@@ -33,7 +33,7 @@ enum drawitem_e {
 	DI_MAX,
 };
 
-
+// A single draw item with all possible arguments needed for a draw call.
 typedef struct drawitem_s {
 	enum drawitem_e type;
 	fixed_t x;
@@ -61,7 +61,7 @@ typedef struct drawitem_s {
 	INT32 align;
 } drawitem_t;
 
-
+// The internal structure of a drawlist.
 struct huddrawlist_s {
 	drawitem_t *items;
 	size_t items_capacity;
@@ -71,7 +71,7 @@ struct huddrawlist_s {
 	size_t strbuf_len;
 };
 
-
+// alignment types for v.drawString
 enum align {
 	align_left = 0,
 	align_center,
@@ -116,10 +116,10 @@ huddrawlist_h LUA_HUD_CreateDrawList(void)
 
 void LUA_HUD_ClearDrawList(huddrawlist_h list)
 {
+	// rather than deallocate, we'll just save the existing allocation and empty
+	// it out for reuse
 
-
-
-
+	// this memset probably isn't necessary
 	if (list->items)
 	{
 		memset(list->items, 0, sizeof(drawitem_t) * list->items_capacity);
@@ -149,7 +149,7 @@ boolean LUA_HUD_IsDrawListValid(huddrawlist_h list)
 {
 	if (!list) return false;
 
-
+	// that's all we can really do to check the validity of the handle right now
 	return true;
 }
 
@@ -166,9 +166,9 @@ static size_t AllocateDrawItem(huddrawlist_h list)
 	return list->items_len++;
 }
 
-
-
-
+// copy string to list's internal string buffer
+// lua can deallocate the string before we get to use it, so it's important to
+// keep our own copy
 static const char *CopyString(huddrawlist_h list, const char* str)
 {
 	size_t lenstr;
@@ -184,8 +184,8 @@ static const char *CopyString(huddrawlist_h list, const char* str)
 			list->strbuf_capacity *= 2;
 		list->strbuf = (char*) Z_Realloc(list->strbuf, sizeof(char) * list->strbuf_capacity, PU_STATIC, NULL);
 
-
-
+		// align the string pointers to make sure old pointers don't point towards invalid addresses
+		// this is necessary since Z_ReallocAlign might actually move the string buffer in memory
 		for (i = 0; i < list->items_len; i++)
 		{
 			list->items[i].str += list->strbuf - old_offset;
@@ -485,7 +485,7 @@ void LUA_HUD_DrawList(huddrawlist_h list)
 			case DI_DrawString:
 				switch(item->align)
 				{
-
+				// hu_font
 				case align_left:
 					V_DrawString(item->x, item->y, item->flags, item->str);
 					break;
@@ -504,7 +504,7 @@ void LUA_HUD_DrawList(huddrawlist_h list)
 				case align_fixedright:
 					V_DrawRightAlignedStringAtFixed(item->x, item->y, item->flags, item->str);
 					break;
-
+				// hu_font, 0.5x scale
 				case align_small:
 					V_DrawSmallString(item->x, item->y, item->flags, item->str);
 					break;
@@ -541,7 +541,7 @@ void LUA_HUD_DrawList(huddrawlist_h list)
 				case align_smallthinfixedright:
 					V_DrawRightAlignedSmallThinStringAtFixed(item->x, item->y, item->flags, item->str);
 					break;
-
+				// tny_font
 				case align_thin:
 					V_DrawThinString(item->x, item->y, item->flags, item->str);
 					break;

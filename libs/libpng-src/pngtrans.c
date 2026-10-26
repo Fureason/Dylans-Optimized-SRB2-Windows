@@ -16,7 +16,7 @@
 #if defined(PNG_READ_SUPPORTED) || defined(PNG_WRITE_SUPPORTED)
 
 #if defined(PNG_READ_BGR_SUPPORTED) || defined(PNG_WRITE_BGR_SUPPORTED)
- 
+/* Turn on BGR-to-RGB mapping */
 void PNGAPI
 png_set_bgr(png_structrp png_ptr)
 {
@@ -30,7 +30,7 @@ png_set_bgr(png_structrp png_ptr)
 #endif
 
 #if defined(PNG_READ_SWAP_SUPPORTED) || defined(PNG_WRITE_SWAP_SUPPORTED)
- 
+/* Turn on 16-bit byte swapping */
 void PNGAPI
 png_set_swap(png_structrp png_ptr)
 {
@@ -45,7 +45,7 @@ png_set_swap(png_structrp png_ptr)
 #endif
 
 #if defined(PNG_READ_PACK_SUPPORTED) || defined(PNG_WRITE_PACK_SUPPORTED)
- 
+/* Turn on pixel packing */
 void PNGAPI
 png_set_packing(png_structrp png_ptr)
 {
@@ -65,7 +65,7 @@ png_set_packing(png_structrp png_ptr)
 #endif
 
 #if defined(PNG_READ_PACKSWAP_SUPPORTED)||defined(PNG_WRITE_PACKSWAP_SUPPORTED)
- 
+/* Turn on packed pixel swapping */
 void PNGAPI
 png_set_packswap(png_structrp png_ptr)
 {
@@ -111,11 +111,11 @@ png_set_interlace_handling(png_structrp png_ptr)
 #endif
 
 #if defined(PNG_READ_FILLER_SUPPORTED) || defined(PNG_WRITE_FILLER_SUPPORTED)
-                                                                        
-                                                                      
-                                                                          
-                                       
-   
+/* Add a filler byte on read, or remove a filler or alpha byte on write.
+ * The filler type has changed in v0.95 to allow future 2-byte fillers
+ * for 48-bit input data, as well as to avoid problems with some compilers
+ * that don't like bytes as parameters.
+ */
 void PNGAPI
 png_set_filler(png_structrp png_ptr, png_uint_32 filler, int filler_loc)
 {
@@ -124,34 +124,34 @@ png_set_filler(png_structrp png_ptr, png_uint_32 filler, int filler_loc)
    if (png_ptr == NULL)
       return;
 
-                                                                               
-                                                                        
-      
+   /* In libpng 1.6 it is possible to determine whether this is a read or write
+    * operation and therefore to do more checking here for a valid call.
+    */
    if ((png_ptr->mode & PNG_IS_READ_STRUCT) != 0)
    {
 #     ifdef PNG_READ_FILLER_SUPPORTED
-                                                                              
-                                                                             
-                                                                                
-                    
-           
-                                                                              
-                                                                              
-            
+         /* On read png_set_filler is always valid, regardless of the base PNG
+          * format, because other transformations can give a format where the
+          * filler code can execute (basically an 8 or 16-bit component RGB or G
+          * format.)
+          *
+          * NOTE: usr_channels is not used by the read code!  (This has led to
+          * confusion in the past.)  The filler is only used in the read code.
+          */
          png_ptr->filler = (png_uint_16)filler;
 #     else
          png_app_error(png_ptr, "png_set_filler not supported on read");
-         PNG_UNUSED(filler)  
+         PNG_UNUSED(filler) /* not used in the write case */
          return;
 #     endif
    }
 
-   else  
+   else /* write */
    {
 #     ifdef PNG_WRITE_FILLER_SUPPORTED
-                                                                            
-                                                                            
-            
+         /* On write the usr_channels parameter must be set correctly at the
+          * start to record the number of channels in the app-supplied data.
+          */
          switch (png_ptr->color_type)
          {
             case PNG_COLOR_TYPE_RGB:
@@ -167,10 +167,10 @@ png_set_filler(png_structrp png_ptr, png_uint_32 filler, int filler_loc)
 
                else
                {
-                                                                            
-                                                                           
-                          
-                     
+                  /* There simply isn't any code in libpng to strip out bits
+                   * from bytes when the components are less than a byte in
+                   * size!
+                   */
                   png_app_error(png_ptr,
                       "png_set_filler is invalid for"
                       " low bit depth gray output");
@@ -188,9 +188,9 @@ png_set_filler(png_structrp png_ptr, png_uint_32 filler, int filler_loc)
 #     endif
    }
 
-                                                                             
-                                                      
-      
+   /* Here on success - libpng supports the operation, set the transformation
+    * and the flag to say where the filler channel is.
+    */
    png_ptr->transformations |= PNG_FILLER;
 
    if (filler_loc == PNG_FILLER_AFTER)
@@ -200,7 +200,7 @@ png_set_filler(png_structrp png_ptr, png_uint_32 filler, int filler_loc)
       png_ptr->flags &= ~PNG_FLAG_FILLER_AFTER;
 }
 
- 
+/* Added to libpng-1.2.7 */
 void PNGAPI
 png_set_add_alpha(png_structrp png_ptr, png_uint_32 filler, int filler_loc)
 {
@@ -210,7 +210,7 @@ png_set_add_alpha(png_structrp png_ptr, png_uint_32 filler, int filler_loc)
       return;
 
    png_set_filler(png_ptr, filler, filler_loc);
-    
+   /* The above may fail to do anything. */
    if ((png_ptr->transformations & PNG_FILLER) != 0)
       png_ptr->transformations |= PNG_ADD_ALPHA;
 }
@@ -257,15 +257,15 @@ png_set_invert_mono(png_structrp png_ptr)
    png_ptr->transformations |= PNG_INVERT_MONO;
 }
 
- 
-void  
+/* Invert monochrome grayscale data */
+void /* PRIVATE */
 png_do_invert(png_row_infop row_info, png_bytep row)
 {
    png_debug(1, "in png_do_invert");
 
-                                                            
-                                      
-     
+  /* This test removed from libpng version 1.0.13 and 1.2.0:
+   *   if (row_info->bit_depth == 1 &&
+   */
    if (row_info->color_type == PNG_COLOR_TYPE_GRAY)
    {
       png_bytep rp = row;
@@ -314,8 +314,8 @@ png_do_invert(png_row_infop row_info, png_bytep row)
 
 #ifdef PNG_16BIT_SUPPORTED
 #if defined(PNG_READ_SWAP_SUPPORTED) || defined(PNG_WRITE_SWAP_SUPPORTED)
- 
-void  
+/* Swaps byte order on 16-bit depth images */
+void /* PRIVATE */
 png_do_swap(png_row_infop row_info, png_bytep row)
 {
    png_debug(1, "in png_do_swap");
@@ -329,9 +329,9 @@ png_do_swap(png_row_infop row_info, png_bytep row)
       for (i = 0; i < istop; i++, rp += 2)
       {
 #ifdef PNG_BUILTIN_BSWAP16_SUPPORTED
-                                                                    
-                               
-            
+         /* Feature added to libpng-1.6.11 for testing purposes, not
+          * enabled by default.
+          */
          *(png_uint_16*)rp = __builtin_bswap16(*(png_uint_16*)rp);
 #else
          png_byte t = *rp;
@@ -450,8 +450,8 @@ static const png_byte fourbppswaptable[256] = {
    0x8F, 0x9F, 0xAF, 0xBF, 0xCF, 0xDF, 0xEF, 0xFF
 };
 
- 
-void  
+/* Swaps pixel packing order within bytes */
+void /* PRIVATE */
 png_do_packswap(png_row_infop row_info, png_bytep row)
 {
    png_debug(1, "in png_do_packswap");
@@ -479,46 +479,46 @@ png_do_packswap(png_row_infop row_info, png_bytep row)
          *rp = table[*rp];
    }
 }
-#endif  
+#endif /* PACKSWAP || WRITE_PACKSWAP */
 
 #if defined(PNG_WRITE_FILLER_SUPPORTED) || \
     defined(PNG_READ_STRIP_ALPHA_SUPPORTED)
-                                                                         
-                                                                              
-                                                                            
-                     
-  
-                                                                              
-                                         
-   
-void  
+/* Remove a channel - this used to be 'png_do_strip_filler' but it used a
+ * somewhat weird combination of flags to determine what to do.  All the calls
+ * to png_do_strip_filler are changed in 1.5.2 to call this instead with the
+ * correct arguments.
+ *
+ * The routine isn't general - the channel must be the channel at the start or
+ * end (not in the middle) of each pixel.
+ */
+void /* PRIVATE */
 png_do_strip_channel(png_row_infop row_info, png_bytep row, int at_start)
 {
-   png_bytep sp = row;  
-   png_bytep dp = row;  
-   png_bytep ep = row + row_info->rowbytes;  
+   png_bytep sp = row; /* source pointer */
+   png_bytep dp = row; /* destination pointer */
+   png_bytep ep = row + row_info->rowbytes; /* One beyond end of row */
 
-                                                                          
-                                                                           
-                                                                       
-     
-                                                                        
-                                                                            
-      
+   /* At the start sp will point to the first byte to copy and dp to where
+    * it is copied to.  ep always points just beyond the end of the row, so
+    * the loop simply copies (channels-1) channels until sp reaches ep.
+    *
+    * at_start:        0 -- convert AG, XG, ARGB, XRGB, AAGG, XXGG, etc.
+    *            nonzero -- convert GA, GX, RGBA, RGBX, GGAA, RRGGBBXX, etc.
+    */
 
-    
+   /* GA, GX, XG cases */
    if (row_info->channels == 2)
    {
       if (row_info->bit_depth == 8)
       {
-         if (at_start != 0)  
+         if (at_start != 0) /* Skip initial filler */
             ++sp;
-         else           
+         else          /* Skip initial channel and, for sp, the filler */
          {
             sp += 2; ++dp;
          }
 
-          
+         /* For a 1 pixel wide image there is nothing to do */
          while (sp < ep)
          {
             *dp++ = *sp; sp += 2;
@@ -529,9 +529,9 @@ png_do_strip_channel(png_row_infop row_info, png_bytep row, int at_start)
 
       else if (row_info->bit_depth == 16)
       {
-         if (at_start != 0)  
+         if (at_start != 0) /* Skip initial filler */
             sp += 2;
-         else           
+         else          /* Skip initial channel and, for sp, the filler */
          {
             sp += 4; dp += 2;
          }
@@ -545,28 +545,28 @@ png_do_strip_channel(png_row_infop row_info, png_bytep row, int at_start)
       }
 
       else
-         return;  
+         return; /* bad bit depth */
 
       row_info->channels = 1;
 
-       
+      /* Finally fix the color type if it records an alpha channel */
       if (row_info->color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
          row_info->color_type = PNG_COLOR_TYPE_GRAY;
    }
 
-    
+   /* RGBA, RGBX, XRGB cases */
    else if (row_info->channels == 4)
    {
       if (row_info->bit_depth == 8)
       {
-         if (at_start != 0)  
+         if (at_start != 0) /* Skip initial filler */
             ++sp;
-         else           
+         else          /* Skip initial channels and, for sp, the filler */
          {
             sp += 4; dp += 3;
          }
 
-          
+         /* Note that the loop adds 3 to dp and 4 to sp each time. */
          while (sp < ep)
          {
             *dp++ = *sp++; *dp++ = *sp++; *dp++ = *sp; sp += 2;
@@ -577,16 +577,16 @@ png_do_strip_channel(png_row_infop row_info, png_bytep row, int at_start)
 
       else if (row_info->bit_depth == 16)
       {
-         if (at_start != 0)  
+         if (at_start != 0) /* Skip initial filler */
             sp += 2;
-         else           
+         else          /* Skip initial channels and, for sp, the filler */
          {
             sp += 8; dp += 6;
          }
 
          while (sp < ep)
          {
-             
+            /* Copy 6 bytes, skip 2 */
             *dp++ = *sp++; *dp++ = *sp++;
             *dp++ = *sp++; *dp++ = *sp++;
             *dp++ = *sp++; *dp++ = *sp; sp += 3;
@@ -596,26 +596,26 @@ png_do_strip_channel(png_row_infop row_info, png_bytep row, int at_start)
       }
 
       else
-         return;  
+         return; /* bad bit depth */
 
       row_info->channels = 3;
 
-       
+      /* Finally fix the color type if it records an alpha channel */
       if (row_info->color_type == PNG_COLOR_TYPE_RGB_ALPHA)
          row_info->color_type = PNG_COLOR_TYPE_RGB;
    }
 
    else
-      return;  
+      return; /* The filler channel has gone already */
 
-    
+   /* Fix the rowbytes value. */
    row_info->rowbytes = (size_t)(dp-row);
 }
 #endif
 
 #if defined(PNG_READ_BGR_SUPPORTED) || defined(PNG_WRITE_BGR_SUPPORTED)
- 
-void  
+/* Swaps red and blue bytes within a pixel */
+void /* PRIVATE */
 png_do_bgr(png_row_infop row_info, png_bytep row)
 {
    png_debug(1, "in png_do_bgr");
@@ -690,23 +690,23 @@ png_do_bgr(png_row_infop row_info, png_bytep row)
 #endif
    }
 }
-#endif  
+#endif /* READ_BGR || WRITE_BGR */
 
 #if defined(PNG_READ_CHECK_FOR_INVALID_INDEX_SUPPORTED) || \
     defined(PNG_WRITE_CHECK_FOR_INVALID_INDEX_SUPPORTED)
- 
-void  
+/* Added at libpng-1.5.10 */
+void /* PRIVATE */
 png_do_check_palette_indexes(png_structrp png_ptr, png_row_infop row_info)
 {
    if (png_ptr->num_palette < (1 << row_info->bit_depth) &&
-      png_ptr->num_palette > 0)  
+      png_ptr->num_palette > 0) /* num_palette can be 0 in MNG files */
    {
-                                                                          
-                                                                               
-                                                                               
-                                                                           
-                                              
-         
+      /* Calculations moved outside switch in an attempt to stop different
+       * compiler warnings.  'padding' is in *bits* within the last byte, it is
+       * an 'int' because pixel_depth becomes an 'int' in the expression below,
+       * and this calculation is used because it avoids warnings that other
+       * forms produced on either GCC or MSVC.
+       */
       int padding = PNG_PADBITS(row_info->pixel_depth, row_info->width);
       png_bytep rp = png_ptr->row_buf + row_info->rowbytes - 1;
 
@@ -714,9 +714,9 @@ png_do_check_palette_indexes(png_structrp png_ptr, png_row_infop row_info)
       {
          case 1:
          {
-                                                                 
-                                                                 
-               
+            /* in this case, all bytes must be 0 so we don't need
+             * to unpack the pixels except for the rightmost one.
+             */
             for (; rp > png_ptr->row_buf; rp--)
             {
               if ((*rp >> padding) != 0)
@@ -793,7 +793,7 @@ png_do_check_palette_indexes(png_structrp png_ptr, png_row_infop row_info)
       }
    }
 }
-#endif  
+#endif /* CHECK_FOR_INVALID_INDEX */
 
 #if defined(PNG_READ_USER_TRANSFORM_SUPPORTED) || \
     defined(PNG_WRITE_USER_TRANSFORM_SUPPORTED)
@@ -823,11 +823,11 @@ png_set_user_transform_info(png_structrp png_ptr, png_voidp
 }
 #endif
 
-                                                                            
-                                                                        
-                                                                             
-              
-   
+/* This function returns a pointer to the user_transform_ptr associated with
+ * the user transform functions.  The application should free any memory
+ * associated with this pointer before png_write_destroy and png_read_destroy
+ * are called.
+ */
 #ifdef PNG_USER_TRANSFORM_PTR_SUPPORTED
 png_voidp PNGAPI
 png_get_user_transform_ptr(png_const_structrp png_ptr)
@@ -843,13 +843,13 @@ png_get_user_transform_ptr(png_const_structrp png_ptr)
 png_uint_32 PNGAPI
 png_get_current_row_number(png_const_structrp png_ptr)
 {
-                                                                           
-                       
-      
+   /* See the comments in png.h - this is the sub-image row when reading an
+    * interlaced image.
+    */
    if (png_ptr != NULL)
       return png_ptr->row_number;
 
-   return PNG_UINT_32_MAX;  
+   return PNG_UINT_32_MAX; /* help the app not to fail silently */
 }
 
 png_byte PNGAPI
@@ -857,8 +857,8 @@ png_get_current_pass_number(png_const_structrp png_ptr)
 {
    if (png_ptr != NULL)
       return png_ptr->pass;
-   return 8;  
+   return 8; /* invalid */
 }
-#endif  
-#endif  
-#endif  
+#endif /* USER_TRANSFORM_INFO */
+#endif /* READ_USER_TRANSFORM || WRITE_USER_TRANSFORM */
+#endif /* READ || WRITE */

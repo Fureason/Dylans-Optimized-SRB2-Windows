@@ -21,7 +21,7 @@ endif ()
 
 include(GNUInstallDirs)
 
-
+# Interface library for compile definitions, flags and option
 add_library(miniupnpc-private INTERFACE)
 
 if (NO_GETADDRINFO)
@@ -33,27 +33,27 @@ if (NOT WIN32)
     MINIUPNPC_SET_SOCKET_TIMEOUT
     _BSD_SOURCE _DEFAULT_SOURCE)
   if (NOT APPLE AND NOT CMAKE_SYSTEM_NAME MATCHES ".*BSD" AND NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
-
+    # add_definitions (-D_POSIX_C_SOURCE=200112L)
     target_compile_definitions(miniupnpc-private INTERFACE _XOPEN_SOURCE=600)
   endif ()
   if (CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
     target_compile_definitions(miniupnpc-private INTERFACE _NETBSD_SOURCE)
   endif ()
 else ()
-  target_compile_definitions(miniupnpc-private INTERFACE _WIN32_WINNT=0x0501)  
+  target_compile_definitions(miniupnpc-private INTERFACE _WIN32_WINNT=0x0501) # XP or higher for getnameinfo and friends
 endif ()
 
 if (APPLE)
   target_compile_definitions(miniupnpc-private INTERFACE _DARWIN_C_SOURCE)
 endif ()
 
-
+# Set compiler specific build flags
 if (CMAKE_COMPILER_IS_GNUCC AND NOT CMAKE_SYSTEM_NAME STREQUAL "AmigaOS")
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
   target_compile_options(miniupnpc-private INTERFACE -Wall)
 endif ()
 
-
+# Suppress noise warnings
 if (MSVC)
   target_compile_definitions(miniupnpc-private INTERFACE _CRT_SECURE_NO_WARNINGS _WINSOCK_DEPRECATED_NO_WARNINGS)
 endif()
@@ -242,7 +242,7 @@ if (UPNPC_BUILD_TESTS)
 
   add_executable (minihttptestserver src/minihttptestserver.c)
 
-
+# set (UPNPC_INSTALL_TARGETS ${UPNPC_INSTALL_TARGETS} testminixml minixmlvalid testupnpreplyparse testigddescparse testminiwget)
   include(CTest)
   add_test(NAME validateminixml
            COMMAND minixmlvalid)
@@ -305,4 +305,4 @@ if (NOT UPNPC_NO_INSTALL)
   )
 endif()
 
-
+# vim: ts=2:sw=2:expandtab

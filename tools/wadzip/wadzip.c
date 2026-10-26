@@ -20,9 +20,9 @@ typedef unsigned short uint16_t;
 #include "lzf.h"
 #include "xm.h"
 
- 
+/* Note: Define WORDS_BIGENDIAN if that is the case on the target CPU. */
 
-#define MINCOMPRESS 1024  
+#define MINCOMPRESS 1024 // Don't bother compressing lumps smaller than this.
 
 #define SWAP16(n) ((((n)&0xff)<<8) | ((n)>>8))
 #define SWAP32(n)                                                       \
@@ -65,7 +65,7 @@ WRITEFUNC(write32le, uint32_t, conv32le)
 
 #define ID_IWAD 0x44415749
 #define ID_PWAD 0x44415750
-#define ID_ZWAD 0x4441575a  
+#define ID_ZWAD 0x4441575a // 'ZWAD' for lzf-compressed wad
 
 typedef struct
 {
@@ -115,7 +115,7 @@ static void readlumpdata(lump_t *lump, uint32_t csize, int compressed, FILE *fp)
 	if (usize == 0)
 	{
 		lump->len = csize - 4;
-		lump->data = cbuf + 4;  
+		lump->data = cbuf + 4; // XXX cannot be freed later
 		return;
 	}
 
@@ -151,21 +151,21 @@ static wad_t *readwad(const char *fname)
 
 	wad = xm(sizeof *wad, 1);
 
-
+	// Read wad id. If it is ZWAD, prepare to read compressed lumps.
 	wad->id = read32le(fp);
 	inputcompressed = wad->id == ID_ZWAD;
 
-
+	// Read number of lumps, and prepare space for that many.
 	wad->numlumps = read32le(fp);
 	wad->lumps = xm(sizeof wad->lumps[0], wad->numlumps);
 
-
+	// Read offset to directory.
 	dirstart = (fileoffset_t)read32le(fp);
 
 	for (ix = 0; ix < wad->numlumps; ix++)
 	{
 		fileoffset_t lumpofs;
-		uint32_t lumpsize;  
+		uint32_t lumpsize; // The compressed size, if it is compressed.
 
 		if (myseek(fp, dirstart + (16*ix), SEEK_SET) == -1)
 		{
@@ -177,8 +177,8 @@ static wad_t *readwad(const char *fname)
 		if (fread(wad->lumps[ix].name, 1, 8, fp) < 8)
 			err(1, "cannot read lump %lu name", (unsigned long)ix);
 
-
-
+		// Don't try to seek to zero-length lumps.
+		// Their offset is meaningless.
 		if (lumpsize == 0)
 		{
 			wad->lumps[ix].len = 0;
@@ -197,8 +197,8 @@ static wad_t *readwad(const char *fname)
 
 void writewad(const wad_t *wad, const char *fname, int compress)
 {
-	uint32_t *lumpofs;  
-	uint32_t *disksize;  
+	uint32_t *lumpofs; // Each lump's offset in the file.
+	uint32_t *disksize; // Each lump's disk size (compressed if applicable).
 	uint32_t dirstart;
 	uint32_t ix;
 	FILE *fp;
@@ -209,10 +209,10 @@ void writewad(const wad_t *wad, const char *fname, int compress)
 	fp = fopen(fname, "wb");
 	if (fp == NULL) err(1, "%s", fname);
 
-
+	// Write header.
 	write32le(fp, compress ? ID_ZWAD : ID_PWAD);
 	write32le(fp, wad->numlumps);
-	write32le(fp, 0);  
+	write32le(fp, 0); // Directory table comes later.
 
 	for (ix = 0; ix < wad->numlumps; ix++)
 	{
@@ -236,16 +236,16 @@ void writewad(const wad_t *wad, const char *fname, int compress)
 					wad->lumps[ix].len, cbuf + 4,
 					csize - 5)) == 0)
 			{
-
+				// Store uncompressed.
 				memcpy(cbuf + 4, wad->lumps[ix].data,
 					wad->lumps[ix].len);
 				*(uint32_t *)cbuf = 0;
 			}
 			else
 			{
-
-
-
+				// Compression succeeded.
+				// Store uncompressed size, and set compressed
+				// size properly.
 				*(uint32_t *)cbuf =
 					conv32le(wad->lumps[ix].len);
 				csize = retval + 4;
@@ -253,7 +253,7 @@ void writewad(const wad_t *wad, const char *fname, int compress)
 		}
 
 		if (!csize)
-			;  
+			; // inu: 0 length markers aren't to be written
 		else if (fwrite(cbuf, csize, 1, fp) < 1)
 		{
 			err(1, "cannot write lump %lu to %s", (unsigned long)ix,
@@ -274,7 +274,7 @@ void writewad(const wad_t *wad, const char *fname, int compress)
 
 	for (ix = 0; ix < wad->numlumps; ix++)
 	{
-
+		// Write the lump's directory entry.
 		write32le(fp, lumpofs[ix]);
 		write32le(fp, disksize[ix]);
 		if (fwrite(wad->lumps[ix].name, 1, 8, fp) < 8)
@@ -297,7 +297,7 @@ int main(int argc, char *argv[])
 	if (argc != 4 || strlen(argv[1]) != 1)
 		usage();
 
-	 
+	/* c to compress, d to decompress */
 	if (argv[1][0] == 'c') compress = 1;
 	else if (argv[1][0] == 'd') compress = 0;
 	else usage();

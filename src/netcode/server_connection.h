@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  server_connection.h
+/// \brief Server-side part of connection handling
 
 #ifndef __D_SERVER_CONNECTION__
 #define __D_SERVER_CONNECTION__

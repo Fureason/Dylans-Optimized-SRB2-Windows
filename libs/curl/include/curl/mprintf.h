@@ -23,8 +23,8 @@
  ***************************************************************************/
 
 #include <stdarg.h>
-#include <stdio.h>  
-#include "curl.h"   
+#include <stdio.h> /* needed for FILE */
+#include "curl.h"  /* for CURL_EXTERN */
 
 #ifdef  __cplusplus
 extern "C" {
@@ -47,4 +47,4 @@ CURL_EXTERN char *curl_mvaprintf(const char *format, va_list args);
 }
 #endif
 
-#endif  
+#endif /* CURLINC_MPRINTF_H */

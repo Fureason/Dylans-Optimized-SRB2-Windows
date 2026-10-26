@@ -19,33 +19,33 @@ Windows x64:
 
   script:
     - - |
-
+          # apt_toolchain
           echo -e "\e[0Ksection_start:`date +%s`:apt_toolchain[collapsed=true]\r\e[0KInstalling toolchain packages"
       - apt-get install gcc-mingw-w64-x86-64-win32
       - |
-
+          # apt_toolchain
           echo -e "\e[0Ksection_end:`date +%s`:apt_toolchain\r\e[0K"
 
     - - |
-
+          # apt_development
           echo -e "\e[0Ksection_start:`date +%s`:apt_development[collapsed=true]\r\e[0KInstalling development packages"
       - apt-get install ninja-build
       - |
-
+          # apt_development
           echo -e "\e[0Ksection_end:`date +%s`:apt_development\r\e[0K"
 
     - - |
-
+          # cmake
           echo -e "\e[0Ksection_start:`date +%s`:cmake[collapsed=false]\r\e[0KBuilding Makefiles"
       - cmake -B build.cmake -DSRB2_USE_CCACHE=YES -DSRB2_CONFIG_ERRORMODE=ON -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-mingw-static -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/toolchains/mingw.cmake
       - |
-
+          # cmake
           echo -e "\e[0Ksection_end:`date +%s`:cmake\r\e[0K"
 
     - - |
-
+          # make
           echo -e "\e[0Ksection_start:`date +%s`:make[collapsed=false]\r\e[0KCompiling SRB2"
       - make --directory=build.cmake --keep-going || make --directory=build.cmake --keep-going
       - |
-
+          # make
           echo -e "\e[0Ksection_end:`date +%s`:make\r\e[0K"

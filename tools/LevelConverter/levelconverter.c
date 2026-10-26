@@ -1,29 +1,29 @@
-
-
-
-
-
-
-
-
-
-
+//
+// Level Converter
+//
+// Converts thing types from 1.09.4 to 1.1
+//
+// By A.J. Freda
+//
+// Modified from Graue's "Heightedit"
+// and uses Graue's "LumpMod" utility.
+//
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-
+//#define STARPOSTS_ONLY
 
 #define TABLE_SIZE 16384
-int conversion[TABLE_SIZE];  
+int conversion[TABLE_SIZE]; // Conversion table.
 FILE *lvlconvfile;
 
 static inline void InitializeThingConversionTable(void)
 {
 	memset(conversion, 0, sizeof(conversion));
 
-
+	// Player starts
 	conversion[1] = 1;
 	conversion[2] = 2;
 	conversion[3] = 3;
@@ -60,7 +60,7 @@ static inline void InitializeThingConversionTable(void)
 	conversion[87] = 34;
 	conversion[89] = 35;
 
-
+	// Enemies
 	conversion[3004] = 100;
 	conversion[9] = 101;
 	conversion[58] = 102;
@@ -74,13 +74,13 @@ static inline void InitializeThingConversionTable(void)
 	conversion[2004] = 110;
 	conversion[42] = 111;
 
-
+	// Bosses
 	conversion[16] = 200;
 	conversion[2008] = 201;
 	conversion[17] = 290;
 	conversion[2049] = 291;
 
-
+	// Collectibles
 	conversion[2014] = 300;
 	conversion[69] = 301;
 	conversion[3003] = 302;
@@ -101,7 +101,7 @@ static inline void InitializeThingConversionTable(void)
 	conversion[3002] = 320;
 	conversion[3001] = 320;
 
-
+	// Boxes
 	conversion[2011] = 400;
 	conversion[2012] = 400;
 	conversion[48] = 402;
@@ -116,11 +116,11 @@ static inline void InitializeThingConversionTable(void)
 	conversion[78] = 411;
 	conversion[3000] = 412;
 
-
+	// Interactive Objects
 	conversion[33] = 500;
 	conversion[86] = 501;
 	conversion[3006] = 502;
-
+//	conversion[?] = 520;
 	conversion[23] = 521;
 	conversion[67] = 522;
 	conversion[68] = 523;
@@ -136,7 +136,7 @@ static inline void InitializeThingConversionTable(void)
 	conversion[20] = 557;
 	conversion[39] = 558;
 
-
+	// Special Placement Patterns
 	conversion[84] = 600;
 	conversion[44] = 601;
 	conversion[76] = 602;
@@ -148,7 +148,7 @@ static inline void InitializeThingConversionTable(void)
 	conversion[2046] = 608;
 	conversion[2047] = 609;
 
-
+	// Powerup Indicators/Environmental Effects/Miscellany
 	conversion[2026] = 700;
 	conversion[2024] = 701;
 	conversion[2023] = 702;
@@ -167,27 +167,27 @@ static inline void InitializeThingConversionTable(void)
 	conversion[5002] = 755;
 	conversion[2003] = 756;
 
-
+	// Greenflower Scenery
 	conversion[36] = 800;
 	conversion[70] = 801;
 	conversion[73] = 802;
 	conversion[74] = 804;
 	conversion[75] = 805;
 
-
+	// Techno Hill Scenery
 	conversion[2035] = 900;
 	conversion[2006] = 901;
 
-
+	// Deep Sea Scenery
 	conversion[81] = 1000;
 
-
+	// Castle Eggman Scenery
 	conversion[49] = 1100;
 	conversion[24] = 1101;
 	conversion[52] = 1102;
 	conversion[2001] = 1103;
 
-
+	// NiGHTS Items
 	conversion[72] = 1700;
 	conversion[61] = 1701;
 	conversion[46] = 1702;
@@ -200,7 +200,7 @@ static inline void InitializeThingConversionTable(void)
 	conversion[3009] = 1709;
 	conversion[40] = 1710;
 
-
+	// Mario Items
 	conversion[10005] = 1800;
 	conversion[10000] = 1801;
 	conversion[10001] = 1802;
@@ -213,7 +213,7 @@ static inline void InitializeThingConversionTable(void)
 	conversion[10003] = 1809;
 	conversion[10004] = 1810;
 
-
+	// Christmas Items
 	conversion[5] = 1850;
 	conversion[13] = 1851;
 	conversion[6] = 1852;
@@ -223,7 +223,7 @@ static inline void InitializeSectorConversionTable(void)
 {
 	memset(conversion, 0, sizeof(conversion));
 
-
+	// Player starts
 	conversion[690] = -1;
 	conversion[691] = -1;
 	conversion[692] = -1;
@@ -253,7 +253,7 @@ static inline void InitializeSectorConversionTable(void)
 	conversion[519] = 3 + (512 << 8);
 	conversion[984] = 2 + (512 << 8);
 
-
+	// Section 1
 	conversion[11] = 1;
 	conversion[983] = 2;
 	conversion[7] = 3;
@@ -270,7 +270,7 @@ static inline void InitializeSectorConversionTable(void)
 	conversion[996] = 14;
 	conversion[14] = 15;
 
-
+	// Section 2
 	conversion[971] = 1 << 4;
 	conversion[972] = 2 << 4;
 	conversion[973] = 3 << 4;
@@ -283,7 +283,7 @@ static inline void InitializeSectorConversionTable(void)
 	conversion[990] = 10 << 4;
 	conversion[991] = 11 << 4;
 
-
+	// Section 3
 	conversion[256] = 1 << 8;
 	conversion[512] = 2 << 8;
 	conversion[768] = 3 << 8;
@@ -300,7 +300,7 @@ static inline void InitializeSectorConversionTable(void)
 	conversion[1507] = 14 << 8;
 	conversion[1508] = 15 << 8;
 
-
+	// Section 4
 	conversion[993] = 1 << 12;
 	conversion[33] = 2 << 12;
 	conversion[982] = 2 << 12;
@@ -320,10 +320,10 @@ static inline void InitializeLinedefConversionTable(void)
 {
 	memset(conversion, 0, sizeof(conversion));
 
-
+	// Old Water Removed
 	conversion[14] = -1;
 
-
+	// Level Parameters/Misc:
 	conversion[64] = 1;
 	conversion[71] = 2;
 	conversion[18] = 3;
@@ -332,7 +332,7 @@ static inline void InitializeLinedefConversionTable(void)
 	conversion[73] = 6;
 	conversion[66] = 7;
 
-
+	// Level-Load Effects:
 	conversion[26] = 50;
 	conversion[24] = 51;
 	conversion[88] = 52;
@@ -348,7 +348,7 @@ static inline void InitializeLinedefConversionTable(void)
 	conversion[50] = 62;
 	conversion[242] = 63;
 
-
+	// Floor-Over-Floors:
 	conversion[25] = 100;
 	conversion[33] = 101;
 	conversion[44] = 102;
@@ -401,7 +401,7 @@ static inline void InitializeLinedefConversionTable(void)
 	conversion[53] = 258;
 	conversion[87] = 259;
 
-
+	// Linedef Executor Triggers:
 	conversion[96] = 300;
 	conversion[97] = 301;
 	conversion[98] = 302;
@@ -417,7 +417,7 @@ static inline void InitializeLinedefConversionTable(void)
 	conversion[13] = 312;
 	conversion[15] = 313;
 
-
+	// Linedef Executor Options:
 	conversion[101] = 400;
 	conversion[102] = 401;
 	conversion[103] = 402;
@@ -446,7 +446,7 @@ static inline void InitializeLinedefConversionTable(void)
 	conversion[126] = 427;
 	conversion[127] = 428;
 
-
+	// Scrollers/Pushers
 	conversion[100] = 500;
 	conversion[85] = 501;
 	conversion[254] = 502;
@@ -480,7 +480,7 @@ static inline void InitializeLinedefConversionTable(void)
 	conversion[228] = 546;
 	conversion[226] = 547;
 
-
+	// Lighting
 	conversion[213] = 600;
 	
 	conversion[5] = 601;
@@ -488,7 +488,7 @@ static inline void InitializeLinedefConversionTable(void)
 	conversion[61] = 603;
 	conversion[16] = 606;
 
-
+	// Translucency
 	conversion[284] = 900;
 	conversion[285] = 901;
 	conversion[286] = 902;
@@ -496,7 +496,7 @@ static inline void InitializeLinedefConversionTable(void)
 	conversion[288] = 904;
 	conversion[283] = 905;
 
-
+	// Extended numbers
 	conversion[281] = conversion[25];
 	conversion[289] = conversion[33];
 	conversion[282] = conversion[26];
@@ -565,7 +565,7 @@ static inline int ConvertStarposts(char *argv[])
 
 		fseek(lvlconvfile, -6, SEEK_CUR);
 
-		 
+		/* CHECK FOR MATCH */
 		if(type == 502)
 		{
 			int numpost = options & 31;
@@ -648,8 +648,8 @@ static inline int ConvertThings(char *argv[])
 
 		fseek(lvlconvfile, -6, SEEK_CUR);
 
-		 
-		if(type != 32000 && type != 32001)  
+		/* CHECK FOR MATCH */
+		if(type != 32000 && type != 32001) // !@#$%^ Doom Builder...
 		{
 			if(type < TABLE_SIZE && conversion[type] < 0)
 				printf("\nThing type %d no longer supported. You will have to manually change this.", type);
@@ -666,7 +666,7 @@ static inline int ConvertThings(char *argv[])
 					type = 4242;
 				}
 
-				options &= ~7;  
+				options &= ~7; // Strip skill settings
 			}
 		}
 
@@ -704,7 +704,7 @@ static inline int ConvertThings(char *argv[])
 
 static void ConvertFlat(char *garbage)
 {
-		 
+		/* CHECK FOR MATCH */
 		if(!memcmp(garbage, "FLOOR0_3\0\0\0\0", 8))
 			strncpy(garbage, "GFZFLR01\0\0\0\0", 8);
 		else if(!memcmp(garbage, "FLOOR0_6\0\0\0", 8))
@@ -822,9 +822,9 @@ static void ConvertFlat(char *garbage)
 		else if(!memcmp(garbage, "DENTFLR\0\0\0\0\0", 8))
 			strncpy(garbage, "DCZFLR11\0\0\0\0\0\0\0", 8);
 		else if(!memcmp(garbage, "DENTMETL\0\0\0\0\0", 8))
-			strncpy(garbage, "DCZFLR12\0\0\0\0\0\0\0", 8);  
+			strncpy(garbage, "DCZFLR12\0\0\0\0\0\0\0", 8); // Intentionally
 		else if(!memcmp(garbage, "FLAT14\0\0\0\0\0\0", 8))
-			strncpy(garbage, "DCZFLR12\0\0\0\0\0", 8);  
+			strncpy(garbage, "DCZFLR12\0\0\0\0\0", 8); // The same!
 		else if(!memcmp(garbage, "MFLR8_1\0\0\0\0\0", 8))
 			strncpy(garbage, "DCZFLR13\0\0\0\0\0\0", 8);
 		else if(!memcmp(garbage, "STEP2\0\0\0\0\0", 8))
@@ -898,7 +898,7 @@ static inline int ConvertSectors(char *argv[])
 			return EXIT_FAILURE;
 		}
 
-
+		// Read floor flat first.
 		if(fread(&garbage, 8, 1, lvlconvfile) < 1) {
 			puts("I CAN'T READ THE SECTOR FLOOR FLAT");
 			return EXIT_FAILURE;
@@ -919,7 +919,7 @@ static inline int ConvertSectors(char *argv[])
 
 		memset(garbage, 0, sizeof(garbage));
 
-
+		// Now do ceiling flat.
 		if(fread(&garbage, 8, 1, lvlconvfile) < 1) {
 			puts("I CAN'T READ THE SECTOR CEILING FLAT");
 			return EXIT_FAILURE;
@@ -935,10 +935,10 @@ static inline int ConvertSectors(char *argv[])
 			return EXIT_FAILURE;
 		}
 
-
+		// Skip lightlevel
 		fseek(lvlconvfile, 1 * sizeof(short), SEEK_CUR);
 
-
+		// Now do sector special.
 		if(fread(&type, sizeof(short), 1, lvlconvfile) < 1) {
 			puts("I CAN'T READ THE SECTOR SPECIAL");
 			return EXIT_FAILURE;
@@ -946,7 +946,7 @@ static inline int ConvertSectors(char *argv[])
 
 		fseek(lvlconvfile, -1 * (int)sizeof(short), SEEK_CUR);
 
-		 
+		/* CHECK FOR MATCH */
 		if(conversion[type] < 0)
 			printf("\nSector type %d no longer supported. You will have to manually change this.", type);
 		else if(conversion[type] != 0)
@@ -959,7 +959,7 @@ static inline int ConvertSectors(char *argv[])
 			return EXIT_FAILURE;
 		}
 
-		 
+		/* skip 1 short of TOTAL CRAP */
 		fseek(lvlconvfile, 1 * sizeof(short), SEEK_CUR);
 	}
 	fclose(lvlconvfile);
@@ -1004,7 +1004,7 @@ static inline int ConvertLinedefs(char *argv[])
 
 		fseek(lvlconvfile, -1 * (int)sizeof(short), SEEK_CUR);
 
-		 
+		/* CHECK FOR MATCH */
 		if(conversion[type] < 0)
 			printf("\nLinedef type %d no longer supported. You will have to manually change this.", type);
 		else if(conversion[type] != 0)
@@ -1022,7 +1022,7 @@ static inline int ConvertLinedefs(char *argv[])
 			return EXIT_FAILURE;
 		}
 
-		 
+		/* skip 3 shorts of TOTAL CRAP */
 		fseek(lvlconvfile, 3 * sizeof(short), SEEK_CUR);
 	}
 	fclose(lvlconvfile);
@@ -1038,12 +1038,12 @@ int main(int argc, char *argv[]) {
 	if(argc != 3) {
 		puts("Usage: lvlconv [filename] [mapnumber]");
 		puts("Example: lvlconv wadfile.wad 01");
-		return EXIT_FAILURE;  
+		return EXIT_FAILURE; /* YOU FAIL IT! */
 	}
 
 	if(strlen(argv[2]) != 2 || strlen(argv[1]) > 32) {
 		puts("nonono you screwed it up");
-		return EXIT_FAILURE;  
+		return EXIT_FAILURE; /* YOU LIKEWISE FAIL IT! */
 	}
 #ifdef STARPOSTS_ONLY
 	ConvertStarposts(argv);
@@ -1057,5 +1057,5 @@ int main(int argc, char *argv[]) {
 #endif
 
 	puts("\nOkay, DONE!! Enjoy the NEWLY MODIFIED WAD FILE!!! HAVE A GOOD DAY!");
-	return EXIT_SUCCESS;  
+	return EXIT_SUCCESS; /* YOU SUCCEED AT IT! :) */
 }

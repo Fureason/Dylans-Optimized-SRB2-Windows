@@ -14,16 +14,16 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file lump.c
+/// \brief Lump interface functionality.
 
 #include "wad_static.h"
 
-
-
-
-
-
+//
+// Create a lump name from the file name
+// of a lump. Used for when no name for
+// a lump was given.
+//
 char *WAD_LumpNameFromFileName(char *path)
 {
 	wad_int32_t i;
@@ -32,10 +32,10 @@ char *WAD_LumpNameFromFileName(char *path)
 	if (!file)
 		return NULL;
 
-
-
-
-
+	//
+	// Process the filename for a suitable lump name.
+	//
+	// Get rid of any hidden file period.
 	if (file[0] == '.')
 	{
 		if (!(tempname = malloc(sizeof(*file) * strlen(&file[1]))))
@@ -49,11 +49,11 @@ char *WAD_LumpNameFromFileName(char *path)
 	else
 		tempname = file;
 
-
+	// Get rid of any extensions.
 	for (i = 0; tempname[i] != '.' && tempname[i] != '\0'; i++);
 
-
-
+	// Then, take the first eight characters of
+	// the resulting filename to get the lump name.
 	if (i > 8)
 		i = 8;
 
@@ -66,9 +66,9 @@ char *WAD_LumpNameFromFileName(char *path)
 	strncpy(name, tempname, i);
 	name[i+1] = '\0';
 
-
-
-
+	//
+	// Done processing lump name.
+	//
 	free(tempname);
 	return name;
 }
@@ -174,15 +174,15 @@ static void WAD_AddLumpToTree(lump_t *lump, lump_t *destlump)
 
 lump_t *WAD_AddLump(wad_t *wad, lump_t *destlump, const char *name, const char *filename)
 {
-
+	// The open lump file.
 	FILE *file = NULL;
-
+	// Pointer to the lump.
 	lump_t *lump;
-
-	wad_uint64_t disksize;	 
-	size_t size;		 
-	wad_boolean_t compressed; 
-	void *data;		 
+	// Lump structure.
+	wad_uint64_t disksize;	// lump->disksize
+	size_t size;		// lump->size
+	wad_boolean_t compressed;// lump->compressed
+	void *data;		// lump->data
 
 	if (!wad)
 		return NULL;
@@ -260,7 +260,7 @@ inline lump_t *WAD_AddLumpByName(const char *destname, const char *name, const c
 
 lump_t *WAD_CacheLump(lump_t *lump)
 {
-	return lump;  
+	return lump; // TODO: WAD_CacheLump, dynamic lump loading.
 }
 
 inline lump_t *WAD_CacheLumpInWADByNum(wad_t *wad, wad_uint32_t num)
@@ -285,9 +285,9 @@ lump_t *WAD_MoveLump(lump_t *lump, lump_t *destlump)
 	if (!destlump)
 		return NULL;
 
-
-
-
+	//
+	// Link the previous and next nodes in the WAD tree with each other.
+	//
 	if (lump->next)
 	{
 		lump->next->prev = lump->prev;
@@ -298,7 +298,7 @@ lump_t *WAD_MoveLump(lump_t *lump, lump_t *destlump)
 		lump->prev->next = lump->next;
 	lump->wad->header->numlumps--;
 
-
+	//
 	WAD_AddLumpToTree(lump, destlump);
 
 	return lump;
@@ -321,7 +321,7 @@ inline lump_t *WAD_MoveLumpByName(const char *name, const char *destname)
 
 void WAD_UncacheLump(lump_t *lump)
 {
-	(void)lump;  
+	(void)lump; // TODO: WAD_UncacheLump, dynamic lump loading.
 }
 
 inline void WAD_UncacheLumpInWADByNum(wad_t *wad, wad_uint32_t num)
@@ -346,16 +346,16 @@ void WAD_RemoveLump(lump_t *lump)
 	if (!lump)
 		return;
 
-
-
-
+	//
+	// Link the previous and next nodes in the WAD tree with each other.
+	//
 	lump->next->prev = lump->prev;
 	lump->prev->next = lump->next;
 
-
-
-
-
+	//
+	// Modify the lump numbers for all the subsequent lumps,
+	// and the total lumps in the WAD.
+	//
 	lump->wad->header->numlumps--;
 
 	if (lump->num == 0)
@@ -364,15 +364,15 @@ void WAD_RemoveLump(lump_t *lump)
 	for (l = lump->next; l; l = l->next)
 		l->num--;
 
-
-
-
-
+	//
+	// While, at the same time, blanking the references
+	// to these nodes so they don't get removed.
+	//
 	lump->next = NULL;
 
-
-
-
+	//
+	// Free this lump's memory.
+	//
 	WAD_FreeMemory(NULL, NULL, NULL, lump, NULL);
 }
 

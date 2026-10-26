@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  screen.c
+/// \brief Handles multiple resolutions
 
 #include "doomdef.h"
 #include "doomstat.h"
@@ -29,11 +29,11 @@
 #include "d_main.h"
 #include "netcode/d_clisrv.h"
 #include "f_finale.h"
-#include "y_inter.h"  
-#include "i_sound.h"  
-#include "s_sound.h"  
-#include "g_game.h"  
-#include "p_local.h"  
+#include "y_inter.h" // usebuffer
+#include "i_sound.h" // closed captions
+#include "s_sound.h" // ditto
+#include "g_game.h" // ditto
+#include "p_local.h" // P_AutoPause()
 
 #ifdef HWRENDER
 #include "hardware/hw_main.h"
@@ -41,14 +41,14 @@
 #include "hardware/hw_model.h"
 #endif
 
+// SRB2Kart
+#include "r_fps.h" // R_GetFramerateCap
 
-#include "r_fps.h"  
+#include "lua_hud.h" // LUA_HudEnabled
 
-#include "lua_hud.h"  
-
-
-
-
+// --------------------------------------------
+// assembly or c drawer routines for 8bpp/16bpp
+// --------------------------------------------
 void (*colfunc)(void);
 void (*colfuncs[COLDRAWFUNC_MAX])(void);
 
@@ -56,16 +56,16 @@ void (*spanfunc)(void);
 void (*spanfuncs[SPANDRAWFUNC_MAX])(void);
 void (*spanfuncs_npo2[SPANDRAWFUNC_MAX])(void);
 
-
-
-
+// ------------------
+// global video state
+// ------------------
 viddef_t vid;
-INT32 setmodeneeded;  
+INT32 setmodeneeded; //video mode change needed if > 0 (the mode number to set + 1)
 UINT8 setrenderneeded = 0;
 
 static CV_PossibleValue_t scr_depth_cons_t[] = {{8, "8 bits"}, {16, "16 bits"}, {24, "24 bits"}, {32, "32 bits"}, {0, NULL}};
 
-
+//added : 03-02-98: default screen mode, as loaded/saved in config
 consvar_t cv_scr_width = CVAR_INIT ("scr_width", "1280", CV_SAVE, CV_Unsigned, NULL);
 consvar_t cv_scr_height = CVAR_INIT ("scr_height", "800", CV_SAVE, CV_Unsigned, NULL);
 consvar_t cv_scr_width_w = CVAR_INIT ("scr_width_w", "640", CV_SAVE, CV_Unsigned, NULL);
@@ -86,20 +86,20 @@ static void SCR_ChangeFullscreen(void);
 
 consvar_t cv_fullscreen = CVAR_INIT ("fullscreen", "Yes", CV_SAVE|CV_CALL, CV_YesNo, SCR_ChangeFullscreen);
 
+// =========================================================================
+//                           SCREEN VARIABLES
+// =========================================================================
 
+INT32 scr_bpp; // current video mode bytes per pixel
 
-
-
-INT32 scr_bpp;  
-
-
+// =========================================================================
 
 void SCR_SetDrawFuncs(void)
 {
-
-
-
-	if (vid.bpp == 1)  
+	//
+	//  setup the right draw routines
+	//
+	if (vid.bpp == 1) //Always run in 8bpp.
 	{
 		colfuncs[BASEDRAWFUNC] = R_DrawColumn_8;
 		spanfuncs[BASEDRAWFUNC] = R_DrawSpan_8;
@@ -169,28 +169,28 @@ void SCR_SetMode(void)
 		return;
 
 	if (!(setmodeneeded || setrenderneeded) || WipeInAction)
-		return;  
+		return; // should never happen and don't change it during a wipe, BAD!
 
 #if defined(_WIN32) && !defined(DEDICATED)
 	mode_started = I_GetPreciseTime();
 #endif
 
-
+	// Lactozilla: Renderer switching
 	if (setrenderneeded)
 	{
-
+		// stop recording movies (APNG only)
 		if (setrenderneeded && (moviemode == MM_APNG))
 			M_StopMovie();
 
-
-
+		// VID_SetMode will call VID_CheckRenderer itself,
+		// so no need to do this in here.
 		if (!setmodeneeded)
 			VID_CheckRenderer();
 
 		vid.recalc = 1;
 	}
 
-
+	// Set the video mode in the video interface.
 	if (setmodeneeded)
 		VID_SetMode(setmodeneeded - 1);
 
@@ -198,11 +198,11 @@ void SCR_SetMode(void)
 
 	SCR_SetDrawFuncs();
 
-
+	// set the apprpriate drawer for the sky (tall or INT16)
 	setmodeneeded = 0;
 	setrenderneeded = 0;
 
-
+	// A display-driver pause must not immediately look like a dead connection.
 	if (netgame)
 		Net_RefreshTimeouts();
 #if defined(_WIN32) && !defined(DEDICATED)
@@ -210,8 +210,8 @@ void SCR_SetMode(void)
 #endif
 }
 
-
-
+// do some initial settings for the game loading screen
+//
 void SCR_Startup(void)
 {
 	if (dedicated)
@@ -232,57 +232,57 @@ void SCR_Startup(void)
 	V_SetPalette(0);
 }
 
-
-
+// Called at new frame, if the video mode has changed
+//
 void SCR_Recalc(void)
 {
 	if (dedicated)
 		return;
 
-
+	// bytes per pixel quick access
 	scr_bpp = vid.bpp;
 
 	V_Recalc();
 
-
-
+	// toggle off (then back on) the automap because some screensize-dependent values will
+	// be calculated next time the automap is activated.
 	if (automapactive)
 	{
 		am_recalc = true;
 		AM_Start();
 	}
 
-
+	// set the screen[x] ptrs on the new vidbuffers
 	V_Init();
 
+	// scr_viewsize doesn't change, neither detailLevel, but the pixels
+	// per screenblock is different now, since we've changed resolution.
+	R_SetViewSize(); //just set setsizeneeded true now ..
 
-
-	R_SetViewSize();  
-
-
+	// vid.recalc lasts only for the next refresh...
 	con_recalc = true;
 	am_recalc = true;
 
 #ifdef HWRENDER
-
+	// Shoot! The screen texture was flushed!
 	if ((rendermode == render_opengl) && (gamestate == GS_INTERMISSION))
 		usebuffer = false;
 #endif
 }
 
-
-
-
-
+// Check for screen cmd-line parms: to force a resolution.
+//
+// Set the video mode to set at the 1st display loop (setmodeneeded)
+//
 
 void SCR_CheckDefaultMode(void)
 {
-	INT32 scr_forcex, scr_forcey;  
+	INT32 scr_forcex, scr_forcey; // resolution asked from the cmd-line
 
 	if (dedicated)
 		return;
 
-
+	// 0 means not set at the cmd-line
 	scr_forcex = scr_forcey = 0;
 
 	if (M_CheckParm("-width") && M_IsNextParm())
@@ -294,7 +294,7 @@ void SCR_CheckDefaultMode(void)
 	if (scr_forcex && scr_forcey)
 	{
 		CONS_Printf(M_GetText("Using resolution: %d x %d\n"), scr_forcex, scr_forcey);
-
+		// returns -1 if not found, thus will be 0 (no mode change) if not found
 		setmodeneeded = VID_GetModeForSize(scr_forcex, scr_forcey) + 1;
 	}
 	else
@@ -303,9 +303,9 @@ void SCR_CheckDefaultMode(void)
 		CONS_Printf(M_GetText("Windowed resolution: %d x %d\n"), cv_scr_width_w.value, cv_scr_height_w.value);
 		CONS_Printf(M_GetText("Default bit depth: %d bits\n"), cv_scr_depth.value);
 		if (cv_fullscreen.value)
-			setmodeneeded = VID_GetModeForSize(cv_scr_width.value, cv_scr_height.value) + 1;  
+			setmodeneeded = VID_GetModeForSize(cv_scr_width.value, cv_scr_height.value) + 1; // see note above
 		else
-			setmodeneeded = VID_GetModeForSize(cv_scr_width_w.value, cv_scr_height_w.value) + 1;  
+			setmodeneeded = VID_GetModeForSize(cv_scr_width_w.value, cv_scr_height_w.value) + 1; // see note above
 
 		if (setmodeneeded <= 0)
 			CONS_Alert(CONS_WARNING, "Invalid resolution given, defaulting to base resolution\n");
@@ -313,29 +313,29 @@ void SCR_CheckDefaultMode(void)
 
 	if (cv_renderer.value != (signed)rendermode)
 	{
-		if (chosenrendermode == render_none)  
+		if (chosenrendermode == render_none) // nothing set at command line
 			SCR_ChangeRenderer();
 		else
 		{
-
+			// Set cv_renderer to the current render mode
 			CV_StealthSetValue(&cv_renderer, rendermode);
 		}
 	}
 }
 
-
+// sets the modenum as the new default video mode to be saved in the config file
 void SCR_SetDefaultMode(void)
 {
 	CV_SetValue(cv_fullscreen.value ? &cv_scr_width : &cv_scr_width_w, vid.width);
 	CV_SetValue(cv_fullscreen.value ? &cv_scr_height : &cv_scr_height_w, vid.height);
 }
 
-
+// Change fullscreen on/off according to cv_fullscreen
 void SCR_ChangeFullscreen(void)
 {
 #ifdef DIRECTFULLSCREEN
-
-
+	// allow_fullscreen is set by VID_PrepareModeList
+	// it is used to prevent switching to fullscreen during startup
 	if (!allow_fullscreen)
 		return;
 
@@ -347,7 +347,7 @@ void SCR_ChangeFullscreen(void)
 		else
 			setmodeneeded = VID_GetModeForSize(cv_scr_width_w.value, cv_scr_height_w.value) + 1;
 
-		if (setmodeneeded <= 0)  
+		if (setmodeneeded <= 0) // hacky safeguard
 		{
 			CONS_Alert(CONS_WARNING, "Invalid resolution given, defaulting to base resolution.\n");
 			setmodeneeded = VID_GetModeForSize(BASEVIDWIDTH, BASEVIDHEIGHT) + 1;
@@ -364,7 +364,7 @@ void SCR_ChangeRenderer(void)
 		return;
 
 #ifdef HWRENDER
-
+	// Check if OpenGL loaded successfully (or wasn't disabled) before switching to it.
 	if ((vid.glstate == VID_GL_LIBRARY_ERROR)
 	&& (cv_renderer.value == render_opengl))
 	{
@@ -375,12 +375,12 @@ void SCR_ChangeRenderer(void)
 		return;
 	}
 
-	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED))  
+	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED)) // Clear these out before switching to software
 		HWR_ClearAllTextures();
 
 #endif
 
-
+	// Set the new render mode
 	setrenderneeded = cv_renderer.value;
 }
 
@@ -399,7 +399,7 @@ double averageFPS = 0.0f;
 
 #ifdef USE_FPS_SAMPLES
 #define MAX_FRAME_TIME 0.05
-#define NUM_FPS_SAMPLES (16)  
+#define NUM_FPS_SAMPLES (16) // Number of samples to store
 
 static double total_frame_time = 0.0;
 static int frame_index;
@@ -433,7 +433,7 @@ void SCR_CalculateFPS(void)
 		frame_index = 0;
 	}
 #else
-
+	// Direct, unsampled counter.
 	averageFPS = 1.0 / frameElapsed;
 #endif
 }
@@ -459,17 +459,17 @@ void SCR_DisplayTicRate(void)
 		ticcntcolor = V_GREENMAP;
 	}
 
-	if (cv_ticrate.value == 2)  
+	if (cv_ticrate.value == 2) // compact counter
 	{
 		V_DrawRightAlignedString(vid.width, h,
-			ticcntcolor|V_NOSCALESTART|V_USERHUDTRANS, va("%04.2f", averageFPS));  
+			ticcntcolor|V_NOSCALESTART|V_USERHUDTRANS, va("%04.2f", averageFPS)); // use averageFPS directly
 	}
-	else if (cv_ticrate.value == 1)  
+	else if (cv_ticrate.value == 1) // full counter
 	{
 		const char *drawnstr;
 		INT32 width;
 
-
+		// The highest assignable cap is < 1000, so 3 characters is fine.
 		if (cap > 0)
 			drawnstr = va("%3.0f/%3u", fps, cap);
 		else
@@ -486,8 +486,8 @@ void SCR_DisplayTicRate(void)
 
 void SCR_DisplayLocalPing(void)
 {
-	UINT32 ping = playerpingtable[consoleplayer];	 
-	if (cv_showping.value == 1 || (cv_showping.value == 2 && servermaxping && ping > servermaxping))	 
+	UINT32 ping = playerpingtable[consoleplayer];	// consoleplayer's ping is everyone's ping in a splitnetgame :P
+	if (cv_showping.value == 1 || (cv_showping.value == 2 && servermaxping && ping > servermaxping))	// only show 2 (warning) if our ping is at a bad level
 	{
 		INT32 dispy = cv_ticrate.value ? 180 : 189;
 		HU_drawPing(307, dispy, ping, true, V_SNAPTORIGHT | V_SNAPTOBOTTOM);
@@ -512,8 +512,8 @@ void SCR_ClosedCaptions(void)
 		else if (splitscreen)
 			basey -= 8;
 		else if (LUA_HudEnabled(hud_powerups)
-		&& ((cv_powerupdisplay.value == 2)  
-		 || (cv_powerupdisplay.value == 1 && !camera.chase)))  
+		&& ((cv_powerupdisplay.value == 2) // "Always"
+		 || (cv_powerupdisplay.value == 1 && !camera.chase))) // "First-person only"
 			basey -= 16;
 	}
 
@@ -540,12 +540,12 @@ void SCR_ClosedCaptions(void)
 			if (renderisnewtic)
 				closedcaptions[i].b--;
 
-			if (closedcaptions[i].b)  
+			if (closedcaptions[i].b) // If the caption hasn't reached its final destination...
 			{
-				y -= closedcaptions[i].b * 4 * FRACUNIT;  
-				y += (rendertimefrac % FRACUNIT) * 4;  
-
-
+				y -= closedcaptions[i].b * 4 * FRACUNIT; // ...move it per tic...
+				y += (rendertimefrac % FRACUNIT) * 4; // ...and interpolate it per frame
+				// We have to modulo it by FRACUNIT, so that it won't be a tic ahead with interpolation disabled
+				// Unlike everything else, captions are (intentionally) interpolated from T to T+1 instead of T-1 to T
 			}
 		}
 
@@ -571,7 +571,7 @@ void SCR_DisplayMarathonInfo(void)
 	INT32 flags = V_SNAPTOBOTTOM;
 	static tic_t entertic, oldentertics = 0, antisplice[2] = {48,0};
 	const char *str;
-#if 0  
+#if 0 // eh, this probably isn't going to be a problem
 	if (((signed)marathontime) < 0)
 	{
 		flags |= V_REDMAP;
@@ -584,15 +584,15 @@ void SCR_DisplayMarathonInfo(void)
 		if (gamecomplete)
 			flags |= V_YELLOWMAP;
 		else if (marathonmode & MA_INGAME)
-			;  
+			; // see also G_Ticker
 		else if (marathonmode & MA_INIT)
 			marathonmode &= ~MA_INIT;
 		else
 			marathontime += entertic - oldentertics;
 
-
+		// Create a sequence of primes such that their LCM is nice and big.
 #define PRIMEV1 13
-#define PRIMEV2 17  
+#define PRIMEV2 17 // I can't believe it! I'm on TV!
 		antisplice[0] += (entertic - oldentertics)*PRIMEV2;
 		antisplice[0] %= PRIMEV1*((vid.width/vid.dup)+1);
 		antisplice[1] += (entertic - oldentertics)*PRIMEV1;

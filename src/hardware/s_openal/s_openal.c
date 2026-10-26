@@ -13,13 +13,13 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
-
-
+/// \file
+/// \brief  General driver for 3D sound system
+///
+///	Implementend via OpenAL API
 
 #ifdef _WINDOWS
-
+//#define WIN32_LEAN_AND_MEAN
 #define RPC_NO_WINDOWS_H
 #include <windows.h>
 #include <stdio.h>
@@ -31,38 +31,38 @@ FILE* logstream = NULL;
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
-#ifndef HAVE_SDL  
+#ifndef HAVE_SDL // let not make a logstream here is we are inline the HW3D in the SDL binary
 FILE* logstream = NULL;
 #endif
 #endif
 
 #ifdef __APPLE__
-#include <al.h>  
-#include <alc.h>  
+#include <al.h> //Main AL
+#include <alc.h> //Helpers
 #else
-#include <AL/al.h>  
-#include <AL/alc.h>  
+#include <AL/al.h> //Main AL
+#include <AL/alc.h> //Helpers
 #endif
 
 #define  _CREATE_DLL_
 #include "../../doomdef.h"
 #include "../hw3dsdrv.h"
 
-
-
+//#undef DEBUG_TO_FILE
+//#if defined ( HAVE_SDL ) && !defined ( LOGMESSAGES )
 #define DEBUG_TO_FILE
+//#endif
 
-
-
+// Internal sound stack
 typedef struct stack_snd_s
 {
-	ALuint ALsource; 
+	ALuint ALsource;// 3D data of 3D source
 
-	ALint sfx_id; 
+	ALint sfx_id;// Currently unused
 
-	ALint LRU; 
+	ALint LRU;// Currently unused
 
-	ALboolean permanent; 
+	ALboolean permanent;// Flag of static source
 } stack_snd_t;
 
 #ifndef AL_INVALID
@@ -70,8 +70,8 @@ typedef struct stack_snd_s
 #endif
 
 static I_Error_t    I_ErrorOpenAl    = NULL;
-static stack_snd_t *ALstack          = NULL;  
-static ALsizei      allocated_sounds = 0;     
+static stack_snd_t *ALstack          = NULL; // Sound stack
+static ALsizei      allocated_sounds = 0;    // Size of stack
 static ALsizei      allocate_delta   = 16;
 static ALCdevice   *ALCDevice        = NULL;
 static ALCcontext  *ALContext        = NULL;
@@ -95,17 +95,17 @@ static ALfloat ALvol(ALint vol, ALsizei step)
 	return ((ALfloat)vol)/(ALfloat)step;
 }
 
-  
-                                   
- 
-     
-                      
-      
-                              
-                                                    
-                                      
- 
-  
+/*
+static ALfloat Alpitch(ALint pitch)
+{
+#if 1
+	pitch = NORMAL_PITCH;
+#endif
+	return pitch < NORMAL_PITCH ?
+		(float)(pitch + NORMAL_PITCH) / (NORMAL_PITCH * 2)
+		:(float)pitch / (float)NORMAL_PITCH;
+}
+*/
 
 static const ALchar *GetALErrorString(ALenum err)
 {
@@ -175,19 +175,19 @@ static const ALchar *GetALCErrorString(ALenum err)
 	}
 }
 
-                                                                
-  
-             
-                                                                  
-                  
-  
-                                                               
-   
-
-
-
-
-
+/***************************************************************
+ *
+ * DBG_Printf
+ * Output error messages to debug log if DEBUG_TO_FILE is defined,
+ * else do nothing
+ *
+ **************************************************************
+ */
+// -----------------+
+// DBG_Printf       : Output error messages to debug log if DEBUG_TO_FILE is defined,
+//                  : else do nothing
+// Returns          :
+// -----------------+
 FUNCPRINTF void DBG_Printf(const char *lpFmt, ... )
 {
 #ifdef DEBUG_TO_FILE
@@ -204,12 +204,12 @@ FUNCPRINTF void DBG_Printf(const char *lpFmt, ... )
 #endif
 }
 
-                                                                
-  
-                                                     
-  
-                                                                
-   
+/***************************************************************
+ *
+ * Grow internal sound stack by allocate_delta amount
+ *
+ ***************************************************************
+ */
 static ALboolean reallocate_stack(void)
 {
 	stack_snd_t *new_stack;
@@ -231,12 +231,12 @@ static ALboolean reallocate_stack(void)
 }
 
 
-                                                                
-  
-                           
-  
-                                                                
-   
+/***************************************************************
+ *
+ * Destroys source in stack
+ *
+ ***************************************************************
+ */
 static ALvoid kill_sound(stack_snd_t *snd)
 {
 	if (alIsSource(snd->ALsource))
@@ -249,13 +249,13 @@ static ALvoid kill_sound(stack_snd_t *snd)
 	snd->ALsource = (ALuint)AL_INVALID;
 }
 
-                                                                
-  
-                                          
-                                                  
-  
-                                                                
-   
+/***************************************************************
+ *
+ * Returns free (unused) source stack slot
+ * If none available sound stack will be increased
+ *
+ ***************************************************************
+ */
 static ALsizei find_handle(void)
 {
 	ALsizei free_sfx = 0;
@@ -274,8 +274,8 @@ static ALsizei find_handle(void)
 			break;
 	}
 
-
-
+	// No suitable resource found so increase sound stack
+	//DBG_Printf("sfx chan %d\n", free_sfx);
 	if (free_sfx == allocated_sounds)
 	{
 		DBG_Printf("No free or same sfx found so increase stack (currently %d srcs)\n", allocated_sounds);
@@ -286,7 +286,7 @@ static ALsizei find_handle(void)
 
 static ALvoid ALSetPan(ALuint sid, INT32 sep)
 {
-	ALfloat facing[3] ={0.0f, 0.0f, 0.0f};  
+	ALfloat facing[3] ={0.0f, 0.0f, 0.0f}; //Alam: bad?
 	const ALfloat fsep = (ALfloat)sep;
 	const ALfloat nsep = (ALfloat)NORMAL_SEP;
 	if (sep)
@@ -302,11 +302,11 @@ static ALvoid ALSetPan(ALuint sid, INT32 sep)
 }
 
 
-                                                                               
-  
-                                 
-  
-                                                                               
+/******************************************************************************
+ *
+ * Initialise driver and listener
+ *
+ *****************************************************************************/
 EXPORT INT32 HWRAPI( Startup ) (I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 {
 	ALenum          model      = AL_INVERSE_DISTANCE_CLAMPED;
@@ -316,10 +316,10 @@ EXPORT INT32 HWRAPI( Startup ) (I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 	const ALCubyte *ALCdriver  = alcGetString(NULL,ALC_DEFAULT_DEVICE_SPECIFIER);
 	const ALCubyte *DSdriver = "DirectSound";
 
-	if (!strcmp((const ALCbyte *)ALCdriver,"DirectSound3D"))  
-		ALCDevice = alcOpenDevice(DSdriver);  
-	else  
-		ALCDevice = alcOpenDevice(ALCdriver);  
+	if (!strcmp((const ALCbyte *)ALCdriver,"DirectSound3D")) //Alam: OpenAL's DS3D is buggy
+		ALCDevice = alcOpenDevice(DSdriver); //Open DirectSound
+	else //Alam: The OpenAl device
+		ALCDevice = alcOpenDevice(ALCdriver); //Open Default
 #else
 	ALCDevice = alcOpenDevice(alcGetString(NULL,ALC_DEFAULT_DEVICE_SPECIFIER));
 #endif
@@ -337,11 +337,11 @@ EXPORT INT32 HWRAPI( Startup ) (I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 
 	I_ErrorOpenAl = FatalErrorFunction;
 
-	AlSetup[1] = snd_dev->sample_rate;  
+	AlSetup[1] = snd_dev->sample_rate; //ALC_FREQUENCY
 	AlSetup[1] = 44100;
-	AlSetup[3] = 35;                    
+	AlSetup[3] = 35;                   //ALC_REFRESH
 
-
+	//Alam: The Environment?
 	ALContext = alcCreateContext(ALCDevice,AlSetup);
 	if (ALCo_GetError() != ALC_NO_ERROR || !ALContext)
 	{
@@ -399,7 +399,7 @@ EXPORT INT32 HWRAPI( Startup ) (I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 	}
 	else
 	{
-
+		//DBG_Printf("S_OpenAl: %s mode setted\n",alGetString(model));
 	}
 
 	inited = reallocate_stack();
@@ -407,11 +407,11 @@ EXPORT INT32 HWRAPI( Startup ) (I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 	return inited;
 }
 
-                                                                               
-  
-                    
-  
-                                                                                
+/******************************************************************************
+ *
+ * Shutdown 3D Sound
+ *
+ ******************************************************************************/
 EXPORT void HWRAPI( Shutdown ) ( void )
 {
 	ALsizei i;
@@ -426,7 +426,7 @@ EXPORT void HWRAPI( Shutdown ) ( void )
 
 #if defined(linux) || defined(__linux) || defined(__linux__)
 	alcMakeContextCurrent(NULL);
-
+	//TODO:check?
 #endif
 
 	if (ALContext)
@@ -441,13 +441,13 @@ EXPORT void HWRAPI( Shutdown ) ( void )
 		ALstack = NULL;
 	}
 
-
+	//TODO:check?
 	if (ALCDevice)
 	{
 		alcCloseDevice(ALCDevice);
 		ALCDevice = NULL;
 	}
-
+	//TODO:check?
 }
 
 #ifdef _MSC_VER
@@ -457,11 +457,11 @@ EXPORT void HWRAPI( Shutdown ) ( void )
 
 typedef struct
 {
-	ALushort header;      
-	ALushort samplerate;  
-	ALushort samples;     
-	ALushort dummy;      
-	ALubyte  data[0];     
+	ALushort header;     // 3?
+	ALushort samplerate; // 11025+
+	ALushort samples;    // number of samples
+	ALushort dummy;     // 0
+	ALubyte  data[0];    // data;
 } ATTRPACK dssfx_t;
 
 #ifdef _MSC_VER
@@ -505,11 +505,11 @@ static ALsizei makechan(ALuint sfxhandle, ALboolean perm)
 	return chan;
 }
 
-                                                                               
-  
-                    
-  
-                                                                                
+/******************************************************************************
+ *
+ * Creates ?D source
+ *
+ ******************************************************************************/
 EXPORT INT32 HWRAPI ( AddSource ) (source3D_data_t *src, u_int sfxhandle)
 {
 	ALsizei chan = makechan(sfxhandle, (ALboolean)(src?src->permanent:AL_FALSE));
@@ -519,7 +519,7 @@ EXPORT INT32 HWRAPI ( AddSource ) (source3D_data_t *src, u_int sfxhandle)
 	else
 		sid = ALstack[chan].ALsource;
 
-	if (src)  
+	if (src) //3D
 	{
 #if 0
 		alSourcef(sid, AL_REFERENCE_DISTANCE, src->min_distance);
@@ -555,7 +555,7 @@ EXPORT INT32 HWRAPI ( AddSource ) (source3D_data_t *src, u_int sfxhandle)
 			DBG_Printf("%s: AL_VELOCITY, %s", __FUNCTION__, GetALErrorString(ALo_Lasterror));
 		}
 	}
-	else  
+	else //2D
 	{
 		alSourcei(sid, AL_SOURCE_RELATIVE, AL_TRUE);
 		if (ALo_GetError() != AL_NO_ERROR)
@@ -675,14 +675,14 @@ EXPORT INT32 HWRAPI (IsPlaying) (INT32 chan)
 	return (state == AL_PLAYING);
 }
 
-                                                                               
-                 
-  
-                                   
-             
-                
-             
-                                                                               
+/******************************************************************************
+ * UpdateListener
+ *
+ * Set up main listener properties:
+ * - position
+ * - orientation
+ * - velocity
+ *****************************************************************************/
 EXPORT void HWRAPI (UpdateListener) (listener_data_t *data, INT32 num)
 {
 	if (num != 1) return;
@@ -723,11 +723,11 @@ EXPORT void HWRAPI (UpdateListener) (listener_data_t *data, INT32 num)
 	}
 }
 
-                                                                               
-  
-                                                                    
-  
-                                                                               
+/******************************************************************************
+ *
+ * Update volume for 2D source and separation (panning) of 2D source
+ *
+ *****************************************************************************/
 EXPORT void HWRAPI (UpdateSourceParms) (INT32 chan, INT32 vol, INT32 sep)
 {
 	ALuint sid = AL_NONE;
@@ -761,9 +761,9 @@ EXPORT void HWRAPI (UpdateSourceParms) (INT32 chan, INT32 vol, INT32 sep)
 	}
 }
 
-
-
-
+// --------------------------------------------------------------------------
+// Set the global volume for sound effects
+// --------------------------------------------------------------------------
 EXPORT void HWRAPI (SetGlobalSfxVolume) (INT32 vol)
 {
 	alListenerf(AL_GAIN, ALvol(vol,32));
@@ -773,7 +773,7 @@ EXPORT void HWRAPI (SetGlobalSfxVolume) (INT32 vol)
 	}
 }
 
-
+//Alam: Not Used?
 EXPORT INT32 HWRAPI (SetCone) (INT32 chan, cone_def_t *cone_def)
 {
 	ALuint sid = AL_NONE;
@@ -836,9 +836,9 @@ EXPORT void HWRAPI (Update3DSource) (INT32 chan, source3D_pos_t *sfx)
 	}
 }
 
-
-
-
+//-------------------------------------------------------------
+// Load new sound data into source
+//-------------------------------------------------------------
 EXPORT INT32 HWRAPI (ReloadSource) (INT32 chan, u_int sfxhandle)
 {
 	ALuint sid;
@@ -851,7 +851,7 @@ EXPORT INT32 HWRAPI (ReloadSource) (INT32 chan, u_int sfxhandle)
 	ALo_GetError();
 
 	alSourceQueueBuffers(sid, 1, &sfxhandle);
-	if (ALo_GetError() == AL_INVALID_OPERATION)  
+	if (ALo_GetError() == AL_INVALID_OPERATION) //Alam: not needed?
 	{
 		alSourceStop(sid);
 		alSourcei(sid, AL_BUFFER, sfxhandle);
@@ -865,12 +865,12 @@ EXPORT INT32 HWRAPI (ReloadSource) (INT32 chan, u_int sfxhandle)
 	return chan;
 }
 
-                                                                               
-  
-                                                                
-                                  
-  
-                                                                               
+/******************************************************************************
+ *
+ * Destroy source and remove it from stack if it is a 2D source.
+ * Otherwise put source into cache
+ *
+ *****************************************************************************/
 EXPORT void HWRAPI (KillSource) (INT32 chan)
 {
 	if (chan > AL_INVALID && (ALsizei)chan <= allocated_sounds)
@@ -918,7 +918,7 @@ EXPORT void HWRAPI (KillSfx) (u_int sfxhandle)
 	alDeleteBuffers(1, &ALsfx);
 	if (ALo_GetError() == AL_INVALID_OPERATION)
 	{
-
+		// Buffer leak
 	}
 	else if (ALo_Lasterror != AL_NO_ERROR)
 	{
@@ -933,17 +933,17 @@ EXPORT void HWRAPI (GetHW3DSTitle) (char *buf, size_t size)
 
 
 #ifdef _WINDOWS
-BOOL WINAPI DllMain(HINSTANCE hinstDLL,  
-                    DWORD fdwReason,     
-                    LPVOID lpvReserved)  
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, // handle to DLL module
+                    DWORD fdwReason,    // reason for calling function
+                    LPVOID lpvReserved) // reserved
 {
-
+	// Perform actions based on the reason for calling.
 	UNREFERENCED_PARAMETER(lpvReserved);
 	switch ( fdwReason )
 	{
 		case DLL_PROCESS_ATTACH:
-
-
+		// Initialize once for each new process.
+		// Return FALSE to fail DLL load.
 #ifdef DEBUG_TO_FILE
 			logstream = fopen("s_openal.log", "wt");
 			if (logstream == NULL)
@@ -953,15 +953,15 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL,
 		break;
 
 		case DLL_THREAD_ATTACH:
-
+			// Do thread-specific initialization.
 			break;
 
 		case DLL_THREAD_DETACH:
-
+			// Do thread-specific cleanup.
 			break;
 
 		case DLL_PROCESS_DETACH:
-
+			// Perform any necessary cleanup.
 #ifdef DEBUG_TO_FILE
 			if ( logstream)
 			{
@@ -971,13 +971,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL,
 #endif
 			break;
 	}
-	return TRUE;   
+	return TRUE;  // Successful DLL_PROCESS_ATTACH.
 }
 #elif !defined (_WINDOWS)
 
-
-
-
+// **************************************************************************
+//                                                                  FUNCTIONS
+// **************************************************************************
 
 EXPORT void _init()
 {

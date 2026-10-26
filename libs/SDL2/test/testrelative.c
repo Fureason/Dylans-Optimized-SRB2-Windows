@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple program:  Test relative mouse motion */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -37,7 +37,7 @@ DrawRects(SDL_Renderer *renderer)
 static void
 loop()
 {
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &done);
         switch (event.type) {
@@ -57,7 +57,7 @@ loop()
         SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
         SDL_RenderClear(renderer);
 
-         
+        /* Wrap the cursor rectangle at the screen edges to keep it visible */
         SDL_RenderGetViewport(renderer, &viewport);
         if (rect.x < viewport.x) {
             rect.x += viewport.w;
@@ -86,10 +86,10 @@ loop()
 int main(int argc, char *argv[])
 {
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-     
+    /* Create the windows and initialize the renderers */
     for (i = 0; i < state->num_windows; ++i) {
         SDL_Renderer *renderer = state->renderers[i];
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
     rect.y = DEFAULT_WINDOW_HEIGHT / 2;
     rect.w = 10;
     rect.h = 10;
-     
+    /* Main render loop */
     done = 0;
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(loop, 0, 1);
@@ -131,4 +131,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

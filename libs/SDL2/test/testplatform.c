@@ -14,11 +14,11 @@
 
 #include "SDL.h"
 
-  
-                                                                      
-                                                                       
-                            
-   
+/*
+ * Watcom C flags these as Warning 201: "Unreachable code" if you just
+ *  compare them directly, so we push it through a function to keep the
+ *  compiler quiet.  --ryan.
+ */
 static int
 badsize(size_t sizeoftype, size_t hardcodetype)
 {
@@ -36,12 +36,12 @@ SDL_COMPILE_TIME_ASSERT(SDL_MAX_UINT16, SDL_MAX_UINT16 == 65535);
 SDL_COMPILE_TIME_ASSERT(SDL_MIN_UINT16, SDL_MIN_UINT16 == 0);
 
 SDL_COMPILE_TIME_ASSERT(SDL_MAX_SINT32, SDL_MAX_SINT32 == 2147483647);
-SDL_COMPILE_TIME_ASSERT(SDL_MIN_SINT32, SDL_MIN_SINT32 == ~0x7fffffff);  
+SDL_COMPILE_TIME_ASSERT(SDL_MIN_SINT32, SDL_MIN_SINT32 == ~0x7fffffff); /* Instead of -2147483648, which is treated as unsigned by some compilers */
 SDL_COMPILE_TIME_ASSERT(SDL_MAX_UINT32, SDL_MAX_UINT32 == 4294967295u);
 SDL_COMPILE_TIME_ASSERT(SDL_MIN_UINT32, SDL_MIN_UINT32 == 0);
 
 SDL_COMPILE_TIME_ASSERT(SDL_MAX_SINT64, SDL_MAX_SINT64 == 9223372036854775807ll);
-SDL_COMPILE_TIME_ASSERT(SDL_MIN_SINT64, SDL_MIN_SINT64 == ~0x7fffffffffffffffll);  
+SDL_COMPILE_TIME_ASSERT(SDL_MIN_SINT64, SDL_MIN_SINT64 == ~0x7fffffffffffffffll); /* Instead of -9223372036854775808, which is treated as unsigned by compilers */
 SDL_COMPILE_TIME_ASSERT(SDL_MAX_UINT64, SDL_MAX_UINT64 == 18446744073709551615ull);
 SDL_COMPILE_TIME_ASSERT(SDL_MIN_UINT64, SDL_MIN_UINT64 == 0);
 
@@ -239,30 +239,30 @@ typedef struct
 } LL_Test;
 
 static LL_Test LL_Tests[] = {
-     
+    /* UNDEFINED {"_allshl",   &TST_allshl,   0xFFFFFFFFFFFFFFFFll,                  0ll, 65, 0x0000000000000000ll}, */
     { "_allshl", &TST_allshl, 0xFFFFFFFFFFFFFFFFll, 0ll, 1, 0xFFFFFFFFFFFFFFFEll },
     { "_allshl", &TST_allshl, 0xFFFFFFFFFFFFFFFFll, 0ll, 32, 0xFFFFFFFF00000000ll },
     { "_allshl", &TST_allshl, 0xFFFFFFFFFFFFFFFFll, 0ll, 33, 0xFFFFFFFE00000000ll },
     { "_allshl", &TST_allshl, 0xFFFFFFFFFFFFFFFFll, 0ll, 0, 0xFFFFFFFFFFFFFFFFll },
 
     { "_allshr", &TST_allshr, 0xAAAAAAAA55555555ll, 0ll, 63, 0xFFFFFFFFFFFFFFFFll },
-     
+    /* UNDEFINED {"_allshr",   &TST_allshr,   0xFFFFFFFFFFFFFFFFll,                  0ll, 65, 0xFFFFFFFFFFFFFFFFll}, */
     { "_allshr", &TST_allshr, 0xFFFFFFFFFFFFFFFFll, 0ll, 1, 0xFFFFFFFFFFFFFFFFll },
     { "_allshr", &TST_allshr, 0xFFFFFFFFFFFFFFFFll, 0ll, 32, 0xFFFFFFFFFFFFFFFFll },
     { "_allshr", &TST_allshr, 0xFFFFFFFFFFFFFFFFll, 0ll, 33, 0xFFFFFFFFFFFFFFFFll },
     { "_allshr", &TST_allshr, 0xFFFFFFFFFFFFFFFFll, 0ll, 0, 0xFFFFFFFFFFFFFFFFll },
-     
+    /* UNDEFINED {"_allshr",   &TST_allshr,   0x5F5F5F5F5F5F5F5Fll,                  0ll, 65, 0x0000000000000000ll}, */
     { "_allshr", &TST_allshr, 0x5F5F5F5F5F5F5F5Fll, 0ll, 1, 0x2FAFAFAFAFAFAFAFll },
     { "_allshr", &TST_allshr, 0x5F5F5F5F5F5F5F5Fll, 0ll, 32, 0x000000005F5F5F5Fll },
     { "_allshr", &TST_allshr, 0x5F5F5F5F5F5F5F5Fll, 0ll, 33, 0x000000002FAFAFAFll },
 
-     
+    /* UNDEFINED {"_aullshl",  &TST_aullshl,  0xFFFFFFFFFFFFFFFFll,                  0ll, 65, 0x0000000000000000ll}, */
     { "_aullshl", &TST_aullshl, 0xFFFFFFFFFFFFFFFFll, 0ll, 1, 0xFFFFFFFFFFFFFFFEll },
     { "_aullshl", &TST_aullshl, 0xFFFFFFFFFFFFFFFFll, 0ll, 32, 0xFFFFFFFF00000000ll },
     { "_aullshl", &TST_aullshl, 0xFFFFFFFFFFFFFFFFll, 0ll, 33, 0xFFFFFFFE00000000ll },
     { "_aullshl", &TST_aullshl, 0xFFFFFFFFFFFFFFFFll, 0ll, 0, 0xFFFFFFFFFFFFFFFFll },
 
-     
+    /* UNDEFINED {"_aullshr",  &TST_aullshr,  0xFFFFFFFFFFFFFFFFll,                  0ll, 65, 0x0000000000000000ll}, */
     { "_aullshr", &TST_aullshr, 0xFFFFFFFFFFFFFFFFll, 0ll, 1, 0x7FFFFFFFFFFFFFFFll },
     { "_aullshr", &TST_aullshr, 0xFFFFFFFFFFFFFFFFll, 0ll, 32, 0x00000000FFFFFFFFll },
     { "_aullshr", &TST_aullshr, 0xFFFFFFFFFFFFFFFFll, 0ll, 33, 0x000000007FFFFFFFll },
@@ -422,7 +422,7 @@ int TestAssertions(SDL_bool verbose)
     SDL_assert_release(0 || 1);
     SDL_assert_paranoid(0 || 1);
 
-#if 0  
+#if 0 /* enable this to test assertion failures. */
     SDL_assert_release(1 == 2);
     SDL_assert_release(5 < 4);
     SDL_assert_release(0 && "This is a test");
@@ -446,7 +446,7 @@ int main(int argc, char *argv[])
     SDL_bool verbose = SDL_TRUE;
     int status = 0;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (argv[1] && (SDL_strcmp(argv[1], "-q") == 0)) {

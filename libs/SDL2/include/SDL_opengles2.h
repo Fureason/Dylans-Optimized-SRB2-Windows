@@ -19,11 +19,11 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-   
-                         
-  
-                                                                       
-   
+/**
+ *  \file SDL_opengles2.h
+ *
+ *  This is a simple file to encapsulate the OpenGL ES 2.0 API headers.
+ */
 #include "SDL_config.h"
 
 #if !defined(_MSC_VER) && !defined(SDL_USE_BUILTIN_OPENGL_DEFINITIONS)
@@ -37,15 +37,15 @@
 #include <GLES2/gl2ext.h>
 #endif
 
-#else  
+#else /* _MSC_VER */
 
- 
+/* OpenGL ES2 headers for Visual Studio */
 #include "SDL_opengles2_khrplatform.h"
 #include "SDL_opengles2_gl2platform.h"
 #include "SDL_opengles2_gl2.h"
 #include "SDL_opengles2_gl2ext.h"
 
-#endif  
+#endif /* _MSC_VER */
 
 #ifndef APIENTRY
 #define APIENTRY GL_APIENTRY

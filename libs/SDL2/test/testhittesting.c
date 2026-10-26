@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "SDL.h"
 
- 
+/* !!! FIXME: rewrite this to be wired in to test framework. */
 
 #define RESIZE_BORDER 20
 
@@ -63,7 +63,7 @@ int main(int argc, char **argv)
     SDL_Window *window;
     SDL_Renderer *renderer;
 
-     
+    /* !!! FIXME: check for errors. */
     SDL_Init(SDL_INIT_VIDEO);
     window = SDL_CreateWindow("Drag the red boxes", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_BORDERLESS | SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, -1, 0);

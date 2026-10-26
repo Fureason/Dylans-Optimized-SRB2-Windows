@@ -41,8 +41,8 @@ linear_from_sRGB(double s)
 static double
 YfromRGB(double r, double g, double b)
 {
-                                                                              
-                                    
-      
+   /* Use the sRGB (rounded) coefficients for Rlinear, Glinear, Blinear to get
+    * the CIE Y value (also linear).
+    */
    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }

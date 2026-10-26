@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  i_time.h
+/// \brief Timing for the system layer.
 
 #ifndef __I_TIME_H__
 #define __I_TIME_H__
@@ -30,25 +30,25 @@ typedef struct timestate_s {
 extern timestate_t g_time;
 extern consvar_t cv_timescale;
 
-                                                                    
-  
+/**	\brief  Called by D_SRB2Loop, returns current time in game tics.
+*/
 tic_t I_GetTime(void);
 
-                                      
-  
+/**	\brief  Initializes timing system.
+*/
 void I_InitializeTime(void);
 
 void I_UpdateTime(fixed_t timescale);
 
-                                                                              
-                                                                             
-                                                                      
-                      
-  
+/** \brief  Block for at minimum the duration specified. This function makes a
+            best effort not to oversleep, and will spinloop if sleeping would
+			take too long. However, callers should still check the current time
+			after this returns.
+*/
 void I_SleepDuration(precise_t duration);
 
 #ifdef __cplusplus
-}  
+} // extern "C"
 #endif
 
-#endif  
+#endif // __I_TIME_H__

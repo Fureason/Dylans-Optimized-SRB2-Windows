@@ -1,4 +1,4 @@
- 
+/* $Id: miniwget.c,v 1.84 2020/11/09 19:41:18 nanard Exp $ */
 /* Project : miniupnp
  * Website : http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
  * Author : Thomas Bernard
@@ -20,18 +20,18 @@
 #ifndef strncasecmp
 #if defined(_MSC_VER) && (_MSC_VER >= 1400)
 #define strncasecmp _memicmp
-#else  
+#else /* defined(_MSC_VER) && (_MSC_VER >= 1400) */
 #define strncasecmp memicmp
-#endif  
-#endif  
-#else  
+#endif /* defined(_MSC_VER) && (_MSC_VER >= 1400) */
+#endif /* #ifndef strncasecmp */
+#else /* #ifdef _WIN32 */
 #include <unistd.h>
 #include <sys/param.h>
 #if defined(__amigaos__) && !defined(__amigaos4__)
 #define socklen_t int
-#else  
+#else /* #if defined(__amigaos__) && !defined(__amigaos4__) */
 #include <sys/select.h>
-#endif  
+#endif /* #else defined(__amigaos__) && !defined(__amigaos4__) */
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -39,14 +39,14 @@
 #include <netdb.h>
 #define closesocket close
 #include <strings.h>
-#endif  
+#endif /* #else _WIN32 */
 #ifdef __GNU__
 #define MAXHOSTNAMELEN 64
-#endif  
+#endif /* __GNU__ */
 
 #ifndef MIN
 #define MIN(x,y) (((x)<(y))?(x):(y))
-#endif  
+#endif /* MIN */
 
 
 #include "miniupnpcstrings.h"
@@ -58,12 +58,12 @@
 #define MAXHOSTNAMELEN 64
 #endif
 
-  
-                                      
-                                                        
-                                                                
-                           
-   
+/*
+ * Read a HTTP response from a socket.
+ * Process Content-Length and Transfer-encoding headers.
+ * return a pointer to the content buffer, which length is saved
+ * to the length parameter.
+ */
 void *
 getHTTPResponse(SOCKET s, int * size, int * status_code)
 {
@@ -74,7 +74,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 	int content_length = -1;
 	unsigned int chunksize = 0;
 	unsigned int bytestocopy = 0;
-	 
+	/* buffers : */
 	char * header_buf;
 	unsigned int header_buf_len = 2048;
 	unsigned int header_buf_used = 0;
@@ -94,7 +94,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 	{
 #ifdef DEBUG
 		fprintf(stderr, "%s: Memory allocation error\n", "getHTTPResponse");
-#endif  
+#endif /* DEBUG */
 		*size = -1;
 		return NULL;
 	}
@@ -104,7 +104,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 		free(header_buf);
 #ifdef DEBUG
 		fprintf(stderr, "%s: Memory allocation error\n", "getHTTPResponse");
-#endif  
+#endif /* DEBUG */
 		*size = -1;
 		return NULL;
 	}
@@ -122,7 +122,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 			if(header_buf_used + n > header_buf_len) {
 				char * tmp = realloc(header_buf, header_buf_used + n);
 				if(tmp == NULL) {
-					 
+					/* memory allocation error */
 					free(header_buf);
 					free(content_buf);
 					*size = -1;
@@ -133,8 +133,8 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 			}
 			memcpy(header_buf + header_buf_used, buf, n);
 			header_buf_used += n;
-			                                          
-                             
+			/* search for CR LF CR LF (end of headers)
+			 * recognize also LF LF */
 			i = 0;
 			while(i < ((int)header_buf_used-1) && (endofheaders == 0)) {
 				if(header_buf[i] == '\r') {
@@ -158,7 +158,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 			}
 			if(endofheaders == 0)
 				continue;
-			 
+			/* parse header lines */
 			for(i = 0; i < endofheaders - 1; i++) {
 				if(linestart > 0 && colon <= linestart && header_buf[i]==':')
 				{
@@ -168,13 +168,13 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 						i++;
 					valuestart = i + 1;
 				}
-				 
+				/* detecting end of line */
 				else if(header_buf[i]=='\r' || header_buf[i]=='\n')
 				{
 					if(linestart == 0 && status_code)
 					{
-						              
-                                                             
+						/* Status line
+						 * HTTP-Version SP Status-Code SP Reason-Phrase CRLF */
 						int sp;
 						for(sp = 0; sp < i - 1; sp++)
 							if(header_buf[sp] == ' ')
@@ -228,14 +228,14 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 					valuestart = 0;
 				}
 			}
-			 
+			/* copy the remaining of the received data back to buf */
 			n = header_buf_used - endofheaders;
 			memcpy(buf, header_buf + endofheaders, n);
-			 
+			/* if(headers) */
 		}
-		                                      
-                                                     
-		 
+		/* if we get there, endofheaders != 0.
+		 * In the other case, there was a continue above */
+		/* content */
 		if(chunked)
 		{
 			int i = 0;
@@ -243,9 +243,9 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 			{
 				if(chunksize == 0)
 				{
-					 
+					/* reading chunk size */
 					if(chunksize_buf_index == 0) {
-						 
+						/* skipping any leading CR LF */
 						if(buf[i] == '\r') i++;
 						if(i<n && buf[i] == '\n') i++;
 					}
@@ -257,7 +257,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 						i++;
 					}
 					while(i<n && buf[i] != '\r' && buf[i] != '\n')
-						i++;  
+						i++; /* discarding chunk-extension */
 					if(i<n && buf[i] == '\r') i++;
 					if(i<n && buf[i] == '\n') {
 						unsigned int j;
@@ -272,7 +272,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 						chunksize_buf_index = 0;
 						i++;
 					} else {
-						 
+						/* not finished to get chunksize */
 						continue;
 					}
 #ifdef DEBUG
@@ -282,12 +282,12 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 					{
 #ifdef DEBUG
 						printf("end of HTTP content - %d %d\n", i, n);
-						 
+						/*printf("'%.*s'\n", n-i, buf+i);*/
 #endif
 						goto end_of_stream;
 					}
 				}
-				 
+				/* it is guaranteed that (n >= i) */
 				bytestocopy = (chunksize < (unsigned int)(n - i))?chunksize:(unsigned int)(n - i);
 				if((content_buf_used + bytestocopy) > content_buf_len)
 				{
@@ -299,7 +299,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 					}
 					tmp = realloc(content_buf, content_buf_len);
 					if(tmp == NULL) {
-						 
+						/* memory allocation error */
 						free(content_buf);
 						free(header_buf);
 						*size = -1;
@@ -315,10 +315,10 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 		}
 		else
 		{
-			 
+			/* not chunked */
 			if(content_length > 0
 			   && (content_buf_used + n) > (unsigned int)content_length) {
-				 
+				/* skipping additional bytes */
 				n = content_length - content_buf_used;
 			}
 			if(content_buf_used + n > content_buf_len)
@@ -332,7 +332,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 				}
 				tmp = realloc(content_buf, content_buf_len);
 				if(tmp == NULL) {
-					 
+					/* memory allocation error */
 					free(content_buf);
 					free(header_buf);
 					*size = -1;
@@ -343,7 +343,7 @@ getHTTPResponse(SOCKET s, int * size, int * status_code)
 			memcpy(content_buf + content_buf_used, buf, n);
 			content_buf_used += n;
 		}
-		 
+		/* use the Content-Length header value if available */
 		if(content_length > 0 && content_buf_used >= (unsigned int)content_length)
 		{
 #ifdef DEBUG
@@ -363,9 +363,9 @@ end_of_stream:
 	return content_buf;
 }
 
-                
-                   
-                                      
+/* miniwget3() :
+ * do all the work.
+ * Return NULL if something failed. */
 static void *
 miniwget3(const char * host,
           unsigned short port, const char * path,
@@ -385,7 +385,7 @@ miniwget3(const char * host,
 	if(ISINVALID(s))
 		return NULL;
 
-	 
+	/* get address for caller ! */
 	if(addr_str)
 	{
 		struct sockaddr_storage saddr;
@@ -399,14 +399,14 @@ miniwget3(const char * host,
 		else
 		{
 #if defined(__amigaos__) && !defined(__amigaos4__)
-	                                                                                                
-                                                                          
-                                                             
-                                                                    
-   
-                                                                       
-     
-			 
+	/* using INT WINAPI WSAAddressToStringA(LPSOCKADDR, DWORD, LPWSAPROTOCOL_INFOA, LPSTR, LPDWORD);
+     * But his function make a string with the port :  nn.nn.nn.nn:port */
+/*		if(WSAAddressToStringA((SOCKADDR *)&saddr, sizeof(saddr),
+                            NULL, addr_str, (DWORD *)&addr_str_len))
+		{
+		    printf("WSAAddressToStringA() failed : %d\n", WSAGetLastError());
+		}*/
+			/* the following code is only compatible with ip v4 addresses */
 			strncpy(addr_str, inet_ntoa(((struct sockaddr_in *)&saddr)->sin_addr), addr_str_len);
 #else
 #if 0
@@ -420,8 +420,8 @@ miniwget3(const char * host,
 				          addr_str, addr_str_len);
 			}
 #endif
-			                                                             
-                                                  
+			/* getnameinfo return ip v6 address with the scope identifier
+			 * such as : 2a01:e35:8b2b:7330::%4281128194 */
 			n = getnameinfo((const struct sockaddr *)&saddr, saddrlen,
 			                addr_str, addr_str_len,
 			                NULL, 0,
@@ -454,7 +454,7 @@ miniwget3(const char * host,
 		return NULL;
 	}
 	sent = 0;
-	 
+	/* sending the HTTP request */
 	while(sent < len)
 	{
 		n = send(s, buf+sent, len-sent, 0);
@@ -474,8 +474,8 @@ miniwget3(const char * host,
 	return content;
 }
 
-                
-                                                         
+/* miniwget2() :
+ * Call miniwget3(); retry with HTTP/1.1 if 1.0 fails. */
 static void *
 miniwget2(const char * host,
           unsigned short port, const char * path,
@@ -509,16 +509,16 @@ miniwget2(const char * host,
 
 
 
-             
-              
-                                      
-                                                                      
-                               
-                                                
-  
-                  
-                 
-                            
+/* parseURL()
+ * arguments :
+ *   url :		source string not modified
+ *   hostname :	hostname destination string (size of MAXHOSTNAMELEN+1)
+ *   port :		port (destination)
+ *   path :		pointer to the path part of the URL
+ *
+ * Return values :
+ *    0 - Failure
+ *    1 - Success         */
 int
 parseURL(const char * url,
          char * hostname, unsigned short * port,
@@ -537,19 +537,19 @@ parseURL(const char * url,
 	memset(hostname, 0, MAXHOSTNAMELEN + 1);
 	if(*p1 == '[')
 	{
-		 
+		/* IP v6 : http://[2a00:1450:8002::6a]/path/abc */
 		char * scope;
 		scope = strchr(p1, '%');
 		p2 = strchr(p1, ']');
 		if(p2 && scope && scope < p2 && scope_id) {
-			 
+			/* parse scope */
 #ifdef IF_NAMESIZE
 			char tmp[IF_NAMESIZE];
 			int l;
 			scope++;
-			 
+			/* "%25" is just '%' in URL encoding */
 			if(scope[0] == '2' && scope[1] == '5')
-				scope += 2;	 
+				scope += 2;	/* skip "25" */
 			l = p2 - scope;
 			if(l >= IF_NAMESIZE)
 				l = IF_NAMESIZE - 1;
@@ -560,13 +560,13 @@ parseURL(const char * url,
 				*scope_id = (unsigned int)strtoul(tmp, NULL, 10);
 			}
 #else
-			 
+			/* under windows, scope is numerical */
 			char tmp[8];
 			size_t l;
 			scope++;
-			 
+			/* "%25" is just '%' in URL encoding */
 			if(scope[0] == '2' && scope[1] == '5')
-				scope += 2;	 
+				scope += 2;	/* skip "25" */
 			l = p2 - scope;
 			if(l >= sizeof(tmp))
 				l = sizeof(tmp) - 1;
@@ -630,7 +630,7 @@ miniwget(const char * url, int * size,
 {
 	unsigned short port;
 	char * path;
-	 
+	/* protocol://host:port/chemin */
 	char hostname[MAXHOSTNAMELEN+1];
 	*size = 0;
 	if(!parseURL(url, hostname, &port, &path, &scope_id))
@@ -649,7 +649,7 @@ miniwget_getaddr(const char * url, int * size,
 {
 	unsigned short port;
 	char * path;
-	 
+	/* protocol://host:port/path */
 	char hostname[MAXHOSTNAMELEN+1];
 	*size = 0;
 	if(addr)

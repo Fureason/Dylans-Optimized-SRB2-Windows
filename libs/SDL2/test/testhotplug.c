@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple program to test the SDL joystick hotplugging */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,20 +40,20 @@ int main(int argc, char *argv[])
         init_subsystems |= SDL_INIT_HAPTIC;
     }
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 
-     
+    /* Initialize SDL (Note: video is required to start event loop) */
     if (SDL_Init(init_subsystems) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         exit(1);
     }
 
-      
-                                                                                             
-      
+    /*
+    //SDL_CreateWindow("Dummy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 128, 128, 0);
+    */
 
     SDL_Log("There are %d joysticks at startup\n", SDL_NumJoysticks());
     if (enable_haptic) {
@@ -108,9 +108,9 @@ int main(int argc, char *argv[])
                 }
                 break;
             case SDL_JOYAXISMOTION:
-                  
-                                                                                   
-                  
+                /*
+                //                    SDL_Log("Axis Move: %d\n", event.jaxis.axis);
+                */
                 if (enable_haptic) {
                     SDL_HapticRumblePlay(haptic, 0.25, 250);
                 }

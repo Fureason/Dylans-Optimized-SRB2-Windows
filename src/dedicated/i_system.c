@@ -17,9 +17,9 @@
 //
 // Changes by Graue <graue@oceanbase.org> are in the public domain.
 //
-
-
-
+//-----------------------------------------------------------------------------
+/// \file
+/// \brief SRB2 system stuff for dedicated servers
 
 #include <signal.h>
 
@@ -34,7 +34,7 @@ typedef UINT (WINAPI *p_timeEndPeriod) (UINT);
 typedef HANDLE (WINAPI *p_OpenFileMappingA) (DWORD, BOOL, LPCSTR);
 typedef LPVOID (WINAPI *p_MapViewOfFile) (HANDLE, DWORD, DWORD, DWORD, SIZE_T);
 
-
+// This is for RtlGenRandom.
 #define SystemFunction036 NTAPI SystemFunction036
 #include <ntsecapi.h>
 #undef SystemFunction036
@@ -72,7 +72,7 @@ typedef LPVOID (WINAPI *p_MapViewOfFile) (HANDLE, DWORD, DWORD, DWORD, SIZE_T);
 #include <sys/statvfs.h>
 #include <sys/param.h>
 #include <sys/mount.h>
- 
+/*For meminfo*/
 #include <sys/types.h>
 #ifdef FREEBSD
 #include <kvm.h>
@@ -85,7 +85,7 @@ typedef LPVOID (WINAPI *p_MapViewOfFile) (HANDLE, DWORD, DWORD, DWORD, SIZE_T);
 #if defined (__linux__) || defined (UNIXCOMMON)
 #ifndef NOTERMIOS
 #include <termios.h>
-#include <sys/ioctl.h>  
+#include <sys/ioctl.h> // ioctl
 #define HAVE_TERMIOS
 #endif
 #endif
@@ -97,13 +97,13 @@ typedef LPVOID (WINAPI *p_MapViewOfFile) (HANDLE, DWORD, DWORD, DWORD, SIZE_T);
 #if defined (__unix__) || (defined (UNIXCOMMON) && !defined (__APPLE__))
 #include <errno.h>
 #include <sys/wait.h>
-#ifndef __HAIKU__  
+#ifndef __HAIKU__ // haiku's crash dialog is just objectively better
 #define NEWSIGNALHANDLER
 #endif
 #endif
 
 #ifndef NOMUMBLE
-#ifdef __linux__  
+#ifdef __linux__ // need -lrt
 #include <sys/mman.h>
 #ifdef MAP_FAILED
 #define HAVE_SHM
@@ -117,7 +117,7 @@ typedef LPVOID (WINAPI *p_MapViewOfFile) (HANDLE, DWORD, DWORD, DWORD, SIZE_T);
 #elif defined (HAVE_SHM)
 #define HAVE_MUMBLE
 #endif
-#endif  
+#endif // NOMUMBLE
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -139,7 +139,7 @@ typedef LPVOID (WINAPI *p_MapViewOfFile) (HANDLE, DWORD, DWORD, DWORD, SIZE_T);
 #define UNIXBACKTRACE
 #endif
 
-
+// Locations to directly check for srb2.pk3 in
 const char *wadDefaultPaths[] = {
 #if defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON)
 	"/usr/local/share/games/SRB2",
@@ -153,7 +153,7 @@ const char *wadDefaultPaths[] = {
 	NULL
 };
 
-
+// Folders to recurse through looking for srb2.pk3
 const char *wadSearchPaths[] = {
 #if defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON)
 	"/usr/local/games",
@@ -166,14 +166,14 @@ const char *wadSearchPaths[] = {
 	NULL
 };
 
-                               
-  
+/**	\brief WAD file to look for
+*/
 #define WADKEYWORD1 "srb2.pk3"
-                         
-  
+/**	\brief holds wad path
+*/
 static char returnWadPath[256];
 
-
+//Alam_GBC: SDL
 
 #include "../doomdef.h"
 #include "../m_misc.h"
@@ -182,7 +182,7 @@ static char returnWadPath[256];
 #include "../i_sound.h"
 #include "../i_system.h"
 #include "../i_threads.h"
-#include "../screen.h"  
+#include "../screen.h" //vid.WndParent
 #include "../netcode/d_net.h"
 #include "../netcode/commands.h"
 #include "../g_game.h"
@@ -192,7 +192,7 @@ static char returnWadPath[256];
 
 #include "../m_argv.h"
 
-#include "../r_main.h"  
+#include "../r_main.h" // Frame interpolation/uncapped
 #include "../r_fps.h"
 
 #ifdef MAC_ALERT
@@ -202,17 +202,17 @@ static char returnWadPath[256];
 #include "../d_main.h"
 
 #if !defined(NOMUMBLE) && defined(HAVE_MUMBLE)
-
+// Mumble context string
 #include "../netcode/d_clisrv.h"
 #include "../byteptr.h"
 #endif
 
 #define MAX_EXIT_FUNCS 32
 
-
-
-
-
+// A little more than the minimum sleep duration on Windows.
+// May be incorrect for other platforms, but we don't currently have a way to
+// query the scheduler granularity. SDL will do what's needed to make this as
+// low as possible though.
 #define MIN_SLEEP_DURATION_MS 2.1
 
 UINT8 graphics_started = 0;
@@ -238,8 +238,8 @@ static boolean is_quitting = false;
 #define BUFFERS "Buffers:"
 #define SHMEM "Shmem:"
 
-                                                                       
-                         
+/* Parse the contents of /proc/meminfo (in buf), return value of "name"
+ * (example: MemTotal) */
 static long get_entry(const char* name, const char* buf)
 {
 	long val;
@@ -273,7 +273,7 @@ size_t I_GetFreeMem(size_t *total)
 		*total = v_page_count * v_page_size;
 	return v_free_count * v_page_size;
 #elif defined (SOLARIS)
-	 
+	/* Just guess */
 	if (total)
 		*total = 32 << 20;
 	return 32 << 20;
@@ -286,7 +286,7 @@ size_t I_GetFreeMem(size_t *total)
 		*total = (size_t)info.dwTotalPhys;
 	return (size_t)info.dwAvailPhys;
 #elif defined (__linux__)
-	 
+	/* Linux */
 	char buf[1024];
 	char *memTag;
 	size_t freeKBytes;
@@ -305,7 +305,7 @@ size_t I_GetFreeMem(size_t *total)
 
 	if (n < 0)
 	{
-
+		// Error
 		if (total)
 			*total = 0L;
 		return 0;
@@ -314,7 +314,7 @@ size_t I_GetFreeMem(size_t *total)
 	buf[n] = '\0';
 	if ((memTag = strstr(buf, MEMTOTAL)) == NULL)
 	{
-
+		// Error
 		if (total)
 			*total = 0L;
 		return 0;
@@ -333,7 +333,7 @@ size_t I_GetFreeMem(size_t *total)
 
 		if (MemAvailable == -1)
 		{
-
+			// Error
 			if (total)
 				*total = 0L;
 			return 0;
@@ -350,7 +350,7 @@ size_t I_GetFreeMem(size_t *total)
 		*total = totalKBytes << 10;
 	return freeKBytes << 10;
 #else
-
+	// Guess 48 MB.
 	if (total)
 		*total = 48<<20;
 	return 48<<20;
@@ -380,7 +380,7 @@ void I_SleepDuration(precise_t duration)
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__HAIKU__)
 	UINT64 precision = I_GetPrecisePrecision();
 	precise_t dest = I_GetPreciseTime() + duration;
-	precise_t slack = (precision / 5000);  
+	precise_t slack = (precision / 5000); // 0.2 ms slack
 	if (duration > slack)
 	{
 		duration -= slack;
@@ -393,7 +393,7 @@ void I_SleepDuration(precise_t duration)
 		while (status == EINTR);
 	}
 
-
+	// busy-wait the rest
 	while (((INT64)dest - (INT64)I_GetPreciseTime()) > 0);
 #else
 	UINT64 precision = I_GetPrecisePrecision();
@@ -410,20 +410,20 @@ void I_SleepDuration(precise_t duration)
 	cur = I_GetPreciseTime();
 	dest = cur + duration;
 
-
-
-
-
+	// the reason this is not dest > cur is because the precise counter may wrap
+	// two's complement arithmetic is our friend here, though!
+	// e.g. cur 0xFFFFFFFFFFFFFFFE = -2, dest 0x0000000000000001 = 1
+	// 0x0000000000000001 - 0xFFFFFFFFFFFFFFFE = 3
 	while ((INT64)(dest - cur) > 0)
 	{
-
-
+		// If our cv_sleep value exceeds the remaining sleep duration, use the
+		// hard sleep function.
 		if (sleepvalue > 0 && (dest - cur) > delaygranularity)
 		{
 			I_Sleep(sleepvalue);
 		}
 
-
+		// Otherwise, this is a spinloop.
 
 		cur = I_GetPreciseTime();
 	}
@@ -469,7 +469,7 @@ ticcmd_t *I_BaseTiccmd(void)
 
 ticcmd_t *I_BaseTiccmd2(void)
 {
-
+	// dedicated servers don't do 2 player.
 	return NULL;
 }
 
@@ -479,13 +479,13 @@ FUNCNORETURN static void I_QuitStatus(int status)
 		abort();
 
 	is_quitting = true;
-	M_SaveConfig(NULL);  
-	D_SaveBan();  
-	G_SaveGameData(clientGamedata);  
+	M_SaveConfig(NULL); //save game config, cvars..
+	D_SaveBan(); // save the ban list
+	G_SaveGameData(clientGamedata); // Tails 12-08-2002
+	//added:16-02-98: when recording a demo, should exit using 'q' key,
+	//        but sometimes we forget and use 'F10'.. so save here too.
 
-
-
-
+	// FIXME: can a dedicated server even record demos?
 	if (demorecording)
 		G_CheckDemoStatus();
 	if (metalrecording)
@@ -510,20 +510,20 @@ void I_Error(const char *error, ...)
 	char *buffer;
 	size_t buflen;
 
-
+	// Display error message in the console before we start shutting it down
 	va_start(argptr, error);
 	buflen = vsnprintf(NULL, 0, error, argptr);
 	va_end(argptr);
 
-
-
+	// do it proper with an actual malloc
+	// (stop abusing the stackbuffer ffs ヽ(。_°)ノ)
 	buffer = malloc(buflen+1);
 	va_start(argptr, error);
 	vsprintf(buffer, error, argptr);
 	va_end(argptr);
 	I_OutputMsg("\nI_Error(): %s\n", buffer);
 	free(buffer);
-
+	// ---
 
 	I_QuitStatus(-1);
 }
@@ -561,13 +561,13 @@ const char *I_GetJoyName(INT32 joyindex)
 
 #ifndef NOMUMBLE
 #ifdef HAVE_MUMBLE
-
-
-
-
-
-#define DEG2RAD (0.017453292519943295769236907684883l)  
-#define MUMBLEUNIT (64.0f)  
+// Best Mumble positional audio settings:
+// Minimum distance 3.0 m
+// Bloom 175%
+// Maximum distance 80.0 m
+// Minimum volume 50%
+#define DEG2RAD (0.017453292519943295769236907684883l) // TAU/360 or PI/180
+#define MUMBLEUNIT (64.0f) // FRACUNITS in a Meter
 
 static struct {
 	UINT32 uiVersion;
@@ -578,17 +578,17 @@ static struct {
 #endif
 	float fAvatarPosition[3];
 	float fAvatarFront[3];
-	float fAvatarTop[3];  
-	wchar_t name[256];  
+	float fAvatarTop[3]; // defaults to Y-is-up (only used for leaning)
+	wchar_t name[256]; // game name
 	float fCameraPosition[3];
 	float fCameraFront[3];
-	float fCameraTop[3];  
-	wchar_t identity[256];  
+	float fCameraTop[3]; // defaults to Y-is-up (only used for leaning)
+	wchar_t identity[256]; // player id
 	UINT32 context_len;
-	unsigned char context[256];  
-	wchar_t description[2048];  
+	unsigned char context[256]; // server/team
+	wchar_t description[2048]; // game description
 } *mumble = NULL;
-#endif  
+#endif // HAVE_MUMBLE
 
 static void I_SetupMumble(void)
 {
@@ -616,14 +616,14 @@ static void I_SetupMumble(void)
 #endif
 }
 #undef WINMUMBLE
-#endif  
+#endif // NOMUMBLE
 
 void I_UpdateMumble(const mobj_t *mobj, const listener_t listener)
 {
 #ifdef HAVE_MUMBLE
-
-
-
+	// DO NOT BE DECEIVED BY THIS OLD CODE!
+	// despite being untouched for years, it still works as intended after testing.
+	// (i strongly recommend a game of hide & seek with the mumble integration; hilarities are ensured)
 	double angle;
 	fixed_t anglef;
 
@@ -637,7 +637,7 @@ void I_UpdateMumble(const mobj_t *mobj, const listener_t listener)
 	}
 	mumble->uiTick++;
 
-	if (!netgame || gamestate != GS_LEVEL) {  
+	if (!netgame || gamestate != GS_LEVEL) { // Zero out, but never delink.
 		mumble->fAvatarPosition[0] = mumble->fAvatarPosition[1] = mumble->fAvatarPosition[2] = 0.0f;
 		mumble->fAvatarFront[0] = 1.0f;
 		mumble->fAvatarFront[1] = mumble->fAvatarFront[2] = 0.0f;
@@ -682,7 +682,7 @@ void I_UpdateMumble(const mobj_t *mobj, const listener_t listener)
 #else
 	(void)mobj;
 	(void)listener;
-#endif  
+#endif // HAVE_MUMBLE
 }
 
 void I_StartupMouse(void){}
@@ -704,7 +704,7 @@ void I_AddExitFunc(void (*func)())
 
 void I_RemoveExitFunc(void (*func)())
 {
-
+	// NOTE: this isn't even used, so no need implementing this.
 	(void)func;
 }
 
@@ -717,24 +717,24 @@ typedef struct
 
 static feild_t tty_con;
 
-
-
+// lock to prevent clearing partial lines, since not everything
+// printed ends on a newline.
 static boolean ttycon_ateol = true;
-
-
+// some key codes that the terminal may be using
+// TTimo NOTE: I'm not sure how relevant this is
 static INT32 tty_erase;
 static INT32 tty_eof;
 
 static struct termios tty_tc;
 
+// =============================================================
+// tty console routines
+// NOTE: if the user is editing a line when something gets printed to the early console then it won't look good
+//   so we provide tty_Clear and tty_Show to be called before and after a stdout or stderr output
+// =============================================================
 
-
-
-
-
-
-
-
+// flush stdin, I suspect some terminals are sending a LOT of garbage
+// FIXME TTimo relevant?
 #if 0
 static inline void tty_FlushIn(void)
 {
@@ -743,13 +743,13 @@ static inline void tty_FlushIn(void)
 }
 #endif
 
-
-
-
-
-
-
-
+// do a backspace
+// TTimo NOTE: it seems on some terminals just sending '\b' is not enough
+//   so for now, in any case we send "\b \b" .. yeah well ..
+//   (there may be a way to find out if '\b' alone would work though)
+// Hanicef NOTE: using \b this way is unreliable because of terminal state,
+//   it's better to use \r to reset the cursor to the beginning of the
+//   line and clear from there.
 static void tty_Back(void)
 {
 	write(STDOUT_FILENO, "\r", 1);
@@ -774,7 +774,7 @@ static void tty_Clear(void)
 	}
 }
 
-
+// never exit without calling this, or your terminal will be left in a pretty bad state
 static void I_ShutdownConsole(void)
 {
 	if (consolevent)
@@ -789,9 +789,9 @@ static void I_StartupConsole(void)
 {
 	struct termios tc;
 
-
-
-
+	// TTimo
+	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=390 (404)
+	// then SIGTTIN or SIGTOU is emitted, if not catched, turns into a SIGSTP
 	signal(SIGTTIN, SIG_IGN);
 	signal(SIGTTOU, SIG_IGN);
 
@@ -814,28 +814,28 @@ static void I_StartupConsole(void)
 	tty_erase = tty_tc.c_cc[VERASE];
 	tty_eof = tty_tc.c_cc[VEOF];
 	tc = tty_tc;
-	  
-                                   
-                                                             
-                                                      
-                                            
-                                                           
-                                                        
-   
+	/*
+	 ECHO: don't echo input characters
+	 ICANON: enable canonical mode.  This  enables  the  special
+	  characters  EOF,  EOL,  EOL2, ERASE, KILL, REPRINT,
+	  STATUS, and WERASE, and buffers by lines.
+	 ISIG: when any of the characters  INTR,  QUIT,  SUSP,  or
+	  DSUSP are received, generate the corresponding signal
+	*/
 	tc.c_lflag &= ~(ECHO | ICANON);
-	  
-                        
-                                    
-    
+	/*
+	 ISTRIP strip off bit 8
+	 INPCK enable input parity checking
+	 */
 	tc.c_iflag &= ~(ISTRIP | INPCK);
-	tc.c_cc[VMIN] = 0;  
+	tc.c_cc[VMIN] = 0; //1?
 	tc.c_cc[VTIME] = 0;
 	tcsetattr (0, TCSADRAIN, &tc);
 }
 
 static void I_GetConsoleEvents(void)
 {
-
+	// we use this when sending back commands
 	event_t ev = {0};
 	char key = 0;
 	struct pollfd pfd =
@@ -858,9 +858,9 @@ static void I_GetConsoleEvents(void)
 		if (read(STDIN_FILENO, &key, 1) == -1 || !key)
 			return;
 
-
-
-
+		// we have something
+		// backspace?
+		// NOTE TTimo testing a lot of values .. seems it's the only way to get it to work everywhere
 		if ((key == tty_erase) || (key == 127) || (key == 8))
 		{
 			if (tty_con.cursor > 0)
@@ -871,7 +871,7 @@ static void I_GetConsoleEvents(void)
 			}
 			ev.key = KEY_BACKSPACE;
 		}
-		else if (key < ' ')  
+		else if (key < ' ') // check if this is a control char
 		{
 			if (key == '\n')
 			{
@@ -879,23 +879,23 @@ static void I_GetConsoleEvents(void)
 				tty_con.cursor = 0;
 				ev.key = KEY_ENTER;
 			}
-			else if (key == 0x4)  
+			else if (key == 0x4) // ^D, aka EOF
 			{
-
+				// shut down, most unix programs behave this way
 				I_Quit();
 			}
 			else continue;
 		}
 		else if (tty_con.cursor < sizeof(tty_con.buffer))
 		{
-
+			// push regular character
 			ev.key = tty_con.buffer[tty_con.cursor] = key;
 			tty_con.cursor++;
-
+			// print the current line (this is differential)
 			write(STDOUT_FILENO, &key, 1);
 		}
 		if (ev.key) D_PostEvent(&ev);
-
+		//tty_FlushIn();
 	}
 }
 
@@ -932,9 +932,9 @@ static void Impl_HandleKeyboardConsoleEvent(KEY_EVENT_RECORD evt, HANDLE co)
 				break;
 			case VK_RETURN:
 				entering_con_command = false;
-				 
+				/* FALLTHRU */
 			default:
-
+				//event.key = MapVirtualKey(evt.wVirtualKeyCode,2); // convert in to char
 				event.key = evt.uChar.AsciiChar;
 		}
 		if (co != INVALID_HANDLE_VALUE && GetFileType(co) == FILE_TYPE_CHAR && GetConsoleMode(co, &t))
@@ -991,7 +991,7 @@ static void I_StartupConsole(void)
 		consolevent = true;
 	}
 
-
+	//Let get the real console HANDLE, because Mingw's Bash is bad!
 	ci = CreateFile(TEXT("CONIN$") ,               GENERIC_READ, FILE_SHARE_READ,  NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	co = CreateFile(TEXT("CONOUT$"), GENERIC_WRITE|GENERIC_READ, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (ci != INVALID_HANDLE_VALUE)
@@ -999,7 +999,7 @@ static void I_StartupConsole(void)
 		const DWORD CM = ENABLE_LINE_INPUT|ENABLE_ECHO_INPUT|ENABLE_PROCESSED_INPUT;
 		SetStdHandle(STD_INPUT_HANDLE, ci);
 		if (GetFileType(ci) == FILE_TYPE_CHAR)
-			SetConsoleMode(ci, CM);  
+			SetConsoleMode(ci, CM); //default mode but no ENABLE_MOUSE_INPUT
 	}
 	if (co != INVALID_HANDLE_VALUE)
 	{
@@ -1071,7 +1071,7 @@ void I_OutputMsg(const char *fmt, ...)
 			INT oldLength;
 			CONSOLE_SCREEN_BUFFER_INFO csbi;
 
-
+			// Save the lines that we're going to obliterate.
 			GetConsoleScreenBufferInfo(co, &csbi);
 			oldLength = csbi.dwSize.X * (csbi.dwCursorPosition.Y - coordNextWrite.Y) + csbi.dwCursorPosition.X - coordNextWrite.X;
 
@@ -1083,7 +1083,7 @@ void I_OutputMsg(const char *fmt, ...)
 					free(txt);
 					return;
 				}
-				memset(blank, ' ', oldLength);  
+				memset(blank, ' ', oldLength); // Blank out.
 				oldLines = malloc(oldLength*sizeof(TCHAR));
 				if (!oldLines)
 				{
@@ -1094,30 +1094,30 @@ void I_OutputMsg(const char *fmt, ...)
 
 				ReadConsoleOutputCharacter(co, oldLines, oldLength, coordNextWrite, &bytesWritten);
 
-
-
+				// Move to where we what to print - which is where we would've been,
+				// had console input not been in the way,
 				SetConsoleCursorPosition(co, coordNextWrite);
 
 				WriteConsoleA(co, blank, oldLength, &bytesWritten, NULL);
 				free(blank);
 
-
+				// And back to where we want to print again.
 				SetConsoleCursorPosition(co, coordNextWrite);
 			}
 
-
+			// Actually write the string now!
 			WriteConsoleA(co, txt, (DWORD)len, &bytesWritten, NULL);
 
-
+			// Next time, output where we left off.
 			GetConsoleScreenBufferInfo(co, &csbi);
 			coordNextWrite = csbi.dwCursorPosition;
 
-
+			// Restore what was overwritten.
 			if (oldLines && entering_con_command)
 				WriteConsole(co, oldLines, oldLength, &bytesWritten, NULL);
 			if (oldLines) free(oldLines);
 		}
-		else  
+		else // Redirected to a file.
 			WriteFile(co, txt, (DWORD)len, &bytesWritten, NULL);
 	}
 #else
@@ -1139,7 +1139,7 @@ void I_OutputMsg(const char *fmt, ...)
 	}
 #endif
 
-
+	// 2004-03-03 AJR Since not all messages end in newline, some were getting displayed late.
 	if (!framebuffer)
 		fflush(stderr);
 
@@ -1156,15 +1156,15 @@ void I_OsPolling(void)
 FUNCNORETURN static ATTRNORETURN void quit_handler(int num)
 {
 	(void)num;
-
-
+	// FIXME: set a flag to quit later.
+	// this is risky since some functions can softlock in a signal handler: https://www.unix.com/man-page/posix/7/signal-safety/
 	I_Quit();
 }
 
 static void I_RegisterSignals (void)
 {
 #if defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON)
-
+	// signal is deprecated, long live sigaction
 	struct sigaction sig;
 	sigemptyset(&sig.sa_mask);
 	sig.sa_flags = 0;
@@ -1246,7 +1246,7 @@ void I_GetDiskFreeSpace(INT64* freespace)
 						 &NumberOfFreeClusters, &TotalNumberOfClusters);
 		*freespace = BytesPerSector*SectorsPerCluster*NumberOfFreeClusters;
 	}
-#else  
+#else // Dummy for platform independent; 1GB should be enough
 	*freespace = 1024*1024*1024;
 #endif
 }
@@ -1284,16 +1284,16 @@ char *I_GetUserName(void)
 
 	if (strcmp(username, "") != 0)
 		return username;
-	return NULL;  
+	return NULL; // dummy for platform independent version
 }
 
 INT32 I_mkdir(const char *dirname, INT32 unixright)
 {
-
+//[segabor]
 #if defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON) || defined (__CYGWIN__)
 	return mkdir(dirname, unixright);
 #elif defined (_WIN32)
-	UNREFERENCED_PARAMETER(unixright);  
+	UNREFERENCED_PARAMETER(unixright); /// \todo should implement ntright under nt...
 	return CreateDirectoryA(dirname, NULL);
 #else
 	(void)dirname;
@@ -1376,12 +1376,12 @@ static const char *locateWad(void)
 	int i;
 
 	I_OutputMsg("SRB2WADDIR");
-
+	// does SRB2WADDIR exist?
 	if (((envstr = I_GetEnv("SRB2WADDIR")) != NULL) && isWadPathOk(envstr))
 		return envstr;
 
 #ifndef NOCWD
-
+	// examine current dir
 	strcpy(returnWadPath, ".");
 	I_OutputMsg(",%s", returnWadPath);
 	if (isWadPathOk(returnWadPath))
@@ -1393,7 +1393,7 @@ static const char *locateWad(void)
 	CHECKWADPATH(returnWadPath);
 #endif
 
-
+	// examine default dirs
 	for (i = 0; wadDefaultPaths[i]; i++)
 	{
 		strcpy(returnWadPath, wadDefaultPaths[i]);
@@ -1401,7 +1401,7 @@ static const char *locateWad(void)
 	}
 
 #ifndef NOHOME
-
+	// find in $HOME
 	if ((envstr = I_GetEnv("HOME")) != NULL)
 	{
 		char *tmp = malloc(strlen(envstr) + 1 + sizeof(DEFAULTDIR));
@@ -1413,14 +1413,14 @@ static const char *locateWad(void)
 	}
 #endif
 
-
+	// search paths
 	for (i = 0; wadSearchPaths[i]; i++)
 	{
 		I_OutputMsg(", in:%s", wadSearchPaths[i]);
 		SEARCHWAD(wadSearchPaths[i]);
 	}
 
-
+	// if nothing was found
 	return NULL;
 }
 
@@ -1429,13 +1429,13 @@ const char *I_LocateWad(void)
 	const char *waddir;
 
 	I_OutputMsg("Looking for WADs in: ");
-
+	// FIXME: should we go for a command parameter instead for dedicated servers?
 	waddir = locateWad();
 	I_OutputMsg("\n");
 
 	if (waddir)
 	{
-
+		// change to the directory where we found srb2.pk3
 #if defined (_WIN32)
 		waddir = _fullpath(NULL, waddir, MAX_PATH);
 		SetCurrentDirectoryA(waddir);
@@ -1514,7 +1514,7 @@ void I_RegisterSysCommands(void){}
 
 char const *I_GetSysName(void)
 {
-
+	// reference: https://sourceforge.net/p/predef/wiki/OperatingSystems/
 #if defined(_WIN32) || defined(__CYGWIN__)
 	return "Windows";
 #elif defined(__APPLE__)
@@ -1530,7 +1530,7 @@ char const *I_GetSysName(void)
 #elif defined(__DragonFly__)
 	return "DragonFly BSD";
 #elif defined(__gnu_hurd__)
-	return "GNU Hurd";  
+	return "GNU Hurd"; // for anyone mental enough to set up an SRB2 server on GNU Hurd
 #elif defined(__hpux)
 	return "HP-UX";
 #elif defined(EPLAN9)
@@ -1543,14 +1543,14 @@ char const *I_GetSysName(void)
 	return "Minix";
 #elif defined(__sun)
 #if defined(__SVR4) || defined(__srv4__)
-	return "Solaris";  
+	return "Solaris"; // this would be so cursed...
 #else
 	return "SunOS";
 #endif
 #elif defined(_AIX)
 	return "AIX";
 #elif defined(__SYLLABLE__)
-	return "SyllableOS";  
+	return "SyllableOS"; // RIP SyllableOS, i still miss you ;-;
 #else
 	return "Unknown";
 #endif

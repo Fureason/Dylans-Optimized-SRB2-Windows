@@ -83,7 +83,7 @@ static TString* LoadString(LoadState* S)
  {
   char* s=luaZ_openspace(S->L,S->b,size);
   LoadBlock(S,s,size);
-  return luaS_newlstr(S->L,s,size-1);		 
+  return luaS_newlstr(S->L,s,size-1);		/* remove trailing '\0' */
  }
 }
 
@@ -190,9 +190,9 @@ static void LoadHeader(LoadState* S)
  IF (memcmp(h,s,LUAC_HEADERSIZE)!=0, "bad header");
 }
 
-  
-                         
-  
+/*
+** load precompiled chunk
+*/
 Proto* luaU_undump (lua_State* L, ZIO* Z, Mbuffer* buff, const char* name)
 {
  LoadState S;
@@ -210,9 +210,9 @@ Proto* luaU_undump (lua_State* L, ZIO* Z, Mbuffer* buff, const char* name)
 }
 #endif
 
-  
-             
-  
+/*
+* make header
+*/
 void luaU_header (char* h)
 {
  int x=1;
@@ -220,10 +220,10 @@ void luaU_header (char* h)
  h+=sizeof(LUA_SIGNATURE)-1;
  *h++=(char)LUAC_VERSION;
  *h++=(char)LUAC_FORMAT;
- *h++=(char)*(char*)&x;				 
+ *h++=(char)*(char*)&x;				/* endianness */
  *h++=(char)sizeof(int);
  *h++=(char)sizeof(size_t);
  *h++=(char)sizeof(Instruction);
  *h++=(char)sizeof(lua_Number);
- *h++=(char)(((lua_Number)0.5L)==0);		 
+ *h++=(char)(((lua_Number)0.5L)==0);		/* is lua_Number integral? */
 }

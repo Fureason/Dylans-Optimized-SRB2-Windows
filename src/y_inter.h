@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  y_inter.h
+/// \brief Tally screens, or "Intermissions" as they were formally called in Doom
 
 extern boolean usebuffer;
 
@@ -26,14 +26,14 @@ void Y_DetermineIntermissionType(void);
 typedef enum
 {
 	int_none,
-	int_coop,      
-	int_match,     
-	int_teammatch, 
-
-	int_ctf,       
-	int_spec,      
-	int_race,      
-	int_comp,      
+	int_coop,     // Single Player/Cooperative
+	int_match,    // Match
+	int_teammatch,// Team Match
+//	int_tag,      // Tag
+	int_ctf,      // CTF
+	int_spec,     // Special Stage
+	int_race,     // Race
+	int_comp,     // Competition
 } intertype_t;
 extern intertype_t intertype;
 extern intertype_t intermissiontypes[NUMGAMETYPES];

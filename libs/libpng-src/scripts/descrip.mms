@@ -32,7 +32,7 @@ clean :
 	delete *.obj;*,*.exe;
 
 
-
+# Other dependencies.
 png.obj : png.h, pngconf.h, pnglibconf.h, pngpriv.h, pngstruct.h,pnginfo.h, pngdebug.h
 pngpread.obj : png.h, pngconf.h, pnglibconf.h, pngpriv.h, pngstruct.h,pnginfo.h, pngdebug.h
 pngset.obj : png.h, pngconf.h, pnglibconf.h, pngpriv.h, pngstruct.h,pnginfo.h, pngdebug.h

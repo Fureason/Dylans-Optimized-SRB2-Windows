@@ -53,10 +53,10 @@ main(int argc, const char **argv)
    int channels = 0;
    double c[4];
 
-                                                                               
-                                                                           
-                         
-      
+   /* FE_TONEAREST is the IEEE754 round to nearest, preferring even, mode; i.e.
+    * everything rounds to the nearest value except that '.5' rounds to the
+    * nearest even value.
+    */
    fesetround(FE_TONEAREST);
 
    c[3] = c[2] = c[1] = c[0] = 0;
@@ -153,7 +153,7 @@ main(int argc, const char **argv)
          usage(prog);
       }
 
-      c[3] = c[1];  
+      c[3] = c[1]; /* alpha, if present */
       c[2] = c[1] = c[0];
    }
 
@@ -169,7 +169,7 @@ main(int argc, const char **argv)
       for (i=0; i<channels; ++i) c[i] = nearbyint(c[i] * 65535);
    }
 
-   else  
+   else /* to sRGB */
    {
       int i = (channels+1)&~1;
       while (--i >= 0)

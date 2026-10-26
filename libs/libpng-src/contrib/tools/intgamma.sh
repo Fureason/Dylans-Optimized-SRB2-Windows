@@ -9,18 +9,18 @@
 # related or neighboring rights to this work.  This work is published from:
 # United States.
 #
-
-
-
-
-
-
-
-
-
-
-
-
+# Shell script to generate png.c 8-bit and 16-bit log tables (see the code in
+# png.c for details).
+#
+# This script uses the "bc" arbitrary precision calculator to calculate 32-bit
+# fixed point values of logarithms appropriate to finding the log of an 8-bit
+# (0..255) value and a similar table for the exponent calculation.
+#
+# "bc" must be on the path when the script is executed, and the math library
+# (-lm) must be available
+#
+# function to print out a list of numbers as integers; the function truncates
+# the integers which must be one-per-line
 function print(){
    awk 'BEGIN{
       str = ""
@@ -45,8 +45,8 @@ function print(){
       print str
    }'
 }
-
-
+#
+# The logarithm table.
 cat <<END
 /* 8-bit log table: png_8bit_l2[128]
  * This is a table of -log(value/255)/log(2) for 'value' in the range 128 to

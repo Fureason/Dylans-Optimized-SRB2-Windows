@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  p_maputl.h
+/// \brief map utility functions
 
 #ifndef __P_MAPUTL__
 #define __P_MAPUTL__
@@ -17,9 +17,9 @@
 #include "r_defs.h"
 #include "m_fixed.h"
 
-
-
-
+//
+// P_MAPUTL
+//
 typedef struct
 {
 	fixed_t x, y, dx, dy;
@@ -27,7 +27,7 @@ typedef struct
 
 typedef struct
 {
-	fixed_t frac;  
+	fixed_t frac; // along trace line
 	boolean isaline;
 	union
 	{
@@ -102,10 +102,10 @@ boolean P_DoBlockThingsIterate(int x1, int y1, int x2, int y2, boolean (*func)(m
 
 extern divline_t trace;
 
-extern fixed_t tmbbox[4];  
+extern fixed_t tmbbox[4]; // p_map.c
 
-
-
-
-
-#endif  
+// call your user function for each line of the blockmap in the
+// bbox defined by the radius
+//boolean P_RadiusLinesCheck(fixed_t radius, fixed_t x, fixed_t y,
+//	boolean (*func)(line_t *));
+#endif // __P_MAPUTL__

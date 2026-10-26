@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  commands.h
+/// \brief Various netgame commands, such as kick and ban
 
 #ifndef __COMMANDS__
 #define __COMMANDS__

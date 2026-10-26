@@ -7,17 +7,17 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 #
+# Notes:
+#   Derived from makefile.std
+#   All modules are compiled in C mode
+#   Tested under Win32, expected to work under OS/2
+#   Can be easily adapted for IBM VisualAge/C++ for AIX
 
-
-
-
-
-
-
+# Location of the zlib library and include files
 ZLIBINC = ../zlib
 ZLIBLIB = ../zlib
 
-
+# Compiler, linker, lib and other tools
 CC = icc
 LD = ilink
 AR = ilib
@@ -28,23 +28,23 @@ CPPFLAGS = -I$(ZLIBINC)
 CFLAGS = -Mc -O2 -W3
 LDFLAGS =
 
-
-
+# Pre-built configuration
+# See scripts/pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT = scripts/pnglibconf.h.prebuilt
 
-
+# File extensions
 O=.obj
 A=.lib
 E=.exe
 
-
+# Variables
 OBJS = png$(O) pngerror$(O) pngget$(O) pngmem$(O) pngpread$(O) \
 	pngread$(O) pngrio$(O) pngrtran$(O) pngrutil$(O) pngset$(O) \
 	pngtrans$(O) pngwio$(O) pngwrite$(O) pngwtran$(O) pngwutil$(O)
 
 LIBS = libpng$(A) $(ZLIBLIB)/zlib$(A)
 
-
+# Targets
 .c$(O):
 	$(CC) -c $(CPPFLAGS) $(CFLAGS) $<
 

@@ -5,17 +5,17 @@
 --                                                            --
 --  Open source license information is in the zlib.ads file.  --
 ----------------------------------------------------------------
+--
+--  $Id: buffer_demo.adb,v 1.3 2004/09/06 06:55:35 vagul Exp $
 
+--  This demo program provided by Dr Steve Sangwine <sjs@essex.ac.uk>
+--
+--  Demonstration of a problem with Zlib-Ada (already fixed) when a buffer
+--  of exactly the correct size is used for decompressed data, and the last
+--  few bytes passed in to Zlib are checksum bytes.
 
-
-
-
-
-
-
-
-
-
+--  This program compresses a string of text, and then decompresses the
+--  compressed text into a buffer of the same size as the original text.
 
 with Ada.Streams; use Ada.Streams;
 with Ada.Text_IO;
@@ -48,7 +48,7 @@ begin
       begin
          Deflate_Init (Compressor);
 
-
+         --  Compress the whole of T at once.
 
          Translate (Compressor, Source, I, Compressed_Data, L, Finish);
          pragma Assert (I = Source'Last);
@@ -60,10 +60,10 @@ begin
             & Stream_Element_Offset'Image (L) & " bytes");
       end Compress;
 
-
-
-
-
+      --  Now we decompress the data, passing short blocks of data to Zlib
+      --  (because this demonstrates the problem - the last block passed will
+      --  contain checksum information and there will be no output, only a
+      --  check inside Zlib that the checksum is correct).
 
       Decompress : declare
          Decompressor : Filter_Type;

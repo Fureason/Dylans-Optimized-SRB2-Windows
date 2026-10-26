@@ -184,13 +184,13 @@ void gld_clipper_SafeAddClipRange(angle_t startangle, angle_t endangle)
 {
 	if(startangle > endangle)
 	{
-
+		// The range has to added in two parts.
 		gld_clipper_AddClipRange(startangle, ANGLE_MAX);
 		gld_clipper_AddClipRange(0, endangle);
 	}
 	else
 	{
-
+		// Add the range as usual.
 		gld_clipper_AddClipRange(startangle, endangle);
 	}
 }
@@ -201,7 +201,7 @@ static void gld_clipper_AddClipRange(angle_t start, angle_t end)
 
 	if (cliphead)
 	{
-
+		//check to see if range contains any old ranges
 		node = cliphead;
 		while (node != NULL && node->start < end)
 		{
@@ -224,16 +224,16 @@ static void gld_clipper_AddClipRange(angle_t start, angle_t end)
 			}
 		}
 
-
+		//check to see if range overlaps a range (or possibly 2)
 		node = cliphead;
 		while (node != NULL && node->start <= end)
 		{
 			if (node->end >= start)
 			{
-
+				// we found the first overlapping node
 				if (node->start > start)
 				{
-
+					// the new range overlaps with this node's start point
 					node->start = start;
 				}
 				if (node->end < end)
@@ -258,7 +258,7 @@ static void gld_clipper_AddClipRange(angle_t start, angle_t end)
 			node = node->next;
 		}
 
-
+		//just add range
 		node = cliphead;
 		prevNode = NULL;
 		temp = gld_clipnode_NewRange(start, end);
@@ -327,7 +327,7 @@ angle_t gld_FrustumAngle(float render_fov, angle_t tiltangle)
 
 	float tilt = (float)fabs(((double)(int)tiltangle) / ANG1);
 
-	float render_fovratio = (float)BASEVIDWIDTH / (float)BASEVIDHEIGHT;  
+	float render_fovratio = (float)BASEVIDWIDTH / (float)BASEVIDHEIGHT; // SRB2CBTODO: NEWCLIPTODO: Is this right?
 	float render_multiplier = 64.0f / render_fovratio / RMUL;
 
 	if (tilt > 90.0f)
@@ -335,12 +335,12 @@ angle_t gld_FrustumAngle(float render_fov, angle_t tiltangle)
 		tilt = 90.0f;
 	}
 
-
+	// If the pitch is larger than this you can look all around at a FOV of 90
 	if (abs((signed)tiltangle) > 46 * ANG1)
 		return 0xffffffff;
 
-
-
+	// ok, this is a gross hack that barely works...
+	// but at least it doesn't overestimate too much...
 	floatangle = 2.0f + (45.0f + (tilt / 1.9f)) * (float)render_fov * 48.0f / render_multiplier / 90.0f;
 	a1 = ANG1 * (int)floatangle;
 	if (a1 >= ANGLE_180)
@@ -348,14 +348,14 @@ angle_t gld_FrustumAngle(float render_fov, angle_t tiltangle)
 	return a1;
 }
 
-
-
-
-
+// SRB2CB I don't think used any of this stuff, let's disable for now since SRB2 probably doesn't want it either
+// compiler complains about (p)glGetFloatv anyway, in case anyone wants this
+// only r_opengl.c can use the base gl funcs as it turns out, that's a problem for whoever wants sphere frustum checks
+// btw to renable define HAVE_SPHEREFRUSTRUM in hw_clip.h
 #ifdef HAVE_SPHEREFRUSTRUM
-
-
-
+//
+// gld_FrustrumSetup
+//
 
 #define CALCMATRIX(a, b, c, d, e, f, g, h)\
 (float)(viewMatrix[a] * projMatrix[b] + \
@@ -401,42 +401,42 @@ void gld_FrustrumSetup(void)
 	clip[14] = CALCMATRIX(12, 2, 13, 6, 14, 10, 15, 14);
 	clip[15] = CALCMATRIX(12, 3, 13, 7, 14, 11, 15, 15);
 
-
+	// Right plane
 	frustum[0][0] = clip[ 3] - clip[ 0];
 	frustum[0][1] = clip[ 7] - clip[ 4];
 	frustum[0][2] = clip[11] - clip[ 8];
 	frustum[0][3] = clip[15] - clip[12];
 	NORMALIZE_PLANE(0);
 
-
+	// Left plane
 	frustum[1][0] = clip[ 3] + clip[ 0];
 	frustum[1][1] = clip[ 7] + clip[ 4];
 	frustum[1][2] = clip[11] + clip[ 8];
 	frustum[1][3] = clip[15] + clip[12];
 	NORMALIZE_PLANE(1);
 
-
+	// Bottom plane
 	frustum[2][0] = clip[ 3] + clip[ 1];
 	frustum[2][1] = clip[ 7] + clip[ 5];
 	frustum[2][2] = clip[11] + clip[ 9];
 	frustum[2][3] = clip[15] + clip[13];
 	NORMALIZE_PLANE(2);
 
-
+	// Top plane
 	frustum[3][0] = clip[ 3] - clip[ 1];
 	frustum[3][1] = clip[ 7] - clip[ 5];
 	frustum[3][2] = clip[11] - clip[ 9];
 	frustum[3][3] = clip[15] - clip[13];
 	NORMALIZE_PLANE(3);
 
-
+	// Far plane
 	frustum[4][0] = clip[ 3] - clip[ 2];
 	frustum[4][1] = clip[ 7] - clip[ 6];
 	frustum[4][2] = clip[11] - clip[10];
 	frustum[4][3] = clip[15] - clip[14];
 	NORMALIZE_PLANE(4);
 
-
+	// Near plane
 	frustum[5][0] = clip[ 3] + clip[ 2];
 	frustum[5][1] = clip[ 7] + clip[ 6];
 	frustum[5][2] = clip[11] + clip[10];

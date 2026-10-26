@@ -1,13 +1,13 @@
 @setlocal enableextensions enabledelayedexpansion
 
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 : Appveyor Deployer
 : See appveyor.yml for default variables
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 : Evaluate whether we should be deploying
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 if not [%DPL_ENABLED%] == [1] (
     echo Deployer is not enabled...
@@ -45,9 +45,9 @@ if [%APPVEYOR_REPO_TAG%] == [true] (
     set "ASSET_FILES_OPTIONAL_GET=1"
 )
 
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 : Get asset archives
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 if exist "C:\Users\appveyor\srb2_cache\archives\" (
     if [%ASSET_CLEAN%] == [1] (
@@ -60,10 +60,10 @@ if not exist "C:\Users\appveyor\srb2_cache\archives\" mkdir "C:\Users\appveyor\s
 
 goto EXTRACT_ARCHIVES
 
-
+::::::::::::::::::::::::::::::::
 : ARCHIVE_NAME_PARTS
 : Call this like a function. %archivepath% is the path to extract parts from.
-
+::::::::::::::::::::::::::::::::
 
 for %%a in (%archivepath%) do (
     set "file=%%~fa"
@@ -75,9 +75,9 @@ set "localarchivepath=C:\Users\appveyor\srb2_cache\archives\%filename%"
 
 goto EOF
 
-
+::::::::::::::::::::::::::::::::
 : EXTRACT_ARCHIVES
-
+::::::::::::::::::::::::::::::::
 
 set "archivepath=%ASSET_ARCHIVE_PATH%"
 call :ARCHIVE_NAME_PARTS
@@ -110,9 +110,9 @@ if [%ASSET_FILES_OPTIONAL_GET%] == [1] (
     if not exist "!localarchivepath!" appveyor DownloadFile "%ASSET_ARCHIVE_OPTIONAL_PATH%" -FileName "!localarchivepath!"
 )
 
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 : Build the installers
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 mkdir "assets\installer"
 mkdir "assets\patch"
@@ -142,9 +142,9 @@ if not [%APPVEYOR_REPO_TAG%] == [true] (
 
 if not [%X86_64%] == [1] ( goto X86_INSTALL )
 
-
+::::::::::::::::::::::::::::::::
 : X64_INSTALL
-
+::::::::::::::::::::::::::::::::
 
 : Extract DLL binaries
 7z x -y "%ASSET_ARCHIVE_X64_PATH_LOCAL%" -o"assets\installer" >null
@@ -165,9 +165,9 @@ appveyor PushArtifact "%DPL_INSTALLER_NAME%-x64-Patch%INSTALLER_SUFFIX%.zip"
 : We only do x86 OR x64, one at a time, so exit now.
 goto EOF
 
-
+::::::::::::::::::::::::::::::::
 : X86_INSTALL
-
+::::::::::::::::::::::::::::::::
 
 : Extract DLL binaries
 7z x -y "%ASSET_ARCHIVE_X86_PATH_LOCAL%" -o"assets\installer" >null
@@ -188,8 +188,8 @@ appveyor PushArtifact "%DPL_INSTALLER_NAME%-Patch%INSTALLER_SUFFIX%.zip"
 : We only do x86 OR x64, one at a time, so exit now
 goto EOF
 
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 : EOF
-
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 endlocal

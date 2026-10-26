@@ -1,7 +1,13 @@
+#
+# Detect the host system and compiler version.
+#
 
-
-
-
+# Previously featured:\
+	PANDORA\
+	DUMMY\
+	DJGPPDOS\
+	SOLARIS\
+	MACOSX\
 
 all_systems:=\
 	LINUX64\
@@ -12,18 +18,18 @@ all_systems:=\
 	FREEBSD\
 	HAIKU\
 
-
+# check for user specified system
 ifeq (,$(filter $(all_systems),$(.VARIABLES)))
-ifeq ($(OS),Windows_NT)  
+ifeq ($(OS),Windows_NT) # all windows are Windows_NT...
 
 _m=Detected a Windows system,\
 	compiling for 32-bit MinGW SDL...)
 $(call Print,$(_m))
 
-
+# go for a 32-bit sdl mingw exe by default
 MINGW:=1
 
-else  
+else # if you on the *nix
 
 system:=$(shell uname -s)
 
@@ -50,7 +56,7 @@ $(new_system):=1
 endif
 endif
 
-
+# This must have high to low order.
 gcc_versions:=\
 	132 131 130\
 	123 122 121 120\
@@ -65,34 +71,34 @@ gcc_versions:=\
 
 latest_gcc_version:=13.2
 
-
-
-
+# Automatically set version flag, but not if one was
+# manually set. And don't bother if this is a clean only
+# run.
 ifeq (,$(call Wildvar,GCC% destructive))
 
-
-
-
+# can't use $(CC) --version here since that uses argv[0] to display the name
+# also gcc outputs the information to stderr, so I had to do 2>&1
+# this program really doesn't like identifying itself
 shellversion:=$(shell $(CC) -v 2>&1)
-
+# Try to remove "-win32"
 version:=$(subst -win32,.0,$(shellversion))
 
-
+# check if this is in fact GCC
 ifneq (,$(findstring gcc version,$(version)))
 
-
+# in stark contrast to the name, gcc will give me a nicely formatted version number for free
 shellversion:=$(shell $(CC) -dumpfullversion)
 
-
+# Try to remove "-win32"
 version:=$(subst -win32,.0,$(shellversion))
 
-
+# Turn version into words of major, minor
 v:=$(subst ., ,$(version))
-
+# concat. major minor
 v:=$(word 1,$(v))$(word 2,$(v))
 
-
-
+# If this version is not in the list,
+# default to the latest supported
 ifeq (,$(filter $(v),$(gcc_versions)))
 define line =
 Your compiler version, GCC $(version), \

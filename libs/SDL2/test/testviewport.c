@@ -9,7 +9,7 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* Simple program:  Check viewports */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,7 +34,7 @@ static Uint32 wait_start;
 static SDL_Texture *sprite;
 static int sprite_w, sprite_h;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -46,47 +46,47 @@ void DrawOnViewport(SDL_Renderer *renderer)
 {
     SDL_Rect rect;
 
-     
+    /* Set the viewport */
     SDL_RenderSetViewport(renderer, &viewport);
 
-     
+    /* Draw a gray background */
     SDL_SetRenderDrawColor(renderer, 0x80, 0x80, 0x80, 0xFF);
     SDL_RenderClear(renderer);
 
-     
+    /* Test inside points */
     SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0x00, 0xFF);
     SDL_RenderDrawPoint(renderer, viewport.h / 2 + 20, viewport.w / 2);
     SDL_RenderDrawPoint(renderer, viewport.h / 2 - 20, viewport.w / 2);
     SDL_RenderDrawPoint(renderer, viewport.h / 2, viewport.w / 2 - 20);
     SDL_RenderDrawPoint(renderer, viewport.h / 2, viewport.w / 2 + 20);
 
-     
+    /* Test horizontal and vertical lines */
     SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
     SDL_RenderDrawLine(renderer, 1, 0, viewport.w - 2, 0);
     SDL_RenderDrawLine(renderer, 1, viewport.h - 1, viewport.w - 2, viewport.h - 1);
     SDL_RenderDrawLine(renderer, 0, 1, 0, viewport.h - 2);
     SDL_RenderDrawLine(renderer, viewport.w - 1, 1, viewport.w - 1, viewport.h - 2);
 
-     
+    /* Test diagonal lines */
     SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
     SDL_RenderDrawLine(renderer, 0, 0, viewport.w - 1, viewport.h - 1);
     SDL_RenderDrawLine(renderer, viewport.w - 1, 0, 0, viewport.h - 1);
 
-     
+    /* Test outside points */
     SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0x00, 0xFF);
     SDL_RenderDrawPoint(renderer, viewport.h / 2 + viewport.h, viewport.w / 2);
     SDL_RenderDrawPoint(renderer, viewport.h / 2 - viewport.h, viewport.w / 2);
     SDL_RenderDrawPoint(renderer, viewport.h / 2, viewport.w / 2 - viewport.w);
     SDL_RenderDrawPoint(renderer, viewport.h / 2, viewport.w / 2 + viewport.w);
 
-     
+    /* Add a box at the top */
     rect.w = 8;
     rect.h = 8;
     rect.x = (viewport.w - rect.w) / 2;
     rect.y = 0;
     SDL_RenderFillRect(renderer, &rect);
 
-     
+    /* Add a clip rect and fill it with the sprite */
     SDL_QueryTexture(sprite, NULL, NULL, &rect.w, &rect.h);
     rect.x = (viewport.w - rect.w) / 2;
     rect.y = (viewport.h - rect.h) / 2;
@@ -100,18 +100,18 @@ void loop()
     SDL_Event event;
     int i;
 #ifdef __EMSCRIPTEN__
-     
+    /* Avoid using delays */
     if (SDL_GetTicks() - wait_start < 1000) {
         return;
     }
     wait_start = SDL_GetTicks();
 #endif
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &done);
     }
 
-     
+    /* Move a viewport box in steps around the screen */
     viewport.x = j * 100;
     viewport.y = viewport.x;
     viewport.w = 100 + j * 50;
@@ -124,10 +124,10 @@ void loop()
             continue;
         }
 
-         
+        /* Draw using viewport */
         DrawOnViewport(state->renderers[i]);
 
-         
+        /* Update the screen! */
         if (use_target) {
             SDL_SetRenderTarget(state->renderers[i], NULL);
             SDL_RenderCopy(state->renderers[i], state->targets[i], NULL, NULL);
@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
     int i;
     Uint32 then, now, frames;
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
         SDL_RenderClear(renderer);
     }
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         double fps = ((double)frames * 1000) / (now - then);
@@ -227,4 +227,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  p_local.h
+/// \brief Play functions, animation, global header
 
 #ifndef __P_LOCAL__
 #define __P_LOCAL__
@@ -25,22 +25,22 @@
 
 #define FLOATSPEED (FRACUNIT*4)
 
+// Maximum player score.
+#define MAXSCORE 99999990 // 999999990
 
-#define MAXSCORE 99999990  
-
-
-
+// mapblocks are used to check movement
+// against lines and things
 #define MAPBLOCKUNITS 128
 #define MAPBLOCKSIZE  (MAPBLOCKUNITS*FRACUNIT)
 #define MAPBLOCKSHIFT (FRACBITS+7)
 #define MAPBMASK      (MAPBLOCKSIZE-1)
 #define MAPBTOFRAC    (MAPBLOCKSHIFT-FRACBITS)
 
-
+// Convenience macro to fix issue with collision along bottom/left edges of blockmap -Red
 #define BMBOUNDFIX(xl, xh, yl, yh) {if (xl > xh) xl = 0; if (yl > yh) yl = 0;}
 
-
-
+// max Z move up or down without jumping
+// above this, a height difference is considered as a 'dropoff'
 #define MAXSTEPMOVE (24*FRACUNIT)
 
 #define USERANGE (64*FRACUNIT)
@@ -64,7 +64,7 @@ typedef enum
 	THINK_DYNSLOPE,
 	THINK_PRECIP,
 	NUM_THINKERLISTS
-} thinklistnum_t;  
+} thinklistnum_t; /**< Thinker lists. */
 extern thinker_t thlist[];
 extern mobj_t *mobjcache;
 
@@ -72,39 +72,39 @@ void P_InitThinkers(void);
 void P_AddThinker(const thinklistnum_t n, thinker_t *thinker);
 void P_RemoveThinker(thinker_t *thinker);
 
-
-
-
+//
+// P_USER
+//
 typedef struct camera_s
 {
 	boolean chase;
 	angle_t aiming;
 
-
+	// Things used by FS cameras.
 	fixed_t viewheight;
 	angle_t startangle;
 
-
-
+	// Camera demobjerization
+	// Info for drawing: position.
 	fixed_t x, y, z;
 	boolean reset;
 
-
-	angle_t angle;  
+	//More drawing info: to determine current sprite.
+	angle_t angle; // orientation
 
 	struct subsector_s *subsector;
 
-
+	// The closest interval over all contacted Sectors (or Things).
 	fixed_t floorz;
 	fixed_t ceilingz;
 
-
+	// For movement checking.
 	fixed_t radius;
 	fixed_t height;
 
 	fixed_t relativex;
 
-
+	// Momentums, used to update position.
 	fixed_t momx, momy, momz;
 } camera_t;
 
@@ -197,7 +197,7 @@ mobj_t *P_LookForFocusTarget(player_t *player, mobj_t *exclude, SINT8 direction,
 mobj_t *P_LookForEnemies(player_t *player, boolean nonenemies, boolean bullet);
 void P_NukeEnemies(mobj_t *inflictor, mobj_t *source, fixed_t radius);
 void P_Earthquake(mobj_t *inflictor, mobj_t *source, fixed_t radius);
-boolean P_HomingAttack(mobj_t *source, mobj_t *enemy);  
+boolean P_HomingAttack(mobj_t *source, mobj_t *enemy); /// \todo doesn't belong in p_user
 boolean P_SuperReady(player_t *player);
 void P_DoJump(player_t *player, boolean soundandstate, boolean allowflip);
 void P_DoSpinDashDust(player_t *player);
@@ -224,29 +224,29 @@ boolean P_GetLives(player_t *player);
 boolean P_SpectatorJoinGame(player_t *player);
 void P_RestoreMultiMusic(player_t *player);
 
-
-
-
+/// ------------------------
+/// Jingle stuff
+/// ------------------------
 
 typedef enum
 {
-	JT_NONE,    
-	JT_OTHER,   
-	JT_MASTER,  
-	JT_1UP,  
-	JT_SHOES,   
-	JT_INV,  
-	JT_MINV,  
-	JT_DROWN,   
-	JT_SUPER,   
-	JT_GOVER,  
-	JT_NIGHTSTIMEOUT,  
-	JT_SSTIMEOUT,  
+	JT_NONE,   // Null state
+	JT_OTHER,  // Other state
+	JT_MASTER, // Main level music
+	JT_1UP, // Extra life
+	JT_SHOES,  // Speed shoes
+	JT_INV, // Invincibility
+	JT_MINV, // Mario Invincibility
+	JT_DROWN,  // Drowning
+	JT_SUPER,  // Super Sonic
+	JT_GOVER, // Game Over
+	JT_NIGHTSTIMEOUT, // NiGHTS Time Out (10 seconds)
+	JT_SSTIMEOUT, // NiGHTS Special Stage Time Out (10 seconds)
 
-
-
-
-
+	// these are not jingles
+	// JT_LCLEAR, // Level Clear
+	// JT_RACENT, // Multiplayer Intermission
+	// JT_CONTSC, // Continue
 
 	NUMJINGLES
 } jingletype_t;
@@ -265,14 +265,14 @@ void P_PlayJingle(player_t *player, jingletype_t jingletype);
 boolean P_EvaluateMusicStatus(UINT16 status, const char *musname);
 void P_PlayJingleMusic(player_t *player, const char *musname, UINT16 musflags, boolean looping, UINT16 status);
 
-
-
-
+//
+// P_MOBJ
+//
 #define ONFLOORZ INT32_MIN
 #define ONCEILINGZ INT32_MAX
 
-
-
+// Time interval for item respawning.
+// WARNING MUST be a power of 2
 #define ITEMQUESIZE 1024
 
 extern mapthing_t *itemrespawnque[ITEMQUESIZE];
@@ -300,8 +300,8 @@ boolean P_CheckSkyHit(mobj_t *mo, line_t *line);
 void P_PushableThinker(mobj_t *mobj);
 void P_SceneryThinker(mobj_t *mobj);
 
-
-
+// This does not need to be added to Lua.
+// To test it in Lua, check mobj.valid
 FUNCINLINE static ATTRINLINE boolean P_MobjWasRemoved(mobj_t *mobj)
 {
 	return mobj == NULL || mobj->thinker.function.acp1 != (actionf_p1)P_MobjThinker;
@@ -357,14 +357,14 @@ void P_FlashPal(player_t *pl, UINT16 type, UINT16 duration);
 #define PAL_NUKE     4
 #define PAL_INVERT   5
 
+//
+// P_ENEMY
+//
 
+// main player in game
+extern player_t *stplyr; // for splitscreen correct palette changes and overlay
 
-
-
-
-extern player_t *stplyr;  
-
-
+// Is there a better place for these?
 extern INT32 var1;
 extern INT32 var2;
 
@@ -384,12 +384,12 @@ void P_InternalFlickyBubble(mobj_t *actor);
 void P_InternalFlickyFly(mobj_t *actor, fixed_t flyspeed, fixed_t targetdist, fixed_t chasez);
 void P_InternalFlickyHop(mobj_t *actor, fixed_t momz, fixed_t momh, angle_t angle);
 
+//
+// P_MAP
+//
 
-
-
-
-
-
+// If "floatok" true, move would be ok
+// if within "tmfloorz - tmceilingz".
 extern boolean floatok;
 extern fixed_t tmfloorz;
 extern fixed_t tmceilingz;
@@ -400,7 +400,7 @@ extern fixed_t tmx;
 extern fixed_t tmy;
 extern pslope_t *tmfloorslope, *tmceilingslope;
 
- 
+/* cphipps 2004/08/30 */
 extern void P_MapStart(void);
 extern void P_MapEnd(void);
 
@@ -449,52 +449,52 @@ INT32 P_GetSectorLightLevelAt(fixed_t x, fixed_t y, fixed_t z);
 extracolormap_t *P_GetColormapFromSectorAt(sector_t *sector, fixed_t x, fixed_t y, fixed_t z);
 extracolormap_t *P_GetSectorColormapAt(fixed_t x, fixed_t y, fixed_t z);
 
-
-
-
-extern UINT8 *rejectmatrix;  
-extern INT32 *blockmaplump;  
-extern INT32 *blockmap;  
+//
+// P_SETUP
+//
+extern UINT8 *rejectmatrix; // for fast sight rejection
+extern INT32 *blockmaplump; // offsets in blockmap are from here
+extern INT32 *blockmap; // Big blockmap
 extern INT32 bmapwidth;
-extern INT32 bmapheight;  
+extern INT32 bmapheight; // in mapblocks
 extern fixed_t bmaporgx;
-extern fixed_t bmaporgy;  
-extern blocknode_t **blocklinks;  
+extern fixed_t bmaporgy; // origin of block map
+extern blocknode_t **blocklinks; // for thing chains
 
-
-
-
+//
+// P_INTER
+//
 typedef struct BasicFF_s
 {
-	INT32 ForceX;  
-	INT32 ForceY;  
-	const player_t *player;  
-
-	UINT32 Duration;  
-	INT32 Gain;  
-
-	INT32 Magnitude;  
+	INT32 ForceX; ///< The X of the Force's Vel
+	INT32 ForceY; ///< The Y of the Force's Vel
+	const player_t *player; ///< Player of Rumble
+	//All
+	UINT32 Duration; ///< The total duration of the effect, in microseconds
+	INT32 Gain; ///< /The gain to be applied to the effect, in the range from 0 through 10,000.
+	//All, CONSTANTFORCE �10,000 to 10,000
+	INT32 Magnitude; ///< Magnitude of the effect, in the range from 0 through 10,000.
 } BasicFF_t;
 
- 
-
-
+/* Damage/death types, for P_DamageMobj and related */
+//// Damage types
+//#define DMG_NORMAL 0 (unneeded?)
 #define DMG_WATER     1
 #define DMG_FIRE      2
 #define DMG_ELECTRIC  3
 #define DMG_SPIKE     4
-#define DMG_NUKE      5  
-
-
+#define DMG_NUKE      5 // bomb shield
+//#define DMG_SPECIALSTAGE 6
+//// Death types - cannot be combined with damage types
 #define DMG_INSTAKILL  0x80
 #define DMG_DROWNED    0x80+1
 #define DMG_SPACEDROWN 0x80+2
 #define DMG_DEATHPIT   0x80+3
 #define DMG_CRUSHED    0x80+4
 #define DMG_SPECTATOR  0x80+5
-
-#define DMG_CANHURTSELF 0x40  
-#define DMG_DEATHMASK  DMG_INSTAKILL  
+// Masks
+#define DMG_CANHURTSELF 0x40 // Flag - can hurt self/team indirectly, such as through mines
+#define DMG_DEATHMASK  DMG_INSTAKILL // if bit 7 is set, this is a death type instead of a damage type
 
 void P_ForceFeed(const player_t *player, INT32 attack, INT32 fade, tic_t duration, INT32 period);
 void P_ForceConstant(const BasicFF_t *FFInfo);
@@ -503,7 +503,7 @@ void P_RemoveShield(player_t *player);
 void P_SpecialStageDamage(player_t *player, mobj_t *inflictor, mobj_t *source);
 boolean P_DamageMobj(mobj_t *target, mobj_t *inflictor, mobj_t *source, INT32 damage, UINT8 damagetype);
 void P_KillMobj(mobj_t *target, mobj_t *inflictor, mobj_t *source, UINT8 damagetype);
-void P_PlayerRingBurst(player_t *player, INT32 num_rings);  
+void P_PlayerRingBurst(player_t *player, INT32 num_rings); /// \todo better fit in p_user.c
 void P_PlayerWeaponPanelBurst(player_t *player);
 void P_PlayerWeaponAmmoBurst(player_t *player);
 void P_PlayerWeaponPanelOrAmmoBurst(player_t *player);
@@ -526,15 +526,15 @@ boolean P_EmblemWasCollected(INT32 emblemID);
 void P_DoNightsScore(player_t *player);
 void P_DoMatchSuper(player_t *player);
 
-
-
-
+//
+// P_SPEC
+//
 #include "p_spec.h"
 
 extern INT32 ceilmovesound;
 
-
-
+// Factor to scale scrolling effect into mobj-carrying properties = 3/32.
+// (This is so scrolling floors and objects on them can move at same speed.)
 #define CARRYFACTOR ((3*FRACUNIT)/32)
 
 void P_MixUp(mobj_t *thing, fixed_t x, fixed_t y, fixed_t z, angle_t angle,
@@ -554,4 +554,4 @@ void P_ExplodeMissile(mobj_t *mo);
 void P_CheckGravity(mobj_t *mo, boolean affect);
 void P_SetPitchRollFromSlope(mobj_t *mo, pslope_t *slope);
 
-#endif  
+#endif // __P_LOCAL__

@@ -1,5 +1,5 @@
-
-
+# Makefile for libpng
+# Watcom C/C++ 10.0 and later, 32-bit protected mode, flat memory model
 
 # Copyright (C) 2000, Pawel Mrochen, based on makefile.msc which is
 # copyright 1995 Guy Eric Schalnat, Group 42, Inc.
@@ -8,31 +8,31 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
+# To use, do "wmake /f scripts\makefile.watcom"
 
 
+# ---------------------- Watcom C/C++ 10.0 and later -----------------------
 
-
-
-
+# Where the zlib library and include files are located
 ZLIBLIB=..\zlib
 ZLIBINC=..\zlib
 
-
+# Target OS
 OS=DOS
+#OS=NT
 
+# Target CPU
+CPU=6		# Pentium Pro
+#CPU=5		# Pentium
 
+# Calling convention
+CALLING=r	# registers
+#CALLING=s	# stack
 
-CPU=6		 
+# Uncomment next to put error messages in a file
+#ERRFILE=>>pngerrs
 
-
-
-CALLING=r	 
-
-
-
-
-
-
+# --------------------------------------------------------------------------
 
 
 CC=wcc386
@@ -109,4 +109,4 @@ test: pngtest.exe .symbolic
 	pngtest.exe
 
 
-
+# End of makefile for libpng

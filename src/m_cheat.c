@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_cheat.c
+/// \brief Cheat sequence checking
 
 #include "doomdef.h"
 #include "g_input.h"
@@ -27,7 +27,7 @@
 #include "m_misc.h"
 
 #include "hu_stuff.h"
-#include "m_cond.h"  
+#include "m_cond.h" // secrets unlocked?
 
 #include "v_video.h"
 #include "z_zone.h"
@@ -36,9 +36,9 @@
 #include "lua_script.h"
 #include "lua_hook.h"
 
-
-
-
+//
+// CHEAT SEQUENCE PACKAGE
+//
 
 #define SCRAMBLE(a) \
 ((((a)&1)<<7) + (((a)&2)<<5) + ((a)&4) + (((a)&8)<<1) \
@@ -47,24 +47,24 @@
 typedef struct
 {
 	UINT8 *p;
-	UINT8 (*func)(void);  
+	UINT8 (*func)(void); // called when cheat confirmed.
 	UINT8 sequence[];
 } cheatseq_t;
 
+// ==========================================================================
+//                             CHEAT Structures
+// ==========================================================================
 
-
-
-
-
+// Cheat responders
 static UINT8 cheatf_ultimate(void)
 {
 	if (menuactive && (currentMenu != &MainDef && currentMenu != &SP_LoadDef))
-		return 0;  
+		return 0; // Only on the main menu, or the save select!
 
 	BwehHehHe();
 	ultimate_selectable = (!ultimate_selectable);
 
-
+	// If on the save select, move to what is now Ultimate Mode!
 	if (currentMenu == &SP_LoadDef)
 		M_ForceSaveSlotSelected(NOSAVESLOT);
 	return 1;
@@ -73,17 +73,17 @@ static UINT8 cheatf_ultimate(void)
 static UINT8 cheatf_warp(void)
 {
 	if (menuactive && currentMenu != &MainDef)
-		return 0;  
+		return 0; // Only on the main menu!
 
 	S_StartSound(0, sfx_itemup);
 
-
+	// Temporarily unlock stuff.
 	G_SetUsedCheats(false);
-	clientGamedata->unlocked[31] = true;  
-	clientGamedata->unlocked[30] = true;  
-	clientGamedata->unlocked[28] = true;  
+	clientGamedata->unlocked[31] = true; // credits
+	clientGamedata->unlocked[30] = true; // sound test
+	clientGamedata->unlocked[28] = true; // level select
 
-
+	// Refresh secrets menu existing.
 	M_ClearMenus(true);
 	M_StartControlPanel();
 	return 1;
@@ -95,18 +95,18 @@ static UINT8 cheatf_devmode(void)
 	UINT8 i;
 
 	if (menuactive && currentMenu != &MainDef)
-		return 0;  
+		return 0; // Only on the main menu!
 
 	S_StartSound(0, sfx_itemup);
 
-
+	// Just unlock all the things and turn on -debug and console devmode.
 	G_SetUsedCheats(false);
 	for (i = 0; i < MAXUNLOCKABLES; i++)
 		clientGamedata->unlocked[i] = true;
 	devparm = true;
 	cv_debug |= 0x8000;
 
-
+	// Refresh secrets menu existing.
 	M_ClearMenus(true);
 	M_StartControlPanel();
 	return 1;
@@ -145,9 +145,9 @@ static cheatseq_t cheat_devmode = {
 };
 #endif
 
-
-
-
+// ==========================================================================
+//                        CHEAT SEQUENCE PACKAGE
+// ==========================================================================
 
 static UINT8 cheat_xlate_table[256];
 
@@ -162,16 +162,16 @@ void cht_Init(void)
 	}
 }
 
-
-
-
-
+//
+// Called in st_stuff module, which handles the input.
+// Returns a 1 if the cheat was successful, 0 if failed.
+//
 static UINT8 cht_CheckCheat(cheatseq_t *cht, char key)
 {
 	UINT8 rc = 0;
 
 	if (!cht->p)
-		cht->p = cht->sequence;  
+		cht->p = cht->sequence; // initialize if first time
 
 	if (*cht->p == 0)
 		*(cht->p++) = key;
@@ -182,7 +182,7 @@ static UINT8 cht_CheckCheat(cheatseq_t *cht, char key)
 
 	if (*cht->p == 1)
 		cht->p++;
-	else if (*cht->p == 0xff)  
+	else if (*cht->p == 0xff) // end of sequence character
 	{
 		cht->p = cht->sequence;
 		rc = cht->func();
@@ -199,8 +199,8 @@ boolean cht_Responder(event_t *ev)
 
 	if (ev->key > 0xFF)
 	{
-
-
+		// map some fake (joy) inputs into keys
+		// map joy inputs into keys
 		switch (ev->key)
 		{
 			case KEY_JOY1:
@@ -220,7 +220,7 @@ boolean cht_Responder(event_t *ev)
 				ch = KEY_RIGHTARROW;
 				break;
 			default:
-
+				// no mapping
 				return false;
 		}
 	}
@@ -237,7 +237,7 @@ boolean cht_Responder(event_t *ev)
 	return (ret != 0);
 }
 
-
+// Console cheat commands rely on these a lot...
 #define REQUIRE_PANDORA if (!M_SecretUnlocked(SECRET_PANDORA, serverGamedata) && !cv_debug)\
 { CONS_Printf(M_GetText("You haven't earned this yet.\n")); return; }
 
@@ -256,7 +256,7 @@ boolean cht_Responder(event_t *ev)
 #define REQUIRE_NOULTIMATE if (ultimatemode)\
 { CONS_Printf(M_GetText("You're too good to be cheating!\n")); return; }
 
-
+// command that can be typed at the console!
 void Command_CheatNoClip_f(void)
 {
 	player_t *plyr;
@@ -311,7 +311,7 @@ void Command_Scale_f(void)
 	REQUIRE_INLEVEL;
 	REQUIRE_SINGLEPLAYER;
 
-	if (scale < FRACUNIT/100 || scale > 100*FRACUNIT)  
+	if (scale < FRACUNIT/100 || scale > 100*FRACUNIT) //COM_Argv(1) will return a null string if they did not give a paramater, so...
 	{
 		CONS_Printf(M_GetText("scale <value> (0.01-100.0): set player scale size\n"));
 		return;
@@ -350,7 +350,7 @@ void Command_Hurtme_f(void)
 	P_DamageMobj(players[consoleplayer].mo, NULL, NULL, atoi(COM_Argv(1)), 0);
 }
 
-
+// Moves the NiGHTS player to another axis within the current mare
 void Command_JumpToAxis_f(void)
 {
 	REQUIRE_DEVMODE;
@@ -499,8 +499,8 @@ void Command_Teleport_f(void)
 	i = COM_CheckParm("-sp");
 	if (i)
 	{
-		INT32 starpostnum = atoi(COM_Argv(i + 1));  
-		INT32 starpostpath = atoi(COM_Argv(i + 2));  
+		INT32 starpostnum = atoi(COM_Argv(i + 1)); // starpost number
+		INT32 starpostpath = atoi(COM_Argv(i + 2)); // quick, dirty way to distinguish between paths
 
 		if (starpostnum < 0 || starpostpath < 0)
 		{
@@ -508,7 +508,7 @@ void Command_Teleport_f(void)
 			return;
 		}
 
-		if (!starpostnum)  
+		if (!starpostnum) // spawnpoints...
 		{
 			mapthing_t *mt;
 			fixed_t offset;
@@ -519,7 +519,7 @@ void Command_Teleport_f(void)
 				return;
 			}
 
-			mt = playerstarts[starpostpath];  
+			mt = playerstarts[starpostpath]; // Given above check, should never be NULL.
 			intx = mt->x<<FRACBITS;
 			inty = mt->y<<FRACBITS;
 			offset = mt->z<<FRACBITS;
@@ -531,14 +531,14 @@ void Command_Teleport_f(void)
 				return;
 			}
 
-
-
+			// Flagging a player's ambush will make them start on the ceiling
+			// Objectflip inverts
 			if (!!(mt->args[0]) ^ !!(mt->options & MTF_OBJECTFLIP))
 				intz = ss->sector->ceilingheight - p->mo->height - offset;
 			else
 				intz = ss->sector->floorheight + offset;
 
-			if (mt->options & MTF_OBJECTFLIP)  
+			if (mt->options & MTF_OBJECTFLIP) // flip the player!
 			{
 				p->mo->eflags |= MFE_VERTICALFLIP;
 				p->mo->flags2 |= MF2_OBJECTFLIP;
@@ -552,13 +552,13 @@ void Command_Teleport_f(void)
 			p->mo->angle = p->drawangle = FixedAngle(mt->angle<<FRACBITS);
 			P_SetPlayerAngle(p, p->mo->angle);
 		}
-		else  
+		else // scan the thinkers to find starposts...
 		{
 			mobj_t *mo2 = NULL;
 			thinker_t *th;
 
 			INT32 starpostmax = 0;
-			intz = starpostpath;  
+			intz = starpostpath; // variable reuse - counting down for selection purposes
 
 			for (th = thlist[THINK_MOBJ].next; th != &thlist[THINK_MOBJ]; th = th->next)
 			{
@@ -603,7 +603,7 @@ void Command_Teleport_f(void)
 			inty = mo2->y;
 			intz = mo2->z;
 
-			if (mo2->flags2 & MF2_OBJECTFLIP)  
+			if (mo2->flags2 & MF2_OBJECTFLIP) // flip the player!
 			{
 				p->mo->eflags |= MFE_VERTICALFLIP;
 				p->mo->flags2 |= MF2_OBJECTFLIP;
@@ -622,7 +622,7 @@ void Command_Teleport_f(void)
 	}
 	else
 	{
-		i = COM_CheckParm("-nop");  
+		i = COM_CheckParm("-nop"); // undocumented stupid addition to allow pivoting on the spot with -ang and -aim
 		if (i)
 		{
 			intx = p->mo->x;
@@ -746,10 +746,10 @@ void Command_Toggletwod_f(void)
 }
 
 #ifdef _DEBUG
-
-
-
-
+// You never thought you needed this, did you? >=D
+// Yes, this has the specific purpose of completely screwing you up
+// to see if the consistency restoration code can fix you.
+// Don't enable this for normal builds...
 void Command_CauseCfail_f(void)
 {
 	if (consoleplayer == serverplayer)
@@ -763,14 +763,14 @@ void Command_CauseCfail_f(void)
 	P_RandomByte();
 	P_RandomFixed();
 	players[consoleplayer].mo->x = 0;
-	players[consoleplayer].mo->y = 123311;  
+	players[consoleplayer].mo->y = 123311; //cfail cansuled kthxbye
 	players[consoleplayer].mo->z = 123311;
 	players[consoleplayer].score = 1337;
 	players[consoleplayer].rings = 1337;
 	players[consoleplayer].mo->destscale = 25;
 	P_SetThingPosition(players[consoleplayer].mo);
 
-
+	// CTF consistency test
 	if (gametyperules & GTR_TEAMFLAGS)
 	{
 		if (blueflag) {
@@ -828,7 +828,7 @@ void Command_Savecheckpoint_f(void)
 	CONS_Printf(M_GetText("Temporary checkpoint created at %d, %d, %d\n"), players[consoleplayer].starpostx, players[consoleplayer].starposty, players[consoleplayer].starpostz);
 }
 
-
+// Like M_GetAllEmeralds() but for console devmode junkies.
 void Command_Getallemeralds_f(void)
 {
 	REQUIRE_SINGLEPLAYER;
@@ -862,7 +862,7 @@ void Command_Devmode_f(void)
 		const char *arg = COM_Argv(1);
 
 		if (arg[0] && arg[0] == '0' &&
-			arg[1] && arg[1] == 'x')  
+			arg[1] && arg[1] == 'x') // Use hexadecimal!
 			cv_debug = axtoi(arg+2);
 		else
 			cv_debug = atoi(arg);
@@ -887,16 +887,16 @@ void Command_Setrings_f(void)
 	{
 		if (!(maptol & TOL_NIGHTS))
 		{
-
+			// P_GivePlayerRings does value clamping
 			players[consoleplayer].rings = 0;
 			P_GivePlayerRings(&players[consoleplayer], atoi(COM_Argv(1)));
-			players[consoleplayer].totalring -= atoi(COM_Argv(1));  
+			players[consoleplayer].totalring -= atoi(COM_Argv(1)); //undo totalring addition done in P_GivePlayerRings
 		}
 		else
 		{
 			players[consoleplayer].spheres = 0;
 			P_GivePlayerSpheres(&players[consoleplayer], atoi(COM_Argv(1)));
-
+			// no totalsphere addition to revert
 		}
 
 		G_SetUsedCheats(false);
@@ -914,10 +914,10 @@ void Command_Setlives_f(void)
 	{
 		SINT8 lives = atoi(COM_Argv(1));
 		if (lives == -1)
-			players[consoleplayer].lives = INFLIVES;  
+			players[consoleplayer].lives = INFLIVES; // infinity!
 		else
 		{
-
+			// P_GivePlayerLives does value clamping
 			players[consoleplayer].lives = 0;
 			P_GivePlayerLives(&players[consoleplayer], atoi(COM_Argv(1)));
 		}
@@ -953,9 +953,9 @@ void Command_Setcontinues_f(void)
 	}
 }
 
-
-
-
+//
+// OBJECTPLACE (and related variables)
+//
 static CV_PossibleValue_t op_mapthing_t[] = {{0, "MIN"}, {4095, "MAX"}, {0, NULL}};
 static CV_PossibleValue_t op_speed_t[] = {{1, "MIN"}, {128, "MAX"}, {0, NULL}};
 static CV_PossibleValue_t op_flags_t[] = {{0, "MIN"}, {15, "MAX"}, {0, NULL}};
@@ -967,9 +967,9 @@ consvar_t cv_opflags = CVAR_INIT ("op_flags", "0", CV_NOTINNET, op_flags_t, NULL
 consvar_t cv_ophoopflags = CVAR_INIT ("op_hoopflags", "4", CV_NOTINNET, op_hoopflags_t, NULL);
 
 boolean objectplacing = false;
-mobjtype_t op_currentthing = 0;  
-UINT16 op_currentdoomednum = 0;  
-UINT32 op_displayflags = 0;  
+mobjtype_t op_currentthing = 0; // For the object placement mode
+UINT16 op_currentdoomednum = 0; // For display, etc
+UINT32 op_displayflags = 0; // for display in ST_stuff
 
 static pflags_t op_oldpflags = 0;
 static mobjflag_t op_oldflags1 = 0;
@@ -979,9 +979,9 @@ static fixed_t op_oldmomx = 0, op_oldmomy = 0, op_oldmomz = 0, op_oldheight = 0;
 static statenum_t op_oldstate = 0;
 static UINT16 op_oldcolor = 0;
 
-
-
-
+//
+// Static calculation / common output help
+//
 static void OP_CycleThings(INT32 amt)
 {
 	INT32 add = (amt > 0 ? 1 : -1);
@@ -1005,7 +1005,7 @@ static void OP_CycleThings(INT32 amt)
 		amt -= add;
 	}
 
-
+	// HACK, minus has SPR_NULL sprite
 	if (states[mobjinfo[op_currentthing].spawnstate].sprite == SPR_NULL)
 	{
 		states[S_OBJPLACE_DUMMY].sprite = states[mobjinfo[op_currentthing].seestate].sprite;
@@ -1016,7 +1016,7 @@ static void OP_CycleThings(INT32 amt)
 		states[S_OBJPLACE_DUMMY].sprite = states[mobjinfo[op_currentthing].spawnstate].sprite;
 		states[S_OBJPLACE_DUMMY].frame = states[mobjinfo[op_currentthing].spawnstate].frame;
 	}
-	if (players[0].mo->eflags & MFE_VERTICALFLIP)  
+	if (players[0].mo->eflags & MFE_VERTICALFLIP) // correct z when flipped
 		players[0].mo->z += players[0].mo->height - FixedMul(mobjinfo[op_currentthing].height, players[0].mo->scale);
 	players[0].mo->height = FixedMul(mobjinfo[op_currentthing].height, players[0].mo->scale);
 	P_SetMobjState(players[0].mo, S_OBJPLACE_DUMMY);
@@ -1030,8 +1030,8 @@ static boolean OP_HeightOkay(player_t *player, UINT8 ceiling)
 
 	if (ceiling)
 	{
-
-
+		// Truncate position to match where mapthing would be when spawned
+		// (this applies to every further P_GetSlopeZAt call as well)
 		fixed_t cheight = P_GetSectorCeilingZAt(sec, player->mo->x & 0xFFFF0000, player->mo->y & 0xFFFF0000);
 
 		if (((cheight - player->mo->z - player->mo->height)>>FRACBITS) >= (1 << (16-ZSHIFT)))
@@ -1063,8 +1063,8 @@ static mapthing_t *OP_CreateNewMapThing(player_t *player, UINT16 type, boolean c
 
 	mapthings = Z_Realloc(mapthings, ++nummapthings * sizeof (*mapthings), PU_LEVEL, NULL);
 
-
-
+	// as Z_Realloc can relocate mapthings, quickly go through thinker list and correct
+	// the spawnpoints of any objects that have them to the new location
 	if (mt != mapthings)
 	{
 		thinker_t *th;
@@ -1076,7 +1076,7 @@ static mapthing_t *OP_CreateNewMapThing(player_t *player, UINT16 type, boolean c
 				continue;
 
 			mo = (mobj_t *)th;
-
+			// get offset from mt, which points to old mapthings, then add new location
 			if (!mo->spawnpoint)
 				continue;
 			mo->spawnpoint = (mo->spawnpoint - mt) + mapthings;
@@ -1109,7 +1109,7 @@ static mapthing_t *OP_CreateNewMapThing(player_t *player, UINT16 type, boolean c
 	memset(mt->stringargs, 0x00, NUMMAPTHINGSTRINGARGS*sizeof(*mt->stringargs));
 	mt->pitch = mt->roll = 0;
 
-
+	// Ignore offsets
 	if (mt->type == mobjinfo[MT_EMBLEM].doomednum)
 		mt->args[1] = 1;
 	else if (!(mt->type == mobjinfo[MT_METALSONIC_RACE].doomednum || mt->type == mobjinfo[MT_ROSY].doomednum))
@@ -1118,9 +1118,9 @@ static mapthing_t *OP_CreateNewMapThing(player_t *player, UINT16 type, boolean c
 	return mt;
 }
 
-
-
-
+//
+// Helper functions
+//
 boolean OP_FreezeObjectplace(void)
 {
 	if (!objectplacing)
@@ -1138,174 +1138,174 @@ void OP_ResetObjectplace(void)
 	op_currentthing = 0;
 }
 
+//
+// Main meat of objectplace: handling functions
+//
+/*void OP_NightsObjectplace(player_t *player)
+{
+	ticcmd_t *cmd = &player->cmd;
+	mapthing_t *mt;
 
+	player->nightstime = 3*TICRATE;
+	player->drillmeter = TICRATE;
 
+	if (player->pflags & PF_ATTACKDOWN)
+	{
+		// Are ANY objectplace buttons pressed?  If no, remove flag.
+		if (!(cmd->buttons & (BT_ATTACK|BT_TOSSFLAG|BT_SPIN|BT_WEAPONNEXT|BT_WEAPONPREV)))
+			player->pflags &= ~PF_ATTACKDOWN;
 
-                                             
- 
-                              
-                
+		// Do nothing.
+		return;
+	}
 
-                                
-                              
+	// This places a hoop!
+	if (cmd->buttons & BT_ATTACK)
+	{
+		UINT16 angle = (UINT16)(player->anotherflyangle % 360);
+		INT16 temp = (INT16)FixedInt(AngleFixed(player->mo->angle)); // Traditional 2D Angle
 
-                                    
-  
-                                                              
-                                                                                    
-                                    
+		player->pflags |= PF_ATTACKDOWN;
 
-                
-         
-  
+		mt = OP_CreateNewMapThing(player, 1713, false);
 
-                       
-                              
-  
-                                                         
-                                                                                      
+		// Tilt
+		mt->angle = (INT16)FixedInt(FixedDiv(angle*FRACUNIT, 360*(FRACUNIT/256)));
 
-                                  
+		if (player->anotherflyangle < 90 || player->anotherflyangle > 270)
+			temp -= 90;
+		else
+			temp += 90;
+		temp %= 360;
 
-                                                 
+		mt->options = (mt->options & ~(UINT16)cv_opflags.value) | (UINT16)cv_ophoopflags.value;
+		mt->angle = (INT16)(mt->angle+(INT16)((FixedInt(FixedDiv(temp*FRACUNIT, 360*(FRACUNIT/256))))<<8));
 
-         
-                                                                            
+		P_SpawnHoop(mt);
+	}
 
-                                                                    
-              
-      
-              
-              
+	// This places a bumper!
+	if (cmd->buttons & BT_TOSSFLAG)
+	{
+		UINT16 vertangle = (UINT16)(player->anotherflyangle % 360);
+		UINT16 newflags;
 
-                                                                                         
-                                                                                                     
+		player->pflags |= PF_ATTACKDOWN;
+		if (!OP_HeightOkay(player, false))
+			return;
 
-                  
-  
+		mt = OP_CreateNewMapThing(player, (UINT16)mobjinfo[MT_NIGHTSBUMPER].doomednum, false);
+		mt->z = min(mt->z - (mobjinfo[MT_NIGHTSBUMPER].height/4), 0);
+			// height offset: from P_TouchSpecialThing case MT_NIGHTSBUMPER
 
-                         
-                                
-  
-                                                             
-                  
+		// clockwise
+		if (vertangle >= 75 && vertangle < 105) // up
+			newflags = 3;
+		else if (vertangle >= 105 && vertangle < 135) // 60 upward tilt
+			newflags = 2;
+		else if (vertangle >= 135 && vertangle < 165) // 30 upward tilt
+			newflags = 1;
+		//else if (vertangle >= 165 && vertangle < 195) // forward, see else case
+		//	newflags = 0;
+		else if (vertangle >= 195 && vertangle < 225) // 30 downward tilt
+			newflags = 11;
+		else if (vertangle >= 225 && vertangle < 255) // 60 downward tilt
+			newflags = 10;
+		else if (vertangle >= 255 && vertangle < 285) // down
+			newflags = 9;
+		else if (vertangle >= 285 && vertangle < 315) // 60 downward tilt backwards
+			newflags = 8;
+		else if (vertangle >= 315 && vertangle < 345) // 30 downward tilt backwards
+			newflags = 7;
+		else if (vertangle >= 345 || vertangle < 15) // backwards
+			newflags = 6;
+		else if (vertangle >= 15 && vertangle < 45) // 30 upward tilt backwards
+			newflags = 5;
+		else if (vertangle >= 45 && vertangle < 75) // 60 upward tilt backwards
+			newflags = 4;
+		else // forward
+			newflags = 0;
 
-                                  
-                                    
-          
+		mt->options = (mt->z << ZSHIFT) | newflags;
 
-                                                                                        
-                                                               
-                                                                  
+		// if NiGHTS is facing backwards, orient the Thing angle forwards so that the sprite angle
+		// displays correctly. Backwards movement via the Thing flags is unaffected.
+		if (vertangle < 90 || vertangle > 270)
+			mt->angle = (mt->angle + 180) % 360;
 
-              
-                                               
-                
-                                                                 
-                
-                                                                 
-                
-                                                                           
-                  
-                                                                   
-                 
-                                                                   
-                 
-                                                       
-                
-                                                                             
-                
-                                                                             
-                
-                                                           
-                
-                                                                         
-                
-                                                                         
-                
-                 
-                
+		P_SpawnMapThing(mt);
+	}
 
-                                             
+	// This places a sphere!
+	if (cmd->buttons & BT_WEAPONNEXT)
+	{
+		player->pflags |= PF_ATTACKDOWN;
+		if (!OP_HeightOkay(player, false))
+			return;
 
-                                                                                            
-                                                                              
-                                        
-                                       
+		mt = OP_CreateNewMapThing(player, (UINT16)mobjinfo[MT_BLUESPHERE].doomednum, false);
+		P_SpawnMapThing(mt);
+	}
 
-                      
-  
+	// This places a ring!
+	if (cmd->buttons & BT_WEAPONPREV)
+	{
+		player->pflags |= PF_ATTACKDOWN;
+		if (!OP_HeightOkay(player, false))
+			return;
 
-                         
-                                  
-  
-                                  
-                                    
-          
+		mt = OP_CreateNewMapThing(player, (UINT16)mobjinfo[MT_RING].doomednum, false);
+		P_SpawnMapThing(mt);
+	}
 
-                                                                                      
-                      
-  
+	// This places a custom object as defined in the console cv_mapthingnum.
+	if (cmd->buttons & BT_SPIN)
+	{
+		UINT16 angle;
 
-                       
-                                  
-  
-                                  
-                                    
-          
+		player->pflags |= PF_ATTACKDOWN;
+		if (!cv_mapthingnum.value)
+		{
+			CONS_Alert(CONS_WARNING, "Set op_mapthingnum first!\n");
+			return;
+		}
+		if (!OP_HeightOkay(player, false))
+			return;
 
-                                                                                
-                      
-  
+		if (player->mo->target->flags2 & MF2_AMBUSH)
+			angle = (UINT16)player->anotherflyangle;
+		else
+		{
+			angle = (UINT16)((360-player->anotherflyangle) % 360);
+			if (angle > 90 && angle < 270)
+			{
+				angle += 180;
+				angle %= 360;
+			}
+		}
 
-                                                                         
-                            
-  
-               
+		mt = OP_CreateNewMapThing(player, (UINT16)cv_mapthingnum.value, false);
+		mt->angle = angle;
 
-                                  
-                            
-   
-                                                           
-          
-   
-                                    
-          
+		if (mt->type >= 600 && mt->type <= 611) // Placement patterns
+			P_SpawnItemPattern(mt, false);
+		else if (mt->type == 1713) // NiGHTS Hoops
+			P_SpawnHoop(mt);
+		else
+			P_SpawnMapThing(mt);
+	}
+}*/
 
-                                              
-                                           
-      
-   
-                                                         
-                                 
-    
-                 
-                 
-    
-   
-
-                                                                         
-                    
-
-                                                               
-                                 
-                                            
-                   
-      
-                       
-  
-   
-
-
-
-
-
-
+//
+// OP_ObjectplaceMovement
+//
+// Control code for Objectplace mode
+//
 void OP_ObjectplaceMovement(player_t *player)
 {
 	ticcmd_t *cmd = &player->cmd;
 
-	player->drawangle = player->mo->angle = (cmd->angleturn<<16  );
+	player->drawangle = player->mo->angle = (cmd->angleturn<<16 /* not FRACBITS */);
 
 	ticruned++;
 	if (!(cmd->angleturn & TICCMD_RECEIVED))
@@ -1339,7 +1339,7 @@ void OP_ObjectplaceMovement(player_t *player)
 	else
 		player->mo->eflags &= ~MFE_VERTICALFLIP;
 
-
+	// make sure viewz follows player if in 1st person mode
 	player->deltaviewheight = 0;
 	player->viewheight = FixedMul(41*player->height/48, player->mo->scale);
 	if (player->mo->eflags & MFE_VERTICALFLIP)
@@ -1347,8 +1347,8 @@ void OP_ObjectplaceMovement(player_t *player)
 	else
 		player->viewz = player->mo->z + player->viewheight;
 
-
-
+	// Display flag information
+	// Moved up so it always updates.
 	{
 		sector_t *sec = player->mo->subsector->sector;
 
@@ -1368,11 +1368,11 @@ void OP_ObjectplaceMovement(player_t *player)
 
 	if (player->pflags & PF_ATTACKDOWN)
 	{
-
+		// Are ANY objectplace buttons pressed?  If no, remove flag.
 		if (!(cmd->buttons & (BT_ATTACK|BT_TOSSFLAG|BT_WEAPONNEXT|BT_WEAPONPREV)))
 			player->pflags &= ~PF_ATTACKDOWN;
 
-
+		// Do nothing.
 		return;
 	}
 
@@ -1388,7 +1388,7 @@ void OP_ObjectplaceMovement(player_t *player)
 		player->pflags |= PF_ATTACKDOWN;
 	}
 
-
+	// Place an object and add it to the maplist
 	if (cmd->buttons & BT_ATTACK)
 	{
 		mapthing_t *mt;
@@ -1400,7 +1400,7 @@ void OP_ObjectplaceMovement(player_t *player)
 
 		if (cv_mapthingnum.value > 0 && cv_mapthingnum.value < 4096)
 		{
-
+			// find which type to spawn
 			for (spawnmid = 0; spawnmid < NUMMOBJTYPES; ++spawnmid)
 				if (cv_mapthingnum.value == mobjinfo[spawnmid].doomednum)
 					break;
@@ -1418,9 +1418,9 @@ void OP_ObjectplaceMovement(player_t *player)
 			return;
 
 		mt = OP_CreateNewMapThing(player, (UINT16)spawnthing, ceiling);
-		if (mt->type >= 600 && mt->type <= 611)  
+		if (mt->type >= 600 && mt->type <= 611) // Placement patterns
 			P_SpawnItemPattern(mt, false);
-		else if (mt->type == 1713)  
+		else if (mt->type == 1713) // NiGHTS Hoops
 			P_SpawnHoop(mt);
 		else
 			P_SpawnMapThing(mt);
@@ -1429,9 +1429,9 @@ void OP_ObjectplaceMovement(player_t *player)
 	}
 }
 
-
-
-
+//
+// Objectplace related commands.
+//
 void Command_Writethings_f(void)
 {
 	REQUIRE_INLEVEL;
@@ -1464,7 +1464,7 @@ void Command_ObjectPlace_f(void)
 
 	thingarg = 2 - ( silent != 1 );
 
-
+	// Entering objectplace?
 	if (!objectplacing || thingarg < COM_Argc())
 	{
 		if (!objectplacing)
@@ -1487,7 +1487,7 @@ void Command_ObjectPlace_f(void)
 					"       Fire Ring: Place object   \\")));
 			}
 
-
+			// Save all the player's data.
 			op_oldflags1 = players[0].mo->flags;
 			op_oldflags2 = players[0].mo->flags2;
 			op_oldeflags = players[0].mo->eflags;
@@ -1497,9 +1497,9 @@ void Command_ObjectPlace_f(void)
 			op_oldmomz = players[0].mo->momz;
 			op_oldheight = players[0].mo->height;
 			op_oldstate = S_PLAY_STND;
-			op_oldcolor = players[0].mo->color;  
+			op_oldcolor = players[0].mo->color; // save color too in case of super/fireflower
 
-
+			// Remove ALL flags and motion.
 			P_UnsetThingPosition(players[0].mo);
 			players[0].pflags = 0;
 			players[0].mo->flags2 = 0;
@@ -1508,10 +1508,10 @@ void Command_ObjectPlace_f(void)
 			players[0].mo->momx = players[0].mo->momy = players[0].mo->momz = 0;
 			P_SetThingPosition(players[0].mo);
 
-
+			// Take away color so things display properly
 			players[0].mo->color = 0;
 
-
+			// Like the classics, recover from death by entering objectplace
 			if (players[0].mo->health <= 0)
 			{
 				players[0].mo->health = 1;
@@ -1535,32 +1535,32 @@ void Command_ObjectPlace_f(void)
 				op_currentthing = type;
 		}
 
-
+		// If no thing set, then cycle a little
 		if (!op_currentthing)
 		{
 			op_currentthing = 1;
 			OP_CycleThings(1);
 		}
 		else
-			OP_CycleThings(0);  
+			OP_CycleThings(0); // sets all necessary height values without cycling op_currentthing
 
 		P_SetMobjState(players[0].mo, S_OBJPLACE_DUMMY);
 	}
-
+	// Or are we leaving it instead?
 	else
 	{
 		objectplacing = false;
 
-
-
+		// Don't touch the NiGHTS Objectplace stuff.
+		// ... or if the mo mysteriously vanished.
 		if (!players[0].mo || (players[0].powers[pw_carry] == CR_NIGHTSMODE))
 			return;
 
-
+		// If still in dummy state, get out of it.
 		if (players[0].mo->state == &states[S_OBJPLACE_DUMMY])
 			P_SetMobjState(players[0].mo, op_oldstate);
 
-
+		// Reset everything back to how it was before we entered objectplace.
 		P_UnsetThingPosition(players[0].mo);
 		players[0].mo->flags = op_oldflags1;
 		players[0].mo->flags2 = op_oldflags2;
@@ -1572,10 +1572,10 @@ void Command_ObjectPlace_f(void)
 		players[0].mo->height = op_oldheight;
 		P_SetThingPosition(players[0].mo);
 
-
+		// Return their color to normal.
 		players[0].mo->color = op_oldcolor;
 
-
+		// This is necessary for recovery of dying players.
 		if (players[0].powers[pw_flashing] >= flashingtics)
 			players[0].powers[pw_flashing] = flashingtics - 1;
 	}

@@ -6,7 +6,7 @@
 --  Open source license information is in the zlib.ads file.  --
 ----------------------------------------------------------------
 
-
+--  $Id: zlib-thin.ads,v 1.11 2004/07/23 06:33:11 vagul Exp $
 
 with Interfaces.C.Strings;
 
@@ -14,109 +14,109 @@ with System;
 
 private package ZLib.Thin is
 
+   --  From zconf.h
 
+   MAX_MEM_LEVEL : constant := 9;         --  zconf.h:105
+                                          --  zconf.h:105
+   MAX_WBITS : constant := 15;      --  zconf.h:115
+                                    --  32K LZ77 window
+                                    --  zconf.h:115
+   SEEK_SET : constant := 8#0000#;  --  zconf.h:244
+                                    --  Seek from beginning of file.
+                                    --  zconf.h:244
+   SEEK_CUR : constant := 1;        --  zconf.h:245
+                                    --  Seek from current position.
+                                    --  zconf.h:245
+   SEEK_END : constant := 2;        --  zconf.h:246
+                                    --  Set file pointer to EOF plus "offset"
+                                    --  zconf.h:246
 
-   MAX_MEM_LEVEL : constant := 9;          
-
-   MAX_WBITS : constant := 15;       
-
-
-   SEEK_SET : constant := 8#0000#;   
-
-
-   SEEK_CUR : constant := 1;         
-
-
-   SEEK_END : constant := 2;         
-
-
-
-   type Byte is new Interfaces.C.unsigned_char;  
-
-   type UInt is new Interfaces.C.unsigned;       
-
+   type Byte is new Interfaces.C.unsigned_char; --  8 bits
+                                                --  zconf.h:214
+   type UInt is new Interfaces.C.unsigned;      --  16 bits or more
+                                                --  zconf.h:216
    type Int is new Interfaces.C.int;
 
-   type ULong is new Interfaces.C.unsigned_long;      
-
+   type ULong is new Interfaces.C.unsigned_long;     --  32 bits or more
+                                                     --  zconf.h:217
    subtype Chars_Ptr is Interfaces.C.Strings.chars_ptr;
 
    type ULong_Access is access ULong;
    type Int_Access is access Int;
 
-   subtype Voidp is System.Address;             
+   subtype Voidp is System.Address;            --  zconf.h:232
 
    subtype Byte_Access is Voidp;
 
    Nul : constant Voidp := System.Null_Address;
+   --  end from zconf
 
-
-   Z_NO_FLUSH : constant := 8#0000#;    
-
-   Z_PARTIAL_FLUSH : constant := 1;        
-
-
-
-   Z_SYNC_FLUSH : constant := 2;        
-
-   Z_FULL_FLUSH : constant := 3;        
-
-   Z_FINISH : constant := 4;         
-
-   Z_OK : constant := 8#0000#;    
-
-   Z_STREAM_END : constant := 1;        
-
-   Z_NEED_DICT : constant := 2;         
-
-   Z_ERRNO : constant := -1;         
-
-   Z_STREAM_ERROR : constant := -2;        
-
-   Z_DATA_ERROR : constant := -3;       
-
-   Z_MEM_ERROR : constant := -4;        
-
-   Z_BUF_ERROR : constant := -5;        
-
-   Z_VERSION_ERROR : constant := -6;       
-
-   Z_NO_COMPRESSION : constant := 8#0000#;    
-
-   Z_BEST_SPEED : constant := 1;        
-
-   Z_BEST_COMPRESSION : constant := 9;        
-
-   Z_DEFAULT_COMPRESSION : constant := -1;       
-
-   Z_FILTERED : constant := 1;       
-
-   Z_HUFFMAN_ONLY : constant := 2;         
-
-   Z_DEFAULT_STRATEGY : constant := 8#0000#;  
-
-   Z_BINARY : constant := 8#0000#;   
-
-   Z_ASCII : constant := 1;       
-
-   Z_UNKNOWN : constant := 2;        
-
-   Z_DEFLATED : constant := 8;       
-
-   Z_NULL : constant := 8#0000#;  
-
-
-   type gzFile is new Voidp;                   
+   Z_NO_FLUSH : constant := 8#0000#;   --  zlib.h:125
+                                       --  zlib.h:125
+   Z_PARTIAL_FLUSH : constant := 1;       --  zlib.h:126
+                                          --  will be removed, use
+                                          --  Z_SYNC_FLUSH instead
+                                          --  zlib.h:126
+   Z_SYNC_FLUSH : constant := 2;       --  zlib.h:127
+                                       --  zlib.h:127
+   Z_FULL_FLUSH : constant := 3;       --  zlib.h:128
+                                       --  zlib.h:128
+   Z_FINISH : constant := 4;        --  zlib.h:129
+                                    --  zlib.h:129
+   Z_OK : constant := 8#0000#;   --  zlib.h:132
+                                 --  zlib.h:132
+   Z_STREAM_END : constant := 1;       --  zlib.h:133
+                                       --  zlib.h:133
+   Z_NEED_DICT : constant := 2;        --  zlib.h:134
+                                       --  zlib.h:134
+   Z_ERRNO : constant := -1;        --  zlib.h:135
+                                    --  zlib.h:135
+   Z_STREAM_ERROR : constant := -2;       --  zlib.h:136
+                                          --  zlib.h:136
+   Z_DATA_ERROR : constant := -3;      --  zlib.h:137
+                                       --  zlib.h:137
+   Z_MEM_ERROR : constant := -4;       --  zlib.h:138
+                                       --  zlib.h:138
+   Z_BUF_ERROR : constant := -5;       --  zlib.h:139
+                                       --  zlib.h:139
+   Z_VERSION_ERROR : constant := -6;      --  zlib.h:140
+                                          --  zlib.h:140
+   Z_NO_COMPRESSION : constant := 8#0000#;   --  zlib.h:145
+                                             --  zlib.h:145
+   Z_BEST_SPEED : constant := 1;       --  zlib.h:146
+                                       --  zlib.h:146
+   Z_BEST_COMPRESSION : constant := 9;       --  zlib.h:147
+                                             --  zlib.h:147
+   Z_DEFAULT_COMPRESSION : constant := -1;      --  zlib.h:148
+                                                --  zlib.h:148
+   Z_FILTERED : constant := 1;      --  zlib.h:151
+                                    --  zlib.h:151
+   Z_HUFFMAN_ONLY : constant := 2;        --  zlib.h:152
+                                          --  zlib.h:152
+   Z_DEFAULT_STRATEGY : constant := 8#0000#; --  zlib.h:153
+                                             --  zlib.h:153
+   Z_BINARY : constant := 8#0000#;  --  zlib.h:156
+                                    --  zlib.h:156
+   Z_ASCII : constant := 1;      --  zlib.h:157
+                                 --  zlib.h:157
+   Z_UNKNOWN : constant := 2;       --  zlib.h:158
+                                    --  zlib.h:158
+   Z_DEFLATED : constant := 8;      --  zlib.h:161
+                                    --  zlib.h:161
+   Z_NULL : constant := 8#0000#; --  zlib.h:164
+                                 --  for initializing zalloc, zfree, opaque
+                                 --  zlib.h:164
+   type gzFile is new Voidp;                  --  zlib.h:646
 
    type Z_Stream is private;
 
-   type Z_Streamp is access all Z_Stream;      
+   type Z_Streamp is access all Z_Stream;     --  zlib.h:89
 
    type alloc_func is access function
      (Opaque : Voidp;
       Items  : UInt;
       Size   : UInt)
-      return Voidp;  
+      return Voidp; --  zlib.h:63
 
    type free_func is access procedure (opaque : Voidp; address : Voidp);
 
@@ -137,32 +137,32 @@ private package ZLib.Thin is
       return       Int;
 
    function deflateCopy (dest : Z_Streamp; source : Z_Streamp) return Int;
+   --  zlib.h:478
 
-
-   function deflateReset (strm : Z_Streamp) return Int;  
+   function deflateReset (strm : Z_Streamp) return Int; -- zlib.h:495
 
    function deflateParams
      (strm     : Z_Streamp;
       level    : Int;
       strategy : Int)
-      return     Int;        
+      return     Int;       -- zlib.h:506
 
    function inflateSetDictionary
      (strm       : Z_Streamp;
       dictionary : Byte_Access;
       dictLength : UInt)
-      return       Int;  
+      return       Int; --  zlib.h:548
 
-   function inflateSync (strm : Z_Streamp) return Int;   
+   function inflateSync (strm : Z_Streamp) return Int;  --  zlib.h:565
 
-   function inflateReset (strm : Z_Streamp) return Int;  
+   function inflateReset (strm : Z_Streamp) return Int; --  zlib.h:580
 
    function compress
      (dest      : Byte_Access;
       destLen   : ULong_Access;
       source    : Byte_Access;
       sourceLen : ULong)
-      return      Int;            
+      return      Int;           -- zlib.h:601
 
    function compress2
      (dest      : Byte_Access;
@@ -170,7 +170,7 @@ private package ZLib.Thin is
       source    : Byte_Access;
       sourceLen : ULong;
       level     : Int)
-      return      Int;           
+      return      Int;          -- zlib.h:615
 
    function uncompress
      (dest      : Byte_Access;
@@ -293,7 +293,7 @@ private package ZLib.Thin is
       version     : in Chars_Ptr;
       stream_size : in Int)
       return      Int;
-
+   --  Size of window have to be 2**windowBits.
 
    function Inflate_Init (strm : Z_Streamp; windowBits : Int) return Int;
    pragma Inline (Inflate_Init);
@@ -304,11 +304,11 @@ private package ZLib.Thin is
 
    function get_crc_table return ULong_Access;
 
-
-
-
-
-
+   --  Interface to the available fields of the z_stream structure.
+   --  The application must update next_in and avail_in when avail_in has
+   --  dropped to zero. It must update next_out and avail_out when avail_out
+   --  has dropped to zero. The application must initialize zalloc, zfree and
+   --  opaque before calling the init function.
 
    procedure Set_In
      (Strm   : in out Z_Stream;
@@ -362,24 +362,24 @@ private package ZLib.Thin is
 
 private
 
-   type Z_Stream is record             
-      Next_In   : Voidp      := Nul;   
-      Avail_In  : UInt       := 0;     
-      Total_In  : ULong      := 0;     
-      Next_Out  : Voidp      := Nul;   
-      Avail_Out : UInt       := 0;     
-      Total_Out : ULong      := 0;     
-      msg       : Chars_Ptr;           
-      state     : Voidp;               
-      zalloc    : alloc_func := null;  
-      zfree     : free_func  := null;  
-      opaque    : Voidp;               
-
-      data_type : Int;                 
-
-      adler     : ULong;               
-
-      reserved  : ULong;               
+   type Z_Stream is record            -- zlib.h:68
+      Next_In   : Voidp      := Nul;  -- next input byte
+      Avail_In  : UInt       := 0;    -- number of bytes available at next_in
+      Total_In  : ULong      := 0;    -- total nb of input bytes read so far
+      Next_Out  : Voidp      := Nul;  -- next output byte should be put there
+      Avail_Out : UInt       := 0;    -- remaining free space at next_out
+      Total_Out : ULong      := 0;    -- total nb of bytes output so far
+      msg       : Chars_Ptr;          -- last error message, NULL if no error
+      state     : Voidp;              -- not visible by applications
+      zalloc    : alloc_func := null; -- used to allocate the internal state
+      zfree     : free_func  := null; -- used to free the internal state
+      opaque    : Voidp;              -- private data object passed to
+                                      --  zalloc and zfree
+      data_type : Int;                -- best guess about the data type:
+                                      --  ascii or binary
+      adler     : ULong;              -- adler32 value of the uncompressed
+                                      --  data
+      reserved  : ULong;              -- reserved for future use
    end record;
 
    pragma Convention (C, Z_Stream);
@@ -426,7 +426,7 @@ private
    pragma Import (C, inflateSyncPoint, "inflateSyncPoint");
    pragma Import (C, get_crc_table, "get_crc_table");
 
-
+   --  since zlib 1.2.0:
 
    pragma Import (C, inflateCopy, "inflateCopy");
    pragma Import (C, compressBound, "compressBound");
@@ -436,15 +436,15 @@ private
 
    pragma Import (C, inflateBackInit, "inflateBackInit_");
 
+   --  I stopped binding the inflateBack routines, because realize that
+   --  it does not support zlib and gzip headers for now, and have no
+   --  symmetric deflateBack routines.
+   --  ZLib-Ada is symmetric regarding deflate/inflate data transformation
+   --  and has a similar generic callback interface for the
+   --  deflate/inflate transformation based on the regular Deflate/Inflate
+   --  routines.
 
-
-
-
-
-
-
-
-
-
+   --  pragma Import (C, inflateBack, "inflateBack");
+   --  pragma Import (C, inflateBackEnd, "inflateBackEnd");
 
 end ZLib.Thin;

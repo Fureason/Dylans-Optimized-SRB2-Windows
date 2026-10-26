@@ -6,12 +6,12 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 #
+# Assumes that zlib.lib, zconf.h, and zlib.h have been copied to ..\zlib
+# To use, do "nmake /f scripts\makefile.vcwin32"
 
+# -------- Microsoft Visual C++ 2.0 and later --------
 
-
-
-
-
+# Compiler, linker, librarian and other tools
 CC = cl
 LD = link
 AR = lib
@@ -22,23 +22,23 @@ ARFLAGS = -nologo
 CP = copy
 RM = del
 
-
-
+# Pre-built configuration
+# See scripts\pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT = scripts\pnglibconf.h.prebuilt
 
-
+# File extensions
 O=.obj
 
+#uncomment next to put error messages in a file
+#ERRFILE= >> pngerrs.log
 
-
-
-
+# Variables
 OBJS1 = png$(O) pngerror$(O) pngget$(O) pngmem$(O) pngpread$(O)
 OBJS2 = pngread$(O) pngrio$(O) pngrtran$(O) pngrutil$(O) pngset$(O)
 OBJS3 = pngtrans$(O) pngwio$(O) pngwrite$(O) pngwtran$(O) pngwutil$(O)
 OBJS  = $(OBJS1) $(OBJS2) $(OBJS3)
 
-
+# Targets
 all: libpng.lib
 
 pnglibconf.h: $(PNGLIBCONF_H_PREBUILT)
@@ -109,5 +109,5 @@ clean:
 	-$(RM) pngtest.exe
 	-$(RM) pngout.png
 
-
+# End of makefile for libpng
 

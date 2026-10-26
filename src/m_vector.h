@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_vector.h
+/// \brief Basic vector functions
 
 #ifndef __M_VECTOR__
 #define __M_VECTOR__

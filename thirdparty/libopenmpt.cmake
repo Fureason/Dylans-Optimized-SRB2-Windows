@@ -1,5 +1,5 @@
 if(TARGET libopenmpt)
-
+    #return()
 endif()
 
 message(STATUS "Third-party: creating target 'libopenmpt'")
@@ -29,8 +29,8 @@ if(aaaa-libopenmpt-local_ADDED)
 	set(
 		libopenmpt-local_SOURCES
 
-
-
+		# minimp3
+		# -DMPT_WITH_MINIMP3
 		include/minimp3/minimp3.c
 
 		common/mptStringParse.cpp
@@ -286,7 +286,7 @@ if(aaaa-libopenmpt-local_ADDED)
 	)
 	list(TRANSFORM libopenmpt-local_SOURCES PREPEND "${libopenmpt-local_SOURCE_DIR}/")
 
-
+	# -DLIBOPENMPT_BUILD
 	configure_file("openmpt_svn_version.h" "svn_version.h")
 	add_library(libopenmpt STATIC ${libopenmpt-local_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/svn_version.h)
 	if("${CMAKE_C_COMPILER_ID}" STREQUAL GNU OR "${CMAKE_C_COMPILER_ID}" STREQUAL Clang OR "${CMAKE_C_COMPILER_ID}" STREQUAL AppleClang)
@@ -304,6 +304,6 @@ if(aaaa-libopenmpt-local_ADDED)
 	target_include_directories(libopenmpt PRIVATE "${libopenmpt-local_SOURCE_DIR}")
 	target_include_directories(libopenmpt PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
-
+	# I wish this wasn't necessary, but it is
 	target_include_directories(libopenmpt PUBLIC "${libopenmpt-local_SOURCE_DIR}")
 endif()

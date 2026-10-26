@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "M3u_Playlist.h"
 #include "Music_Emu.h"
@@ -18,11 +18,11 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
-
+// gme functions defined here to avoid linking in m3u code unless it's used
 
 blargg_err_t Gme_File::load_m3u_( blargg_err_t err )
 {
-	require( raw_track_count_ );  
+	require( raw_track_count_ ); // file must be loaded first
 	
 	if ( !err )
 	{
@@ -32,7 +32,7 @@ blargg_err_t Gme_File::load_m3u_( blargg_err_t err )
 		int line = playlist.first_error();
 		if ( line )
 		{
-
+			// avoid using bloated printf()
 			char* out = &playlist_warning [sizeof playlist_warning];
 			*--out = 0;
 			do {
@@ -82,7 +82,7 @@ static char* parse_filename( char* in, M3u_Playlist::entry_t& entry )
 		if ( !c ) break;
 		in++;
 		
-		if ( c == ',' )  
+		if ( c == ',' ) // commas in filename
 		{
 			char* p = skip_white( in );
 			if ( *p == '$' || from_dec( *p ) <= 9 )
@@ -92,20 +92,20 @@ static char* parse_filename( char* in, M3u_Playlist::entry_t& entry )
 			}
 		}
 		
-		if ( c == ':' && in [0] == ':' && in [1] && in [2] != ',' )  
+		if ( c == ':' && in [0] == ':' && in [1] && in [2] != ',' ) // ::type suffix
 		{
 			entry.type = ++in;
 			while ( (c = *in) != 0 && c != ',' )
 				in++;
 			if ( c == ',' )
 			{
-				*in++ = 0;  
+				*in++ = 0; // terminate type
 				in = skip_white( in );
 			}
 			break;
 		}
 		
-		if ( c == '\\' )  
+		if ( c == '\\' ) // \ prefix for special characters
 		{
 			c = *in;
 			if ( !c ) break;
@@ -113,7 +113,7 @@ static char* parse_filename( char* in, M3u_Playlist::entry_t& entry )
 		}
 		*out++ = (char) c;
 	}
-	*out = 0;  
+	*out = 0; // terminate string
 	return in;
 }
 
@@ -158,7 +158,7 @@ static char* parse_int( char* in, int* out, int* result )
 	return next_field( parse_int_( in, out ), result );
 }
 
-
+// Returns 16 or greater if not hex
 inline int from_hex_char( int h )
 {
 	h -= 0x30;
@@ -225,7 +225,7 @@ static char* parse_name( char* in )
 		if ( !c ) break;
 		in++;
 		
-		if ( c == ',' )  
+		if ( c == ',' ) // commas in string
 		{
 			char* p = skip_white( in );
 			if ( *p == ',' || *p == '-' || from_dec( *p ) <= 9 )
@@ -235,7 +235,7 @@ static char* parse_name( char* in )
 			}
 		}
 		
-		if ( c == '\\' )  
+		if ( c == '\\' ) // \ prefix for special characters
 		{
 			c = *in;
 			if ( !c ) break;
@@ -243,7 +243,7 @@ static char* parse_name( char* in )
 		}
 		*out++ = (char) c;
 	}
-	*out = 0;  
+	*out = 0; // terminate string
 	return in;
 }
 
@@ -251,25 +251,25 @@ static int parse_line( char* in, M3u_Playlist::entry_t& entry )
 {
 	int result = 0;
 	
-
+	// file
 	entry.file = in;
 	entry.type = "";
 	in = parse_filename( in, entry );
 	
-
+	// track
 	entry.track = -1;
 	entry.decimal_track = 0;
 	in = parse_track( in, entry, &result );
 	
-
+	// name
 	entry.name = in;
 	in = parse_name( in );
 	
-
+	// time
 	entry.length = -1;
 	in = parse_time( in, &entry.length, &result );
 	
-
+	// loop
 	entry.intro = -1;
 	entry.loop  = -1;
 	if ( *in == '-' )
@@ -283,7 +283,7 @@ static int parse_line( char* in, M3u_Playlist::entry_t& entry )
 		if ( entry.loop >= 0 )
 		{
 			entry.intro = 0;
-			if ( *in == '-' )  
+			if ( *in == '-' ) // trailing '-' means that intro length was specified 
 			{
 				in++;
 				entry.intro = entry.loop;
@@ -293,11 +293,11 @@ static int parse_line( char* in, M3u_Playlist::entry_t& entry )
 	}
 	in = next_field( in, &result );
 	
-
+	// fade
 	entry.fade = -1;
 	in = parse_time( in, &entry.fade, &result );
 	
-
+	// repeat
 	entry.repeat = -1;
 	in = parse_int( in, &entry.repeat, &result );
 	
@@ -344,7 +344,7 @@ blargg_err_t M3u_Playlist::parse_()
 	int const CR = 13;
 	int const LF = 10;
 	
-	data.end() [-1] = LF;  
+	data.end() [-1] = LF; // terminate input
 	
 	first_error_ = 0;
 	bool first_comment = true;
@@ -353,7 +353,7 @@ blargg_err_t M3u_Playlist::parse_()
 	char* in  = data.begin();
 	while ( in < data.end() )
 	{
-
+		// find end of line and terminate it
 		line++;
 		char* begin = in;
 		while ( *in != CR && *in != LF )
@@ -362,11 +362,11 @@ blargg_err_t M3u_Playlist::parse_()
 				return "Not an m3u playlist";
 			in++;
 		}
-		if ( in [0] == CR && in [1] == LF )  
+		if ( in [0] == CR && in [1] == LF ) // treat CR,LF as a single line
 			*in++ = 0;
 		*in++ = 0;
 		
-
+		// parse line
 		if ( *begin == '#' )
 		{
 			parse_comment( begin, info_, first_comment );

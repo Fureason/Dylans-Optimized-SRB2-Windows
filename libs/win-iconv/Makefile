@@ -1,5 +1,5 @@
 
-
+# comma separated list (e.g. "iconv.dll,libiconv.dll")
 DEFAULT_LIBICONV_DLL ?= \"\"
 
 

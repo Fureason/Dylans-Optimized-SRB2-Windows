@@ -1,6 +1,6 @@
+// Finite impulse response (FIR) resampler with adjustable FIR size
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef FIR_RESAMPLER_H
 #define FIR_RESAMPLER_H
 
@@ -10,47 +10,47 @@
 class Fir_Resampler_ {
 public:
 	
-
+	// Use Fir_Resampler<width> (below)
 	
-
-
+	// Set input/output resampling ratio and optionally low-pass rolloff and gain.
+	// Returns actual ratio used (rounded to internal precision).
 	double time_ratio( double factor, double rolloff = 0.999, double gain = 1.0 );
 	
-
+	// Current input/output ratio
 	double ratio() const { return ratio_; }
 	
-
+// Input
 	
 	typedef short sample_t;
 	
-
+	// Resize and clear input buffer
 	blargg_err_t buffer_size( int );
 	
-
-
+	// Clear input buffer. At least two output samples will be available after
+	// two input samples are written.
 	void clear();
 	
-
+	// Number of input samples that can be written
 	int max_write() const { return buf.end() - write_pos; }
 	
-
+	// Pointer to place to write input samples
 	sample_t* buffer() { return write_pos; }
 	
-
+	// Notify resampler that 'count' input samples have been written
 	void write( long count );
 	
-
+	// Number of input samples in buffer
 	int written() const { return write_pos - &buf [write_offset]; }
 	
-
+	// Skip 'count' input samples. Returns number of samples actually skipped.
 	int skip_input( long count );
 	
-
+// Output
 	
-
+	// Number of extra input samples needed until 'count' output samples are available
 	int input_needed( blargg_long count ) const;
 	
-
+	// Number of output samples available
 	int avail() const { return avail_( write_pos - &buf [width_ * stereo] ); }
 	
 public:
@@ -74,8 +74,8 @@ protected:
 	int avail_( blargg_long input_count ) const;
 };
 
-
-
+// Width is number of points in FIR. Must be even and 4 or more. More points give
+// better quality and rolloff effectiveness, and take longer to calculate.
 template<int width>
 class Fir_Resampler : public Fir_Resampler_ {
 	BOOST_STATIC_ASSERT( width >= 4 && width % 2 == 0 );
@@ -83,12 +83,12 @@ class Fir_Resampler : public Fir_Resampler_ {
 public:
 	Fir_Resampler() : Fir_Resampler_( width, impulses [0] ) { }
 	
-
+	// Read at most 'count' samples. Returns number of samples actually read.
 	typedef short sample_t;
 	int read( sample_t* out, blargg_long count );
 };
 
-
+// End of public interface
 
 inline void Fir_Resampler_::write( long count )
 {
@@ -116,7 +116,7 @@ int Fir_Resampler<width>::read( sample_t* out_begin, blargg_long count )
 		{
 			count--;
 			
-
+			// accumulate in extended precision
 			blargg_long l = 0;
 			blargg_long r = 0;
 			

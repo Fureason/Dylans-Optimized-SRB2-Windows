@@ -1,18 +1,18 @@
 # Makefile for zlib using Microsoft (Visual) C
 # zlib is copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler
 #
+# Usage:
+#   nmake -f win32/Makefile.msc                          (standard build)
+#   nmake -f win32/Makefile.msc LOC=-DFOO                (nonstandard build)
 
-
-
-
-
-
+# The toplevel directory of the source tree.
+#
 TOP = .
 
-
+# optional build flags
 LOC =
 
-
+# variables
 STATICLIB = zlib.lib
 SHAREDLIB = zlib1.dll
 IMPLIB    = zdll.lib
@@ -34,7 +34,7 @@ OBJS = adler32.obj compress.obj crc32.obj deflate.obj gzclose.obj gzlib.obj gzre
 OBJA =
 
 
-
+# targets
 all: $(STATICLIB) $(SHAREDLIB) $(IMPLIB) \
      example.exe minigzip.exe example_d.exe minigzip_d.exe
 
@@ -135,7 +135,7 @@ minigzip.obj: $(TOP)/test/minigzip.c $(TOP)/zlib.h $(TOP)/zconf.h
 zlib1.res: $(TOP)/win32/zlib1.rc
 	$(RC) $(RCFLAGS) /fo$@ $(TOP)/win32/zlib1.rc
 
-
+# testing
 test: example.exe minigzip.exe
 	example
 	echo hello world | minigzip | minigzip -d
@@ -145,7 +145,7 @@ testdll: example_d.exe minigzip_d.exe
 	echo hello world | minigzip_d | minigzip_d -d
 
 
-
+# cleanup
 clean:
 	-del $(STATICLIB)
 	-del $(SHAREDLIB)

@@ -9,9 +9,9 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
-                                                                              
-                                                                              
-                                                    
+/* A simple program to test the Input Method support in the SDL library (2.0+)
+   If you build without SDL_ttf, you can use the GNU Unifont hex file instead.
+   Download at http://unifoundry.com/unifont.html */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -30,7 +30,7 @@
 #ifdef __MACOSX__
 #define DEFAULT_FONT "/System/Library/Fonts/华文细黑.ttf"
 #elif __WIN32__
- 
+/* Some japanese font present on at least Windows 8.1. */
 #define DEFAULT_FONT "C:\\Windows\\Fonts\\yugothic.ttf"
 #else
 #define DEFAULT_FONT "NoDefaultFont.ttf"
@@ -52,7 +52,7 @@ static TTF_Font *font;
 #else
 #define UNIFONT_MAX_CODEPOINT     0x1ffff
 #define UNIFONT_NUM_GLYPHS        0x20000
- 
+/* Using 512x512 textures that are supported everywhere. */
 #define UNIFONT_TEXTURE_WIDTH     512
 #define UNIFONT_GLYPHS_IN_ROW     (UNIFONT_TEXTURE_WIDTH / 16)
 #define UNIFONT_GLYPHS_IN_TEXTURE (UNIFONT_GLYPHS_IN_ROW * UNIFONT_GLYPHS_IN_ROW)
@@ -68,7 +68,7 @@ struct UnifontGlyph
 static SDL_Texture **unifontTexture;
 static Uint8 unifontTextureLoaded[UNIFONT_NUM_TEXTURES] = { 0 };
 
- 
+/* Unifont loading code start */
 
 static Uint8 dehex(char c)
 {
@@ -114,7 +114,7 @@ static int unifont_init(const char *fontname)
     const size_t unifontTextureSize = UNIFONT_NUM_TEXTURES * state->num_windows * sizeof(void *);
     char *filename;
 
-     
+    /* Allocate memory for the glyph data so the file can be closed after initialization. */
     unifontGlyph = (struct UnifontGlyph *)SDL_malloc(unifontGlyphSize);
     if (unifontGlyph == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "unifont: Failed to allocate %d KiB for glyph data.\n", (int)(unifontGlyphSize + 1023) / 1024);
@@ -122,7 +122,7 @@ static int unifont_init(const char *fontname)
     }
     SDL_memset(unifontGlyph, 0, unifontGlyphSize);
 
-     
+    /* Allocate memory for texture pointers for all renderers. */
     unifontTexture = (SDL_Texture **)SDL_malloc(unifontTextureSize);
     if (unifontTexture == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "unifont: Failed to allocate %d KiB for texture pointer data.\n", (int)(unifontTextureSize + 1023) / 1024);
@@ -142,7 +142,7 @@ static int unifont_init(const char *fontname)
         return -1;
     }
 
-     
+    /* Read all the glyph data into memory to make it accessible later when textures are created. */
     do {
         int i, codepointHexSize;
         size_t bytesOverread;
@@ -151,14 +151,14 @@ static int unifont_init(const char *fontname)
 
         bytesRead = SDL_RWread(hexFile, hexBuffer, 1, 9);
         if (numGlyphs > 0 && bytesRead == 0) {
-            break;  
+            break; /* EOF */
         }
         if ((numGlyphs == 0 && bytesRead == 0) || (numGlyphs > 0 && bytesRead < 9)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "unifont: Unexpected end of hex file.\n");
             return -1;
         }
 
-         
+        /* Looking for the colon that separates the codepoint and glyph data at position 2, 4, 6 and 8. */
         if (hexBuffer[2] == ':') {
             codepointHexSize = 2;
         } else if (hexBuffer[4] == ':') {
@@ -180,7 +180,7 @@ static int unifont_init(const char *fontname)
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "unifont: Codepoint on line %d exceeded limit of 0x%x.\n", lineNumber, UNIFONT_MAX_CODEPOINT);
         }
 
-         
+        /* If there was glyph data read in the last file read, move it to the front of the buffer. */
         bytesOverread = 8 - codepointHexSize;
         if (codepointHexSize < 8) {
             SDL_memmove(hexBuffer, hexBuffer + codepointHexSize + 1, bytesOverread);
@@ -211,7 +211,7 @@ static int unifont_init(const char *fontname)
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "unifont: Ignoring duplicate codepoint 0x%08" SDL_PRIx32 " in hex file on line %d.\n", codepoint, lineNumber);
             } else {
                 unifontGlyph[codepoint].width = glyphWidth;
-                 
+                /* Pack the hex data into a more compact form. */
                 for (i = 0; i < glyphWidth * 2; i++) {
                     unifontGlyph[codepoint].data[i] = dehex2(hexBuffer[i * 2], hexBuffer[i * 2 + 1]);
                 }
@@ -275,7 +275,7 @@ static int unifont_load_texture(Uint32 textureID)
     }
     SDL_memset(textureRGBA, 0, UNIFONT_TEXTURE_SIZE);
 
-     
+    /* Copy the glyphs into memory in RGBA format. */
     for (i = 0; i < UNIFONT_GLYPHS_IN_TEXTURE; i++) {
         Uint32 codepoint = UNIFONT_GLYPHS_IN_TEXTURE * textureID + i;
         if (unifontGlyph[codepoint].width > 0) {
@@ -285,7 +285,7 @@ static int unifont_load_texture(Uint32 textureID)
         }
     }
 
-     
+    /* Create textures and upload the RGBA data from above. */
     for (i = 0; i < state->num_windows; ++i) {
         SDL_Renderer *renderer = state->renderers[i];
         SDL_Texture *tex = unifontTexture[UNIFONT_NUM_TEXTURES * i + textureID];
@@ -357,7 +357,7 @@ static void unifont_cleanup()
     SDL_free(unifontGlyph);
 }
 
- 
+/* Unifont code end */
 #endif
 
 size_t utf8_length(unsigned char c)
@@ -432,7 +432,7 @@ void usage()
 
 void InitInput()
 {
-     
+    /* Prepare a rect for text input */
     textRect.x = textRect.y = 100;
     textRect.w = DEFAULT_WINDOW_WIDTH - 2 * textRect.x;
     textRect.h = 50;
@@ -470,7 +470,7 @@ void _Redraw(int rendererID)
         SDL_Surface *textSur = TTF_RenderUTF8_Blended(font, text, textColor);
         SDL_Texture *texture;
 
-         
+        /* Vertically center text */
         drawnTextRect.y = textRect.y + (textRect.h - textSur->h) / 2;
         drawnTextRect.w = textSur->w;
         drawnTextRect.h = textSur->h;
@@ -505,7 +505,7 @@ void _Redraw(int rendererID)
     markedRect.x = textRect.x + drawnTextRect.w;
     markedRect.w = textRect.w - drawnTextRect.w;
     if (markedRect.w < 0) {
-         
+        /* Stop text input because we cannot hold any more characters */
         SDL_StopTextInput();
         return;
     } else {
@@ -541,7 +541,7 @@ void _Redraw(int rendererID)
             *p = c;
         }
         textSur = TTF_RenderUTF8_Blended(font, markedText, textColor);
-         
+        /* Vertically center text */
         drawnTextRect.y = textRect.y + (textRect.h - textSur->h) / 2;
         drawnTextRect.w = textSur->w;
         drawnTextRect.h = textSur->h;
@@ -608,7 +608,7 @@ void Redraw()
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
 
-         
+        /* Sending in the window id to let the font renderers know which one we're working with. */
         _Redraw(i);
 
         SDL_RenderPresent(renderer);
@@ -621,10 +621,10 @@ int main(int argc, char *argv[])
     SDL_Event event;
     const char *fontname = DEFAULT_FONT;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -656,7 +656,7 @@ int main(int argc, char *argv[])
     }
 
 #ifdef HAVE_SDL_TTF
-     
+    /* Initialize fonts */
     TTF_Init();
 
     font = TTF_OpenFont(fontname, DEFAULT_PTSIZE);
@@ -673,7 +673,7 @@ int main(int argc, char *argv[])
     SDL_Log("Using font: %s\n", fontname);
 
     InitInput();
-     
+    /* Create the windows and initialize the renderers */
     for (i = 0; i < state->num_windows; ++i) {
         SDL_Renderer *renderer = state->renderers[i];
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
@@ -681,10 +681,10 @@ int main(int argc, char *argv[])
         SDL_RenderClear(renderer);
     }
     Redraw();
-     
+    /* Main render loop */
     done = 0;
     while (!done) {
-         
+        /* Check for events */
         while (SDL_PollEvent(&event)) {
             SDLTest_CommonEvent(state, &event, &done);
             switch (event.type) {
@@ -695,7 +695,7 @@ int main(int argc, char *argv[])
                     Redraw();
                     break;
                 case SDLK_BACKSPACE:
-                     
+                    /* Only delete text if not in editing mode. */
                     if (!markedText[0]) {
                         size_t textlen = SDL_strlen(text);
 
@@ -704,17 +704,17 @@ int main(int argc, char *argv[])
                                 break;
                             }
                             if (!(text[textlen - 1] & 0x80)) {
-                                 
+                                /* One byte */
                                 text[textlen - 1] = 0x00;
                                 break;
                             }
                             if ((text[textlen - 1] & 0xC0) == 0x80) {
-                                 
+                                /* Byte from the multibyte sequence */
                                 text[textlen - 1] = 0x00;
                                 textlen--;
                             }
                             if ((text[textlen - 1] & 0xC0) == 0xC0) {
-                                 
+                                /* First byte of multibyte sequence */
                                 text[textlen - 1] = 0x00;
                                 break;
                             }
@@ -749,8 +749,8 @@ int main(int argc, char *argv[])
 
                 SDL_Log("text inputed: %s\n", text);
 
-                 
-                 
+                /* After text inputed, we can clear up markedText because it */
+                /* is committed */
                 markedText[0] = 0;
                 Redraw();
                 break;
@@ -772,4 +772,4 @@ int main(int argc, char *argv[])
 }
 
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

@@ -5,15 +5,15 @@
 // Use of this source code is governed by a BSD-style license that may
 // be found in the LICENSE file https://cs.chromium.org/chromium/src/LICENSE
 
+// Last changed in libpng 1.6.35 [July 15, 2018]
 
-
-
-
-
-
-
-
-
+// The modifications in 2017 by Glenn Randers-Pehrson include
+// 1. addition of a PNG_CLEANUP macro,
+// 2. setting the option to ignore ADLER32 checksums,
+// 3. adding "#include <string.h>" which is needed on some platforms
+//    to provide memcpy().
+// 4. adding read_end_info() and creating an end_info structure.
+// 5. adding calls to png_set_*() transforms commonly used by browsers.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -80,9 +80,9 @@ void user_read_data(png_structp png_ptr, png_bytep data, size_t length) {
 
 static const int kPngHeaderSize = 8;
 
-
-
-
+// Entry point for LibFuzzer.
+// Roughly follows the libpng book example:
+// http://www.libpng.org/pub/png/book/chapter13.html
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   if (size < kPngHeaderSize) {
     return 0;
@@ -90,7 +90,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 
   std::vector<unsigned char> v(data, data + size);
   if (png_sig_cmp(v.data(), 0, kPngHeaderSize)) {
-
+    // not a PNG.
     return 0;
   }
 
@@ -123,7 +123,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   png_set_option(png_handler.png_ptr, PNG_IGNORE_ADLER32, PNG_OPTION_ON);
 #endif
 
-
+  // Setting up reading from buffer.
   png_handler.buf_state = new BufState();
   png_handler.buf_state->data = data + kPngHeaderSize;
   png_handler.buf_state->bytes_left = size - kPngHeaderSize;
@@ -135,10 +135,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     return 0;
   }
 
-
+  // Reading.
   png_read_info(png_handler.png_ptr, png_handler.info_ptr);
 
-
+  // reset error handler to put png_deleter into scope.
   if (setjmp(png_jmpbuf(png_handler.png_ptr))) {
     PNG_CLEANUP
     return 0;
@@ -155,13 +155,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     return 0;
   }
 
-
+  // This is going to be too slow.
   if (width && height > 100000000 / width) {
     PNG_CLEANUP
     return 0;
   }
 
-
+  // Set several transforms that browsers typically use:
   png_set_gray_to_rgb(png_handler.png_ptr);
   png_set_expand(png_handler.png_ptr);
   png_set_packing(png_handler.png_ptr);

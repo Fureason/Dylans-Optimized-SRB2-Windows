@@ -1,10 +1,10 @@
+#
+# Flags to put a sock in GCC!
+#
 
-
-
-
-
-
-
+# See the versions list in detect.mk
+# This will define all version flags going backward.
+# Yes, it's magic.
 define _predecessor =
 ifdef GCC$(firstword $(1))
 GCC$(lastword $(1)):=1
@@ -16,20 +16,20 @@ $(foreach v,$(join $(wordlist 2,$(_n),- $(gcc_versions)),\
 	$(and $(findstring =,$(v)),\
 	$(eval $(call _predecessor,$(subst =, ,$(v))))))
 
-
+# -W -Wno-unused
 WFLAGS:=-Wall -Wno-trigraphs
 ifndef GCC295
-
+#WFLAGS+=-Wno-packed
 endif
 ifndef RELAXWARNINGS
  WFLAGS+=-W
-
+#WFLAGS+=-Wno-sign-compare
 ifndef GCC295
  WFLAGS+=-Wno-div-by-zero
 endif
-
+#WFLAGS+=-Wsystem-headers
 WFLAGS+=-Wfloat-equal
-
+#WFLAGS+=-Wtraditional
  WFLAGS+=-Wundef
 ifndef GCC295
  WFLAGS+=-Wendif-labels
@@ -37,10 +37,10 @@ endif
 ifdef GCC41
  WFLAGS+=-Wshadow
 endif
-
+#WFLAGS+=-Wlarger-than-%len%
  WFLAGS+=-Wpointer-arith -Wbad-function-cast
 ifdef GCC45
-
+#WFLAGS+=-Wc++-compat
 endif
  WFLAGS+=-Wcast-qual
 ifndef NOCASTALIGNWARN
@@ -48,9 +48,9 @@ ifndef NOCASTALIGNWARN
 endif
  WFLAGS+=-Wwrite-strings
 ifndef ERRORMODE
-
+#WFLAGS+=-Wconversion
 ifdef GCC43
-
+ #WFLAGS+=-Wno-sign-conversion
 endif
 endif
  WFLAGS+=-Wsign-compare
@@ -63,10 +63,10 @@ endif
  WFLAGS+=-Waggregate-return
 ifdef HAIKU
 ifdef GCC41
-
+ #WFLAGS+=-Wno-attributes
 endif
 endif
-
+#WFLAGS+=-Wstrict-prototypes
 ifdef GCC40
  WFLAGS+=-Wold-style-definition
 endif
@@ -75,14 +75,14 @@ ifdef GCC40
  WFLAGS+=-Wmissing-field-initializers
 endif
  WFLAGS+=-Wmissing-noreturn
-
-
-
-
-
-
+#WFLAGS+=-Wmissing-format-attribute
+#WFLAGS+=-Wno-multichar
+#WFLAGS+=-Wno-deprecated-declarations
+#WFLAGS+=-Wpacked
+#WFLAGS+=-Wpadded
+#WFLAGS+=-Wredundant-decls
  WFLAGS+=-Wnested-externs
-
+#WFLAGS+=-Wunreachable-code
  WFLAGS+=-Winline
 ifdef DEBUGMODE
  WFLAGS+=-Wno-error=inline
@@ -101,7 +101,7 @@ WFLAGS+=-Wno-error=format-overflow=2
 endif
 WFLAGS+=-Wformat-security
 ifndef GCC29
-
+#WFLAGS+=-Winit-self
 endif
 ifdef GCC46
 WFLAGS+=-Wno-suggest-attribute=noreturn
@@ -116,10 +116,10 @@ WFLAGS+=-Werror
 endif
 
 ifdef GCC43
-
+ #WFLAGS+=-Wno-error=clobbered
 endif
 ifdef GCC44
-
+#WFLAGS+=-Wno-error=array-bounds
 endif
 ifdef GCC46
  WFLAGS+=-Wno-error=suggest-attribute=noreturn
@@ -140,7 +140,7 @@ ifdef GCC81
 endif
 
 ifdef NONX86
-  ifdef X86_64  
+  ifdef X86_64 # yeah that SEEMS contradictory
   opts+=-march=nocona
   endif
 else
@@ -166,7 +166,7 @@ WFLAGS+=-Wno-unused-but-set-variable
 endif
 endif
 
-
+# Lua
 ifdef GCC43
 ifndef GCC44
 WFLAGS+=-Wno-logical-op

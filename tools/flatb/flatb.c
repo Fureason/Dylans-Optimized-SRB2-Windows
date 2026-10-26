@@ -228,7 +228,7 @@ int      st_uppers;
 int      st_mids;
 int      st_lowers;
 
- 
+/* this is horseshit */
 char   * old;
 char   * new;
 int      did;
@@ -302,7 +302,7 @@ Iwad ()
 	h         = n / 9;
 	n        *= 2;
 	directory = Malloc(n);
-	 
+	/* minimum number of lumps for a map */
 	sectors   = Malloc(h);
 	sides     = Malloc(h);
 
@@ -313,15 +313,15 @@ Iwad ()
 	map = 3;
 	for (t = ( p = directory ) + n; p < t; p += 16)
 	{
-		 
-		 
+		/* looking for SECTORS? Hopefully order doesn't matter in real world. */
+		/* also search for fucking SIDES MY SIDES AAAAAAAAAA */
 		switch (map)
 		{
 			case 0:
 			case 2:
 				if (strncmp(&p[8], "SECTORS", 8) == 0)
 				{
-					 
+					/* copy file offset and size */
 					memcpy(sector_p, p, 8);
 					sector_p += 8;
 					sectors_c++;
@@ -338,7 +338,7 @@ Iwad ()
 		}
 		if (map == 3)
 		{
-			 
+			/* MAP marker */
 			if (p[13] == '\0' && strncmp(&p[8], "MAP", 3) == 0)
 				map = 0;
 		}
@@ -362,7 +362,7 @@ Epic (char *p, char *t)
 	char *top;
 	char *bot;
 	int i;
-	 
+	/* oh hi magic number! */
 	for (; p < t; p += 26)
 	{
 		bot = &p [4];

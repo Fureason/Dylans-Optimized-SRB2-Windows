@@ -1,6 +1,6 @@
-   
-                                                    
-   
+/**
+ * New/updated tests: aschiffler at ferzkopp dot net
+ */
 
 #include <stdio.h>
 #include <string.h>
@@ -8,16 +8,16 @@
 #include "SDL.h"
 #include "SDL_test.h"
 
- 
+/* ================= Test Case Implementation ================== */
 
- 
+/* Test case functions */
 
-   
-                                            
-  
-      
-                                              
-   
+/**
+ * \brief Check call to SDL_HasClipboardText
+ *
+ * \sa
+ * http://wiki.libsdl.org/SDL_HasClipboardText
+ */
 int clipboard_testHasClipboardText(void *arg)
 {
     SDL_HasClipboardText();
@@ -26,12 +26,12 @@ int clipboard_testHasClipboardText(void *arg)
     return TEST_COMPLETED;
 }
 
-   
-                                                   
-  
-      
-                                                     
-   
+/**
+ * \brief Check call to SDL_HasPrimarySelectionText
+ *
+ * \sa
+ * http://wiki.libsdl.org/SDL_HasPrimarySelectionText
+ */
 int clipboard_testHasPrimarySelectionText(void *arg)
 {
     SDL_HasPrimarySelectionText();
@@ -40,12 +40,12 @@ int clipboard_testHasPrimarySelectionText(void *arg)
     return TEST_COMPLETED;
 }
 
-   
-                                            
-  
-      
-                                              
-   
+/**
+ * \brief Check call to SDL_GetClipboardText
+ *
+ * \sa
+ * http://wiki.libsdl.org/SDL_GetClipboardText
+ */
 int clipboard_testGetClipboardText(void *arg)
 {
     char *charResult;
@@ -57,12 +57,12 @@ int clipboard_testGetClipboardText(void *arg)
     return TEST_COMPLETED;
 }
 
-   
-                                                   
-  
-      
-                                                     
-   
+/**
+ * \brief Check call to SDL_GetPrimarySelectionText
+ *
+ * \sa
+ * http://wiki.libsdl.org/SDL_GetPrimarySelectionText
+ */
 int clipboard_testGetPrimarySelectionText(void *arg)
 {
     char *charResult;
@@ -74,11 +74,11 @@ int clipboard_testGetPrimarySelectionText(void *arg)
     return TEST_COMPLETED;
 }
 
-   
-                                            
-      
-                                              
-   
+/**
+ * \brief Check call to SDL_SetClipboardText
+ * \sa
+ * http://wiki.libsdl.org/SDL_SetClipboardText
+ */
 int clipboard_testSetClipboardText(void *arg)
 {
     char *textRef = SDLTest_RandomAsciiString();
@@ -95,18 +95,18 @@ int clipboard_testSetClipboardText(void *arg)
         "Verify SDL_SetClipboardText did not modify input string, expected '%s', got '%s'",
         textRef, text);
 
-     
+    /* Cleanup */
     SDL_free(textRef);
     SDL_free(text);
 
     return TEST_COMPLETED;
 }
 
-   
-                                                   
-      
-                                                     
-   
+/**
+ * \brief Check call to SDL_SetPrimarySelectionText
+ * \sa
+ * http://wiki.libsdl.org/SDL_SetPrimarySelectionText
+ */
 int clipboard_testSetPrimarySelectionText(void *arg)
 {
     char *textRef = SDLTest_RandomAsciiString();
@@ -123,20 +123,20 @@ int clipboard_testSetPrimarySelectionText(void *arg)
         "Verify SDL_SetPrimarySelectionText did not modify input string, expected '%s', got '%s'",
         textRef, text);
 
-     
+    /* Cleanup */
     SDL_free(textRef);
     SDL_free(text);
 
     return TEST_COMPLETED;
 }
 
-   
-                                                           
-      
-                                              
-                                              
-                                              
-   
+/**
+ * \brief End-to-end test of SDL_xyzClipboardText functions
+ * \sa
+ * http://wiki.libsdl.org/SDL_HasClipboardText
+ * http://wiki.libsdl.org/SDL_GetClipboardText
+ * http://wiki.libsdl.org/SDL_SetClipboardText
+ */
 int clipboard_testClipboardTextFunctions(void *arg)
 {
     char *textRef = SDLTest_RandomAsciiString();
@@ -145,7 +145,7 @@ int clipboard_testClipboardTextFunctions(void *arg)
     int intResult;
     char *charResult;
 
-     
+    /* Clear clipboard text state */
     boolResult = SDL_HasClipboardText();
     SDLTest_AssertPass("Call to SDL_HasClipboardText succeeded");
     if (boolResult == SDL_TRUE) {
@@ -166,14 +166,14 @@ int clipboard_testClipboardTextFunctions(void *arg)
             (boolResult) ? "SDL_TRUE" : "SDL_FALSE");
     }
 
-     
+    /* Empty clipboard  */
     charResult = SDL_GetClipboardText();
     SDLTest_AssertPass("Call to SDL_GetClipboardText succeeded");
     SDLTest_Assert(
         charResult != NULL,
         "Verify SDL_GetClipboardText did not return NULL");
     SDLTest_AssertCheck(
-        charResult[0] == '\0',  
+        charResult[0] == '\0', /* NOLINT(clang-analyzer-core.NullDereference): Checked for NULL above */
         "Verify SDL_GetClipboardText returned string with length 0, got length %i",
         (int)SDL_strlen(charResult));
     intResult = SDL_SetClipboardText((const char *)text);
@@ -200,7 +200,7 @@ int clipboard_testClipboardTextFunctions(void *arg)
         "Verify SDL_GetClipboardText returned correct string, expected '%s', got '%s'",
         textRef, charResult);
 
-     
+    /* Cleanup */
     SDL_free(textRef);
     SDL_free(text);
     SDL_free(charResult);
@@ -208,13 +208,13 @@ int clipboard_testClipboardTextFunctions(void *arg)
     return TEST_COMPLETED;
 }
 
-   
-                                                                  
-      
-                                                     
-                                                     
-                                                     
-   
+/**
+ * \brief End-to-end test of SDL_xyzPrimarySelectionText functions
+ * \sa
+ * http://wiki.libsdl.org/SDL_HasPrimarySelectionText
+ * http://wiki.libsdl.org/SDL_GetPrimarySelectionText
+ * http://wiki.libsdl.org/SDL_SetPrimarySelectionText
+ */
 int clipboard_testPrimarySelectionTextFunctions(void *arg)
 {
     char *textRef = SDLTest_RandomAsciiString();
@@ -223,7 +223,7 @@ int clipboard_testPrimarySelectionTextFunctions(void *arg)
     int intResult;
     char *charResult;
 
-     
+    /* Clear primary selection text state */
     boolResult = SDL_HasPrimarySelectionText();
     SDLTest_AssertPass("Call to SDL_HasPrimarySelectionText succeeded");
     if (boolResult == SDL_TRUE) {
@@ -244,14 +244,14 @@ int clipboard_testPrimarySelectionTextFunctions(void *arg)
             (boolResult) ? "SDL_TRUE" : "SDL_FALSE");
     }
 
-     
+    /* Empty primary selection  */
     charResult = SDL_GetPrimarySelectionText();
     SDLTest_AssertPass("Call to SDL_GetPrimarySelectionText succeeded");
     SDLTest_Assert(
         charResult != NULL,
         "Verify SDL_GetPrimarySelectionText did not return NULL");
     SDLTest_AssertCheck(
-        charResult[0] == '\0',  
+        charResult[0] == '\0', /* NOLINT(clang-analyzer-core.NullDereference): Checked for NULL above */
         "Verify SDL_GetPrimarySelectionText returned string with length 0, got length %i",
         (int)SDL_strlen(charResult));
     intResult = SDL_SetPrimarySelectionText((const char *)text);
@@ -278,7 +278,7 @@ int clipboard_testPrimarySelectionTextFunctions(void *arg)
         "Verify SDL_GetPrimarySelectionText returned correct string, expected '%s', got '%s'",
         textRef, charResult);
 
-     
+    /* Cleanup */
     SDL_free(textRef);
     SDL_free(text);
     SDL_free(charResult);
@@ -286,9 +286,9 @@ int clipboard_testPrimarySelectionTextFunctions(void *arg)
     return TEST_COMPLETED;
 }
 
- 
+/* ================= Test References ================== */
 
- 
+/* Clipboard test cases */
 static const SDLTest_TestCaseReference clipboardTest1 = {
     (SDLTest_TestCaseFp)clipboard_testHasClipboardText, "clipboard_testHasClipboardText", "Check call to SDL_HasClipboardText", TEST_ENABLED
 };
@@ -321,12 +321,12 @@ static const SDLTest_TestCaseReference clipboardTest8 = {
     (SDLTest_TestCaseFp)clipboard_testPrimarySelectionTextFunctions, "clipboard_testPrimarySelectionTextFunctions", "End-to-end test of SDL_xyzPrimarySelectionText functions", TEST_ENABLED
 };
 
- 
+/* Sequence of Clipboard test cases */
 static const SDLTest_TestCaseReference *clipboardTests[] = {
     &clipboardTest1, &clipboardTest2, &clipboardTest3, &clipboardTest4, &clipboardTest5, &clipboardTest6, &clipboardTest7, &clipboardTest8, NULL
 };
 
- 
+/* Clipboard test suite (global) */
 SDLTest_TestSuiteReference clipboardTestSuite = {
     "Clipboard",
     NULL,

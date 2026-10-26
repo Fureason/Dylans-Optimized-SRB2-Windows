@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  snake.c
+/// \brief Snake minigame for the download screen.
 
 #include "snake.h"
 #include "g_input.h"
@@ -171,14 +171,14 @@ void Snake_Update(void *opaque)
 
 	snake_t *snake = opaque;
 
-
+	// Handle retry
 	if (snake->gameover && (PLAYER1INPUTDOWN(GC_JUMP) || gamekeydown[KEY_ENTER]))
 	{
 		Initialise(snake);
-		snake->pausepressed = true;  
+		snake->pausepressed = true; // Avoid accidental pause on respawn
 	}
 
-
+	// Handle pause
 	if (PLAYER1INPUTDOWN(GC_PAUSE) || gamekeydown[KEY_ENTER])
 	{
 		if (!snake->pausepressed)
@@ -198,7 +198,7 @@ void Snake_Update(void *opaque)
 	oldx = snake->snakex[1];
 	oldy = snake->snakey[1];
 
-
+	// Process the input events in here dear lord
 	for (UINT16 j = 0; j < snake->joyeventcount; j++)
 	{
 		event_t *ev = snake->joyevents[j];
@@ -233,7 +233,7 @@ void Snake_Update(void *opaque)
 	}
 	snake->joyeventcount = 0;
 
-
+	// Update direction
 	if (PLAYER1INPUTDOWN(GC_STRAFELEFT) || gamekeydown[KEY_LEFTARROW] || joystate == 3)
 	{
 		if (snake->snakelength < 2 || x <= oldx)
@@ -275,7 +275,7 @@ void Snake_Update(void *opaque)
 	if (snake->gameover)
 		return;
 
-
+	// Find new position
 	switch (snake->snakedir[0])
 	{
 		case 1:
@@ -304,7 +304,7 @@ void Snake_Update(void *opaque)
 			break;
 	}
 
-
+	// Check collision with snake
 	if (snake->snakebonus != BONUS_GHOST)
 		for (i = 1; i < snake->snakelength - 1; i++)
 			if (x == snake->snakex[i] && y == snake->snakey[i])
@@ -325,7 +325,7 @@ void Snake_Update(void *opaque)
 		return;
 	}
 
-
+	// Check collision with apple
 	if (x == snake->applex && y == snake->appley)
 	{
 		if (snake->snakelength + 3 < NUM_BLOCKS_X * NUM_BLOCKS_Y)
@@ -336,10 +336,10 @@ void Snake_Update(void *opaque)
 			snake->snakedir[snake->snakelength - 1] = snake->snakedir[snake->snakelength - 2];
 		}
 
-
+		// Spawn new apple
 		FindFreeSlot(snake, &snake->applex, &snake->appley, x, y);
 
-
+		// Spawn new bonus
 		if (!(snake->snakelength % 5))
 		{
 			do
@@ -361,7 +361,7 @@ void Snake_Update(void *opaque)
 		oldx = snake->snakex[1];
 		oldy = snake->snakey[1];
 
-
+		// Move
 		for (i = snake->snakelength - 1; i > 0; i--)
 		{
 			snake->snakex[i] = snake->snakex[i - 1];
@@ -369,7 +369,7 @@ void Snake_Update(void *opaque)
 			snake->snakedir[i] = snake->snakedir[i - 1];
 		}
 
-
+		// Handle corners
 		if      (x < oldx && dir == 3)
 			dir = 5;
 		else if (x > oldx && dir == 3)
@@ -392,7 +392,7 @@ void Snake_Update(void *opaque)
 	snake->snakex[0] = x;
 	snake->snakey[0] = y;
 
-
+	// Check collision with bonus
 	if (snake->bonustype != BONUS_NONE && x == snake->bonusx && y == snake->bonusy)
 	{
 		S_StartSound(NULL, sfx_ncchip);
@@ -433,7 +433,7 @@ void Snake_Update(void *opaque)
 				UINT8 tmpy   = snake->snakey  [i];
 				UINT8 tmpdir = snake->snakedir[i];
 
-
+				// Swap first segment with last segment
 				snake->snakex  [i] = snake->snakex  [i2];
 				snake->snakey  [i] = snake->snakey  [i2];
 				snake->snakedir[i] = GetOppositeDir(snake->snakedir[i2]);
@@ -464,7 +464,7 @@ void Snake_Draw(void *opaque)
 
 	snake_t *snake = opaque;
 
-
+	// Background
 	V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
 
 	V_DrawFlatFill(
@@ -475,13 +475,13 @@ void Snake_Draw(void *opaque)
 		W_GetNumForName(backgrounds[snake->background])
 	);
 
+	// Borders
+	V_DrawFill(LEFT_X, TOP_Y, BORDER_SIZE + MAP_WIDTH, BORDER_SIZE, 242); // Top
+	V_DrawFill(LEFT_X + BORDER_SIZE + MAP_WIDTH, TOP_Y, BORDER_SIZE, BORDER_SIZE + MAP_HEIGHT, 242); // Right
+	V_DrawFill(LEFT_X + BORDER_SIZE, TOP_Y + BORDER_SIZE + MAP_HEIGHT, BORDER_SIZE + MAP_WIDTH, BORDER_SIZE, 242); // Bottom
+	V_DrawFill(LEFT_X, TOP_Y + BORDER_SIZE, BORDER_SIZE, BORDER_SIZE + MAP_HEIGHT, 242); // Left
 
-	V_DrawFill(LEFT_X, TOP_Y, BORDER_SIZE + MAP_WIDTH, BORDER_SIZE, 242);  
-	V_DrawFill(LEFT_X + BORDER_SIZE + MAP_WIDTH, TOP_Y, BORDER_SIZE, BORDER_SIZE + MAP_HEIGHT, 242);  
-	V_DrawFill(LEFT_X + BORDER_SIZE, TOP_Y + BORDER_SIZE + MAP_HEIGHT, BORDER_SIZE + MAP_WIDTH, BORDER_SIZE, 242);  
-	V_DrawFill(LEFT_X, TOP_Y + BORDER_SIZE, BORDER_SIZE, BORDER_SIZE + MAP_HEIGHT, 242);  
-
-
+	// Apple
 	V_DrawFixedPatch(
 		(LEFT_X + BORDER_SIZE + snake->applex * BLOCK_SIZE + BLOCK_SIZE / 2) * FRACUNIT,
 		(TOP_Y  + BORDER_SIZE + snake->appley * BLOCK_SIZE + BLOCK_SIZE / 2) * FRACUNIT,
@@ -491,7 +491,7 @@ void Snake_Draw(void *opaque)
 		NULL
 	);
 
-
+	// Bonus
 	if (snake->bonustype != BONUS_NONE)
 		V_DrawFixedPatch(
 			(LEFT_X + BORDER_SIZE + snake->bonusx * BLOCK_SIZE + BLOCK_SIZE / 2    ) * FRACUNIT,
@@ -502,15 +502,15 @@ void Snake_Draw(void *opaque)
 			NULL
 		);
 
-
-	if (!snake->gameover || snake->time % 8 < 8 / 2)  
+	// Snake
+	if (!snake->gameover || snake->time % 8 < 8 / 2) // Blink if game over
 	{
 		for (i = snake->snakelength - 1; i >= 0; i--)
 		{
 			const char *patchname;
 			UINT8 dir = snake->snakedir[i];
 
-			if (i == 0)  
+			if (i == 0) // Head
 			{
 				switch (dir)
 				{
@@ -521,7 +521,7 @@ void Snake_Draw(void *opaque)
 					default: patchname = "DL_SNAKEHEAD_M";
 				}
 			}
-			else  
+			else // Body
 			{
 				switch (dir)
 				{
@@ -552,10 +552,10 @@ void Snake_Draw(void *opaque)
 		}
 	}
 
-
+	// Length
 	V_DrawString(RIGHT_X + 4, TOP_Y, V_MONOSPACE, va("%u", snake->snakelength));
 
-
+	// Bonus
 	if (snake->snakebonus != BONUS_NONE
 	&& (snake->snakebonustime >= 3 * TICRATE || snake->time % 4 < 4 / 2))
 		V_DrawFixedPatch(
@@ -577,7 +577,7 @@ void Snake_Free(void **opaque)
 	}
 }
 
-
+// I'm screaming the hack is clean - ashi
 boolean Snake_JoyGrabber(void *opaque, event_t *ev)
 {
 	snake_t *snake = opaque;

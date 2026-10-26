@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_splats.c
+/// \brief Floor splats
 
 #include "r_draw.h"
 #include "r_fps.h"
@@ -20,14 +20,14 @@
 #include "w_wad.h"
 #include "z_zone.h"
 
-struct rastery_s *prastertab;  
+struct rastery_s *prastertab; // for ASM code
 
 static struct rastery_s rastertab[MAXVIDHEIGHT];
 static void prepare_rastertab(void);
 
-
-
-
+// ==========================================================================
+//                                                               FLOOR SPLATS
+// ==========================================================================
 
 static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, vissprite_t *vis);
 
@@ -208,11 +208,11 @@ void R_DrawFloorSplat(vissprite_t *spr)
 	splat.z = spr->pz;
 	splat.slope = NULL;
 
+	// Set positions
 
-
-
-
-
+	// 3--2
+	// |  |
+	// 0--1
 
 	splat.verts[0].x = w - xoffset;
 	splat.verts[0].y = yoffset;
@@ -230,7 +230,7 @@ void R_DrawFloorSplat(vissprite_t *spr)
 	ca = FINECOSINE(angle);
 	sa = FINESINE(angle);
 
-
+	// Rotate
 	for (i = 0; i < 4; i++)
 	{
 		rotated[i].x = FixedMul(splat.verts[i].x, ca) - FixedMul(splat.verts[i].y, sa);
@@ -239,9 +239,9 @@ void R_DrawFloorSplat(vissprite_t *spr)
 
 	if (renderflags & (RF_SLOPESPLAT | RF_OBJECTSLOPESPLAT))
 	{
-		pslope_t *standingslope = mobj->standingslope;  
+		pslope_t *standingslope = mobj->standingslope; // The slope that the object is standing on.
 
-
+		// The slope that was defined for the sprite.
 		if (renderflags & RF_SLOPESPLAT)
 			splat.slope = mobj->floorspriteslope;
 
@@ -249,7 +249,7 @@ void R_DrawFloorSplat(vissprite_t *spr)
 			splat.slope = standingslope;
 	}
 
-
+	// Translate
 	for (i = 0; i < 4; i++)
 	{
 		tr_x = rotated[i].x + mobj->x;
@@ -271,16 +271,16 @@ void R_DrawFloorSplat(vissprite_t *spr)
 	ca = FINECOSINE(angle);
 	sa = FINESINE(angle);
 
-
+	// Project
 	for (i = 0; i < 4; i++)
 	{
 		v3d = &splat.verts[i];
 
-
+		// transform the origin point
 		tr_x = v3d->x - spr->viewpoint.x;
 		tr_y = v3d->y - spr->viewpoint.y;
 
-
+		// rotation around vertical y axis
 		rot_x = FixedMul(tr_x - (mobj->x - x), sa) - FixedMul(tr_y - (mobj->y - y), ca);
 		rot_y = FixedMul(tr_x - (mobj->x - x), ca) + FixedMul(tr_y - (mobj->y - y), sa);
 		rot_z = v3d->z - spr->viewpoint.z;
@@ -288,11 +288,11 @@ void R_DrawFloorSplat(vissprite_t *spr)
 		if (rot_y < FRACUNIT)
 			return;
 
-
+		// note: y from view above of map, is distance far away
 		xscale = FixedDiv(projection, rot_y);
 		yscale = -FixedDiv(projectiony, rot_y);
 
-
+		// projection
 		v2d[i].x = (centerxfrac + FixedMul(rot_x, xscale))>>FRACBITS;
 		v2d[i].y = (centeryfrac + FixedMul(rot_z, yscale))>>FRACBITS;
 	}
@@ -300,14 +300,14 @@ void R_DrawFloorSplat(vissprite_t *spr)
 	R_RasterizeFloorSplat(&splat, v2d, spr);
 }
 
-
-
-
-
-
+// --------------------------------------------------------------------------
+// Rasterize the four edges of a floor splat polygon,
+// fill the polygon with linear interpolation, call span drawer for each
+// scan line
+// --------------------------------------------------------------------------
 static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, vissprite_t *vis)
 {
-
+	// rasterizing
 	INT32 miny = viewheight + 1, maxy = 0;
 	INT32 y, x1, ry1, x2, y2, i;
 	fixed_t offsetx = 0, offsety = 0;
@@ -389,7 +389,7 @@ static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, visspr
 
 		if (pSplat->angle)
 		{
-
+			// Add the view offset, rotated by the plane angle.
 			fixed_t a = -pSplat->verts[0].x + vis->viewpoint.x;
 			fixed_t b = -pSplat->verts[0].y + vis->viewpoint.y;
 			angle_t angle = (pSplat->angle >> ANGLETOFINESHIFT);
@@ -418,18 +418,18 @@ static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, visspr
 
 	ds_transmap = vis->transmap;
 
+	// Determine which R_DrawWhatever to use
 
-
-
+	// Solid color
 	if (ds_solidcolor)
 	{
 		UINT16 px = *(UINT16 *)ds_source;
 
-
+		// Uh, it's not visible.
 		if (!(px & 0xFF00))
 			return;
 
-
+		// Pixel color is contained in the lower 8 bits (upper 8 are the opacity), so advance the pointer
 		ds_source++;
 
 		if (pSplat->slope)
@@ -447,7 +447,7 @@ static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, visspr
 				spanfunctype = SPANDRAWFUNC_SOLID;
 		}
 	}
-
+	// Transparent
 	else if (ds_transmap)
 	{
 		if (pSplat->slope)
@@ -455,7 +455,7 @@ static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, visspr
 		else
 			spanfunctype = SPANDRAWFUNC_TRANSSPRITE;
 	}
-
+	// Opaque
 	else
 	{
 		if (pSplat->slope)
@@ -471,13 +471,13 @@ static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, visspr
 
 	prepare_rastertab();
 
-
+	// do segment a -> top of texture
 	RASTERPARAMS(3,2,0,pSplat->width-1,0,0);
-
+	// do segment b -> right side of texture
 	RASTERPARAMS(2,1,0,pSplat->width-1,pSplat->height-1,0);
-
+	// do segment c -> bottom of texture
 	RASTERPARAMS(1,0,pSplat->width-1,0,pSplat->height-1,0);
-
+	// do segment d -> left side of texture
 	RASTERPARAMS(0,3,pSplat->width-1,0,0,1);
 
 	if (maxy >= vid.height)
@@ -511,7 +511,7 @@ static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, visspr
 		for (i = x1; i <= x2; i++)
 			cliptab[i] = (y >= mfloorclip[i] || y <= mceilingclip[i]);
 
-
+		// clip left
 		while (cliptab[x1])
 		{
 			x1++;
@@ -519,7 +519,7 @@ static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, visspr
 				break;
 		}
 
-
+		// clip right
 		i = x2;
 
 		while (i > x1)
@@ -543,12 +543,12 @@ static void R_RasterizeFloorSplat(floorsplat_t *pSplat, vector2_t *verts, visspr
 			angle_t planecos = FINECOSINE(angle);
 			angle_t planesin = FINESINE(angle);
 
-
-
+			// [RH] Notice that I dumped the caching scheme used by Doom.
+			// It did not offer any appreciable speedup.
 			distance = FixedMul(planeheight, yslope[y]);
 			span = abs(centery - y);
 
-			if (span)  
+			if (span) // Don't divide by zero
 			{
 				xstep = FixedMul(planesin, planeheight) / span;
 				ystep = FixedMul(planecos, planeheight) / span;

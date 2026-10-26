@@ -1,30 +1,30 @@
+# Makefile for libpng
+# 32-bit Borland C++ (Note: All modules are compiled in C mode)
+# To build the library, do:
+#       "make -fmakefile.bc32"
+#
+# -------------------- 32-bit Borland C++ --------------------
 
-
-
-
-
-
-
-
+### Absolutely necessary for this makefile to work
 .AUTODEPEND
 
-
+## Where zlib.h, zconf.h and zlib.lib are
 ZLIB_DIR=..\zlib
 
-
+## Compiler, linker, librarian and other tools
 CC=bcc32
 LD=bcc32
 LIB=tlib
 CP=copy
 
-
+# -3 = 386, -4 = 486, -5 = Pentium etc.
 !ifndef TARGET_CPU
-
+#TARGET_CPU=-6
 !endif
 
-
-
-
+# Use this if you don't want Borland's fancy exception handling
+# (Caution: doesn't work with CBuilderX)
+#NOEHLIB=noeh32.lib
 
 !ifdef DEBUG
 CDEBUG=-v
@@ -34,29 +34,29 @@ CDEBUG=
 LDEBUG=
 !endif
 
-
+# STACKOFLOW=1
 !ifdef STACKOFLOW
 CDEBUG=$(CDEBUG) -N
 LDEBUG=$(LDEBUG) -N
 !endif
 
-
-
-
-
+# -O2 optimize for speed
+# -d  merge duplicate strings
+# -k- turn off standard stack frame
+# -w  display all warnings
 CPPFLAGS=-I$(ZLIB_DIR)
 CFLAGS=-O2 -d -k- -w $(TARGET_CPU) $(CDEBUG)
 
-
+# -M  generate map file
 LDFLAGS=-L$(ZLIB_DIR) -M $(LDEBUG)
 
-
-
+# Pre-built configuration
+# See scripts\pnglibconf.mak for more options
 !ifndef PNGLIBCONF_H_PREBUILT
 PNGLIBCONF_H_PREBUILT = scripts\pnglibconf.h.prebuilt
 !endif
 
-
+## Variables
 OBJS = \
 	png.obj \
 	pngerror.obj \
@@ -93,9 +93,9 @@ LIBOBJS = \
 
 LIBNAME=libpng.lib
 
-
-
-
+## Implicit rules
+# Braces let make "batch" calls to the compiler,
+# 2 calls instead of 12; space is important.
 .c.obj:
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c {$*.c }
 
@@ -106,7 +106,7 @@ LIBNAME=libpng.lib
 .obj.exe:
 	$(LD) $(LDFLAGS) $*.obj $(LIBNAME) zlib.lib $(NOEHLIB)
 
-
+## Major targets
 all: libpng pngtest
 
 libpng: $(LIBNAME)
@@ -116,7 +116,7 @@ pngtest: pngtest.exe
 test: pngtest.exe
 	pngtest
 
-
+## Minor Targets
 
 pnglibconf.h: $(PNGLIBCONF_H_PREBUILT)
 	$(CP) $(PNGLIBCONF_H_PREBUILT) $@
@@ -144,7 +144,7 @@ $(LIBNAME): $(OBJS)
 $(LIBOBJS), libpng
 |
 
-
+# Cleanup
 clean:
 	-del pnglibconf.h
 	-del *.obj
@@ -155,4 +155,4 @@ clean:
 	-del *.tds
 	-del pngout.png
 
-
+# End of makefile for libpng

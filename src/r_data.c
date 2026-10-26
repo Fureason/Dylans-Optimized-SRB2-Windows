@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_data.c
+/// \brief Preparation of data for rendering, generation of lookups, caching, retrieval by name
 
 #include "doomdef.h"
 #include "g_game.h"
@@ -26,37 +26,37 @@
 #include "r_picformats.h"
 #include "w_wad.h"
 #include "z_zone.h"
-#include "p_setup.h"  
-#include "v_video.h"  
-#include "f_finale.h"  
+#include "p_setup.h" // levelflats
+#include "v_video.h" // pMasterPalette
+#include "f_finale.h" // wipes
 #include "byteptr.h"
 #include "dehacked.h"
 
 #ifdef HWRENDER
-#include "hardware/hw_glob.h"  
+#include "hardware/hw_glob.h" // HWR_ClearLightTables
 #endif
 
-
-
-
-
-
-
-
+//
+// Graphics.
+// SRB2 graphics for walls and sprites
+// is stored in vertical runs of opaque pixels (posts).
+// A column is composed of zero or more posts,
+// a patch or sprite is composed of zero or more columns.
+//
 
 size_t numspritelumps, max_spritelumps;
 
-
+// needed for pre rendering
 sprcache_t *spritecachedinfo;
 
 lighttable_t *colormaps;
 lighttable_t *fadecolormap;
 
-
+// for debugging/info purposes
 size_t flatmemory, spritememory, texturememory;
 
-
-
+// Blends two pixels together, using the equation
+// that matches the specified alpha style.
 UINT32 ASTBlendPixel(RGBA_t background, RGBA_t foreground, int style, UINT8 alpha)
 {
 	RGBA_t output;
@@ -67,16 +67,16 @@ UINT32 ASTBlendPixel(RGBA_t background, RGBA_t foreground, int style, UINT8 alph
 			output.rgba = background.rgba;
 		else
 		{
-
+			// don't go too high
 			if (fullalpha >= 0xFF)
 				fullalpha = 0xFF;
 			alpha = (UINT8)fullalpha;
 
-
-
+			// if the background pixel is empty,
+			// match software and don't blend anything
 			if (!background.s.alpha)
 			{
-
+				// ...unless the foreground pixel ISN'T actually translucent.
 				if (alpha == 0xFF)
 					output.rgba = foreground.rgba;
 				else
@@ -127,7 +127,7 @@ UINT32 ASTBlendPixel(RGBA_t background, RGBA_t foreground, int style, UINT8 alph
 			output.s.green = clamp((int)(background.s.green * fg));
 			output.s.blue = clamp((int)(background.s.blue * fb));
 		}
-
+		// just copy the pixel
 		else if (style == AST_COPY)
 			output.rgba = foreground.rgba;
 
@@ -140,59 +140,59 @@ UINT32 ASTBlendPixel(RGBA_t background, RGBA_t foreground, int style, UINT8 alph
 
 INT32 ASTTextureBlendingThreshold[2] = {255/11, (10*255/11)};
 
-
+// Blends a pixel for a texture patch.
 UINT32 ASTBlendTexturePixel(RGBA_t background, RGBA_t foreground, int style, UINT8 alpha)
 {
-
+	// Alpha style set to translucent?
 	if (style == AST_TRANSLUCENT)
 	{
-
+		// Is the alpha small enough for translucency?
 		if (alpha <= ASTTextureBlendingThreshold[1])
 		{
-
+			// Is the patch way too translucent? Don't blend then.
 			if (alpha < ASTTextureBlendingThreshold[0])
 				return background.rgba;
 
 			return ASTBlendPixel(background, foreground, style, alpha);
 		}
-		else  
+		else // just copy the pixel
 			return foreground.rgba;
 	}
 	else
 		return ASTBlendPixel(background, foreground, style, alpha);
 }
 
-
-
+// Blends two palette indexes for a texture patch, then
+// finds the nearest palette index from the blended output.
 UINT8 ASTBlendPaletteIndexes(UINT8 background, UINT8 foreground, int style, UINT8 alpha)
 {
-
+	// Alpha style set to translucent?
 	if (style == AST_TRANSLUCENT)
 	{
-
+		// Is the alpha small enough for translucency?
 		if (alpha <= ASTTextureBlendingThreshold[1])
 		{
 			UINT8 *mytransmap;
 			INT32 trans;
 
-
+			// Is the patch way too translucent? Don't blend then.
 			if (alpha < ASTTextureBlendingThreshold[0])
 				return background;
 
-
+			// The equation's not exact but it works as intended. I'll call it a day for now.
 			trans = (8*(alpha) + 255/8)/(255 - 255/11);
 			mytransmap = R_GetTranslucencyTable(trans + 1);
 			if (background != 0xFF)
 				return *(mytransmap + (background<<8) + foreground);
 		}
-		else  
+		else // just copy the pixel
 			return foreground;
 	}
-
+	// just copy the pixel
 	else if (style == AST_COPY)
 		return foreground;
-
-
+	// use ASTBlendPixel for all other blend modes
+	// and find the nearest colour in the palette
 	else if (style != AST_TRANSLUCENT)
 	{
 		RGBA_t texel;
@@ -201,13 +201,13 @@ UINT8 ASTBlendPaletteIndexes(UINT8 background, UINT8 foreground, int style, UINT
 		texel.rgba = ASTBlendPixel(bg, fg, style, alpha);
 		return NearestColor(texel.s.red, texel.s.green, texel.s.blue);
 	}
-
-
+	// fallback if all above fails, somehow
+	// return the background pixel
 	return background;
 }
 
 #ifdef EXTRACOLORMAPLUMPS
-static lumplist_t *colormaplumps = NULL;  
+static lumplist_t *colormaplumps = NULL; ///\todo free leak
 static size_t numcolormaplumps = 0;
 
 static inline lumpnum_t R_CheckNumForNameList(const char *name, lumplist_t *list, size_t listsize)
@@ -243,9 +243,9 @@ static void R_InitExtraColormaps(void)
 		if (endnum == INT16_MAX)
 			I_Error("R_InitExtraColormaps: C_START without C_END\n");
 
-
-
-
+		// This shouldn't be possible when you use the Pwad function, silly
+		//if (WADFILENUM(startnum) != WADFILENUM(endnum))
+			//I_Error("R_InitExtraColormaps: C_START and C_END in different wad files!\n");
 
 		if (numcolormaplumps >= maxcolormaplumps)
 			maxcolormaplumps *= 2;
@@ -260,15 +260,15 @@ static void R_InitExtraColormaps(void)
 }
 #endif
 
+//
+// R_InitSpriteLumps
+// Finds the width and hoffset of all sprites in the wad, so the sprite does not need to be
+// cached completely, just for having the header info ready during rendering.
+//
 
-
-
-
-
-
-
-
-
+//
+// allocate sprite lookup tables
+//
 static void R_InitSpriteLumps(void)
 {
 	numspritelumps = 0;
@@ -277,9 +277,9 @@ static void R_InitSpriteLumps(void)
 	Z_Malloc(max_spritelumps*sizeof(*spritecachedinfo), PU_STATIC, &spritecachedinfo);
 }
 
-
-
-
+//
+// R_CreateFadeColormaps
+//
 
 static void R_CreateFadeColormaps(void)
 {
@@ -293,25 +293,25 @@ static void R_CreateFadeColormaps(void)
 	for (i = 0; i < len*2; i++)
 		fadecolormap[i] = (i%256);
 
-
+	// Load in the light tables, now 64k aligned for smokie...
 	{
 		lumpnum_t lump = W_CheckNumForName("FADECMAP");
 		lumpnum_t wlump = W_CheckNumForName("FADEWMAP");
 
-
+		// to black
 		if (lump != LUMPERROR)
 			W_ReadLumpHeader(lump, fadecolormap, len, 0U);
-
+		// to white
 		if (wlump != LUMPERROR)
 			W_ReadLumpHeader(wlump, fadecolormap+len, len, 0U);
 
-
+		// missing "to white" colormap lump
 		if (lump != LUMPERROR && wlump == LUMPERROR)
 			goto makewhite;
-
+		// missing "to black" colormap lump
 		else if (lump == LUMPERROR && wlump != LUMPERROR)
 			goto makeblack;
-
+		// both lumps found
 		else if (lump != LUMPERROR && wlump != LUMPERROR)
 			return;
 	}
@@ -321,68 +321,68 @@ static void R_CreateFadeColormaps(void)
 	fade = (i/256) * (256 / FADECOLORMAPROWS); \
 	rgba = V_GetMasterColor(px);
 
-
+	// to black
 	makeblack:
 	for (i = 0; i < len; i++)
 	{
-
+		// find pixel and fade amount
 		GETCOLOR;
 
-
+		// subtractive color blending
 		r = rgba.s.red - FADEREDFACTOR*fade/10;
 		g = rgba.s.green - FADEGREENFACTOR*fade/10;
 		b = rgba.s.blue - FADEBLUEFACTOR*fade/10;
 
-
+		// clamp values
 		if (r < 0) r = 0;
 		if (g < 0) g = 0;
 		if (b < 0) b = 0;
 
-
+		// find nearest color in palette
 		fadecolormap[i] = NearestColor(r,g,b);
 	}
 
-
+	// to white
 	makewhite:
 	for (i = len; i < len*2; i++)
 	{
-
+		// find pixel and fade amount
 		GETCOLOR;
 
-
+		// additive color blending
 		r = rgba.s.red + FADEREDFACTOR*fade/10;
 		g = rgba.s.green + FADEGREENFACTOR*fade/10;
 		b = rgba.s.blue + FADEBLUEFACTOR*fade/10;
 
-
+		// clamp values
 		if (r > 255) r = 255;
 		if (g > 255) g = 255;
 		if (b > 255) b = 255;
 
-
+		// find nearest color in palette
 		fadecolormap[i] = NearestColor(r,g,b);
 	}
 #undef GETCOLOR
 }
 
-
-
-
+//
+// R_InitColormaps
+//
 static void R_InitColormaps(void)
 {
 	size_t len;
 	lumpnum_t lump;
 
-
+	// Load in the light tables
 	lump = W_GetNumForName("COLORMAP");
 	len = W_LumpLength(lump);
 	colormaps = Z_MallocAlign(len, PU_STATIC, NULL, 8);
 	W_ReadLump(lump, colormaps);
 
-
+	// Make colormap for fades
 	R_CreateFadeColormaps();
 
-
+	// Init Boom colormaps.
 	R_ClearColormaps();
 #ifdef EXTRACOLORMAPLUMPS
 	R_InitExtraColormaps();
@@ -397,7 +397,7 @@ void R_ReInitColormaps(UINT16 num)
 	if (num > 0 && num <= 10000)
 		snprintf(colormap, 8, "CLM%04u", num-1);
 
-
+	// Load in the light tables, now 64k aligned for smokie...
 	lump = W_GetNumForName(colormap);
 	if (lump == LUMPERROR)
 		lump = basecolormaplump;
@@ -414,25 +414,25 @@ void R_ReInitColormaps(UINT16 num)
 		Z_Free(fadecolormap);
 	R_CreateFadeColormaps();
 
-
+	// Init Boom colormaps.
 	R_ClearColormaps();
 }
 
-
-
-
-
-
+//
+// R_ClearColormaps
+//
+// Clears out extra colormaps between levels.
+//
 void R_ClearColormaps(void)
 {
-
+	// Purged by PU_LEVEL, just overwrite the pointer
 	extra_colormaps = R_CreateDefaultColormap(true);
 }
 
-
-
-
-
+//
+// R_CreateDefaultColormap()
+// NOTE: The result colormap is not added to the extra_colormaps chain. You must do that yourself!
+//
 extracolormap_t *R_CreateDefaultColormap(boolean lighttable)
 {
 	extracolormap_t *exc = Z_Calloc(sizeof (*exc), PU_LEVEL, NULL);
@@ -450,9 +450,9 @@ extracolormap_t *R_CreateDefaultColormap(boolean lighttable)
 	return exc;
 }
 
-
-
-
+//
+// R_GetDefaultColormap()
+//
 extracolormap_t *R_GetDefaultColormap(void)
 {
 #ifdef COLORMAPREVERSELIST
@@ -470,10 +470,10 @@ extracolormap_t *R_GetDefaultColormap(void)
 #endif
 }
 
-
-
-
-
+//
+// R_CopyColormap()
+// NOTE: The result colormap is not added to the extra_colormaps chain. You must do that yourself!
+//
 extracolormap_t *R_CopyColormap(extracolormap_t *extra_colormap, boolean lighttable)
 {
 	extracolormap_t *exc = Z_Calloc(sizeof (*exc), PU_LEVEL, NULL);
@@ -489,7 +489,7 @@ extracolormap_t *R_CopyColormap(extracolormap_t *extra_colormap, boolean lightta
 
 	if (exc->lump != LUMPERROR && lighttable)
 	{
-
+		// aligned on 8 bit for asm code
 		exc->colormap = Z_MallocAlign(W_LumpLength(lump), PU_LEVEL, NULL, 16);
 		W_ReadLump(lump, exc->colormap);
 	}
@@ -503,12 +503,12 @@ extracolormap_t *R_CopyColormap(extracolormap_t *extra_colormap, boolean lightta
 	return exc;
 }
 
-
-
-
-
-
-
+//
+// R_AddColormapToList
+//
+// Sets prev/next chain for extra_colormaps var
+// Copypasta from P_AddFFloorToList
+//
 void R_AddColormapToList(extracolormap_t *extra_colormap)
 {
 #ifndef COLORMAPREVERSELIST
@@ -537,9 +537,9 @@ void R_AddColormapToList(extracolormap_t *extra_colormap)
 #endif
 }
 
-
-
-
+//
+// R_CheckDefaultColormapByValues()
+//
 #ifdef EXTRACOLORMAPLUMPS
 boolean R_CheckDefaultColormapByValues(boolean checkrgba, boolean checkfadergba, boolean checkparams,
 	INT32 rgba, INT32 fadergba, UINT8 fadestart, UINT8 fadeend, UINT8 flags, lumpnum_t lump)
@@ -577,8 +577,8 @@ boolean R_CheckDefaultColormap(extracolormap_t *extra_colormap, boolean checkrgb
 
 boolean R_CheckEqualColormaps(extracolormap_t *exc_a, extracolormap_t *exc_b, boolean checkrgba, boolean checkfadergba, boolean checkparams)
 {
-
-
+	// Treat NULL as default colormap
+	// We need this because what if one exc is a default colormap, and the other is NULL? They're really both equal.
 	if (!exc_a)
 		exc_a = R_GetDefaultColormap();
 	if (!exc_b)
@@ -602,10 +602,10 @@ boolean R_CheckEqualColormaps(extracolormap_t *exc_a, extracolormap_t *exc_b, bo
 		);
 }
 
-
-
-
-
+//
+// R_GetColormapFromListByValues()
+// NOTE: Returns NULL if no match is found
+//
 #ifdef EXTRACOLORMAPLUMPS
 extracolormap_t *R_GetColormapFromListByValues(INT32 rgba, INT32 fadergba, UINT8 fadestart, UINT8 fadeend, UINT8 flags, lumpnum_t lump)
 #else
@@ -666,12 +666,12 @@ extracolormap_t *R_ColormapForName(char *name)
 	strncpy(exc->lumpname, name, 9);
 	exc->lumpname[8] = 0;
 
-
+	// aligned on 8 bit for asm code
 	exc->colormap = Z_MallocAlign(W_LumpLength(lump), PU_LEVEL, NULL, 16);
 	W_ReadLump(lump, exc->colormap);
 
-
-
+	// We set all params of the colormap to normal because there
+	// is no real way to tell how GL should handle a colormap lump anyway..
 	exc->fadestart = 0;
 	exc->fadeend = 31;
 	exc->flags = 0;
@@ -684,14 +684,14 @@ extracolormap_t *R_ColormapForName(char *name)
 }
 #endif
 
-
-
-
-
-
-
-
-
+//
+// R_CreateColormapFromLinedef
+//
+// This is a more GL friendly way of doing colormaps: Specify colormap
+// data in a special linedef's texture areas and use that to generate
+// custom colormaps at runtime. NOTE: For GL mode, we only need to color
+// data and not the colormap data.
+//
 static double deltas[256][3], map[256][3];
 
 static colorlookup_t lighttable_lut;
@@ -725,16 +725,16 @@ void R_GenerateLightTable(extracolormap_t *extra_colormap, boolean uselookup)
 		cfr = R_GetRgbaR(extra_colormap->fadergba),
 		cfg = R_GetRgbaG(extra_colormap->fadergba),
 		cfb = R_GetRgbaB(extra_colormap->fadergba);
-
+//		cfa = R_GetRgbaA(extra_colormap->fadergba); // unused in software
 
 	UINT8 fadestart = extra_colormap->fadestart,
 		fadedist = extra_colormap->fadeend - extra_colormap->fadestart;
 
 	size_t i;
 
-
-
-
+	/////////////////////
+	// Calc the RGBA mask
+	/////////////////////
 	cmaskr = cr;
 	cmaskg = cg;
 	cmaskb = cb;
@@ -747,25 +747,25 @@ void R_GenerateLightTable(extracolormap_t *extra_colormap, boolean uselookup)
 	cmaskg *= maskamt;
 	cmaskb *= maskamt;
 
-
-
-
+	/////////////////////
+	// Calc the RGBA fade mask
+	/////////////////////
 	cdestr = cfr;
 	cdestg = cfg;
 	cdestb = cfb;
 
+	// fade alpha unused in software
+	// maskamt = (double)(cfa/255.0l);
+	// othermask = 1 - maskamt;
+	// maskamt /= 0xff;
 
+	// cdestr *= maskamt;
+	// cdestg *= maskamt;
+	// cdestb *= maskamt;
 
-
-
-
-
-
-
-
-
-
-
+	/////////////////////
+	// This code creates the colormap array used by software renderer
+	/////////////////////
 	{
 		double r, g, b, cbrightness;
 		int p;
@@ -781,11 +781,11 @@ void R_GenerateLightTable(extracolormap_t *extra_colormap, boolean uselookup)
 		else
 			NearestColorFunc = LightTableNearest;
 
-
-
-
-
-
+		// Initialise the map and delta arrays
+		// map[i] stores an RGB color (as double) for index i,
+		//  which is then converted to SRB2's palette later
+		// deltas[i] stores a corresponding fade delta between the RGB color and the final fade color;
+		//  map[i]'s values are decremented by after each use
 		for (i = 0; i < 256; i++)
 		{
 			r = pMasterPalette[i].s.red;
@@ -809,12 +809,12 @@ void R_GenerateLightTable(extracolormap_t *extra_colormap, boolean uselookup)
 			deltas[i][2] = (map[i][2] - cdestb) / (double)fadedist;
 		}
 
-
-
+		// Now allocate memory for the actual colormap array itself!
+		// aligned on 8 bit for asm code
 		colormap_p = (char *)extra_colormap->colormap;
 
-
-
+		// Calculate the palette index for each palette index, for each light level
+		// (as well as the two unused colormap lines we inherited from Doom)
 		for (p = 0; p < 34; p++)
 		{
 			for (i = 0; i < 256; i++)
@@ -858,7 +858,7 @@ void R_UpdateLightTable(extracolormap_t *extra_colormap, boolean uselookup)
 
 extracolormap_t *R_CreateColormapFromLinedef(char *p1, char *p2, char *p3)
 {
-
+	// default values
 	UINT8 cr = 0, cg = 0, cb = 0, ca = 0, cfr = 0, cfg = 0, cfb = 0, cfa = 25;
 	UINT32 fadestart = 0, fadeend = 31;
 	UINT8 flags = 0;
@@ -867,8 +867,8 @@ extracolormap_t *R_CreateColormapFromLinedef(char *p1, char *p2, char *p3)
 #define HEX2INT(x) (UINT32)(x >= '0' && x <= '9' ? x - '0' : x >= 'a' && x <= 'f' ? x - 'a' + 10 : x >= 'A' && x <= 'F' ? x - 'A' + 10 : 0)
 #define ALPHA2INT(x) (x >= 'a' && x <= 'z' ? x - 'a' : x >= 'A' && x <= 'Z' ? x - 'A' : x >= '0' && x <= '9' ? 25 : 0)
 
-
-
+	// Get base colormap value
+	// First alpha-only, then full value
 	if (p1[0] >= 'a' && p1[0] <= 'z' && !p1[1])
 		ca = ((p1[0] - 'a') * 102) / 10;
 	else if (p1[0] == '#' && p1[1] >= 'a' && p1[1] <= 'z' && !p1[2])
@@ -879,8 +879,8 @@ extracolormap_t *R_CreateColormapFromLinedef(char *p1, char *p2, char *p3)
 		ca = ((p1[1] - 'A') * 102) / 10;
 	else if (p1[0] == '#')
 	{
-
-
+		// For each subsequent value, the value before it must exist
+		// If we don't get every value, then set alpha to max
 		if (p1[1] && p1[2])
 		{
 			cr = ((HEX2INT(p1[1]) * 16) + HEX2INT(p1[2]));
@@ -910,7 +910,7 @@ extracolormap_t *R_CreateColormapFromLinedef(char *p1, char *p2, char *p3)
 
 #define NUMFROMCHAR(c) (c >= '0' && c <= '9' ? c - '0' : 0)
 
-
+	// Get parameters like fadestart, fadeend, and flags
 	if (p2[0] == '#')
 	{
 		if (p2[1])
@@ -932,8 +932,8 @@ extracolormap_t *R_CreateColormapFromLinedef(char *p1, char *p2, char *p3)
 
 #undef NUMFROMCHAR
 
-
-
+	// Get fade (dark) colormap value
+	// First alpha-only, then full value
 	if (p3[0] >= 'a' && p3[0] <= 'z' && !p3[1])
 		cfa = ((p3[0] - 'a') * 102) / 10;
 	else if (p3[0] == '#' && p3[1] >= 'a' && p3[1] <= 'z' && !p3[2])
@@ -944,8 +944,8 @@ extracolormap_t *R_CreateColormapFromLinedef(char *p1, char *p2, char *p3)
 		cfa = ((p3[1] - 'A') * 102) / 10;
 	else if (p3[0] == '#')
 	{
-
-
+		// For each subsequent value, the value before it must exist
+		// If we don't get every value, then set alpha to max
 		if (p3[1] && p3[2])
 		{
 			cfr = ((HEX2INT(p3[1]) * 16) + HEX2INT(p3[2]));
@@ -975,8 +975,8 @@ extracolormap_t *R_CreateColormapFromLinedef(char *p1, char *p2, char *p3)
 #undef ALPHA2INT
 #undef HEX2INT
 
-
-
+	// Pack rgba values into combined var
+	// OpenGL also uses this instead of lighttables for rendering
 	rgba = R_PutRgbaRGBA(cr, cg, cb, ca);
 	fadergba = R_PutRgbaRGBA(cfr, cfg, cfb, cfa);
 
@@ -987,7 +987,7 @@ extracolormap_t *R_CreateColormap(INT32 rgba, INT32 fadergba, UINT8 fadestart, U
 {
 	extracolormap_t *extra_colormap;
 
-
+	// Did we just make a default colormap?
 #ifdef EXTRACOLORMAPLUMPS
 	if (R_CheckDefaultColormapByValues(true, true, true, rgba, fadergba, fadestart, fadeend, flags, LUMPERROR))
 		return NULL;
@@ -996,7 +996,7 @@ extracolormap_t *R_CreateColormap(INT32 rgba, INT32 fadergba, UINT8 fadestart, U
 		return NULL;
 #endif
 
-
+	// Look for existing colormaps
 #ifdef EXTRACOLORMAPLUMPS
 	extra_colormap = R_GetColormapFromListByValues(rgba, fadergba, fadestart, fadeend, flags, LUMPERROR);
 #else
@@ -1021,9 +1021,9 @@ extracolormap_t *R_CreateColormap(INT32 rgba, INT32 fadergba, UINT8 fadestart, U
 	extra_colormap->lumpname[0] = 0;
 #endif
 
-
-
-
+	// Having lighttables for alpha-only entries is kind of pointless,
+	// but if there happens to be a matching rgba entry that is NOT alpha-only (but has same rgb values),
+	// then it needs this lighttable because we share matching entries.
 	extra_colormap->colormap = R_CreateLightTable(extra_colormap);
 
 	R_AddColormapToList(extra_colormap);
@@ -1031,10 +1031,10 @@ extracolormap_t *R_CreateColormap(INT32 rgba, INT32 fadergba, UINT8 fadestart, U
 	return extra_colormap;
 }
 
-
-
-
-
+//
+// R_AddColormaps()
+// NOTE: The result colormap is not added to the extra_colormaps chain. You must do that yourself!
+//
 extracolormap_t *R_AddColormaps(extracolormap_t *exc_augend, extracolormap_t *exc_addend,
 	boolean subR, boolean subG, boolean subB, boolean subA,
 	boolean subFadeR, boolean subFadeG, boolean subFadeB, boolean subFadeA,
@@ -1043,34 +1043,34 @@ extracolormap_t *R_AddColormaps(extracolormap_t *exc_augend, extracolormap_t *ex
 {
 	INT16 red, green, blue, alpha;
 
-
-
-
-
+	// exc_augend is added (or subtracted) onto by exc_addend
+	// In Rennaisance times, the first number was considered the augend, the second number the addend
+	// But since the commutative property was discovered, today they're both called addends!
+	// So let's be Olde English for a hot second.
 
 	exc_augend = R_CopyColormap(exc_augend, false);
 	if(!exc_addend)
 		exc_addend = R_GetDefaultColormap();
 
-
-
-
+	///////////////////
+	// base rgba
+	///////////////////
 
 	red = max(min(
 		R_GetRgbaR(exc_augend->rgba)
-			+ (subR ? -1 : 1)  
+			+ (subR ? -1 : 1) // subtract R
 			* R_GetRgbaR(exc_addend->rgba)
 		, 255), 0);
 
 	green = max(min(
 		R_GetRgbaG(exc_augend->rgba)
-			+ (subG ? -1 : 1)  
+			+ (subG ? -1 : 1) // subtract G
 			* R_GetRgbaG(exc_addend->rgba)
 		, 255), 0);
 
 	blue = max(min(
 		R_GetRgbaB(exc_augend->rgba)
-			+ (subB ? -1 : 1)  
+			+ (subB ? -1 : 1) // subtract B
 			* R_GetRgbaB(exc_addend->rgba)
 		, 255), 0);
 
@@ -1079,72 +1079,72 @@ extracolormap_t *R_AddColormaps(extracolormap_t *exc_augend, extracolormap_t *ex
 
 	exc_augend->rgba = R_PutRgbaRGBA(red, green, blue, alpha);
 
-
-
-
+	///////////////////
+	// fade/dark rgba
+	///////////////////
 
 	red = max(min(
 		R_GetRgbaR(exc_augend->fadergba)
-			+ (subFadeR ? -1 : 1)  
+			+ (subFadeR ? -1 : 1) // subtract R
 			* R_GetRgbaR(exc_addend->fadergba)
 		, 255), 0);
 
 	green = max(min(
 		R_GetRgbaG(exc_augend->fadergba)
-			+ (subFadeG ? -1 : 1)  
+			+ (subFadeG ? -1 : 1) // subtract G
 			* R_GetRgbaG(exc_addend->fadergba)
 		, 255), 0);
 
 	blue = max(min(
 		R_GetRgbaB(exc_augend->fadergba)
-			+ (subFadeB ? -1 : 1)  
+			+ (subFadeB ? -1 : 1) // subtract B
 			* R_GetRgbaB(exc_addend->fadergba)
 		, 255), 0);
 
 	alpha = R_GetRgbaA(exc_addend->fadergba);
 	if (alpha == 25 && !R_GetRgbaRGB(exc_addend->fadergba))
-		alpha = 0;  
+		alpha = 0; // HACK: fadergba A defaults at 25, so don't add anything in this case
 	alpha = max(min(R_GetRgbaA(exc_augend->fadergba) + (subFadeA ? -1 : 1) * alpha, 25), 0);
 
 	exc_augend->fadergba = R_PutRgbaRGBA(red, green, blue, alpha);
 
-
-
-
+	///////////////////
+	// parameters
+	///////////////////
 
 	exc_augend->fadestart = max(min(
 		exc_augend->fadestart
-			+ (subFadeStart ? -1 : 1)  
+			+ (subFadeStart ? -1 : 1) // subtract fadestart
 			* exc_addend->fadestart
 		, 31), 0);
 
 	exc_augend->fadeend = max(min(
 		exc_augend->fadeend
-			+ (subFadeEnd ? -1 : 1)  
+			+ (subFadeEnd ? -1 : 1) // subtract fadeend
 			* (exc_addend->fadeend == 31 && !exc_addend->fadestart ? 0 : exc_addend->fadeend)
-
+				// HACK: fadeend defaults to 31, so don't add anything in this case
 		, 31), 0);
 
-	if (!ignoreFlags)  
+	if (!ignoreFlags) // overwrite flags with new value
 		exc_augend->flags = exc_addend->flags;
 
-
-
-
+	///////////////////
+	// put it together
+	///////////////////
 
 	exc_augend->colormap = lighttable ? R_CreateLightTable(exc_augend) : NULL;
 	exc_augend->next = exc_augend->prev = NULL;
 	return exc_augend;
 }
 
-
-
+// Thanks to quake2 source!
+// utils3/qdata/images.c
 UINT8 NearestPaletteColor(UINT8 r, UINT8 g, UINT8 b, RGBA_t *palette)
 {
 	int dr, dg, db;
 	int distortion, bestdistortion = 256 * 256 * 4, bestcolor = 0, i;
 
-
+	// Use master palette if none specified
 	if (palette == NULL)
 		palette = pMasterPalette;
 
@@ -1180,12 +1180,12 @@ const char *R_NameForColormap(extracolormap_t *extra_colormap)
 }
 #endif
 
-
-
-
-
-
-
+//
+// R_InitData
+//
+// Locates all the lumps that will be used by all views
+// Must be called after W_Init.
+//
 void R_InitData(void)
 {
 	CONS_Printf("R_LoadParsedTranslations()...\n");
@@ -1205,11 +1205,11 @@ void R_InitData(void)
 	R_InitColormaps();
 }
 
-
-
-
-
-
+//
+// R_PrecacheLevel
+//
+// Preloads all relevant graphics for the level.
+//
 static void R_PrecacheSpriteLump(lumpnum_t lump)
 {
 #ifdef HWRENDER
@@ -1232,9 +1232,9 @@ static boolean R_PrecacheSpriteLumpBounded(lumpnum_t lump, size_t maxpixels)
 {
 	INT16 width = 0, height = 0;
 
-	                                                                       
-                                                                            
-                                                                              
+	/* Reading a PNG's IHDR is cheap and avoids decoding/uploading a multi-
+	 * megapixel decorative sprite merely because the background warmer reached
+	 * it. Such an upload made KIMIA0 stall a measured frame for about 190 ms. */
 	if (!W_ReadPatchHeader(lump, &width, &height, NULL, NULL)
 	|| width <= 0 || height <= 0
 	|| (size_t)width * (size_t)height > maxpixels)
@@ -1244,12 +1244,12 @@ static boolean R_PrecacheSpriteLumpBounded(lumpnum_t lump, size_t maxpixels)
 	return true;
 }
 
-                                                                              
-                                                                               
-                                                                         
-                                                                              
-                                                                            
-                                                    
+/* Large custom maps can contain hundreds of decorative sprite types. Decoding
+ * all of them before the first frame made Software spend more than a second in
+ * level precache, while uploading them all made OpenGL pause for several
+ * seconds. Keep the used-sprite set and feed it to either renderer only while
+ * completed frames have spare time. Anything immediately visible still uses
+ * the normal on-demand path and remains correct. */
 static char *levelspritepresent;
 static size_t levelspriteprecache_sprite;
 static size_t levelspriteprecache_frame;
@@ -1269,13 +1269,13 @@ static UINT8 levelprecachecooldown;
 #define LEVELTEXTURE_OPAQUE 1
 #define LEVELTEXTURE_MASKED 2
 #define LEVELGRAPHICS_LOCAL_PRIORITY_MAX 48
-                                                                             
-                                                                               
-                                                                                 
+/* Upload time is driven much more by decoded area than compressed file size.
+ * Keep large custom artwork out of the live background warmer: a 9 KiB PNG can
+ * still expand to a 1200x1000 texture and block the OpenGL driver for 40+ ms. */
 #define LEVELTEXTURE_BACKGROUND_MAX_PIXELS (160u * 1024u)
-                                                                              
-                                                                           
-                                                                              
+/* Prepare the most likely current-map artwork while the loading screen is up.
+ * Keep both area and wall-clock bounds: a map with hundreds of true-colour
+ * photographs must not turn a doorway hitch into a minute-long level load. */
 #define LEVELGRAPHICS_INITIAL_MAX_PIXELS (64u * 1024u * 1024u)
 #define LEVELGRAPHICS_INITIAL_MAX_SINGLE_PIXELS (8u * 1024u * 1024u)
 #define LEVELGRAPHICS_INITIAL_MAX_MILLISECONDS 900u
@@ -1348,9 +1348,9 @@ static void R_BuildLevelGraphicPriorities(void)
 		|| !levelflatpriority)))
 		goto done;
 
-	                                                                          
-                                                                           
-                                                                              
+	/* Always prepare the sky and a small neighborhood around the spawn first.
+	 * Limiting this walk matters on highly subdivided custom maps: the former
+	 * depth-16 walk could spend the entire loading budget on distant artwork. */
 	if (leveltexturepresent && skytexture >= 0 && skytexture < numtextures
 	&& leveltexturepresent[skytexture])
 	{
@@ -1428,9 +1428,9 @@ static void R_BuildLevelGraphicPriorities(void)
 		}
 	}
 
-	                                                                           
-                                                                           
-                                                        
+	/* Rank the rest by actual map usage. This brings shared room materials and
+	 * large, repeated walls (such as TDF's basement IRLWALL) ahead of one-off
+	 * photographs without hard-coding any add-on names. */
 	for (i = 0; i < numsides; i++)
 	{
 		const INT32 candidates[3] = {sides[i].toptexture,
@@ -1462,8 +1462,8 @@ static void R_BuildLevelGraphicPriorities(void)
 			leveltexturepriority[leveltexturepriority_count++] = texture;
 		}
 	}
-	                                                                         
-                                                                     
+	/* Animation frames can be marked present without appearing directly on a
+	 * sidedef. Keep them queued after directly referenced materials. */
 	for (i = 0; leveltexturepresent && i < (size_t)numtextures; i++)
 		if (leveltexturepresent[i] && !textureseen[i])
 			leveltexturepriority[leveltexturepriority_count++] = (INT32)i;
@@ -1551,9 +1551,9 @@ static boolean R_PrewarmLevelTextureBounded(INT32 texture, size_t maxpixels,
 	pixels = (size_t)definition->width * (size_t)definition->height;
 	if (pixels > maxpixels || (remaining && pixels > *remaining))
 	{
-		                                                                         
-                                                                            
-                                                         
+		/* This only retires the item from the optional live warmer. The ordinary
+		 * renderer still prepares it on first use. Initial loading leaves an item
+		 * queued when it merely exhausted the total budget. */
 		if (retire_oversize)
 			leveltexturepresent[texture] = 0;
 		return false;
@@ -1652,9 +1652,9 @@ static void R_PrewarmInitialLevelGraphics(void)
 
 #define INITIAL_PREWARM_TIME_LEFT() (I_GetPreciseTime() < deadline)
 
-	                                                                              
-                                                                               
-                                  
+	/* Alternate ranked walls and flats instead of exhausting the wall list first.
+	 * Both can contain multi-megapixel PNGs, and either one can become visible as
+	 * a player crosses a doorway. */
 	while ((texturepriority < leveltexturepriority_count
 		|| flatpriority < levelflatpriority_count)
 	&& remaining && INITIAL_PREWARM_TIME_LEFT())
@@ -1680,8 +1680,8 @@ static void R_PrewarmInitialLevelGraphics(void)
 		}
 	}
 
-	                                                                               
-                                                              
+	/* The ranked lists contain every known map graphic, but keep a linear fallback
+	 * for assets added at runtime while setup is in progress. */
 	while ((leveltexturepresent && texture < (size_t)numtextures)
 		|| (levelflatprecachepresent && flat < numlevelflats))
 	{
@@ -1722,9 +1722,9 @@ void R_ContinueLevelSpritePrecache(void)
 
 	if (!levelspritepresent && !leveltexturepresent && !levelflatprecachepresent)
 		return;
-	                                                                         
-                                                                            
-                                                                         
+	/* A large true-colour PNG can take several milliseconds even though only
+	 * one upload was requested. Leave a few completed frames between expensive
+	 * conversions so background warming cannot become a regular stutter. */
 	if (levelprecachecooldown)
 	{
 		levelprecachecooldown--;
@@ -1770,8 +1770,8 @@ void R_ContinueLevelSpritePrecache(void)
 		levelflatpriority_count = levelflatpriority_index = 0;
 	}
 
-	                                                                            
-                                             
+	/* Any flat left outside the bounded loading-screen preload remains eligible
+	 * for the cautious one-item live warmer. */
 	while (hardware && levelflatprecachepresent
 	&& levelflatprecache_flat < numlevelflats && warmed < 1)
 	{
@@ -1810,10 +1810,10 @@ void R_ContinueLevelSpritePrecache(void)
 		leveltexturepriority_count = leveltexturepriority_index = 0;
 	}
 
-	                                                                            
-                                                                           
-                                                                            
-                                                                           
+	/* Warm wall textures before decorative sprites. First entering a gallery or
+	 * basement commonly exposes many wall PNGs at once; uploading one while a
+	 * previous frame has headroom prevents that cost from landing on the first
+	 * visible frame. Opaque and masked variants are distinct GPU textures. */
 	while (hardware && leveltexturepresent
 	&& leveltextureprecache_texture < (size_t)numtextures && warmed < 1)
 	{
@@ -1839,9 +1839,9 @@ void R_ContinueLevelSpritePrecache(void)
 	}
 #endif
 
-	                                                                            
-                                                                              
-                                                                               
+	/* One upload is the smallest useful unit of work. A single large custom PNG
+	 * can still make the driver wait, so never start a second upload in the same
+	 * frame even when the first one happened to finish inside the time budget. */
 	while (levelspritepresent && levelspriteprecache_sprite < numsprites
 	&& (!hardware || warmed < 1))
 	{
@@ -1895,11 +1895,11 @@ void R_ContinueLevelSpritePrecache(void)
 	{
 		const precise_t elapsed = I_GetPreciseTime() - started;
 		const precise_t precision = I_GetPrecisePrecision();
-		if (elapsed >= precision / 125)  
+		if (elapsed >= precision / 125) /* 8 ms */
 			levelprecachecooldown = 30;
-		else if (elapsed >= precision / 250)  
+		else if (elapsed >= precision / 250) /* 4 ms */
 			levelprecachecooldown = 8;
-		else if (elapsed >= precision / 500)  
+		else if (elapsed >= precision / 500) /* 2 ms */
 			levelprecachecooldown = 2;
 	}
 }
@@ -1933,11 +1933,11 @@ void R_PrecacheLevel(void)
 	levelflatpriority_count = levelflatpriority_index = 0;
 	levelprecachecooldown = 0;
 
-	                                                                            
-                                                                            
-                                                                           
-                                                                             
-                         
+	/* A dedicated/headless server still loads sprite and texture definitions so
+	 * its game state matches clients, but it never draws their patch data. The
+	 * old path walked every level object and cached every used sprite anyway,
+	 * adding tens of milliseconds to each server map change for data that could
+	 * never be rendered. */
 	if (rendermode == render_none)
 		return;
 
@@ -1950,15 +1950,15 @@ void R_PrecacheLevel(void)
 #endif
 	)
 	{
-
+		// Software composites its flats up front; OpenGL uploads them on demand.
 		if (rendermode == render_soft)
 			flatmemory = P_PrecacheLevelFlats();
 
-
-
-
-
-
+	//
+	// Precache textures.
+	//
+	// no need to precache all software textures in 3D mode
+	// (note they are still used with the reference software view)
 	texturepresent = calloc(numtextures, sizeof (*texturepresent));
 	if (texturepresent == NULL) I_Error("%s: Out of memory looking up textures", "R_PrecacheLevel");
 
@@ -1966,15 +1966,15 @@ void R_PrecacheLevel(void)
 	{
 		line_t *line = sides[j].line;
 
-
+		// huh, a potential bug here????
 		if (sides[j].toptexture >= 0 && sides[j].toptexture < numtextures)
 			texturepresent[sides[j].toptexture] |= LEVELTEXTURE_OPAQUE;
 		if (sides[j].midtexture >= 0 && sides[j].midtexture < numtextures)
 		{
-			                                                                     
-                                                                          
-                                                                            
-                                                                   
+			/* Match the variants requested by HWR_ProcessSeg. Ordinary one-sided
+			 * middle walls use the solid texture, while two-sided middle walls use
+			 * the chromakeyed variant. Previously preloading both doubled PNG decode
+			 * and GPU upload work for many large custom-map photographs. */
 			if (line && line->backsector)
 				texturepresent[sides[j].midtexture] |= LEVELTEXTURE_MASKED;
 			else
@@ -1984,11 +1984,11 @@ void R_PrecacheLevel(void)
 			texturepresent[sides[j].bottomtexture] |= LEVELTEXTURE_OPAQUE;
 	}
 
-	                                                                         
-                                                                            
-                                                                            
-                                                                           
-                            
+	/* Rendered 3D-floor sides always request a chromakeyed middle texture. A
+	 * transfer-line floor can source that texture from any line in its control
+	 * sector; a normal floor sources it from the master line itself. Add those
+	 * variants explicitly instead of pessimistically duplicating every middle
+	 * texture in the level. */
 	for (j = 0; j < (size_t)numsectors; j++)
 	{
 		ffloor_t *rover;
@@ -2030,14 +2030,14 @@ void R_PrecacheLevel(void)
 		}
 	}
 
-	                                                                         
-                                                                            
-                                                                     
+	/* A used animation is a set, not just whichever frame texturetranslation
+	 * happens to select at leveltime zero. Preparing the whole set here avoids
+	 * recurring first-use stalls from FIREA-style custom animations. */
 	P_ExpandTextureAnimationPresence(texturepresent, (size_t)numtextures);
 
-
-
-
+	// Sky texture is always present.
+	// Note that F_SKY1 is the name used to indicate a sky floor/ceiling as a flat,
+	// while the sky texture is stored like a wall texture, with a skynum dependent name.
 	texturepresent[skytexture] |= LEVELTEXTURE_OPAQUE;
 
 	if (rendermode == render_soft)
@@ -2050,8 +2050,8 @@ void R_PrecacheLevel(void)
 
 			if (!texturecache[j])
 				R_GenerateTexture(j);
-
-
+			// pre-caching individual patches that compose textures became obsolete,
+			// since we cache entire composite textures
 		}
 		free(texturepresent);
 	}
@@ -2072,9 +2072,9 @@ void R_PrecacheLevel(void)
 			if (levelflats[flat].type != LEVELFLAT_NONE)
 				levelflatprecachepresent[flat] |= LEVELTEXTURE_OPAQUE;
 
-		                                                                         
-                                                                            
-                                       
+		/* Splat FOFs use a separate chromakeyed GPU texture. Record that variant
+		 * now so the first translucent platform in a new room cannot create it in
+		 * the middle of a rendered frame. */
 		for (sector = 0; sector < (size_t)numsectors; sector++)
 		{
 			ffloor_t *rover;
@@ -2100,9 +2100,9 @@ void R_PrecacheLevel(void)
 #endif
 	}
 
-
-
-
+	//
+	// Precache sprites.
+	//
 	spritepresent = calloc(numsprites, sizeof (*spritepresent));
 	if (spritepresent == NULL) I_Error("%s: Out of memory looking up sprites", "R_PrecacheLevel");
 
@@ -2116,9 +2116,9 @@ void R_PrecacheLevel(void)
 #endif
 	)
 	{
-		                                                                          
-                                                                             
-                                                                        
+		/* Whole-map synchronous decoding/uploading made large custom levels pause
+		 * long after geometry was ready. Keep the used-sprite set so the main loop
+		 * can warm short slices whenever a completed frame has spare time. */
 		levelspritepresent = spritepresent;
 		return;
 	}
@@ -2138,7 +2138,7 @@ void R_PrecacheLevel(void)
 			spritememory += W_LumpLength(lump);\
 		R_PrecacheSpriteLump(lump);\
 	}
-
+			// see R_InitSprites for more about lumppat,lumpid
 			switch (sf->rotate)
 			{
 				case SRF_SINGLE:

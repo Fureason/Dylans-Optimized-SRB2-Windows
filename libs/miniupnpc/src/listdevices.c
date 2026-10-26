@@ -1,4 +1,4 @@
- 
+/* $Id: listdevices.c,v 1.8 2018/05/03 08:16:44 nanard Exp $ */
 /* Project : miniupnp
  * Author : Thomas Bernard
  * Copyright (c) 2013-2015 Thomas Bernard
@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #ifdef _WIN32
 #include <winsock2.h>
-#endif  
+#endif /* _WIN32 */
 #include "miniupnpc.h"
 
 struct upnp_dev_list {
@@ -34,7 +34,7 @@ void add_device(struct upnp_dev_list * * list_head, struct UPNPDev * dev)
 		if(strcmp(elt->descURL, dev->descURL) == 0) {
 			for(i = 0; i < elt->count; i++) {
 				if (strcmp(elt->array[i]->st, dev->st) == 0 && strcmp(elt->array[i]->usn, dev->usn) == 0) {
-					return;	 
+					return;	/* already found */
 				}
 			}
 			if(elt->count >= elt->allocated_count) {
@@ -153,18 +153,18 @@ int main(int argc, char * * argv)
 		printf("searching UPnP device type %s\n", searched_device);
 		devlist = upnpDiscoverDevice(searched_device,
 		                             2000, multicastif, minissdpdpath,
-		                             0 , ipv6, ttl, &error);
+		                             0/*localport*/, ipv6, ttl, &error);
 	} else if(searched_devices) {
 		printf("searching UPnP device types :\n");
 		for(i = 0; searched_devices[i]; i++)
 			printf("\t%s\n", searched_devices[i]);
 		devlist = upnpDiscoverDevices(searched_devices,
 		                              2000, multicastif, minissdpdpath,
-		                              0 , ipv6, ttl, &error, 1);
+		                              0/*localport*/, ipv6, ttl, &error, 1);
 	} else {
 		printf("searching all UPnP devices\n");
 		devlist = upnpDiscoverAll(2000, multicastif, minissdpdpath,
-		                             0 , ipv6, ttl, &error);
+		                             0/*localport*/, ipv6, ttl, &error);
 	}
 	if(devlist) {
 		for(dev = devlist, i = 1; dev != NULL; dev = dev->pNext, i++) {

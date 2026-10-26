@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_infolib.c
+/// \brief infotable editing library for Lua scripting
 
 #include "doomdef.h"
 #include "fastcmp.h"
@@ -23,13 +23,13 @@
 #include "r_picformats.h"
 #include "r_things.h"
 #include "r_translation.h"
-#include "r_draw.h"  
-#include "doomstat.h"  
+#include "r_draw.h" // R_GetColorByName
+#include "doomstat.h" // luabanks[]
 
 #include "lua_script.h"
 #include "lua_libs.h"
-#include "lua_hud.h"  
-#include "lua_hook.h"  
+#include "lua_hud.h" // hud_running errors
+#include "lua_hook.h" // hook_cmd_running errors
 
 boolean LUA_CallAction(enum actionnum actionnum, mobj_t *actor);
 state_t *astate;
@@ -38,7 +38,7 @@ enum sfxinfo_read {
 	sfxinfor_name = 0,
 	sfxinfor_singular,
 	sfxinfor_priority,
-	sfxinfor_flags,  
+	sfxinfor_flags, // "pitch"
 	sfxinfor_caption,
 	sfxinfor_skinsound
 };
@@ -54,7 +54,7 @@ const char *const sfxinfo_ropt[] = {
 enum sfxinfo_write {
 	sfxinfow_singular = 0,
 	sfxinfow_priority,
-	sfxinfow_flags,  
+	sfxinfow_flags, // "pitch"
 	sfxinfow_caption
 };
 const char *const sfxinfo_wopt[] = {
@@ -66,16 +66,16 @@ const char *const sfxinfo_wopt[] = {
 
 int actionsoverridden[NUMACTIONS][MAX_ACTION_RECURSION];
 
+//
+// Sprite Names
+//
 
-
-
-
-
+// push sprite name
 static int lib_getSprname(lua_State *L)
 {
 	UINT32 i;
 
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // don't care about sprnames[] dummy userdata.
 
 	if (lua_isnumber(L, 1))
 	{
@@ -98,23 +98,23 @@ static int lib_getSprname(lua_State *L)
 	return 0;
 }
 
-
+/// \todo Maybe make it tally up the used_spr from dehacked?
 static int lib_sprnamelen(lua_State *L)
 {
 	lua_pushinteger(L, NUMSPRITES);
 	return 1;
 }
 
+//
+// Player Sprite Names
+//
 
-
-
-
-
+// push sprite name
 static int lib_getSpr2name(lua_State *L)
 {
 	playersprite_t i;
 
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // don't care about spr2names[] dummy userdata.
 
 	if (lua_isnumber(L, 1))
 	{
@@ -141,7 +141,7 @@ static int lib_getSpr2default(lua_State *L)
 {
 	playersprite_t i;
 
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // don't care about spr2defaults[] dummy userdata.
 
 	if (lua_isnumber(L, 1))
 		i = lua_tonumber(L, 1);
@@ -172,7 +172,7 @@ static int lib_setSpr2default(lua_State *L)
 	if (hook_cmd_running)
 		return luaL_error(L, "Do not alter spr2defaults[] in CMD building code!");
 
-
+// todo: maybe allow setting below first freeslot..? step 1 is toggling this, step 2 is testing to see whether it's net-safe
 #ifdef SETALLSPR2DEFAULTS
 #define FIRSTMODIFY 0
 #else
@@ -181,7 +181,7 @@ static int lib_setSpr2default(lua_State *L)
 		return luaL_error(L, "You can only modify the spr2defaults[] entries of sprite2 freeslots, and none are currently added.");
 #endif
 
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // don't care about spr2defaults[] dummy userdata.
 
 	if (lua_isnumber(L, 1))
 		i = lua_tonumber(L, 1);
@@ -232,11 +232,11 @@ static int lib_spr2namelen(lua_State *L)
 	return 1;
 }
 
+/////////////////
+// SPRITE INFO //
+/////////////////
 
-
-
-
-
+// spriteinfo[]
 static int lib_getSpriteInfo(lua_State *L)
 {
 	UINT32 i = NUMSPRITES;
@@ -275,7 +275,7 @@ static int PopPivotSubTable(spriteframepivot_t *pivot, lua_State *L, int stk, in
 				const char *key = NULL;
 				lua_Integer ikey = -1;
 				lua_Integer value = 0;
-
+				// x or y?
 				switch (lua_type(L, stk+1))
 				{
 					case LUA_TSTRING:
@@ -287,7 +287,7 @@ static int PopPivotSubTable(spriteframepivot_t *pivot, lua_State *L, int stk, in
 					default:
 						FIELDERROR("pivot key", va("string or number expected, got %s", luaL_typename(L, stk+1)))
 				}
-
+				// then get value
 				switch (lua_type(L, stk+2))
 				{
 					case LUA_TNUMBER:
@@ -299,12 +299,12 @@ static int PopPivotSubTable(spriteframepivot_t *pivot, lua_State *L, int stk, in
 					default:
 						TYPEERROR("pivot value", LUA_TNUMBER, lua_type(L, stk+2))
 				}
-
+				// finally set omg!!!!!!!!!!!!!!!!!!
 				if (ikey == 1 || (key && fastcmp(key, "x")))
 					pivot[idx].x = (INT32)value;
 				else if (ikey == 2 || (key && fastcmp(key, "y")))
 					pivot[idx].y = (INT32)value;
-
+				// TODO: 2.3: Delete
 				else if (ikey == 3 || (key && fastcmp(key, "rotaxis")))
 					LUA_UsageWarning(L, "\"rotaxis\" is deprecated and will be removed.")
 				else if (ikey == -1 && (key != NULL))
@@ -321,16 +321,16 @@ static int PopPivotSubTable(spriteframepivot_t *pivot, lua_State *L, int stk, in
 
 static int PopPivotTable(spriteinfo_t *info, lua_State *L, int stk)
 {
-
+	// Just in case?
 	if (!lua_istable(L, stk))
 		TYPEERROR("pivot table", LUA_TTABLE, lua_type(L, stk));
 
 	lua_pushnil(L);
-
-
-
-
-
+	// stk = 0 has the pivot table
+	// stk = 1 has the frame key
+	// stk = 2 has the frame table
+	// stk = 3 has either a string or a number as key
+	// stk = 4 has the value for the key mentioned above
 	while (lua_next(L, stk))
 	{
 		int idx = 0;
@@ -349,7 +349,7 @@ static int PopPivotTable(spriteinfo_t *info, lua_State *L, int stk)
 		}
 		if ((idx < 0) || (idx >= MAXFRAMENUM))
 			return luaL_error(L, "pivot frame %d out of range (0 - %d)", idx, MAXFRAMENUM - 1);
-
+		// the values in pivot[] are also tables
 		if (PopPivotSubTable(info->pivot, L, stk+2, idx))
 			info->available = true;
 		lua_pop(L, 1);
@@ -374,11 +374,11 @@ static int lib_setSpriteInfo(lua_State *L)
 		UINT32 i = luaL_checkinteger(L, 1);
 		if (i == 0 || i >= NUMSPRITES)
 			return luaL_error(L, "spriteinfo[] index %d out of range (1 - %d)", i, NUMSPRITES-1);
-		info = &spriteinfo[i];  
+		info = &spriteinfo[i]; // get the spriteinfo to assign to.
 	}
-	luaL_checktype(L, 2, LUA_TTABLE);  
-	lua_remove(L, 1);  
-	lua_settop(L, 1);  
+	luaL_checktype(L, 2, LUA_TTABLE); // check that we've been passed a table.
+	lua_remove(L, 1); // pop sprite num, don't need it any more.
+	lua_settop(L, 1); // cut the stack here. the only thing left now is the table of data we're assigning to the spriteinfo.
 
 	lua_pushnil(L);
 	while (lua_next(L, 1)) {
@@ -391,7 +391,7 @@ static int lib_setSpriteInfo(lua_State *L)
 
 		if (i == 1 || (str && fastcmp(str, "pivot")))
 		{
-
+			// pivot[] is a table
 			if (lua_istable(L, 3))
 				return PopPivotTable(info, L, 3);
 			else
@@ -413,7 +413,7 @@ static int lib_spriteinfolen(lua_State *L)
 	return 1;
 }
 
-
+// spriteinfo_t
 static int spriteinfo_get(lua_State *L)
 {
 	spriteinfo_t *sprinfo = *((spriteinfo_t **)luaL_checkudata(L, 1, META_SPRITEINFO));
@@ -421,16 +421,16 @@ static int spriteinfo_get(lua_State *L)
 
 	I_Assert(sprinfo != NULL);
 
-
+	// push spriteframepivot_t userdata
 	if (fastcmp(field, "pivot"))
 	{
-
+		// bypass LUA_PushUserdata
 		void **userdata = lua_newuserdata(L, sizeof(void *));
 		*userdata = &sprinfo->pivot;
 		luaL_getmetatable(L, META_PIVOTLIST);
 		lua_setmetatable(L, -2);
 
-
+		// stack is left with the userdata on top, as if getting it had originally succeeded.
 		return 1;
 	}
 	else
@@ -453,21 +453,21 @@ static int spriteinfo_set(lua_State *L)
 
 	I_Assert(sprinfo != NULL);
 
-	lua_remove(L, 1);  
-	lua_remove(L, 1);  
-	lua_settop(L, 1);  
+	lua_remove(L, 1); // remove spriteinfo
+	lua_remove(L, 1); // remove field
+	lua_settop(L, 1); // leave only one value
 
 	if (fastcmp(field, "pivot"))
 	{
-
+		// pivot[] is a table
 		if (lua_istable(L, 1))
 			return PopPivotTable(sprinfo, L, 1);
-
+		// pivot[] is userdata
 		else if (lua_isuserdata(L, 1))
 		{
 			spriteframepivot_t *pivot = *((spriteframepivot_t **)luaL_checkudata(L, 1, META_PIVOTLIST));
 			memcpy(&sprinfo->pivot, pivot, sizeof(spriteframepivot_t));
-			sprinfo->available = true;  
+			sprinfo->available = true; // Just in case?
 		}
 	}
 	else
@@ -487,7 +487,7 @@ static int spriteinfo_num(lua_State *L)
 	return 1;
 }
 
-
+// framepivot_t
 static int pivotlist_get(lua_State *L)
 {
 	void **userdata;
@@ -499,21 +499,21 @@ static int pivotlist_get(lua_State *L)
 	if (frame == 255)
 		luaL_error(L, "invalid frame %s", field);
 
-
+	// bypass LUA_PushUserdata
 	userdata = lua_newuserdata(L, sizeof(void *));
 	*userdata = &framepivot[frame];
 	luaL_getmetatable(L, META_FRAMEPIVOT);
 	lua_setmetatable(L, -2);
 
-
+	// stack is left with the userdata on top, as if getting it had originally succeeded.
 	return 1;
 }
 
 static int pivotlist_set(lua_State *L)
 {
-
+	// Because I already know it's a spriteframepivot_t anyway
 	spriteframepivot_t *pivotlist = *((spriteframepivot_t **)lua_touserdata(L, 1));
-
+	//spriteframepivot_t *framepivot = *((spriteframepivot_t **)luaL_checkudata(L, 1, META_FRAMEPIVOT));
 	const char *field = luaL_checkstring(L, 2);
 	UINT8 frame;
 
@@ -528,10 +528,10 @@ static int pivotlist_set(lua_State *L)
 	if (frame == 255)
 		luaL_error(L, "invalid frame %s", field);
 
-
+	// pivot[] is a table
 	if (lua_istable(L, 3))
 		return PopPivotSubTable(pivotlist, L, 3, frame);
-
+	// pivot[] is userdata
 	else if (lua_isuserdata(L, 3))
 	{
 		spriteframepivot_t *copypivot = *((spriteframepivot_t **)luaL_checkudata(L, 3, META_FRAMEPIVOT));
@@ -558,7 +558,7 @@ static int framepivot_get(lua_State *L)
 		lua_pushinteger(L, framepivot->x);
 	else if (fastcmp("y", field))
 		lua_pushinteger(L, framepivot->y);
-
+	// TODO: 2.3: Delete
 	else if (fastcmp("rotaxis", field))
 	{
 		LUA_UsageWarning(L, "\"rotaxis\" is deprecated and will be removed.");
@@ -588,7 +588,7 @@ static int framepivot_set(lua_State *L)
 		framepivot->x = luaL_checkinteger(L, 3);
 	else if (fastcmp("y", field))
 		framepivot->y = luaL_checkinteger(L, 3);
-
+	// TODO: 2.3: delete
 	else if (fastcmp("rotaxis", field))
 		LUA_UsageWarning(L, "\"rotaxis\" is deprecated and will be removed.")
 	else
@@ -603,29 +603,29 @@ static int framepivot_num(lua_State *L)
 	return 1;
 }
 
+////////////////
+// STATE INFO //
+////////////////
 
-
-
-
-
-
+// Uses astate to determine which state is calling it
+// Then looks up which Lua action is assigned to that state and calls it
 static void A_Lua(mobj_t *actor)
 {
 	boolean found = false;
 	I_Assert(actor != NULL);
 
-	lua_settop(gL, 0);  
+	lua_settop(gL, 0); // Just in case...
 	lua_pushcfunction(gL, LUA_GetErrorMessage);
 
-
+	// get the action for this state
 	lua_getfield(gL, LUA_REGISTRYINDEX, LREG_STATEACTION);
 	I_Assert(lua_istable(gL, -1));
 	lua_pushlightuserdata(gL, astate);
 	lua_rawget(gL, -2);
 	I_Assert(lua_isfunction(gL, -1));
-	lua_remove(gL, -2);  
+	lua_remove(gL, -2); // pop LREG_STATEACTION
 
-
+	// get the name for this action, if possible.
 	lua_getfield(gL, LUA_REGISTRYINDEX, LREG_ACTIONS);
 	lua_pushnil(gL);
 	while (lua_next(gL, -2))
@@ -633,14 +633,14 @@ static void A_Lua(mobj_t *actor)
 		if (lua_rawequal(gL, -1, -4))
 		{
 			found = true;
-			luaactions[luaactionstack] = lua_tostring(gL, -2);  
+			luaactions[luaactionstack] = lua_tostring(gL, -2); // "A_ACTION"
 			++luaactionstack;
-			lua_pop(gL, 2);  
+			lua_pop(gL, 2); // pop the name and function
 			break;
 		}
 		lua_pop(gL, 1);
 	}
-	lua_pop(gL, 1);  
+	lua_pop(gL, 1); // pop LREG_ACTION
 
 	LUA_PushUserdata(gL, actor, META_MOBJ);
 	lua_pushinteger(gL, var1);
@@ -654,7 +654,7 @@ static void A_Lua(mobj_t *actor)
 	}
 }
 
-
+// Arbitrary states[] table index -> state_t *
 static int lib_getState(lua_State *L)
 {
 	UINT32 i;
@@ -667,27 +667,27 @@ static int lib_getState(lua_State *L)
 	return 1;
 }
 
-
+// Lua table full of data -> states[] (set the values all at once! :D :D)
 static int lib_setState(lua_State *L)
 {
 	state_t *state;
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // don't care about states[] userdata.
 	{
 		UINT32 i = luaL_checkinteger(L, 1);
 		if (i >= NUMSTATES)
 			return luaL_error(L, "states[] index %d out of range (0 - %d)", i, NUMSTATES-1);
-		state = &states[i];  
+		state = &states[i]; // get the state to assign to.
 	}
-	luaL_checktype(L, 2, LUA_TTABLE);  
-	lua_remove(L, 1);  
-	lua_settop(L, 1);  
+	luaL_checktype(L, 2, LUA_TTABLE); // check that we've been passed a table.
+	lua_remove(L, 1); // pop state num, don't need it any more.
+	lua_settop(L, 1); // cut the stack here. the only thing left now is the table of data we're assigning to the state.
 
 	if (hud_running)
 		return luaL_error(L, "Do not alter states in HUD rendering code!");
 	if (hook_cmd_running)
 		return luaL_error(L, "Do not alter states in CMD building code!");
 
-
+	// clear the state to start with, in case of missing table elements
 	memset(state,0,sizeof(state_t));
 	state->tics = -1;
 
@@ -713,13 +713,13 @@ static int lib_setState(lua_State *L)
 		} else if (i == 4 || (str && fastcmp(str, "action"))) {
 			switch(lua_type(L, 3))
 			{
-			case LUA_TNIL:  
+			case LUA_TNIL: // Null? Set the action to nothing, then.
 				state->action.acp1 = NULL;
 				break;
-			case LUA_TSTRING:  
+			case LUA_TSTRING: // It's a string, expect the name of a built-in action
 				LUA_SetActionByName(state, lua_tostring(L, 3));
 				break;
-			case LUA_TUSERDATA:  
+			case LUA_TUSERDATA: // It's a userdata, expect META_ACTION of a built-in action
 			{
 				actionf_t *action = *((actionf_t **)luaL_checkudata(L, 3, META_ACTION));
 
@@ -731,16 +731,16 @@ static int lib_setState(lua_State *L)
 				state->action.acp1 = action->acp1;
 				break;
 			}
-			case LUA_TFUNCTION:  
+			case LUA_TFUNCTION: // It's a function (a Lua function or a C function? either way!)
 				lua_getfield(L, LUA_REGISTRYINDEX, LREG_STATEACTION);
 				I_Assert(lua_istable(L, -1));
-				lua_pushlightuserdata(L, state);  
-				lua_pushvalue(L, 3);  
-				lua_rawset(L, -3);  
-				lua_pop(L, 1);  
-				state->action.acp1 = (actionf_p1)A_Lua;  
+				lua_pushlightuserdata(L, state); // We'll store this function by the state's pointer in the registry.
+				lua_pushvalue(L, 3); // Bring it to the top of the stack
+				lua_rawset(L, -3); // Set it in the registry
+				lua_pop(L, 1); // pop LREG_STATEACTION
+				state->action.acp1 = (actionf_p1)A_Lua; // Set the action for the userdata.
 				break;
-			default:  
+			default: // ?!
 				return luaL_typerror(L, 3, "function");
 			}
 		} else if (i == 5 || (str && fastcmp(str, "var1"))) {
@@ -758,7 +758,7 @@ static int lib_setState(lua_State *L)
 	return 0;
 }
 
-
+// #states -> NUMSTATES
 static int lib_statelen(lua_State *L)
 {
 	lua_pushinteger(L, NUMSTATES);
@@ -770,34 +770,34 @@ boolean LUA_SetLuaAction(void *stv, const char *action)
 	state_t *st = (state_t *)stv;
 
 	I_Assert(st != NULL);
-
+	//I_Assert(st >= states && st < states+NUMSTATES); // if you REALLY want to be paranoid...
 	I_Assert(action != NULL);
 
-	if (!gL)  
-		return false;  
+	if (!gL) // Lua isn't loaded,
+		return false; // action not set.
 
-
-
+	// action is assumed to be in all-caps already !!
+	// the registry is case-sensitive, so we strupr everything that enters it.
 
 	lua_getfield(gL, LUA_REGISTRYINDEX, LREG_ACTIONS);
 	lua_getfield(gL, -1, action);
 
-	if (lua_isnil(gL, -1))  
+	if (lua_isnil(gL, -1)) // no match
 	{
-		lua_pop(gL, 2);  
-		return false;  
+		lua_pop(gL, 2); // pop nil and LREG_ACTIONS
+		return false; // action not set.
 	}
 
 	lua_getfield(gL, LUA_REGISTRYINDEX, LREG_STATEACTION);
 	I_Assert(lua_istable(gL, -1));
-	lua_pushlightuserdata(gL, stv);  
-	lua_pushvalue(gL, -3);  
-	lua_rawset(gL, -3);  
-	lua_pop(gL, 1);  
+	lua_pushlightuserdata(gL, stv); // We'll store this function by the state's pointer in the registry.
+	lua_pushvalue(gL, -3); // Bring it to the top of the stack
+	lua_rawset(gL, -3); // Set it in the registry
+	lua_pop(gL, 1); // pop LREG_STATEACTION
 
-	lua_pop(gL, 2);  
-	st->action.acp1 = (actionf_p1)A_Lua;  
-	return true;  
+	lua_pop(gL, 2); // pop the function and LREG_ACTIONS
+	st->action.acp1 = (actionf_p1)A_Lua; // Set the action for the userdata.
+	return true; // action successfully set.
 }
 
 static UINT8 superstack[NUMACTIONS];
@@ -807,18 +807,18 @@ boolean LUA_CallAction(enum actionnum actionnum, mobj_t *actor)
 
 	if (actionsoverridden[actionnum][0] == LUA_REFNIL)
 	{
-
-
+		// The action was not overridden at all,
+		// so just call the hardcoded version.
 		return false;
 	}
 
 	if (luaactionstack && fasticmp(actionpointers[actionnum].name, luaactions[luaactionstack-1]))
 	{
+		// The action is calling itself,
+		// so look up the next Lua reference in its stack.
 
-
-
-
-
+		// 0 is just the reference to the one we're calling,
+		// so we increment here.
 		superstack[actionnum]++;
 
 		if (superstack[actionnum] >= MAX_ACTION_RECURSION)
@@ -831,39 +831,39 @@ boolean LUA_CallAction(enum actionnum actionnum, mobj_t *actor)
 
 	if (actionsoverridden[actionnum][superstack[actionnum]] == LUA_REFNIL)
 	{
-
-
+		// No Lua reference beyond this point.
+		// Let it call the hardcoded function instead.
 
 		if (superstack[actionnum])
 		{
-
+			// Decrement super stack
 			superstack[actionnum]--;
 		}
 
 		return false;
 	}
 
-
+	// Push error function
 	lua_pushcfunction(gL, LUA_GetErrorMessage);
 
-
+	// Push function by reference.
 	lua_getref(gL, actionsoverridden[actionnum][superstack[actionnum]]);
 
-	if (lua_isnil(gL, -1))  
+	if (lua_isnil(gL, -1)) // no match
 	{
-		lua_pop(gL, 2);  
-		return false;  
+		lua_pop(gL, 2); // pop nil and error handler
+		return false; // action not called.
 	}
 
 	if (luaactionstack >= MAX_ACTION_RECURSION)
 	{
 		CONS_Alert(CONS_WARNING, "Max Lua Action recursion reached! Cool it on the calling A_Action functions from inside A_Action functions!\n");
-		lua_pop(gL, 2);  
+		lua_pop(gL, 2); // pop function and error handler
 		return true;
 	}
 
-
-
+	// Found a function.
+	// Call it with (actor, var1, var2)
 	I_Assert(lua_isfunction(gL, -1));
 	LUA_PushUserdata(gL, actor, META_MOBJ);
 	lua_pushinteger(gL, var1);
@@ -873,20 +873,20 @@ boolean LUA_CallAction(enum actionnum actionnum, mobj_t *actor)
 	++luaactionstack;
 
 	LUA_Call(gL, 3, 0, -(2 + 3));
-	lua_pop(gL, -1);  
+	lua_pop(gL, -1); // Error handler
 
 	if (superstack[actionnum])
 	{
-
+		// Decrement super stack
 		superstack[actionnum]--;
 	}
 
 	--luaactionstack;
 	luaactions[luaactionstack] = NULL;
-	return true;  
+	return true; // action successfully called.
 }
 
-
+// state_t *, field -> number
 static int state_get(lua_State *L)
 {
 	state_t *st = *((state_t **)luaL_checkudata(L, 1, META_STATE));
@@ -901,23 +901,23 @@ static int state_get(lua_State *L)
 		number = st->tics;
 	else if (fastcmp(field,"action")) {
 		const char *name;
-		if (!st->action.acp1)  
-			return 0;  
-		if (st->action.acp1 == (actionf_p1)A_Lua) {  
+		if (!st->action.acp1) // Action is NULL.
+			return 0; // return nil.
+		if (st->action.acp1 == (actionf_p1)A_Lua) { // This is a Lua function?
 			lua_getfield(L, LUA_REGISTRYINDEX, LREG_STATEACTION);
 			I_Assert(lua_istable(L, -1));
-			lua_pushlightuserdata(L, st);  
-			lua_rawget(L, -2);  
-			lua_remove(L, -2);  
-			return 1;  
+			lua_pushlightuserdata(L, st); // Push the state pointer and
+			lua_rawget(L, -2); // use it to get the actual Lua function.
+			lua_remove(L, -2); // pop LREG_STATEACTION
+			return 1; // Return the Lua function.
 		}
-		name = LUA_GetActionName(&st->action);  
-		if (!name)  
-			return 0;  
-
-
-		lua_getglobal(L, name);  
-		return 1;  
+		name = LUA_GetActionName(&st->action); // find a hardcoded function name
+		if (!name) // If it's not a hardcoded function and it's not a Lua function...
+			return 0; // Just what is this??
+		// get the function from the global
+		// because the metatable will trigger.
+		lua_getglobal(L, name); // actually gets from LREG_ACTIONS if applicable, and pushes a META_ACTION userdata if not.
+		return 1; // return just the function
 	} else if (fastcmp(field,"var1"))
 		number = st->var1;
 	else if (fastcmp(field,"var2"))
@@ -933,7 +933,7 @@ static int state_get(lua_State *L)
 	return 1;
 }
 
-
+// state_t *, field, number -> states[]
 static int state_set(lua_State *L)
 {
 	state_t *st = *((state_t **)luaL_checkudata(L, 1, META_STATE));
@@ -957,13 +957,13 @@ static int state_set(lua_State *L)
 	else if (fastcmp(field,"action")) {
 		switch(lua_type(L, 3))
 		{
-		case LUA_TNIL:  
+		case LUA_TNIL: // Null? Set the action to nothing, then.
 			st->action.acp1 = NULL;
 			break;
-		case LUA_TSTRING:  
+		case LUA_TSTRING: // It's a string, expect the name of a built-in action
 			LUA_SetActionByName(st, lua_tostring(L, 3));
 			break;
-		case LUA_TUSERDATA:  
+		case LUA_TUSERDATA: // It's a userdata, expect META_ACTION of a built-in action
 		{
 			actionf_t *action = *((actionf_t **)luaL_checkudata(L, 3, META_ACTION));
 
@@ -975,16 +975,16 @@ static int state_set(lua_State *L)
 			st->action.acp1 = action->acp1;
 			break;
 		}
-		case LUA_TFUNCTION:  
+		case LUA_TFUNCTION: // It's a function (a Lua function or a C function? either way!)
 			lua_getfield(L, LUA_REGISTRYINDEX, LREG_STATEACTION);
 			I_Assert(lua_istable(L, -1));
-			lua_pushlightuserdata(L, st);  
-			lua_pushvalue(L, 3);  
-			lua_rawset(L, -3);  
-			lua_pop(L, 1);  
-			st->action.acp1 = (actionf_p1)A_Lua;  
+			lua_pushlightuserdata(L, st); // We'll store this function by the state's pointer in the registry.
+			lua_pushvalue(L, 3); // Bring it to the top of the stack
+			lua_rawset(L, -3); // Set it in the registry
+			lua_pop(L, 1); // pop LREG_STATEACTION
+			st->action.acp1 = (actionf_p1)A_Lua; // Set the action for the userdata.
 			break;
-		default:  
+		default: // ?!
 			return luaL_typerror(L, 3, "function");
 		}
 	} else if (fastcmp(field,"var1"))
@@ -1002,7 +1002,7 @@ static int state_set(lua_State *L)
 	return 0;
 }
 
-
+// state_t * -> S_*
 static int state_num(lua_State *L)
 {
 	state_t *state = *((state_t **)luaL_checkudata(L, 1, META_STATE));
@@ -1010,11 +1010,11 @@ static int state_num(lua_State *L)
 	return 1;
 }
 
+///////////////
+// MOBJ INFO //
+///////////////
 
-
-
-
-
+// Arbitrary mobjinfo[] table index -> mobjinfo_t *
 static int lib_getMobjInfo(lua_State *L)
 {
 	UINT32 i;
@@ -1027,30 +1027,30 @@ static int lib_getMobjInfo(lua_State *L)
 	return 1;
 }
 
-
+// Lua table full of data -> mobjinfo[]
 static int lib_setMobjInfo(lua_State *L)
 {
 	mobjinfo_t *info;
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // don't care about mobjinfo[] userdata.
 	{
 		UINT32 i = luaL_checkinteger(L, 1);
 		if (i >= NUMMOBJTYPES)
 			return luaL_error(L, "mobjinfo[] index %d out of range (0 - %d)", i, NUMMOBJTYPES-1);
-		info = &mobjinfo[i];  
+		info = &mobjinfo[i]; // get the mobjinfo to assign to.
 	}
-	luaL_checktype(L, 2, LUA_TTABLE);  
-	lua_remove(L, 1);  
-	lua_settop(L, 1);  
+	luaL_checktype(L, 2, LUA_TTABLE); // check that we've been passed a table.
+	lua_remove(L, 1); // pop mobjtype num, don't need it any more.
+	lua_settop(L, 1); // cut the stack here. the only thing left now is the table of data we're assigning to the mobjinfo.
 
 	if (hud_running)
 		return luaL_error(L, "Do not alter mobjinfo in HUD rendering code!");
 	if (hook_cmd_running)
 		return luaL_error(L, "Do not alter mobjinfo in CMD building code!");
 
-
+	// clear the mobjinfo to start with, in case of missing table elements
 	memset(info,0,sizeof(mobjinfo_t));
-	info->doomednum = -1;  
-	info->spawnhealth = 1;  
+	info->doomednum = -1; // default to no editor value
+	info->spawnhealth = 1; // avoid 'dead' noclip behaviors
 
 	lua_pushnil(L);
 	while (lua_next(L, 1)) {
@@ -1125,7 +1125,7 @@ static int lib_setMobjInfo(lua_State *L)
 	return 0;
 }
 
-
+// #mobjinfo -> NUMMOBJTYPES
 static int lib_mobjinfolen(lua_State *L)
 {
 	lua_pushinteger(L, NUMMOBJTYPES);
@@ -1190,7 +1190,7 @@ const char *const mobjinfo_opt[] = {
 
 static int mobjinfo_fields_ref = LUA_NOREF;
 
-
+// mobjinfo_t *, field -> number
 static int mobjinfo_get(lua_State *L)
 {
 	mobjinfo_t *info = *((mobjinfo_t **)luaL_checkudata(L, 1, META_MOBJINFO));
@@ -1247,7 +1247,7 @@ static int mobjinfo_get(lua_State *L)
 		lua_pushinteger(L, info->deathsound);
 		break;
 	case mobjinfo_speed:
-		lua_pushinteger(L, info->speed);  
+		lua_pushinteger(L, info->speed); // sometimes it's fixed_t, sometimes it's not...
 		break;
 	case mobjinfo_radius:
 		lua_pushfixed(L, info->radius);
@@ -1278,20 +1278,20 @@ static int mobjinfo_get(lua_State *L)
 		I_Assert(lua_istable(L, -1));
 		lua_pushlightuserdata(L, info);
 		lua_rawget(L, -2);
-		if (!lua_istable(L, -1)) {  
+		if (!lua_istable(L, -1)) { // no extra values table
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no field named '%s'; returning nil.\n"), "mobjinfo_t", lua_tostring(L, 2));
 			return 0;
 		}
-		lua_pushvalue(L, 2);  
+		lua_pushvalue(L, 2); // field name
 		lua_gettable(L, -2);
-		if (lua_isnil(L, -1))  
+		if (lua_isnil(L, -1)) // no value for this field
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no field named '%s'; returning nil.\n"), "mobjinfo_t", lua_tostring(L, 2));
 		break;
 	}
 	return 1;
 }
 
-
+// mobjinfo_t *, field, number -> mobjinfo[]
 static int mobjinfo_set(lua_State *L)
 {
 	mobjinfo_t *info = *((mobjinfo_t **)luaL_checkudata(L, 1, META_MOBJINFO));
@@ -1385,23 +1385,23 @@ static int mobjinfo_set(lua_State *L)
 		lua_pushlightuserdata(L, info);
 		lua_rawget(L, -2);
 		if (lua_isnil(L, -1)) {
-
+			// This index doesn't have a table for extra values yet, let's make one.
 			lua_pop(L, 1);
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no field named '%s'; adding it as Lua data.\n"), "mobjinfo_t", lua_tostring(L, 2));
 			lua_newtable(L);
 			lua_pushlightuserdata(L, info);
-			lua_pushvalue(L, -2);  
-			lua_rawset(L, -4);  
+			lua_pushvalue(L, -2); // ext value table
+			lua_rawset(L, -4); // LREG_EXTVARS table
 		}
-		lua_pushvalue(L, 2);  
-		lua_pushvalue(L, 3);  
+		lua_pushvalue(L, 2); // key
+		lua_pushvalue(L, 3); // value to store
 		lua_settable(L, -3);
 		lua_pop(L, 2);
 	}
 	return 0;
 }
 
-
+// mobjinfo_t * -> MT_*
 static int mobjinfo_num(lua_State *L)
 {
 	mobjinfo_t *info = *((mobjinfo_t **)luaL_checkudata(L, 1, META_MOBJINFO));
@@ -1413,11 +1413,11 @@ static int mobjinfo_num(lua_State *L)
 	return 1;
 }
 
+//////////////
+// SFX INFO //
+//////////////
 
-
-
-
-
+// Arbitrary S_sfx[] table index -> sfxinfo_t *
 static int lib_getSfxInfo(lua_State *L)
 {
 	UINT32 i;
@@ -1430,7 +1430,7 @@ static int lib_getSfxInfo(lua_State *L)
 	return 1;
 }
 
-
+// stack: dummy, S_sfx[] table index, table of values to set.
 static int lib_setSfxInfo(lua_State *L)
 {
 	sfxinfo_t *info;
@@ -1440,11 +1440,11 @@ static int lib_setSfxInfo(lua_State *L)
 		UINT32 i = luaL_checkinteger(L, 1);
 		if (i == 0 || i >= NUMSFX)
 			return luaL_error(L, "sfxinfo[] index %d out of range (1 - %d)", i, NUMSFX-1);
-		info = &S_sfx[i];  
+		info = &S_sfx[i]; // get the sfxinfo to assign to.
 	}
-	luaL_checktype(L, 2, LUA_TTABLE);  
-	lua_remove(L, 1);  
-	lua_settop(L, 1);  
+	luaL_checktype(L, 2, LUA_TTABLE); // check that we've been passed a table.
+	lua_remove(L, 1); // pop sfx num, don't need it any more.
+	lua_settop(L, 1); // cut the stack here. the only thing left now is the table of data we're assigning to the sfx.
 
 	if (hud_running)
 		return luaL_error(L, "Do not alter sfxinfo in HUD rendering code!");
@@ -1456,7 +1456,7 @@ static int lib_setSfxInfo(lua_State *L)
 		enum sfxinfo_write i;
 
 		if (lua_isnumber(L, 2))
-			i = lua_tointeger(L, 2) - 1;  
+			i = lua_tointeger(L, 2) - 1; // lua is one based, this enum is zero based.
 		else
 			i = luaL_checkoption(L, 2, NULL, sfxinfo_wopt);
 
@@ -1489,7 +1489,7 @@ static int lib_sfxlen(lua_State *L)
 	return 1;
 }
 
-
+// sfxinfo_t *, field
 static int sfxinfo_get(lua_State *L)
 {
 	sfxinfo_t *sfx = *((sfxinfo_t **)luaL_checkudata(L, 1, META_SFXINFO));
@@ -1523,7 +1523,7 @@ static int sfxinfo_get(lua_State *L)
 	return 0;
 }
 
-
+// sfxinfo_t *, field, value
 static int sfxinfo_set(lua_State *L)
 {
 	sfxinfo_t *sfx = *((sfxinfo_t **)luaL_checkudata(L, 1, META_SFXINFO));
@@ -1536,9 +1536,9 @@ static int sfxinfo_set(lua_State *L)
 
 	I_Assert(sfx != NULL);
 
-	lua_remove(L, 1);  
-	lua_remove(L, 1);  
-	lua_settop(L, 1);  
+	lua_remove(L, 1); // remove sfxinfo
+	lua_remove(L, 1); // remove field
+	lua_settop(L, 1); // leave only one value
 
 	switch (field)
 	{
@@ -1571,15 +1571,15 @@ static int sfxinfo_num(lua_State *L)
 	return 1;
 }
 
-
-
-
+//////////////
+// LUABANKS //
+//////////////
 
 static int lib_getluabanks(lua_State *L)
 {
 	UINT8 i;
 
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // don't care about luabanks[] dummy userdata.
 
 	if (lua_isnumber(L, 1))
 		i = lua_tonumber(L, 1);
@@ -1603,7 +1603,7 @@ static int lib_setluabanks(lua_State *L)
 	if (hook_cmd_running)
 		return luaL_error(L, "Do not alter luabanks[] in CMD building code!");
 
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // don't care about luabanks[] dummy userdata.
 
 	if (lua_isnumber(L, 1))
 		i = lua_tonumber(L, 1);
@@ -1628,11 +1628,11 @@ static int lib_luabankslen(lua_State *L)
 	return 1;
 }
 
+////////////////////
+// SKINCOLOR INFO //
+////////////////////
 
-
-
-
-
+// Arbitrary skincolors[] table index -> skincolor_t *
 static int lib_getSkinColor(lua_State *L)
 {
 	UINT32 i;
@@ -1645,7 +1645,7 @@ static int lib_getSkinColor(lua_State *L)
 	return 1;
 }
 
-
+//Set the entire c->ramp array
 static void setRamp(lua_State *L, skincolor_t* c) {
 	UINT32 i;
 	lua_pushnil(L);
@@ -1663,29 +1663,29 @@ static void setRamp(lua_State *L, skincolor_t* c) {
 	lua_pop(L,1);
 }
 
-
+// Lua table full of data -> skincolors[]
 static int lib_setSkinColor(lua_State *L)
 {
 	UINT32 j;
 	skincolor_t *info;
-	UINT16 cnum;  
-	lua_remove(L, 1);  
+	UINT16 cnum; //skincolor num
+	lua_remove(L, 1); // don't care about skincolors[] userdata.
 	{
 		cnum = (UINT16)luaL_checkinteger(L, 1);
 		if (!cnum || cnum >= numskincolors)
 			return luaL_error(L, "skincolors[] index %d out of range (1 - %d)", cnum, numskincolors-1);
-		info = &skincolors[cnum];  
+		info = &skincolors[cnum]; // get the skincolor to assign to.
 	}
-	luaL_checktype(L, 2, LUA_TTABLE);  
-	lua_remove(L, 1);  
-	lua_settop(L, 1);  
+	luaL_checktype(L, 2, LUA_TTABLE); // check that we've been passed a table.
+	lua_remove(L, 1); // pop skincolor num, don't need it any more.
+	lua_settop(L, 1); // cut the stack here. the only thing left now is the table of data we're assigning to the skincolor.
 
 	if (hud_running)
 		return luaL_error(L, "Do not alter skincolors in HUD rendering code!");
 	if (hook_cmd_running)
 		return luaL_error(L, "Do not alter skincolors in CMD building code!");
 
-
+	// clear the skincolor to start with, in case of missing table elements
 	memset(info,0,sizeof(skincolor_t));
 
 	Color_cons_t[cnum].value = cnum;
@@ -1708,7 +1708,7 @@ static int lib_setSkinColor(lua_State *L)
 				CONS_Alert(CONS_WARNING, "skincolor_t field 'name' ('%s') contains spaces.\n", info->name);
 #endif
 
-			if (info->name[0] != '\0')  
+			if (info->name[0] != '\0') // don't check empty string for dupe
 			{
 				UINT16 dupecheck = R_GetColorByName(info->name);
 				if (!stricmp(info->name, skincolors[SKINCOLOR_NONE].name) || (dupecheck && (dupecheck != info-skincolors)))
@@ -1744,14 +1744,14 @@ static int lib_setSkinColor(lua_State *L)
 	return 0;
 }
 
-
+// #skincolors -> numskincolors
 static int lib_skincolorslen(lua_State *L)
 {
 	lua_pushinteger(L, numskincolors);
 	return 1;
 }
 
-
+// skincolor_t *, field -> number
 static int skincolor_get(lua_State *L)
 {
 	skincolor_t *info = *((skincolor_t **)luaL_checkudata(L, 1, META_SKINCOLOR));
@@ -1779,7 +1779,7 @@ static int skincolor_get(lua_State *L)
 	return 1;
 }
 
-
+// skincolor_t *, field, number -> skincolors[]
 static int skincolor_set(lua_State *L)
 {
 	UINT32 i;
@@ -1803,7 +1803,7 @@ static int skincolor_set(lua_State *L)
 			CONS_Alert(CONS_WARNING, "skincolor_t field 'name' ('%s') contains spaces.\n", info->name);
 #endif
 
-		if (info->name[0] != '\0')  
+		if (info->name[0] != '\0') // don't check empty string for dupe
 		{
 			UINT16 dupecheck = R_GetColorByName(info->name);
 			if (!stricmp(info->name, skincolors[SKINCOLOR_NONE].name) || (dupecheck && (dupecheck != cnum)))
@@ -1838,7 +1838,7 @@ static int skincolor_set(lua_State *L)
 	return 1;
 }
 
-
+// skincolor_t * -> SKINCOLOR_*
 static int skincolor_num(lua_State *L)
 {
 	skincolor_t *info = *((skincolor_t **)luaL_checkudata(L, 1, META_SKINCOLOR));
@@ -1850,7 +1850,7 @@ static int skincolor_num(lua_State *L)
 	return 1;
 }
 
-
+// ramp, n -> ramp[n]
 static int colorramp_get(lua_State *L)
 {
 	UINT8 *colorramp = *((UINT8 **)luaL_checkudata(L, 1, META_COLORRAMP));
@@ -1861,7 +1861,7 @@ static int colorramp_get(lua_State *L)
 	return 1;
 }
 
-
+// ramp, n, value -> ramp[n] = value
 static int colorramp_set(lua_State *L)
 {
 	UINT8 *colorramp = *((UINT8 **)luaL_checkudata(L, 1, META_COLORRAMP));
@@ -1881,25 +1881,25 @@ static int colorramp_set(lua_State *L)
 	return 0;
 }
 
-
+// #ramp -> COLORRAMPSIZE
 static int colorramp_len(lua_State *L)
 {
 	lua_pushinteger(L, COLORRAMPSIZE);
 	return 1;
 }
 
-
-
-
-
-
+//////////////////////////////
+//
+// Now push all these functions into the Lua state!
+//
+//
 int LUA_InfoLib(lua_State *L)
 {
-
+	// index of A_Lua actions to run for each state
 	lua_newtable(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, LREG_STATEACTION);
 
-
+	// index of globally available Lua actions by function name
 	lua_newtable(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, LREG_ACTIONS);
 
@@ -1923,7 +1923,7 @@ int LUA_InfoLib(lua_State *L)
 	LUA_RegisterGlobalUserdata(L, "skincolors", lib_getSkinColor, lib_setSkinColor, lib_skincolorslen);
 	LUA_RegisterGlobalUserdata(L, "spriteinfo", lib_getSpriteInfo, lib_setSpriteInfo, lib_spriteinfolen);
 	LUA_RegisterGlobalUserdata(L, "sfxinfo", lib_getSfxInfo, lib_setSfxInfo, lib_sfxlen);
-
+	// TODO: 2.3: Delete this alias
 	LUA_RegisterGlobalUserdata(L, "S_sfx", lib_getSfxInfo, lib_setSfxInfo, lib_sfxlen);
 
 	return 0;

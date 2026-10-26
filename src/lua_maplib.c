@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_maplib.c
+/// \brief game map library for Lua scripting
 
 #include "doomdef.h"
 #include "r_state.h"
@@ -21,8 +21,8 @@
 
 #include "lua_script.h"
 #include "lua_libs.h"
-#include "lua_hud.h"  
-#include "lua_hook.h"  
+#include "lua_hud.h" // hud_running errors
+#include "lua_hook.h" // hook_cmd_running errors
 
 #include "dehacked.h"
 #include "fastcmp.h"
@@ -335,11 +335,11 @@ static const char *const ffloor_opt[] = {
 	"bottomyscale",
 	"t_slope",
 	"b_slope",
-	"sector",  
+	"sector", // secnum pushed as control sector userdata
 	"fofflags",
 	"flags",
-	"master",  
-	"target",  
+	"master", // control linedef
+	"target", // target sector
 	"next",
 	"prev",
 	"alpha",
@@ -460,7 +460,7 @@ static const char *const slope_opt[] = {
 
 static int slope_fields_ref = LUA_NOREF;
 
-
+// shared by both vector2_t and vector3_t
 enum vector_e {
 	vector_x = 0,
 	vector_y,
@@ -476,11 +476,11 @@ static const char *const vector_opt[] = {
 static const char *const array_opt[] ={"iterate",NULL};
 static const char *const valid_opt[] ={"valid",NULL};
 
+/////////////////////////////////////////////
+// sector/subsector list iterate functions //
+/////////////////////////////////////////////
 
-
-
-
-
+// iterates through a sector's thinglist!
 static int lib_iterateSectorThinglist(lua_State *L)
 {
 	mobj_t *state = NULL;
@@ -494,10 +494,10 @@ static int lib_iterateSectorThinglist(lua_State *L)
 	if (!lua_isnil(L, 1))
 		state = *((mobj_t **)luaL_checkudata(L, 1, META_MOBJ));
 	else
-		return 0;  
+		return 0; // no thinglist to iterate through sorry!
 
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // remove state now.
 
 	if (!lua_isnil(L, 1))
 	{
@@ -507,7 +507,7 @@ static int lib_iterateSectorThinglist(lua_State *L)
 		thing = thing->snext;
 	}
 	else
-		thing = state;  
+		thing = state; // state is used as the "start" of the thinglist
 
 	if (thing)
 	{
@@ -517,7 +517,7 @@ static int lib_iterateSectorThinglist(lua_State *L)
 	return 0;
 }
 
-
+// iterates through the ffloors list in a sector!
 static int lib_iterateSectorFFloors(lua_State *L)
 {
 	ffloor_t *state = NULL;
@@ -531,10 +531,10 @@ static int lib_iterateSectorFFloors(lua_State *L)
 	if (!lua_isnil(L, 1))
 		state = *((ffloor_t **)luaL_checkudata(L, 1, META_FFLOOR));
 	else
-		return 0;  
+		return 0; // no ffloors to iterate through sorry!
 
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // remove state now.
 
 	if (!lua_isnil(L, 1))
 	{
@@ -542,7 +542,7 @@ static int lib_iterateSectorFFloors(lua_State *L)
 		ffloor = ffloor->next;
 	}
 	else
-		ffloor = state;  
+		ffloor = state; // state is used as the "start" of the ffloor list
 
 	if (ffloor)
 	{
@@ -552,7 +552,7 @@ static int lib_iterateSectorFFloors(lua_State *L)
 	return 0;
 }
 
-
+// iterates through a subsector's polyList! (for polyobj_t)
 static int lib_iterateSubSectorPolylist(lua_State *L)
 {
 	polyobj_t *state = NULL;
@@ -566,10 +566,10 @@ static int lib_iterateSubSectorPolylist(lua_State *L)
 	if (!lua_isnil(L, 1))
 		state = *((polyobj_t **)luaL_checkudata(L, 1, META_POLYOBJ));
 	else
-		return 0;  
+		return 0; // no polylist to iterate through sorry!
 
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // remove state now.
 
 	if (!lua_isnil(L, 1))
 	{
@@ -577,7 +577,7 @@ static int lib_iterateSubSectorPolylist(lua_State *L)
 		po = (polyobj_t *)(po->link.next);
 	}
 	else
-		po = state;  
+		po = state; // state is used as the "start" of the polylist
 
 	if (po)
 	{
@@ -589,23 +589,23 @@ static int lib_iterateSubSectorPolylist(lua_State *L)
 
 static int sector_iterate(lua_State *L)
 {
-	lua_pushvalue(L, lua_upvalueindex(1));  
-	lua_pushvalue(L, lua_upvalueindex(2));  
-	lua_pushnil(L);  
+	lua_pushvalue(L, lua_upvalueindex(1)); // iterator function, or the "generator"
+	lua_pushvalue(L, lua_upvalueindex(2)); // state (used as the "start" of the list for our purposes
+	lua_pushnil(L); // initial value (unused)
 	return 3;
 }
 
+////////////////////
+// sector.lines[] //
+////////////////////
 
-
-
-
-
-
-
-
-
-
-
+// sector.lines, i -> sector.lines[i]
+// sector.lines.valid, for validity checking
+//
+// 25/9/19 Monster Iestyn
+// Modified this and _num to use triple pointers, to allow for a new hack of mine involving offsetof
+// this way we don't need to check frontsector or backsector of line #0 in the array
+//
 static int sectorlines_get(lua_State *L)
 {
 	line_t ***seclines = *((line_t ****)luaL_checkudata(L, 1, META_SECTORLINES));
@@ -628,26 +628,26 @@ static int sectorlines_get(lua_State *L)
 		}
 	}
 
-                                                         
-                  
-                                           
-  
+/* a snip from sector_t struct in r_defs.h, for reference
+	size_t linecount;
+	struct line_s **lines; // [linecount] size
+*/
+	// get the "linecount" by shifting our retrieved memory address of "lines" to where "linecount" is in the sector_t, then dereferencing the result
+	// we need this to determine the array's actual size, and therefore also the maximum value allowed as an index
+	// this only works if seclines is actually a pointer to a sector's lines member in memory, oh boy
+	numoflines = *(size_t *)FIELDFROM (sector_t, seclines, lines,/* -> */linecount);
 
-
-
-	numoflines = *(size_t *)FIELDFROM (sector_t, seclines, lines, linecount);
-
-           
-                                                                                      
-                                                             
-                       
-                                                                     
-                                                     
-                                                      
-                                                                                                                      
-                                                     
-                                    
-  
+/* OLD HACK
+	// check first linedef to figure which of its sectors owns this sector->lines pointer
+	// then check that sector's linecount to get a maximum index
+	//if (!(*seclines)[0])
+		//return luaL_error(L, "no lines found!"); // no first linedef?????
+	if ((*seclines)[0]->frontsector->lines == *seclines)
+		numoflines = (*seclines)[0]->frontsector->linecount;
+	else if ((*seclines)[0]->backsector && *seclines[0]->backsector->lines == *seclines) // check backsector exists first
+		numoflines = (*seclines)[0]->backsector->linecount;
+	//if neither sector has it then ???
+*/
 
 	if (!numoflines)
 		return luaL_error(L, "no lines found!");
@@ -659,7 +659,7 @@ static int sectorlines_get(lua_State *L)
 	return 1;
 }
 
-
+// #(sector.lines) -> sector.linecount
 static int sectorlines_num(lua_State *L)
 {
 	line_t ***seclines = *((line_t ****)luaL_checkudata(L, 1, META_SECTORLINES));
@@ -668,15 +668,15 @@ static int sectorlines_num(lua_State *L)
 	if (!seclines || !(*seclines))
 		return luaL_error(L, "accessed sector_t.lines doesn't exist anymore.");
 
-
-	numoflines = *(size_t *)FIELDFROM (sector_t, seclines, lines, linecount);
+	// see comments in the _get function above
+	numoflines = *(size_t *)FIELDFROM (sector_t, seclines, lines,/* -> */linecount);
 	lua_pushinteger(L, numoflines);
 	return 1;
 }
 
-
-
-
+//////////////
+// sector_t //
+//////////////
 
 static int sector_get(lua_State *L)
 {
@@ -695,7 +695,7 @@ static int sector_get(lua_State *L)
 
 	switch(field)
 	{
-	case sector_valid:  
+	case sector_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
 	case sector_floorheight:
@@ -704,7 +704,7 @@ static int sector_get(lua_State *L)
 	case sector_ceilingheight:
 		lua_pushfixed(L, sector->ceilingheight);
 		return 1;
-	case sector_floorpic:  
+	case sector_floorpic: // floorpic
 	{
 		levelflat_t *levelflat = &levelflats[sector->floorpic];
 		for (i = 0; i < 8; i++)
@@ -728,7 +728,7 @@ static int sector_get(lua_State *L)
 	case sector_floorangle:
 		lua_pushangle(L, sector->floorangle);
 		return 1;
-	case sector_ceilingpic:  
+	case sector_ceilingpic: // ceilingpic
 	{
 		levelflat_t *levelflat = &levelflats[sector->ceilingpic];
 		for (i = 0; i < 8; i++)
@@ -782,57 +782,57 @@ static int sector_get(lua_State *L)
 	case sector_taglist:
 		LUA_PushUserdata(L, &sector->tags, META_SECTORTAGLIST);
 		return 1;
-	case sector_thinglist:  
+	case sector_thinglist: // thinglist
 		lua_pushcfunction(L, lib_iterateSectorThinglist);
 		LUA_PushUserdata(L, sector->thinglist, META_MOBJ);
-		lua_pushcclosure(L, sector_iterate, 2);  
+		lua_pushcclosure(L, sector_iterate, 2); // push lib_iterateSectorThinglist and sector->thinglist as upvalues for the function
 		return 1;
-	case sector_heightsec:  
+	case sector_heightsec: // heightsec - fake floor heights
 		if (sector->heightsec < 0)
 			return 0;
 		LUA_PushUserdata(L, &sectors[sector->heightsec], META_SECTOR);
 		return 1;
-	case sector_camsec:  
+	case sector_camsec: // camsec - camera clipping heights
 		if (sector->camsec < 0)
 			return 0;
 		LUA_PushUserdata(L, &sectors[sector->camsec], META_SECTOR);
 		return 1;
-	case sector_lines:  
-		LUA_PushUserdata(L, &sector->lines, META_SECTORLINES);  
+	case sector_lines: // lines
+		LUA_PushUserdata(L, &sector->lines, META_SECTORLINES); // push the address of the "lines" member in the struct, to allow our hacks in sectorlines_get/_num to work
 		return 1;
-	case sector_ffloors:  
+	case sector_ffloors: // ffloors
 		lua_pushcfunction(L, lib_iterateSectorFFloors);
 		LUA_PushUserdata(L, sector->ffloors, META_FFLOOR);
-		lua_pushcclosure(L, sector_iterate, 2);  
+		lua_pushcclosure(L, sector_iterate, 2); // push lib_iterateFFloors and sector->ffloors as upvalues for the function
 		return 1;
-	case sector_fslope:  
+	case sector_fslope: // f_slope
 		LUA_PushUserdata(L, sector->f_slope, META_SLOPE);
 		return 1;
-	case sector_cslope:  
+	case sector_cslope: // c_slope
 		LUA_PushUserdata(L, sector->c_slope, META_SLOPE);
 		return 1;
-	case sector_colormap:  
+	case sector_colormap: // extra_colormap
 		LUA_PushUserdata(L, sector->extra_colormap, META_EXTRACOLORMAP);
 		return 1;
-	case sector_flags:  
+	case sector_flags: // flags
 		lua_pushinteger(L, sector->flags);
 		return 1;
-	case sector_specialflags:  
+	case sector_specialflags: // specialflags
 		lua_pushinteger(L, sector->specialflags);
 		return 1;
-	case sector_damagetype:  
+	case sector_damagetype: // damagetype
 		lua_pushinteger(L, (UINT8)sector->damagetype);
 		return 1;
-	case sector_triggertag:  
+	case sector_triggertag: // triggertag
 		lua_pushinteger(L, (INT16)sector->triggertag);
 		return 1;
-	case sector_triggerer:  
+	case sector_triggerer: // triggerer
 		lua_pushinteger(L, (UINT8)sector->triggerer);
 		return 1;
-	case sector_friction:  
+	case sector_friction: // friction
 		lua_pushfixed(L, sector->friction);
 		return 1;
-	case sector_gravity:  
+	case sector_gravity: // gravity
 		lua_pushfixed(L, sector->gravity);
 		return 1;
 	}
@@ -854,19 +854,19 @@ static int sector_set(lua_State *L)
 
 	switch(field)
 	{
-	case sector_valid:  
-	case sector_thinglist:  
-	case sector_heightsec:  
-	case sector_camsec:  
-	case sector_lines:  
-	case sector_ffloors:  
-	case sector_fslope:  
-	case sector_cslope:  
-	case sector_friction:  
+	case sector_valid: // valid
+	case sector_thinglist: // thinglist
+	case sector_heightsec: // heightsec
+	case sector_camsec: // camsec
+	case sector_lines: // lines
+	case sector_ffloors: // ffloors
+	case sector_fslope: // f_slope
+	case sector_cslope: // c_slope
+	case sector_friction: // friction
 		return luaL_error(L, "sector_t field " LUA_QS " cannot be set.", sector_opt[field]);
 	default:
 		return luaL_error(L, "sector_t has no field named " LUA_QS ".", lua_tostring(L, 2));
-	case sector_floorheight: {  
+	case sector_floorheight: { // floorheight
 		boolean flag;
 		mobj_t *ptmthing = tmthing;
 		fixed_t lastpos = sector->floorheight;
@@ -880,7 +880,7 @@ static int sector_set(lua_State *L)
 		P_SetTarget(&tmthing, ptmthing);
 		break;
 	}
-	case sector_ceilingheight: {  
+	case sector_ceilingheight: { // ceilingheight
 		boolean flag;
 		mobj_t *ptmthing = tmthing;
 		fixed_t lastpos = sector->ceilingheight;
@@ -989,9 +989,9 @@ static int sector_num(lua_State *L)
 	return 1;
 }
 
-
-
-
+/////////////////
+// subsector_t //
+/////////////////
 
 static int subsector_get(lua_State *L)
 {
@@ -1009,7 +1009,7 @@ static int subsector_get(lua_State *L)
 
 	switch(field)
 	{
-	case subsector_valid:  
+	case subsector_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
 	case subsector_sector:
@@ -1021,10 +1021,10 @@ static int subsector_get(lua_State *L)
 	case subsector_firstline:
 		lua_pushinteger(L, subsector->firstline);
 		return 1;
-	case subsector_polyList:  
+	case subsector_polyList: // polyList
 		lua_pushcfunction(L, lib_iterateSubSectorPolylist);
 		LUA_PushUserdata(L, subsector->polyList, META_POLYOBJ);
-		lua_pushcclosure(L, sector_iterate, 2);  
+		lua_pushcclosure(L, sector_iterate, 2); // push lib_iterateSubSectorPolylist and subsector->polyList as upvalues for the function
 		return 1;
 	}
 	return 0;
@@ -1037,11 +1037,11 @@ static int subsector_num(lua_State *L)
 	return 1;
 }
 
+////////////
+// line_t //
+////////////
 
-
-
-
-
+// args, i -> args[i]
 static int lineargs_get(lua_State *L)
 {
 	INT32 *args = *((INT32**)luaL_checkudata(L, 1, META_LINEARGS));
@@ -1052,14 +1052,14 @@ static int lineargs_get(lua_State *L)
 	return 1;
 }
 
-
+// #args -> NUMLINEARGS
 static int lineargs_len(lua_State* L)
 {
 	lua_pushinteger(L, NUMLINEARGS);
 	return 1;
 }
 
-
+// stringargs, i -> stringargs[i]
 static int linestringargs_get(lua_State *L)
 {
 	char **stringargs = *((char***)luaL_checkudata(L, 1, META_LINESTRINGARGS));
@@ -1070,7 +1070,7 @@ static int linestringargs_get(lua_State *L)
 	return 1;
 }
 
-
+// #stringargs -> NUMLINESTRINGARGS
 static int linestringargs_len(lua_State *L)
 {
 	lua_pushinteger(L, NUMLINESTRINGARGS);
@@ -1093,7 +1093,7 @@ static int line_get(lua_State *L)
 
 	switch(field)
 	{
-	case line_valid:  
+	case line_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
 	case line_v1:
@@ -1118,7 +1118,7 @@ static int line_get(lua_State *L)
 		lua_pushinteger(L, line->special);
 		return 1;
 	case line_tag:
-
+		// TODO: 2.3: Always return a unsigned value
 		lua_pushinteger(L, Tag_FGet(&line->tags));
 		return 1;
 	case line_taglist:
@@ -1133,10 +1133,10 @@ static int line_get(lua_State *L)
 	case line_sidenum:
 		LUA_PushUserdata(L, line->sidenum, META_SIDENUM);
 		return 1;
-	case line_frontside:  
+	case line_frontside: // frontside
 		LUA_PushUserdata(L, &sides[line->sidenum[0]], META_SIDE);
 		return 1;
-	case line_backside:  
+	case line_backside: // backside
 		if (line->sidenum[1] == NO_SIDEDEF)
 			return 0;
 		LUA_PushUserdata(L, &sides[line->sidenum[1]], META_SIDE);
@@ -1173,7 +1173,7 @@ static int line_get(lua_State *L)
 	case line_polyobj:
 		LUA_PushUserdata(L, line->polyobj, META_POLYOBJ);
 		return 1;
-
+	// TODO: 2.3: Delete
 	case line_text:
 		{
 			if (udmf)
@@ -1185,7 +1185,7 @@ static int line_get(lua_State *L)
 
 			if (line->special == 331 || line->special == 443)
 			{
-
+				// See P_ProcessLinedefsAfterSidedefs, P_ConvertBinaryLinedefTypes
 				lua_pushstring(L, line->stringargs[0]);
 			}
 			else
@@ -1207,9 +1207,9 @@ static int line_num(lua_State *L)
 	return 1;
 }
 
-
-
-
+////////////////////
+// line.sidenum[] //
+////////////////////
 
 static int sidenum_get(lua_State *L)
 {
@@ -1239,9 +1239,9 @@ static int sidenum_get(lua_State *L)
 	return 1;
 }
 
-
-
-
+////////////
+// side_t //
+////////////
 
 static int side_get(lua_State *L)
 {
@@ -1259,7 +1259,7 @@ static int side_get(lua_State *L)
 
 	switch(field)
 	{
-	case side_valid:  
+	case side_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
 	case side_textureoffset:
@@ -1351,7 +1351,7 @@ static int side_get(lua_State *L)
 	case side_lightabsolute_bottom:
 		lua_pushboolean(L, side->lightabsolute_bottom);
 		return 1;
-
+	// TODO: 2.3: Delete
 	case side_text:
 		{
 			boolean isfrontside;
@@ -1389,7 +1389,7 @@ static int side_set(lua_State *L)
 
 	switch(field)
 	{
-	case side_valid:  
+	case side_valid: // valid
 	case side_line:
 	case side_sector:
 	case side_special:
@@ -1488,9 +1488,9 @@ static int side_num(lua_State *L)
 	return 1;
 }
 
-
-
-
+//////////////
+// vertex_t //
+//////////////
 
 static int vertex_get(lua_State *L)
 {
@@ -1508,7 +1508,7 @@ static int vertex_get(lua_State *L)
 
 	switch(field)
 	{
-	case vertex_valid:  
+	case vertex_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
 	case vertex_x:
@@ -1542,9 +1542,9 @@ static int vertex_num(lua_State *L)
 
 #ifdef HAVE_LUA_SEGS
 
-
-
-
+///////////
+// seg_t //
+///////////
 
 static int seg_get(lua_State *L)
 {
@@ -1562,7 +1562,7 @@ static int seg_get(lua_State *L)
 
 	switch(field)
 	{
-	case seg_valid:  
+	case seg_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
 	case seg_v1:
@@ -1606,9 +1606,9 @@ static int seg_num(lua_State *L)
 	return 1;
 }
 
-
-
-
+////////////
+// node_t //
+////////////
 
 static int node_get(lua_State *L)
 {
@@ -1626,7 +1626,7 @@ static int node_get(lua_State *L)
 
 	switch(field)
 	{
-	case node_valid:  
+	case node_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
 	case node_x:
@@ -1658,43 +1658,43 @@ static int node_num(lua_State *L)
 	return 1;
 }
 
+///////////////
+// node.bbox //
+///////////////
 
+/*
+// node.bbox[i][j]: i = 0 or 1, j = 0 1 2 or 3
+// NOTE: 2D arrays are NOT double pointers,
+//       the second bbox will be directly after the first in memory (hence the way the bbox is pushed here)
+// this function handles the [i] part, bbox_get handles the [j] part
+static int nodebbox_get(lua_State *L)
+{
+	fixed_t *bbox = *((fixed_t **)luaL_checkudata(L, 1, META_NODEBBOX));
+	int i;
+	lua_settop(L, 2);
+	if (!lua_isnumber(L, 2))
+	{
+		int field = luaL_checkoption(L, 2, NULL, valid_opt);
+		if (!bbox)
+		{
+			if (field == 0) {
+				lua_pushboolean(L, 0);
+				return 1;
+			}
+			return luaL_error(L, "accessed node_t doesn't exist anymore.");
+		} else if (field == 0) {
+			lua_pushboolean(L, 1);
+			return 1;
+		}
+	}
 
-
-
-  
-                                              
-                                           
-                                                                                                           
-                                                                    
-                                     
- 
-                                                                     
-       
-                  
-                         
-  
-                                                      
-            
-   
-                    
-                          
-             
-    
-                                                                  
-                          
-                         
-            
-   
-  
-
-                         
-                    
-           
-                                                            
-          
- 
-  
+	i = lua_tointeger(L, 2);
+	if (i < 0 || i > 1)
+		return 0;
+	LUA_PushUserdata(L, bbox + i*4*sizeof(fixed_t), META_BBOX);
+	return 1;
+}
+*/
 static int nodebbox_call(lua_State *L)
 {
 	fixed_t *bbox = *((fixed_t **)luaL_checkudata(L, 1, META_NODEBBOX));
@@ -1705,7 +1705,7 @@ static int nodebbox_call(lua_State *L)
 		return luaL_error(L, "accessed node bbox doesn't exist anymore.");
 	if (n < 3)
 		return luaL_error(L, "arguments 2 and/or 3 not given (expected node.bbox(child, coord))");
-
+	// get child
 	if (!lua_isnumber(L, 2)) {
 		enum nodechild_e field = luaL_checkoption(L, 2, nodechild_opt[0], nodechild_opt);
 		switch (field) {
@@ -1720,7 +1720,7 @@ static int nodebbox_call(lua_State *L)
 		if (i < 0 || i > 1)
 			return 0;
 	}
-
+	// get bbox coord
 	if (!lua_isnumber(L, 3)) {
 		enum bbox_e field = luaL_checkoption(L, 3, bbox_opt[0], bbox_opt);
 		switch (field) {
@@ -1741,11 +1741,11 @@ static int nodebbox_call(lua_State *L)
 	return 1;
 }
 
+/////////////////////
+// node.children[] //
+/////////////////////
 
-
-
-
-
+// node.children[i]: i = 0 or 1
 static int nodechildren_get(lua_State *L)
 {
 	UINT16 *children = *((UINT16 **)luaL_checkudata(L, 1, META_NODECHILDREN));
@@ -1780,12 +1780,12 @@ static int nodechildren_get(lua_State *L)
 }
 #endif
 
+//////////
+// bbox //
+//////////
 
-
-
-
-
-
+// bounding box (aka fixed_t array with four elements)
+// NOTE: may be useful for polyobjects or other things later
 static int bbox_get(lua_State *L)
 {
 	fixed_t *bbox = *((fixed_t **)luaL_checkudata(L, 1, META_BBOX));
@@ -1821,9 +1821,9 @@ static int bbox_get(lua_State *L)
 	return 1;
 }
 
-
-
-
+///////////////
+// sectors[] //
+///////////////
 
 static int lib_iterateSectors(lua_State *L)
 {
@@ -1832,7 +1832,7 @@ static int lib_iterateSectors(lua_State *L)
 	if (lua_gettop(L) < 2)
 		return luaL_error(L, "Don't call sectors.iterate() directly, use it as 'for sector in sectors.iterate do <block> end'.");
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (size_t)(*((sector_t **)luaL_checkudata(L, 1, META_SECTOR)) - sectors)+1;
 	if (i < numsectors)
@@ -1863,9 +1863,9 @@ static int lib_numsectors(lua_State *L)
 	return 1;
 }
 
-
-
-
+//////////////////
+// subsectors[] //
+//////////////////
 
 static int lib_iterateSubsectors(lua_State *L)
 {
@@ -1874,7 +1874,7 @@ static int lib_iterateSubsectors(lua_State *L)
 	if (lua_gettop(L) < 2)
 		return luaL_error(L, "Don't call subsectors.iterate() directly, use it as 'for subsector in subsectors.iterate do <block> end'.");
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (size_t)(*((subsector_t **)luaL_checkudata(L, 1, META_SUBSECTOR)) - subsectors)+1;
 	if (i < numsubsectors)
@@ -1890,7 +1890,7 @@ static int lib_getSubsector(lua_State *L)
 	int field;
 	INLEVEL
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // dummy userdata table is unused.
 	if (lua_isnumber(L, 1))
 	{
 		size_t i = lua_tointeger(L, 1);
@@ -1902,7 +1902,7 @@ static int lib_getSubsector(lua_State *L)
 	field = luaL_checkoption(L, 1, NULL, array_opt);
 	switch(field)
 	{
-	case 0:  
+	case 0: // iterate
 		lua_pushcfunction(L, lib_iterateSubsectors);
 		return 1;
 	}
@@ -1915,9 +1915,9 @@ static int lib_numsubsectors(lua_State *L)
 	return 1;
 }
 
-
-
-
+/////////////
+// lines[] //
+/////////////
 
 static int lib_iterateLines(lua_State *L)
 {
@@ -1926,7 +1926,7 @@ static int lib_iterateLines(lua_State *L)
 	if (lua_gettop(L) < 2)
 		return luaL_error(L, "Don't call lines.iterate() directly, use it as 'for line in lines.iterate do <block> end'.");
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (size_t)(*((line_t **)luaL_checkudata(L, 1, META_LINE)) - lines)+1;
 	if (i < numlines)
@@ -1957,9 +1957,9 @@ static int lib_numlines(lua_State *L)
 	return 1;
 }
 
-
-
-
+/////////////
+// sides[] //
+/////////////
 
 static int lib_iterateSides(lua_State *L)
 {
@@ -1968,7 +1968,7 @@ static int lib_iterateSides(lua_State *L)
 	if (lua_gettop(L) < 2)
 		return luaL_error(L, "Don't call sides.iterate() directly, use it as 'for side in sides.iterate do <block> end'.");
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (size_t)(*((side_t **)luaL_checkudata(L, 1, META_SIDE)) - sides)+1;
 	if (i < numsides)
@@ -1984,7 +1984,7 @@ static int lib_getSide(lua_State *L)
 	int field;
 	INLEVEL
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // dummy userdata table is unused.
 	if (lua_isnumber(L, 1))
 	{
 		size_t i = lua_tointeger(L, 1);
@@ -1996,7 +1996,7 @@ static int lib_getSide(lua_State *L)
 	field = luaL_checkoption(L, 1, NULL, array_opt);
 	switch(field)
 	{
-	case 0:  
+	case 0: // iterate
 		lua_pushcfunction(L, lib_iterateSides);
 		return 1;
 	}
@@ -2009,9 +2009,9 @@ static int lib_numsides(lua_State *L)
 	return 1;
 }
 
-
-
-
+////////////////
+// vertexes[] //
+////////////////
 
 static int lib_iterateVertexes(lua_State *L)
 {
@@ -2020,7 +2020,7 @@ static int lib_iterateVertexes(lua_State *L)
 	if (lua_gettop(L) < 2)
 		return luaL_error(L, "Don't call vertexes.iterate() directly, use it as 'for vertex in vertexes.iterate do <block> end'.");
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (size_t)(*((vertex_t **)luaL_checkudata(L, 1, META_VERTEX)) - vertexes)+1;
 	if (i < numvertexes)
@@ -2036,7 +2036,7 @@ static int lib_getVertex(lua_State *L)
 	int field;
 	INLEVEL
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // dummy userdata table is unused.
 	if (lua_isnumber(L, 1))
 	{
 		size_t i = lua_tointeger(L, 1);
@@ -2048,7 +2048,7 @@ static int lib_getVertex(lua_State *L)
 	field = luaL_checkoption(L, 1, NULL, array_opt);
 	switch(field)
 	{
-	case 0:  
+	case 0: // iterate
 		lua_pushcfunction(L, lib_iterateVertexes);
 		return 1;
 	}
@@ -2063,9 +2063,9 @@ static int lib_numvertexes(lua_State *L)
 
 #ifdef HAVE_LUA_SEGS
 
-
-
-
+////////////
+// segs[] //
+////////////
 
 static int lib_iterateSegs(lua_State *L)
 {
@@ -2074,7 +2074,7 @@ static int lib_iterateSegs(lua_State *L)
 	if (lua_gettop(L) < 2)
 		return luaL_error(L, "Don't call segs.iterate() directly, use it as 'for seg in segs.iterate do <block> end'.");
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (size_t)(*((seg_t **)luaL_checkudata(L, 1, META_SEG)) - segs)+1;
 	if (i < numsegs)
@@ -2090,7 +2090,7 @@ static int lib_getSeg(lua_State *L)
 	int field;
 	INLEVEL
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // dummy userdata table is unused.
 	if (lua_isnumber(L, 1))
 	{
 		size_t i = lua_tointeger(L, 1);
@@ -2102,7 +2102,7 @@ static int lib_getSeg(lua_State *L)
 	field = luaL_checkoption(L, 1, NULL, array_opt);
 	switch(field)
 	{
-	case 0:  
+	case 0: // iterate
 		lua_pushcfunction(L, lib_iterateSegs);
 		return 1;
 	}
@@ -2115,9 +2115,9 @@ static int lib_numsegs(lua_State *L)
 	return 1;
 }
 
-
-
-
+/////////////
+// nodes[] //
+/////////////
 
 static int lib_iterateNodes(lua_State *L)
 {
@@ -2126,7 +2126,7 @@ static int lib_iterateNodes(lua_State *L)
 	if (lua_gettop(L) < 2)
 		return luaL_error(L, "Don't call nodes.iterate() directly, use it as 'for node in nodes.iterate do <block> end'.");
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (size_t)(*((node_t **)luaL_checkudata(L, 1, META_NODE)) - nodes)+1;
 	if (i < numsegs)
@@ -2142,7 +2142,7 @@ static int lib_getNode(lua_State *L)
 	int field;
 	INLEVEL
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // dummy userdata table is unused.
 	if (lua_isnumber(L, 1))
 	{
 		size_t i = lua_tointeger(L, 1);
@@ -2154,7 +2154,7 @@ static int lib_getNode(lua_State *L)
 	field = luaL_checkoption(L, 1, NULL, array_opt);
 	switch(field)
 	{
-	case 0:  
+	case 0: // iterate
 		lua_pushcfunction(L, lib_iterateNodes);
 		return 1;
 	}
@@ -2168,9 +2168,9 @@ static int lib_numnodes(lua_State *L)
 }
 #endif
 
-
-
-
+//////////////
+// ffloor_t //
+//////////////
 
 static INT32 P_GetOldFOFFlags(ffloor_t *fflr)
 {
@@ -2263,13 +2263,13 @@ static int ffloor_get(lua_State *L)
 
 	switch(field)
 	{
-	case ffloor_valid:  
+	case ffloor_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
 	case ffloor_topheight:
 		lua_pushfixed(L, *ffloor->topheight);
 		return 1;
-	case ffloor_toppic: {  
+	case ffloor_toppic: { // toppic
 		levelflat_t *levelflat = &levelflats[*ffloor->toppic];
 		for (i = 0; i < 8; i++)
 			if (!levelflat->name[i])
@@ -2295,7 +2295,7 @@ static int ffloor_get(lua_State *L)
 	case ffloor_bottomheight:
 		lua_pushfixed(L, *ffloor->bottomheight);
 		return 1;
-	case ffloor_bottompic: {  
+	case ffloor_bottompic: { // bottompic
 		levelflat_t *levelflat = &levelflats[*ffloor->bottompic];
 		for (i = 0; i < 8; i++)
 			if (!levelflat->name[i])
@@ -2467,18 +2467,18 @@ static int ffloor_set(lua_State *L)
 
 	switch(field)
 	{
-	case ffloor_valid:  
-	case ffloor_tslope:  
-	case ffloor_bslope:  
-	case ffloor_sector:  
-	case ffloor_master:  
-	case ffloor_target:  
-	case ffloor_next:  
-	case ffloor_prev:  
+	case ffloor_valid: // valid
+	case ffloor_tslope: // t_slope
+	case ffloor_bslope: // b_slope
+	case ffloor_sector: // sector
+	case ffloor_master: // master
+	case ffloor_target: // target
+	case ffloor_next: // next
+	case ffloor_prev: // prev
 		return luaL_error(L, "ffloor_t field " LUA_QS " cannot be set.", ffloor_opt[field]);
 	default:
 		return luaL_error(L, "ffloor_t has no field named " LUA_QS ".", lua_tostring(L, 2));
-	case ffloor_topheight: {  
+	case ffloor_topheight: { // topheight
 		boolean flag;
 		fixed_t lastpos = *ffloor->topheight;
 		mobj_t *ptmthing = tmthing;
@@ -2511,7 +2511,7 @@ static int ffloor_set(lua_State *L)
 	case ffloor_topyscale:
 		*ffloor->topyscale = luaL_checkfixed(L, 3);
 		break;
-	case ffloor_bottomheight: {  
+	case ffloor_bottomheight: { // bottomheight
 		boolean flag;
 		fixed_t lastpos = *ffloor->bottomheight;
 		mobj_t *ptmthing = tmthing;
@@ -2542,20 +2542,20 @@ static int ffloor_set(lua_State *L)
 		*ffloor->bottomyscale = luaL_checkfixed(L, 3);
 		break;
 	case ffloor_fofflags: {
-		ffloortype_e oldflags = ffloor->fofflags;  
+		ffloortype_e oldflags = ffloor->fofflags; // store FOF's old flags
 		ffloor->fofflags = luaL_checkinteger(L, 3);
 		if (ffloor->fofflags != oldflags)
-			ffloor->target->moved = true;  
+			ffloor->target->moved = true; // reset target sector's lightlist
 		break;
 	}
 	case ffloor_flags: {
-		ffloortype_e oldflags = ffloor->fofflags;  
+		ffloortype_e oldflags = ffloor->fofflags; // store FOF's old flags
 		busttype_e oldbusttype = ffloor->busttype;
 		ffloorbustflags_e oldbustflags = ffloor->bustflags;
 		oldffloortype_e newflags = luaL_checkinteger(L, 3);
 		P_SetOldFOFFlags(ffloor, newflags);
 		if (ffloor->fofflags != oldflags || ffloor->busttype != oldbusttype || ffloor->bustflags != oldbustflags)
-			ffloor->target->moved = true;  
+			ffloor->target->moved = true; // reset target sector's lightlist
 		break;
 	}
 	case ffloor_alpha:
@@ -2568,9 +2568,9 @@ static int ffloor_set(lua_State *L)
 	return 0;
 }
 
-
-
-
+//////////////
+// pslope_t //
+//////////////
 
 static int slope_get(lua_State *L)
 {
@@ -2588,28 +2588,28 @@ static int slope_get(lua_State *L)
 
 	switch(field)
 	{
-	case slope_valid:  
+	case slope_valid: // valid
 		lua_pushboolean(L, 1);
 		return 1;
-	case slope_o:  
+	case slope_o: // o
 		LUA_PushUserdata(L, &slope->o, META_VECTOR3);
 		return 1;
-	case slope_d:  
+	case slope_d: // d
 		LUA_PushUserdata(L, &slope->d, META_VECTOR2);
 		return 1;
-	case slope_zdelta:  
+	case slope_zdelta: // zdelta
 		lua_pushfixed(L, slope->zdelta);
 		return 1;
-	case slope_normal:  
+	case slope_normal: // normal
 		LUA_PushUserdata(L, &slope->normal, META_VECTOR3);
 		return 1;
-	case slope_zangle:  
+	case slope_zangle: // zangle
 		lua_pushangle(L, slope->zangle);
 		return 1;
-	case slope_xydirection:  
+	case slope_xydirection: // xydirection
 		lua_pushangle(L, slope->xydirection);
 		return 1;
-	case slope_flags:  
+	case slope_flags: // flags
 		lua_pushinteger(L, slope->flags);
 		return 1;
 	}
@@ -2629,16 +2629,16 @@ static int slope_set(lua_State *L)
 	if (hook_cmd_running)
 		return luaL_error(L, "Do not alter pslope_t in CMD building code!");
 
-	switch(field)  
+	switch(field) // todo: reorganize this shit
 	{
-	case slope_valid:  
-	case slope_d:  
-	case slope_flags:  
-	case slope_normal:  
+	case slope_valid: // valid
+	case slope_d: // d
+	case slope_flags: // flags
+	case slope_normal: // normal
 		return luaL_error(L, "pslope_t field " LUA_QS " cannot be set.", slope_opt[field]);
 	default:
 		return luaL_error(L, "pslope_t has no field named " LUA_QS ".", lua_tostring(L, 2));
-	case slope_o: {  
+	case slope_o: { // o
 		luaL_checktype(L, 3, LUA_TTABLE);
 
 		lua_getfield(L, 3, "x");
@@ -2683,14 +2683,14 @@ static int slope_set(lua_State *L)
 		lua_pop(L, 1);
 		break;
 	}
-	case slope_zdelta: {  
+	case slope_zdelta: { // zdelta
 		slope->zdelta = luaL_checkfixed(L, 3);
 		slope->zangle = R_PointToAngle2(0, 0, FRACUNIT, -slope->zdelta);
 		slope->dzdelta = FixedToDouble(slope->zdelta);
 		P_CalculateSlopeNormal(slope);
 		break;
 	}
-	case slope_zangle: {  
+	case slope_zangle: { // zangle
 		angle_t zangle = luaL_checkangle(L, 3);
 		if (zangle == ANGLE_90 || zangle == ANGLE_270)
 			return luaL_error(L, "invalid zangle for slope!");
@@ -2700,7 +2700,7 @@ static int slope_set(lua_State *L)
 		P_CalculateSlopeNormal(slope);
 		break;
 	}
-	case slope_xydirection:  
+	case slope_xydirection: // xydirection
 		slope->xydirection = luaL_checkangle(L, 3);
 		slope->d.x = -FINECOSINE((slope->xydirection>>ANGLETOFINESHIFT) & FINEMASK);
 		slope->d.y = -FINESINE((slope->xydirection>>ANGLETOFINESHIFT) & FINEMASK);
@@ -2712,9 +2712,9 @@ static int slope_set(lua_State *L)
 	return 0;
 }
 
-
-
-
+///////////////
+// vector*_t //
+///////////////
 
 static int vector2_get(lua_State *L)
 {
@@ -2753,33 +2753,33 @@ static int vector3_get(lua_State *L)
 	return 0;
 }
 
-
-
-
+/////////////////////
+// mapheaderinfo[] //
+/////////////////////
 
 static int lib_getMapheaderinfo(lua_State *L)
 {
+	// i -> mapheaderinfo[i-1]
 
-
-
+	//int field;
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // dummy userdata table is unused.
 	if (lua_isnumber(L, 1))
 	{
 		size_t i = lua_tointeger(L, 1)-1;
 		if (i >= NUMMAPS)
 			return 0;
 		LUA_PushUserdata(L, mapheaderinfo[i], META_MAPHEADER);
-
+		//CONS_Printf(mapheaderinfo[i]->lvlttl);
 		return 1;
-	}  
-                                                 
-              
-  
-                   
-                                              
-           
-    
+	}/*
+	field = luaL_checkoption(L, 1, NULL, array_opt);
+	switch(field)
+	{
+	case 0: // iterate
+		lua_pushcfunction(L, lib_iterateSubsectors);
+		return 1;
+	}*/
 	return 0;
 }
 
@@ -2789,9 +2789,9 @@ static int lib_nummapheaders(lua_State *L)
 	return 1;
 }
 
-
-
-
+/////////////////
+// mapheader_t //
+/////////////////
 
 enum mapheaderinfo_e
 {
@@ -3039,11 +3039,11 @@ static int mapheaderinfo_get(lua_State *L)
 	case mapheaderinfo_gravity:
 		lua_pushfixed(L, header->gravity);
 		break;
-
+	// TODO add support for reading numGradedMares and grades
 	default:
 	{
-
-
+		// Read custom vars now
+		// (note: don't include the "LUA." in your lua scripts!)
 		UINT8 j = 0;
 		for (;j < header->numCustomOptions && !fastcmp(lua_tostring(L, 2), header->customopts[j].option); ++j);
 
@@ -3113,7 +3113,7 @@ int LUA_MapLib(lua_State *L)
 	node_fields_ref = Lua_CreateFieldTable(L, node_opt);
 
 	luaL_newmetatable(L, META_NODEBBOX);
-
+		//LUA_SetCFunctionField(L, "__index", nodebbox_get);
 		LUA_SetCFunctionField(L, "__call", nodebbox_call);
 	lua_pop(L, 1);
 

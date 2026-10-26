@@ -11,7 +11,7 @@
 */
 #include "SDL.h"
 
-#include <stdio.h>  
+#include <stdio.h> /* for fflush() and stdout */
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -20,8 +20,8 @@
 #include "testutils.h"
 
 static SDL_AudioSpec spec;
-static Uint8 *sound = NULL;  
-static Uint32 soundlen = 0;  
+static Uint8 *sound = NULL; /* Pointer to wave data */
+static Uint32 soundlen = 0; /* Length of wave data */
 
 typedef struct
 {
@@ -75,7 +75,7 @@ test_multi_audio(int devcount)
 #ifdef __ANDROID__
     SDL_Event event;
 
-     
+    /* Create a Window to get fully initialized event processing for testing pause on Android. */
     SDL_CreateWindow("testmultiaudio", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 320, 240, 0);
 #endif
 
@@ -103,7 +103,7 @@ test_multi_audio(int devcount)
 #else
             while (!SDL_AtomicGet(&cbd[0].done)) {
 #ifdef __ANDROID__
-                 
+                /* Empty queue, some application events would prevent pause. */
                 while (SDL_PollEvent(&event)) {
                 }
 #endif
@@ -142,7 +142,7 @@ test_multi_audio(int devcount)
             }
         }
 #ifdef __ANDROID__
-         
+        /* Empty queue, some application events would prevent pause. */
         while (SDL_PollEvent(&event)) {
         }
 #endif
@@ -166,10 +166,10 @@ int main(int argc, char **argv)
 {
     int devcount = 0;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(SDL_INIT_AUDIO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
@@ -183,7 +183,7 @@ int main(int argc, char **argv)
     } else {
         char *file = GetResourceFilename(argc > 1 ? argv[1] : NULL, "sample.wav");
 
-         
+        /* Load the wave file into memory */
         if (SDL_LoadWAV(file, &spec, &sound, &soundlen) == NULL) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load %s: %s\n", file,
                          SDL_GetError());

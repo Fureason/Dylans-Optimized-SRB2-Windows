@@ -1,6 +1,6 @@
-  
-                                                            
-  
+/*
+strcasestr -- case insensitive substring searching function.
+*/
 /*
 Copyright 2019-2023 James R.
 All rights reserved.

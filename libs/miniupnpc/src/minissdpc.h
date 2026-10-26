@@ -1,4 +1,4 @@
- 
+/* $Id: minissdpc.h,v 1.8 2019/02/10 12:29:23 nanard Exp $ */
 /* Project: miniupnp
  * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
  * Author: Thomas Bernard
@@ -11,7 +11,7 @@
 #include "miniupnpc_declspec.h"
 #include "upnpdev.h"
 
- 
+/* error codes : */
 #define MINISSDPC_SUCCESS (0)
 #define MINISSDPC_UNKNOWN_ERROR (-1)
 #define MINISSDPC_SOCKET_ERROR (-101)
@@ -40,7 +40,7 @@ requestDevicesFromMiniSSDPD(int s, const char * devtype);
 MINIUPNP_LIBSPEC struct UPNPDev *
 receiveDevicesFromMiniSSDPD(int s, int * error);
 
-#endif  
+#endif /* !(defined(_WIN32) || defined(__amigaos__) || defined(__amigaos4__)) */
 
 MINIUPNP_LIBSPEC struct UPNPDev *
 ssdpDiscoverDevices(const char * const deviceTypes[],

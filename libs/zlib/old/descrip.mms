@@ -1,5 +1,5 @@
-
-
+# descrip.mms: MMS description file for building zlib on VMS
+# written by Martin P.J. Zinser <m.zinser@gsi.de>
 
 cc_defs =
 c_deb =
@@ -29,7 +29,7 @@ clean :
 	delete *.obj;*,libz.olb;*
 
 
-
+# Other dependencies.
 adler32.obj : zutil.h zlib.h zconf.h
 compress.obj : zlib.h zconf.h
 crc32.obj : zutil.h zlib.h zconf.h

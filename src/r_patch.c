@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_patch.c
+/// \brief Patch generation.
 
 #include "doomdef.h"
 #include "r_patch.h"
@@ -23,9 +23,9 @@
 #include "hardware/hw_glob.h"
 #endif
 
-
-
-
+//
+// Creates a patch.
+//
 
 patch_t *Patch_Create(INT16 width, INT16 height)
 {
@@ -120,9 +120,9 @@ void Patch_MakeColumns(softwarepatch_t *source, size_t num_columns, INT16 width,
 	}
 }
 
-
-
-
+//
+// Frees a patch from memory.
+//
 
 static void Patch_FreeData(patch_t *patch)
 {
@@ -156,7 +156,7 @@ static void Patch_FreeData(patch_t *patch)
 	{
 		rotsprite_t *rotsprite = patch->rotated;
 
-
+		// The second half of this array contains the flipped rotations.
 		for (i = 0; i < rotsprite->angles * 2; i++)
 		{
 			if (rotsprite->patches[i])
@@ -182,9 +182,9 @@ void Patch_Free(patch_t *patch)
 	Z_Free(patch);
 }
 
-
-
-
+//
+// Frees patches with a tag range.
+//
 
 static boolean Patch_FreeTagsCallback(void *mem)
 {
@@ -206,9 +206,9 @@ void Patch_GenerateFlat(patch_t *patch, pictureflags_t flags)
 }
 
 #ifdef HWRENDER
-
-
-
+//
+// Allocates a hardware patch.
+//
 
 void *Patch_AllocateHardwarePatch(patch_t *patch)
 {
@@ -219,9 +219,9 @@ void *Patch_AllocateHardwarePatch(patch_t *patch)
 	}
 	else
 	{
-		                                                                  
-                                                                     
-                                                               
+		/* The zone allocator may purge the mipmap independently while the
+		 * containing hardware patch is still resident. Repair that partial
+		 * cache state before callers dereference grPatch->mipmap. */
 		GLPatch_t *grPatch = (GLPatch_t *)patch->hardware;
 		if (!grPatch->mipmap)
 			grPatch->mipmap = Z_Calloc(sizeof(GLMipmap_t), PU_HWRPATCHINFO, &grPatch->mipmap);
@@ -229,15 +229,15 @@ void *Patch_AllocateHardwarePatch(patch_t *patch)
 	return (void *)(patch->hardware);
 }
 
-
-
-
+//
+// Creates a hardware patch.
+//
 
 void *Patch_CreateGL(patch_t *patch)
 {
 	GLPatch_t *grPatch = (GLPatch_t *)Patch_AllocateHardwarePatch(patch);
-	if (!grPatch->mipmap->data)  
+	if (!grPatch->mipmap->data) // Run HWR_MakePatch in all cases, to recalculate some things
 		HWR_MakePatch(patch, grPatch, grPatch->mipmap, false);
 	return grPatch;
 }
-#endif  
+#endif // HWRENDER

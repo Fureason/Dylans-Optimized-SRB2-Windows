@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw_light.h
+/// \brief Dynamic lighting & coronas add on by Hurdler
 
 #ifndef _HW_LIGHTS_
 #define _HW_LIGHTS_
@@ -16,12 +16,12 @@
 #include "hw_glob.h"
 #include "hw_defs.h"
 
-#define NUMLIGHTFREESLOTS 32  
+#define NUMLIGHTFREESLOTS 32 // Free light slots (for SOCs)
 
 #ifdef ALAM_LIGHTING
 #define NEWCORONAS
 
-#define DL_MAX_LIGHT 256  
+#define DL_MAX_LIGHT 256 // maximum number of lights (extra lights are ignored)
 
 void HWR_InitLight(void);
 void HWR_DL_AddLight(gl_vissprite_t *spr, GLPatch_t *patch);
@@ -29,6 +29,7 @@ void HWR_PlaneLighting(FOutVector *clVerts, int nrClipVerts);
 void HWR_WallLighting(FOutVector *wlVerts);
 void HWR_ResetLights(void);
 void HWR_SetLights(int viewnumber);
+boolean HWR_MobjHasLight(const mobj_t *thing);
 
 #ifdef NEWCORONAS
 void HWR_DrawCoronas(void);
@@ -40,7 +41,7 @@ typedef struct
 {
 	int nb;
 	light_t *p_lspr[DL_MAX_LIGHT];
-	FVector position[DL_MAX_LIGHT];  
+	FVector position[DL_MAX_LIGHT]; // actually maximum DL_MAX_LIGHT lights
 	mobj_t *mo[DL_MAX_LIGHT];
 } dynlights_t;
 
@@ -50,7 +51,7 @@ typedef enum
 {
 	NOLIGHT = 0,
 	RINGSPARK_L,
-	SUPERSONIC_L,  
+	SUPERSONIC_L, // Cool. =)
 	SUPERSPARK_L,
 	INVINCIBLE_L,
 	GREENSHIELD_L,
@@ -78,13 +79,13 @@ typedef enum
 	GOOPLIGHT_L,
 	STREETLIGHT_L,
 
-
+	// free slots for SOCs at run-time --------------------
 	FREESLOT0_L,
-
-
-
+	//
+	// ... 32 free lights here ...
+	//
 	LASTFREESLOT_L = (FREESLOT0_L+NUMLIGHTFREESLOTS-1),
-
+	// end of freeslots ---------------------------------------------
 
 	NUMLIGHTS
 } lightspritenum_t;

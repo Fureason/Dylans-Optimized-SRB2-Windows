@@ -1,4 +1,4 @@
- 
+/* $Id: upnpc.c,v 1.134 2023/06/11 23:23:10 nanard Exp $ */
 /* Project : miniupnp
  * Author : Thomas Bernard
  * Copyright (c) 2005-2023 Thomas Bernard
@@ -13,7 +13,7 @@
 #include <winsock2.h>
 #include "win32_snprintf.h"
 #else
- 
+/* for IPPROTO_TCP / IPPROTO_UDP */
 #include <netinet/in.h>
 #endif
 #include <ctype.h>
@@ -24,8 +24,8 @@
 #include "upnperrors.h"
 #include "miniupnpcstrings.h"
 
-                                                  
-                         
+/* protofix() checks if protocol is "UDP" or "TCP"
+ * returns NULL if not */
 const char * protofix(const char * proto)
 {
 	static const char proto_tcp[4] = { 'T', 'C', 'P', 0};
@@ -44,15 +44,15 @@ const char * protofix(const char * proto)
 	return 0;
 }
 
-                                                    
-                
-                          
+/* is_int() checks if parameter is an integer or not
+ * 1 for integer
+ * 0 for not an integer */
 int is_int(char const* s)
 {
 	if(s == NULL)
 		return 0;
 	while(*s) {
-		 
+		/* #define isdigit(c) ((c) >= '0' && (c) <= '9') */
 		if(!isdigit(*s))
 			return 0;
 		s++;
@@ -145,9 +145,9 @@ static void ListRedirections(struct UPNPUrls * urls,
 	char enabled[6];
 	char rHost[64];
 	char duration[16];
-	                     
-                                                                               
-                                                    
+	/*unsigned int num=0;
+	UPNP_GetPortMappingNumberOfEntries(urls->controlURL, data->servicetype, &num);
+	printf("PortMappingNumberOfEntries : %u\n", num);*/
 	printf(" i protocol exPort->inAddr:inPort description remoteHost leaseTime\n");
 	do {
 		snprintf(index, 6, "%hu", i);
@@ -161,13 +161,13 @@ static void ListRedirections(struct UPNPUrls * urls,
 									   protocol, desc, enabled,
 									   rHost, duration);
 		if(r==0)
-		  
-                                                               
-                                        
-                                                   
-                         
-                    
-         
+		/*
+			printf("%02hu - %s %s->%s:%s\tenabled=%s leaseDuration=%s\n"
+			       "     desc='%s' rHost='%s'\n",
+			       i, protocol, extPort, intClient, intPort,
+				   enabled, duration,
+				   desc, rHost);
+				   */
 			printf("%2hu %s %5s->%s:%-5s '%s' '%s' %s\n",
 			       i, protocol, extPort, intClient, intPort,
 			       desc, rHost, duration);
@@ -239,11 +239,11 @@ static void NewListRedirections(struct UPNPUrls * urls,
 	}
 }
 
-                
-                          
-                             
-                       
-                                            
+/* Test function
+ * 1 - get connection type
+ * 2 - get extenal ip address
+ * 3 - Add port mapping
+ * 4 - get this port mapping from the IGD */
 static int SetRedirectAndTest(struct UPNPUrls * urls,
 			       struct IGDdatas * data,
 			       const char * iaddr,
@@ -305,8 +305,8 @@ static int SetRedirectAndTest(struct UPNPUrls * urls,
 	r = UPNP_GetSpecificPortMappingEntry(urls->controlURL,
 					     data->first.servicetype,
 					     eport, proto, remoteHost,
-					     intClient, intPort, NULL ,
-					     NULL , duration);
+					     intClient, intPort, NULL/*desc*/,
+					     NULL/*enabled*/, duration);
 	if(r!=UPNPCOMMAND_SUCCESS) {
 		printf("GetSpecificPortMappingEntry() failed with code %d (%s)\n",
 		       r, strupnperror(r));
@@ -380,7 +380,7 @@ RemoveRedirectRange(struct UPNPUrls * urls,
 	return 0;
 }
 
- 
+/* IGD:2, functions for service WANIPv6FirewallControl:1 */
 static void GetFirewallStatus(struct UPNPUrls * urls, struct IGDdatas * data)
 {
 	unsigned int bytessent, bytesreceived, packetsreceived, packetssent;
@@ -398,16 +398,16 @@ static void GetFirewallStatus(struct UPNPUrls * urls, struct IGDdatas * data)
 	printf("Packets: Sent: %8u\tRecv: %8u\n", packetssent, packetsreceived);
 }
 
-                
-                  
-                                                       
+/* Test function
+ * 1 - Add pinhole
+ * 2 - Check if pinhole is working from the IGD side */
 static void SetPinholeAndTest(struct UPNPUrls * urls, struct IGDdatas * data,
 					const char * remoteaddr, const char * eport,
 					const char * intaddr, const char * iport,
 					const char * proto, const char * lease_time)
 {
 	char uniqueID[8];
-	 
+	/*int isWorking = 0;*/
 	int r;
 	char proto_tmp[8];
 
@@ -444,16 +444,16 @@ static void SetPinholeAndTest(struct UPNPUrls * urls, struct IGDdatas * data,
 	{
 		printf("AddPinhole: ([%s]:%s -> [%s]:%s) / Pinhole ID = %s\n",
 		       remoteaddr, eport, intaddr, iport, uniqueID);
-		                                                                                                  
-                            
-                                                                                  
-                                                                                                         
+		/*r = UPNP_CheckPinholeWorking(urls->controlURL_6FC, data->servicetype_6FC, uniqueID, &isWorking);
+		if(r!=UPNPCOMMAND_SUCCESS)
+			printf("CheckPinholeWorking() failed with code %d (%s)\n", r, strupnperror(r));
+		printf("CheckPinholeWorking: Pinhole ID = %s / IsWorking = %s\n", uniqueID, (isWorking)? "Yes":"No");*/
 	}
 }
 
-                
-                                                    
-                        
+/* Test function
+ * 1 - Check if pinhole is working from the IGD side
+ * 2 - Update pinhole */
 static void GetPinholeAndUpdate(struct UPNPUrls * urls, struct IGDdatas * data,
 					const char * uniqueID, const char * lease_time)
 {
@@ -465,19 +465,19 @@ static void GetPinholeAndUpdate(struct UPNPUrls * urls, struct IGDdatas * data,
 		fprintf(stderr, "Wrong arguments\n");
 		return;
 	}
-	                                                                 
-                                        
+	/* CheckPinholeWorking is an Optional Action, error 602 should be
+	 * returned if it is not implemented */
 	r = UPNP_CheckPinholeWorking(urls->controlURL_6FC, data->IPv6FC.servicetype, uniqueID, &isWorking);
 	if(r==UPNPCOMMAND_SUCCESS)
 		printf("CheckPinholeWorking: Pinhole ID = %s / IsWorking = %s\n", uniqueID, (isWorking)? "Yes":"No");
 	else
 		printf("CheckPinholeWorking(%s) failed with code %d (%s)\n", uniqueID, r, strupnperror(r));
-	                                                                        
-                                                                         
-                                                                            
-                                                                    
-                                                                      
-                                                          
+	/* 702 FirewallDisabled Firewall is disabled and this action is disabled
+	 * 703 InboundPinholeNotAllowed Creation of inbound pinholes by UPnP CPs
+	 *                              are not allowed and this action is disabled
+	 * 704 NoSuchEntry There is no pinhole with the specified UniqueID.
+	 * 709 NoTrafficReceived No traffic corresponding to this pinhole has
+	 *                       been received by the gateway. */
 	if(isWorking || (r!=702 && r!=703 && r!=704))
 	{
 		r = UPNP_UpdatePinhole(urls->controlURL_6FC, data->IPv6FC.servicetype, uniqueID, lease_time);
@@ -487,9 +487,9 @@ static void GetPinholeAndUpdate(struct UPNPUrls * urls, struct IGDdatas * data,
 	}
 }
 
-                
-                      
-   
+/* Test function
+ * Get pinhole timeout
+ */
 static void GetPinholeOutboundTimeout(struct UPNPUrls * urls, struct IGDdatas * data,
 					const char * remoteaddr, const char * eport,
 					const char * intaddr, const char * iport,
@@ -561,14 +561,14 @@ RemovePinhole(struct UPNPUrls * urls,
 }
 
 
- 
+/* sample upnp client program */
 int main(int argc, char ** argv)
 {
 	char command = 0;
 	char ** commandargv = 0;
 	int commandargc = 0;
 	struct UPNPDev * devlist = 0;
-	char lanaddr[64] = "unset";	 
+	char lanaddr[64] = "unset";	/* my ip address on the LAN */
 	int i;
 	const char * rootdescurl = 0;
 	const char * multicastif = 0;
@@ -578,7 +578,7 @@ int main(int argc, char ** argv)
 	int error = 0;
 	int ipv6 = 0;
 	int ignore = 0;
-	unsigned char ttl = 2;	 
+	unsigned char ttl = 2;	/* defaulting to 2 */
 	const char * description = 0;
 
 #ifdef _WIN32
@@ -594,7 +594,7 @@ int main(int argc, char ** argv)
 	printf(" (c) 2005-2023 Thomas Bernard.\n");
     printf("Go to http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/\n"
 	       "for more information.\n");
-	 
+	/* command line processing */
 	for(i=1; i<argc; i++)
 	{
 		if(0 == strcmp(argv[i], "--help") || 0 == strcmp(argv[i], "-h"))
@@ -609,7 +609,7 @@ int main(int argc, char ** argv)
 			else if(argv[i][1] == 'm')
 			{
 				multicastif = argv[++i];
-				minissdpdpath = "";	 
+				minissdpdpath = "";	/* Disable usage of minissdpd */
 			}
 			else if(argv[i][1] == 'z')
 			{
@@ -734,12 +734,12 @@ int main(int argc, char ** argv)
 			descXML = miniwget(urls.ipcondescURL, &descXMLsize);
 			if(descXML)
 			{
-				 
+				/*fwrite(descXML, 1, descXMLsize, stdout);*/
 				free(descXML); descXML = NULL;
 			}
 			#endif
 
-			 
+			/* replace '@' with the local LAN ip address */
 			if ((command == 'a' || command == 'n') && 0 == strcmp(commandargv[0], "@"))
 				commandargv[0] = lanaddr;
 			else if ((command == 'A' || command == 'G') && 0 == strcmp(commandargv[2], "@"))
@@ -768,7 +768,7 @@ int main(int argc, char ** argv)
 				               commandargc > 2 ? commandargv[2] : NULL) < 0)
 					retcode = 2;
 				break;
-			case 'n':	 
+			case 'n':	/* aNy */
 				if (SetRedirectAndTest(&urls, &data,
 						   commandargv[0], commandargv[1],
 						   commandargv[2], commandargv[3],
@@ -793,26 +793,26 @@ int main(int argc, char ** argv)
 				while(i<commandargc)
 				{
 					if(!is_int(commandargv[i])) {
-						 
+						/* 1st parameter not an integer : error */
 						fprintf(stderr, "command -r : %s is not an port number\n", commandargv[i]);
 						retcode = 1;
 						break;
 					} else if(is_int(commandargv[i+1])){
-						 
+						/* 2nd parameter is an integer : <port> <external_port> <protocol> */
 						if (SetRedirectAndTest(&urls, &data,
 								   lanaddr, commandargv[i],
 								   commandargv[i+1], commandargv[i+2], "0", NULL,
 								   description, 0) < 0)
 							retcode = 2;
-						i+=3;	 
+						i+=3;	/* 3 parameters parsed */
 					} else {
-						 
+						/* 2nd parameter not an integer : <port> <protocol> */
 						if (SetRedirectAndTest(&urls, &data,
 								   lanaddr, commandargv[i],
 								   commandargv[i], commandargv[i+1], "0", NULL,
 								   description, 0) < 0)
 							retcode = 2;
-						i+=2;	 
+						i+=2;	/* 2 parameters parsed */
 					}
 				}
 				break;
@@ -885,7 +885,7 @@ int main(int argc, char ** argv)
 	if(nResult != NO_ERROR) {
 		fprintf(stderr, "WSACleanup() failed.\n");
 	}
-#endif  
+#endif /* _WIN32 */
 	return retcode;
 }
 

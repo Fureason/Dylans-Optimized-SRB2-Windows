@@ -14,8 +14,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file
+/// \brief SDL network interface
 
 #include "../doomdef.h"
 
@@ -48,12 +48,12 @@ static UDPsocket mysocket = NULL;
 static SDLNet_SocketSet myset = NULL;
 
 static size_t numbans = 0;
-static boolean NET_bannednode[MAXNETNODES+1];  
+static boolean NET_bannednode[MAXNETNODES+1]; /// \note do we really need the +1?
 static boolean init_SDLNet_driver = false;
 
 static const char *NET_AddrToStr(IPaddress* sk)
 {
-	static char s[22];  
+	static char s[22]; // 255.255.255.255:65535
 	strcpy(s, SDLNet_ResolveIP(sk));
 	if (sk->port != 0) strcat(s, va(":%d", sk->port));
 	return s;
@@ -90,7 +90,7 @@ static void NET_Get(void)
 	mypacket.len = MAXPACKETLENGTH;
 	if (!NET_CanGet())
 	{
-		doomcom->remotenode = -1;  
+		doomcom->remotenode = -1; // no packet
 		return;
 	}
 	mystatus = SDLNet_UDP_Recv(mysocket,&mypacket);
@@ -98,7 +98,7 @@ static void NET_Get(void)
 	{
 		if (mypacket.channel != -1)
 		{
-			doomcom->remotenode = mypacket.channel+1;  
+			doomcom->remotenode = mypacket.channel+1; // good packet from a game player
 			doomcom->datalength = mypacket.len;
 			return;
 		}
@@ -110,7 +110,7 @@ static void NET_Get(void)
 			M_Memcpy(&clientaddress[newnode], &mypacket.address, sizeof (IPaddress));
 			DEBFILE(va("New node detected: node:%d address:%s\n", newnode,
 					NET_GetNodeAddress(newnode)));
-			doomcom->remotenode = newnode;  
+			doomcom->remotenode = newnode; // good packet from a game player
 			doomcom->datalength = mypacket.len;
 			for (i = 0; i < numbans; i++)
 			{
@@ -134,7 +134,7 @@ static void NET_Get(void)
 	}
 
 	DEBFILE("New node detected: No more free slots\n");
-	doomcom->remotenode = -1;  
+	doomcom->remotenode = -1; // no packet
 }
 
 #if 0
@@ -157,7 +157,7 @@ static void NET_Send(void)
 
 static void NET_FreeNodenum(INT32 numnode)
 {
-
+	// can't disconnect from self :)
 	if (!numnode)
 		return;
 
@@ -173,11 +173,11 @@ static UDPsocket NET_Socket(void)
 	UDPsocket temp = NULL;
 	Uint16 portnum = 0;
 	IPaddress tempip = {INADDR_BROADCAST,0};
-
-
-
-
-
+	//Hurdler: I'd like to put a server and a client on the same computer
+	//Logan: Me too
+	//BP: in fact for client we can use any free port we want i have read
+	//    in some doc that connect in udp can do it for us...
+	//Alam: where?
 	if (M_CheckParm("-clientport"))
 	{
 		if (!M_IsNextParm())
@@ -201,7 +201,7 @@ static UDPsocket NET_Socket(void)
 	clientaddress[BROADCASTADDR].port = sock_port;
 	clientaddress[BROADCASTADDR].host = INADDR_BROADCAST;
 
-	doomcom->extratics = 1;  
+	doomcom->extratics = 1; // internet is very high ping
 
 	return temp;
 }
@@ -221,7 +221,7 @@ static void I_InitSDLNetDriver(void)
 	if (SDLNet_Init() == -1)
 	{
 		I_OutputMsg("SDL_Net: %s",SDLNet_GetError());
-		return;  
+		return; // No good!
 	}
 	D_SetDoomcom();
 	mypacket.data = doomcom->data;
@@ -241,7 +241,7 @@ static SINT8 NET_NetMakeNodewPort(const char *hostname, const char *port)
 	UINT16 portnum = sock_port;
 	IPaddress hostnameIP;
 
-
+	// retrieve portnum from address!
 	if (port && !port[0])
 		portnum = atoi(port);
 
@@ -266,7 +266,7 @@ static boolean NET_OpenSocket(void)
 {
 	memset(clientaddress, 0, sizeof (clientaddress));
 
-
+	//I_OutputMsg("SDL_Net Code starting up\n");
 
 	I_NetSend = NET_Send;
 	I_NetGet = NET_Get;
@@ -274,16 +274,16 @@ static boolean NET_OpenSocket(void)
 	I_NetFreeNodenum = NET_FreeNodenum;
 	I_NetMakeNodewPort = NET_NetMakeNodewPort;
 
+	//I_NetCanSend = NET_CanSend;
 
-
-
+	// build the socket but close it first
 	NET_CloseSocket();
 	mysocket = NET_Socket();
 
 	if (!mysocket)
 		return false;
 
-
+	// for select
 	myset = SDLNet_AllocSocketSet(1);
 	if (!myset)
 	{
@@ -327,10 +327,10 @@ static void NET_ClearBans(void)
 }
 #endif
 
-
-
-
-
+//
+// I_InitNetwork
+// Only required for DOS, so this is more a dummy
+//
 boolean I_InitNetwork(void)
 {
 #ifdef HAVE_SDLNET
@@ -343,9 +343,9 @@ boolean I_InitNetwork(void)
                         SDLcompiled.major, SDLcompiled.minor, SDLcompiled.patch);
 	I_OutputMsg("Linked with SDL_Net version: %d.%d.%d\n",
                         SDLlinked->major, SDLlinked->minor, SDLlinked->patch);
-
-
-
+	//if (!M_CheckParm ("-sdlnet"))
+	//	return false;
+	// initilize the driver
 	I_InitSDLNetDriver();
 	I_AddExitFunc(I_ShutdownSDLNetDriver);
 	if (!init_SDLNet_driver)
@@ -359,21 +359,21 @@ boolean I_InitNetwork(void)
 			sock_port = 0;
 	}
 
-
+	// parse network game options,
 	if (M_CheckParm("-server") || dedicated)
 	{
 		server = true;
 
-
-
-
-
-
-
-
-                       
-                                                    
-         if (dedicated)
+		// If a number of clients (i.e. nodes) is specified, the server will wait for the clients
+		// to connect before starting.
+		// If no number is specified here, the server starts with 1 client, and others can join
+		// in-game.
+		// Since Boris has implemented join in-game, there is no actual need for specifying a
+		// particular number here.
+		// FIXME: for dedicated server, numnodes needs to be set to 0 upon start
+/*		if (M_IsNextParm())
+			doomcom->numnodes = (INT16)atoi(M_GetNextParm());
+		else */if (dedicated)
 			doomcom->numnodes = 0;
 		else
 			doomcom->numnodes = 1;
@@ -383,11 +383,11 @@ boolean I_InitNetwork(void)
 		if (doomcom->numnodes > MAXNETNODES)
 			doomcom->numnodes = MAXNETNODES;
 
-
+		// server
 		servernode = 0;
-
-
-
+		// FIXME:
+		// ??? and now ?
+		// server on a big modem ??? 4*isdn
 		net_bandwidth = 16000;
 		hardware_MAXPACKETLENGTH = INETPACKETLENGTH;
 
@@ -398,21 +398,21 @@ boolean I_InitNetwork(void)
 		if (M_IsNextParm())
 			strcpy(serverhostname, M_GetNextParm());
 		else
-			serverhostname[0] = 0;  
+			serverhostname[0] = 0; // assuming server in the LAN, use broadcast to detect it
 
-
+		// server address only in ip
 		if (serverhostname[0])
 		{
 			COM_BufAddText("connect \"");
 			COM_BufAddText(serverhostname);
 			COM_BufAddText("\"\n");
 
-
+			// probably modem
 			hardware_MAXPACKETLENGTH = INETPACKETLENGTH;
 		}
 		else
 		{
-
+			// so we're on a LAN
 			COM_BufAddText("connect any\n");
 
 			net_bandwidth = 800000;

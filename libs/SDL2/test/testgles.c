@@ -28,7 +28,7 @@ static SDLTest_CommonState *state;
 static SDL_GLContext *context = NULL;
 static int depth = 16;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -80,11 +80,11 @@ Render()
                                    2, 3, 1,
                                    3, 0, 1 };
 
-     
+    /* Do our drawing, too. */
     glClearColor(0.0, 0.0, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-     
+    /* Draw the cube */
     glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
     glEnableClientState(GL_COLOR_ARRAY);
     glVertexPointer(3, GL_FLOAT, 0, cube);
@@ -105,14 +105,14 @@ int main(int argc, char *argv[])
     Uint32 then, now, frames;
     int status;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize parameters */
     fsaa = 0;
     accel = 0;
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
         i += consumed;
     }
 
-     
+    /* Set OpenGL parameters */
     state->window_flags |= SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS;
     state->gl_red_size = 5;
     state->gl_green_size = 5;
@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
         quit(2);
     }
 
-     
+    /* Create OpenGL ES contexts */
     for (i = 0; i < state->num_windows; i++) {
         context[i] = SDL_GL_CreateContext(state->windows[i]);
         if (!context[i]) {
@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Set rendering settings for each context */
     for (i = 0; i < state->num_windows; ++i) {
         float aspectAdjust;
 
@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
         if (status) {
             SDL_Log("SDL_GL_MakeCurrent(): %s\n", SDL_GetError());
 
-             
+            /* Continue for next window */
             continue;
         }
 
@@ -277,12 +277,12 @@ int main(int argc, char *argv[])
         glShadeModel(GL_SMOOTH);
     }
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
     while (!done) {
-         
+        /* Check for events */
         ++frames;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -296,9 +296,9 @@ int main(int argc, char *argv[])
                                 SDL_Log("SDL_GL_MakeCurrent(): %s\n", SDL_GetError());
                                 break;
                             }
-                             
+                            /* Change view port to the new window dimensions */
                             glViewport(0, 0, event.window.data1, event.window.data2);
-                             
+                            /* Update window content */
                             Render();
                             SDL_GL_SwapWindow(state->windows[i]);
                             break;
@@ -317,7 +317,7 @@ int main(int argc, char *argv[])
             if (status) {
                 SDL_Log("SDL_GL_MakeCurrent(): %s\n", SDL_GetError());
 
-                 
+                /* Continue for next window */
                 continue;
             }
             Render();
@@ -325,7 +325,7 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         SDL_Log("%2.2f frames per second\n",
@@ -337,7 +337,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-#else  
+#else /* HAVE_OPENGLES */
 
 int main(int argc, char *argv[])
 {
@@ -345,6 +345,6 @@ int main(int argc, char *argv[])
     return 1;
 }
 
-#endif  
+#endif /* HAVE_OPENGLES */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

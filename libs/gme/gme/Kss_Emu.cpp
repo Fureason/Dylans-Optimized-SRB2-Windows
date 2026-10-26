@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Kss_Emu.h"
 
@@ -50,7 +50,7 @@ void Kss_Emu::unload()
 	Classic_Emu::unload();
 }
 
-
+// Track info
 
 static void copy_kss_fields( Kss_Emu::header_t const& h, track_info_t* out )
 {
@@ -105,7 +105,7 @@ static gme_type_t_ const gme_kss_type_ = { "MSX", 256, &new_kss_emu, &new_kss_fi
 gme_type_t const gme_kss_type = &gme_kss_type_;
 
 
-
+// Setup
 
 void Kss_Emu::update_gain()
 {
@@ -182,7 +182,7 @@ void Kss_Emu::set_voice( int i, Blip_Buffer* center, Blip_Buffer* left, Blip_Buf
 		sn->osc_output( i, center, left, right );
 }
 
-
+// Emulation
 
 void Kss_Emu::set_tempo_( double t )
 {
@@ -198,19 +198,19 @@ blargg_err_t Kss_Emu::start_track_( int track )
 	memset( ram, 0xC9, 0x4000 );
 	memset( ram + 0x4000, 0, sizeof ram - 0x4000 );
 	
-
+	// copy driver code to lo RAM
 	static byte const bios [] = {
-		0xD3, 0xA0, 0xF5, 0x7B, 0xD3, 0xA1, 0xF1, 0xC9,  
-		0xD3, 0xA0, 0xDB, 0xA2, 0xC9                     
+		0xD3, 0xA0, 0xF5, 0x7B, 0xD3, 0xA1, 0xF1, 0xC9, // $0001: WRTPSG
+		0xD3, 0xA0, 0xDB, 0xA2, 0xC9                    // $0009: RDPSG
 	};
 	static byte const vectors [] = {
-		0xC3, 0x01, 0x00,    
-		0xC3, 0x09, 0x00,    
+		0xC3, 0x01, 0x00,   // $0093: WRTPSG vector
+		0xC3, 0x09, 0x00,   // $0096: RDPSG vector
 	};
 	memcpy( ram + 0x01, bios,    sizeof bios );
 	memcpy( ram + 0x93, vectors, sizeof vectors );
 	
-
+	// copy non-banked data into RAM
 	unsigned load_addr = get_le16( header_.load_addr );
 	long orig_load_size = get_le16( header_.load_size );
 	long load_size = min( orig_load_size, rom.file_size() );
@@ -221,7 +221,7 @@ blargg_err_t Kss_Emu::start_track_( int track )
 	
 	rom.set_addr( -load_size - header_.extra_header );
 	
-
+	// check available bank data
 	blargg_long const bank_size = this->bank_size();
 	int max_banks = (rom.file_size() - load_size + bank_size - 1) / bank_size;
 	bank_count = header_.bank_mode & 0x7F;
@@ -230,9 +230,9 @@ blargg_err_t Kss_Emu::start_track_( int track )
 		bank_count = max_banks;
 		set_warning( "Bank data missing" );
 	}
-
-
-
+	//debug_printf( "load_size : $%X\n", load_size );
+	//debug_printf( "bank_size : $%X\n", bank_size );
+	//debug_printf( "bank_count: %d (%d claimed)\n", bank_count, header_.bank_mode & 0x7F );
 	
 	ram [idle_addr] = 0xFF;
 	cpu::reset( unmapped_write, unmapped_read );
@@ -349,11 +349,11 @@ void kss_cpu_out( Kss_Cpu* cpu, cpu_time_t time, unsigned addr, int data )
 		return;
 	
 	#ifndef NDEBUG
-	case 0xF1:  
+	case 0xF1: // FM data
 		if ( data )
-			break;  
-	case 0xF0:  
-	case 0xA8:  
+			break; // trap non-zero data
+	case 0xF0: // FM addr
+	case 0xA8: // PPI
 		return;
 	#endif
 	}
@@ -363,16 +363,16 @@ void kss_cpu_out( Kss_Cpu* cpu, cpu_time_t time, unsigned addr, int data )
 
 int kss_cpu_in( Kss_Cpu*, cpu_time_t, unsigned addr )
 {
-
-
-
-
+	//Kss_Emu& emu = STATIC_CAST(Kss_Emu&,*cpu);
+	//switch ( addr & 0xFF )
+	//{
+	//}
 	
 	debug_printf( "IN $%04X\n", addr );
 	return 0;
 }
 
-
+// Emulation
 
 blargg_err_t Kss_Emu::run_clocks( blip_time_t& duration, int )
 {

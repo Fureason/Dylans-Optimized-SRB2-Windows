@@ -1,27 +1,27 @@
+#
+# Makefile options for SDL2 backend.
+#
 
-
-
-
-
-
-
-
-
+#
+# SDL...., *looks at Alam*, THIS IS A MESS!
+# 
+# ...a little bird flexes its muscles...
+#
 
 makedir:=$(makedir)/SDL
 
 sources+=$(call List,sdl/Sourcefile)
 opts+=-DDIRECTFULLSCREEN -DHAVE_SDL
 
+# FIXME: UNTESTED
+#ifdef PANDORA
+#include sdl/SRB2Pandora/Makefile.cfg
+#endif #ifdef PANDORA
 
-
-
-
-
-
-
-
-
+# FIXME: UNTESTED
+#ifdef CYGWIN32
+#include sdl/MakeCYG.cfg
+#endif #ifdef CYGWIN32
 
 ifndef NOHW
 sources+=sdl/ogl_sdl.c
@@ -33,7 +33,7 @@ else
 opts+=-DHAVE_MIXER
 sources+=sdl/mixer_sound.c
 
-  ifndef HAIKU  
+  ifndef HAIKU # Haiku has a special import path
     ifdef HAVE_MIXERX
     opts+=-DHAVE_MIXERX
     libs+=-lSDL2_mixer_ext

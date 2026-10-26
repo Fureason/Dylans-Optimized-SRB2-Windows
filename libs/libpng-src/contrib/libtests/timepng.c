@@ -14,7 +14,7 @@
  * case).  The only output is a time as a floating point number of seconds with
  * 9 decimal digits.
  */
-#define _POSIX_C_SOURCE 199309L  
+#define _POSIX_C_SOURCE 199309L /* for clock_gettime */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -28,30 +28,30 @@
 #  include <config.h>
 #endif
 
-                                                                              
-                                 
-   
+/* Define the following to use this test against your installed libpng, rather
+ * than the one being built here:
+ */
 #ifdef PNG_FREESTANDING_TESTS
 #  include <png.h>
 #else
 #  include "../../png.h"
 #endif
 
- 
+/* The following is to support direct compilation of this file as C++ */
 #ifdef __cplusplus
 #  define voidcast(type, value) static_cast<type>(value)
 #else
 #  define voidcast(type, value) (value)
-#endif  
+#endif /* __cplusplus */
 
-                                                                               
-                                                                              
-                                                                              
-                                                                        
-                                                                               
-                                                                                
-            
-   
+/* 'CLOCK_PROCESS_CPUTIME_ID' is one of the clock timers for clock_gettime.  It
+ * need not be supported even when clock_gettime is available.  It returns the
+ * 'CPU' time the process has consumed.  'CPU' time is assumed to include time
+ * when the CPU is actually blocked by a pending cache fill but not time
+ * waiting for page faults.  The attempt is to get a measure of the actual time
+ * the implementation takes to read a PNG ignoring the potentially very large IO
+ * overhead.
+ */
 #if defined (CLOCK_PROCESS_CPUTIME_ID) && defined(PNG_STDIO_SUPPORTED) &&\
     defined(PNG_EASY_ACCESS_SUPPORTED) &&\
     (PNG_LIBPNG_VER >= 10700 ? defined(PNG_READ_PNG_SUPPORTED) :\
@@ -83,15 +83,15 @@ static PNG_CALLBACK(void, read_and_copy,
 static void read_by_row(png_structp png_ptr, png_infop info_ptr,
       FILE *write_ptr, FILE *read_ptr)
 {
-                                                                           
-            
-      
+   /* These don't get freed on error, this is fine; the program immediately
+    * exits.
+    */
    png_bytep row = NULL, display = NULL;
    io_data io_copy;
 
    if (write_ptr != NULL)
    {
-       
+      /* Set up for a copy to the temporary file: */
       io_copy.input = read_ptr;
       io_copy.output = write_ptr;
       png_set_read_fn(png_ptr, &io_copy, read_and_copy);
@@ -119,20 +119,20 @@ static void read_by_row(png_structp png_ptr, png_infop info_ptr,
          {
             png_uint_32 y = height;
 
-                                                                             
-                                                                              
-                                                                               
-               
+            /* NOTE: this trashes the row each time; interlace handling won't
+             * work, but this avoids memory thrashing for speed testing and is
+             * somewhat representative of an application that works row-by-row.
+             */
             while (y-- > 0)
                png_read_row(png_ptr, row, display);
          }
       }
    }
 
-    
+   /* Make sure to read to the end of the file: */
    png_read_end(png_ptr, info_ptr);
 
-    
+   /* Free this up: */
    free(row);
    free(display);
 }
@@ -160,7 +160,7 @@ static int read_png(FILE *fp, png_int_32 transforms, FILE *write_file)
    }
 
 #  ifdef PNG_BENIGN_ERRORS_SUPPORTED
-      png_set_benign_errors(png_ptr, 1 );
+      png_set_benign_errors(png_ptr, 1/*allowed*/);
 #  endif
    png_init_io(png_ptr, fp);
 
@@ -173,7 +173,7 @@ static int read_png(FILE *fp, png_int_32 transforms, FILE *write_file)
       read_by_row(png_ptr, info_ptr, write_file, fp);
 
    else
-      png_read_png(png_ptr, info_ptr, transforms, NULL );
+      png_read_png(png_ptr, info_ptr, transforms, NULL/*params*/);
 
    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
    return 1;
@@ -181,7 +181,7 @@ static int read_png(FILE *fp, png_int_32 transforms, FILE *write_file)
 
 static int mytime(struct timespec *t)
 {
-    
+   /* Do the timing using clock_gettime and the per-process timer. */
    if (!clock_gettime(CLOCK_PROCESS_CPUTIME_ID, t))
       return 1;
 
@@ -195,14 +195,14 @@ static int perform_one_test(FILE *fp, int nfiles, png_int_32 transforms)
    int i;
    struct timespec before, after;
 
-    
+   /* Clear out all errors: */
    rewind(fp);
 
    if (mytime(&before))
    {
       for (i=0; i<nfiles; ++i)
       {
-         if (read_png(fp, transforms, NULL ))
+         if (read_png(fp, transforms, NULL/*write*/))
          {
             if (ferror(fp))
             {
@@ -226,9 +226,9 @@ static int perform_one_test(FILE *fp, int nfiles, png_int_32 transforms)
 
    if (mytime(&after))
    {
-                                                                             
-                                 
-         
+      /* Work out the time difference and print it - this is the only output,
+       * so flush it immediately.
+       */
       unsigned long s = after.tv_sec - before.tv_sec;
       long ns = after.tv_nsec - before.tv_nsec;
 
@@ -252,7 +252,7 @@ static int perform_one_test(FILE *fp, int nfiles, png_int_32 transforms)
          return 0;
       }
 
-       
+      /* Successful return */
       return 1;
    }
 
@@ -266,21 +266,21 @@ static int add_one_file(FILE *fp, char *name)
 
    if (ip != NULL)
    {
-                                                                            
-                                                             
-         
+      /* Read the file using libpng; this detects errors and also deals with
+       * files which contain data beyond the end of the file.
+       */
       int ok = 0;
       fpos_t pos;
 
       if (fgetpos(fp, &pos))
       {
-          
+         /* Fatal error reading the start: */
          perror("temporary file");
          fprintf(stderr, "temporary file fgetpos error\n");
          exit(1);
       }
 
-      if (read_png(ip, -1 , fp ))
+      if (read_png(ip, -1/*by row*/, fp/*output*/))
       {
          if (ferror(ip))
          {
@@ -289,7 +289,7 @@ static int add_one_file(FILE *fp, char *name)
          }
 
          else
-            ok = 1;  
+            ok = 1; /* read ok */
       }
 
       else
@@ -297,7 +297,7 @@ static int add_one_file(FILE *fp, char *name)
 
       (void)fclose(ip);
 
-       
+      /* An error in the output is fatal; exit immediately: */
       if (ferror(fp))
       {
          perror("temporary file");
@@ -308,10 +308,10 @@ static int add_one_file(FILE *fp, char *name)
       if (ok)
          return 1;
 
-                                                                        
-                                                                               
-                   
-         
+      /* Did not read the file successfully, simply rewind the temporary
+       * file.  This must happen after the ferror check above to avoid clearing
+       * the error.
+       */
       if (fsetpos(fp, &pos))
       {
          perror("temporary file");
@@ -322,12 +322,12 @@ static int add_one_file(FILE *fp, char *name)
 
    else
    {
-       
+      /* file open error: */
       perror(name);
       fprintf(stderr, "%s: open failed\n", name);
    }
 
-   return 0;  
+   return 0; /* file not added */
 }
 
 static void
@@ -347,7 +347,7 @@ usage(FILE *fp)
 "  --by-image: read by image with png_read_png\n"
 "  --<transform>: implies by-image, use PNG_TRANSFORM_<transform>\n"
 "  Otherwise: read by row using png_read_row (to a single row buffer)\n"
-    );fprintf(stderr,
+   /* ISO C90 string length max 509 */);fprintf(stderr,
 "{files}:\n"
 "  PNG files to copy into the assembly and time.  Invalid files are skipped\n"
 "  with appropriate error messages.  If no files are given the list of files\n"
@@ -365,13 +365,13 @@ int main(int argc, char **argv)
    int ok = 0;
    int err = 0;
    int nfiles = 0;
-   int transforms = -1;  
+   int transforms = -1; /* by row */
    const char *assembly = NULL;
    FILE *fp;
 
    if (argc > 2 && strcmp(argv[1], "--assemble") == 0)
    {
-       
+      /* Just build the test file, argv[2] is the file name. */
       assembly = argv[2];
       fp = fopen(assembly, "wb");
       if (fp == NULL)
@@ -417,26 +417,26 @@ int main(int argc, char **argv)
       argc -= 3;
    }
 
-   else  
+   else /* Else use a temporary file */
    {
 #ifndef __COVERITY__
       fp = tmpfile();
 #else
-                                                                     
-                                     
-        
-                                                                        
-                                                                             
-                                                                     
-                                                                      
-        
-                                                                
-                                                                     
-                                                                     
-                                                               
-                                                                       
-                                                                              
-         
+      /* Experimental. Coverity says tmpfile() is insecure because it
+       * generates predictable names.
+       *
+       * It is possible to satisfy Coverity by using mkstemp(); however,
+       * any platform supporting mkstemp() undoubtedly has a secure tmpfile()
+       * implementation as well, and doesn't need the fix.  Note that
+       * the fix won't work on platforms that don't support mkstemp().
+       *
+       * https://www.securecoding.cert.org/confluence/display/c/
+       * FIO21-C.+Do+not+create+temporary+files+in+shared+directories
+       * says that most historic implementations of tmpfile() provide
+       * only a limited number of possible temporary file names
+       * (usually 26) before file names are recycled. That article also
+       * provides a secure solution that unfortunately depends upon mkstemp().
+       */
       char tmpfile[] = "timepng-XXXXXX";
       int filedes;
       umask(0177);
@@ -446,9 +446,9 @@ int main(int argc, char **argv)
       else
       {
         fp = fdopen(filedes,"w+");
-                                                                      
-                                           
-           
+        /* Hide the filename immediately and ensure that the file does
+         * not exist after the program ends
+         */
         (void) unlink(tmpfile);
       }
 #endif
@@ -457,26 +457,26 @@ int main(int argc, char **argv)
       {
          perror("tmpfile");
          fprintf(stderr, "timepng: could not open the temporary file\n");
-         exit(1);  
+         exit(1); /* not a user error */
       }
    }
 
-    
+   /* Handle the transforms: */
    while (argc > 1 && argv[1][0] == '-' && argv[1][1] == '-')
    {
       const char *opt = *++argv + 2;
 
       --argc;
 
-                                                                      
-                    
-         
+      /* Transforms turn on the by-image processing and maybe set some
+       * transforms:
+       */
       if (transforms == -1)
          transforms = PNG_TRANSFORM_IDENTITY;
 
       if (strcmp(opt, "by-image") == 0)
       {
-          
+         /* handled above */
       }
 
 #        define OPT(name) else if (strcmp(opt, #name) == 0)\
@@ -507,9 +507,9 @@ int main(int argc, char **argv)
       }
    }
 
-    
+   /* Handle the files: */
    if (argc > 1 && nfiles > 0)
-      usage(fp);  
+      usage(fp); /* Additional files not valid with --dissemble */
 
    else if (argc > 1)
    {
@@ -528,7 +528,7 @@ int main(int argc, char **argv)
       }
    }
 
-   else if (nfiles == 0)  
+   else if (nfiles == 0) /* Read from stdin withoout --dissemble */
    {
       char filename[FILENAME_MAX+1];
 
@@ -565,7 +565,7 @@ int main(int argc, char **argv)
       }
    }
 
-    
+   /* Perform the test, or produce the --assemble output: */
    if (!err)
    {
       if (nfiles > 0)
@@ -600,9 +600,9 @@ int main(int argc, char **argv)
    else
       (void)fclose(fp);
 
-    
+   /* Exit code 0 on success. */
    return ok == 0;
 }
-#else  
+#else /* !sufficient support */
 int main(void) { return 77; }
-#endif  
+#endif /* !sufficient support */

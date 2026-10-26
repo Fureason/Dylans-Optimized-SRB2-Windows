@@ -1,9 +1,9 @@
 find_program(CLANG_TIDY clang-tidy)
 
-
-
-
-
+# Note: Apple Clang does not ship with clang tools. If you want clang-tidy on
+# macOS, it's best to install the Homebrew llvm bottle and set CLANG_TIDY
+# in your build directory. The llvm package is keg-only, so it will not
+# collide with Apple Clang.
 
 function(target_set_default_clang_tidy target lang checks)
     if("${CLANG_TIDY}" STREQUAL "CLANG_TIDY-NOTFOUND")

@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Sap_Apu.h"
 
@@ -17,7 +17,7 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
-int const max_frequency = 12000;  
+int const max_frequency = 12000; // pure waves above this frequency are silenced
 
 static void gen_poly( blargg_ulong mask, int count, byte* out )
 {
@@ -28,7 +28,7 @@ static void gen_poly( blargg_ulong mask, int count, byte* out )
 		int b = 0;
 		do
 		{
-
+			// implemented using "Galios configuration"
 			bits |= (n & 1) << b;
 			n = (n >> 1) ^ (mask & -(n & 1));
 		}
@@ -38,7 +38,7 @@ static void gen_poly( blargg_ulong mask, int count, byte* out )
 	while ( --count );
 }
 
-
+// poly5
 int const poly5_len = (1 <<  5) - 1;
 blargg_ulong const poly5_mask = (1UL << poly5_len) - 1;
 blargg_ulong const poly5 = 0x167C6EA1;
@@ -57,7 +57,7 @@ Sap_Apu_Impl::Sap_Apu_Impl()
 	gen_poly( POLY_MASK(  9, 5, 0 ), sizeof poly9,  poly9  );
 	gen_poly( POLY_MASK( 17, 5, 0 ), sizeof poly17, poly17 );
 	
-	if ( 0 )  
+	if ( 0 ) // comment out to recauculate poly5 constant
 	{
 		byte poly5 [4];
 		gen_poly( POLY_MASK(  5, 2, 0 ), sizeof poly5,  poly5  );
@@ -92,7 +92,7 @@ void Sap_Apu::reset( Sap_Apu_Impl* new_impl )
 
 inline void Sap_Apu::calc_periods()
 {
-
+	 // 15/64 kHz clock
 	int divider = 28;
 	if ( this->control & 1 )
 		divider = 114;
@@ -101,7 +101,7 @@ inline void Sap_Apu::calc_periods()
 	{
 		osc_t* const osc = &oscs [i];
 		
-		int const osc_reload = osc->regs [0];  
+		int const osc_reload = osc->regs [0]; // cache
 		blargg_long period = (osc_reload + 1) * divider;
 		static byte const fast_bits [osc_count] = { 1 << 6, 1 << 4, 1 << 5, 1 << 3 };
 		if ( this->control & fast_bits [i] )
@@ -124,9 +124,9 @@ inline void Sap_Apu::calc_periods()
 void Sap_Apu::run_until( blip_time_t end_time )
 {
 	calc_periods();
-	Sap_Apu_Impl* const impl = this->impl;  
+	Sap_Apu_Impl* const impl = this->impl; // cache
 	
-
+	// 17/9-bit poly selection
 	byte const* polym = impl->poly17;
 	int polym_len = poly17_len;
 	if ( this->control & 0x80 )
@@ -142,19 +142,19 @@ void Sap_Apu::run_until( blip_time_t end_time )
 		blip_time_t time = last_time + osc->delay;
 		blip_time_t const period = osc->period;
 		
-
+		// output
 		Blip_Buffer* output = osc->output;
 		if ( output )
 		{
 			output->set_modified();
 			
-			int const osc_control = osc->regs [1];  
+			int const osc_control = osc->regs [1]; // cache
 			int volume = (osc_control & 0x0F) * 2;
-			if ( !volume || osc_control & 0x10 ||  
+			if ( !volume || osc_control & 0x10 || // silent, DAC mode, or inaudible frequency
 					((osc_control & 0xA0) == 0xA0 && period < 1789773 / 2 / max_frequency) )
 			{
 				if ( !(osc_control & 0x10) )
-					volume >>= 1;  
+					volume >>= 1; // inaudible frequency = half volume
 				
 				int delta = volume - osc->last_amp;
 				if ( delta )
@@ -163,13 +163,13 @@ void Sap_Apu::run_until( blip_time_t end_time )
 					impl->synth.offset( last_time, delta, output );
 				}
 				
-
+				// TODO: doesn't maintain high pass flip-flop (very minor issue)
 			}
 			else
 			{
-
+				// high pass
 				static byte const hipass_bits [osc_count] = { 1 << 2, 1 << 1, 0, 0 };
-				blip_time_t period2 = 0;  
+				blip_time_t period2 = 0; // unused if no high pass
 				blip_time_t time2 = end_time;
 				if ( this->control & hipass_bits [i] )
 				{
@@ -177,7 +177,7 @@ void Sap_Apu::run_until( blip_time_t end_time )
 					time2 = last_time + osc [2].delay;
 					if ( osc->invert )
 					{
-
+						// trick inner wave loop into inverting output
 						osc->last_amp -= volume;
 						volume = -volume;
 					}
@@ -185,10 +185,10 @@ void Sap_Apu::run_until( blip_time_t end_time )
 				
 				if ( time < end_time || time2 < end_time )
 				{
-
-					static byte const poly1 [] = { 0x55, 0x55 };  
+					// poly source
+					static byte const poly1 [] = { 0x55, 0x55 }; // square wave
 					byte const* poly = poly1;
-					int poly_len = 8 * sizeof poly1;  
+					int poly_len = 8 * sizeof poly1; // can be just 2 bits, but this is faster
 					int poly_pos = osc->phase & 1;
 					int poly_inc = 1;
 					if ( !(osc_control & 0x20) )
@@ -205,11 +205,11 @@ void Sap_Apu::run_until( blip_time_t end_time )
 						poly_inc = period % poly_len;
 						poly_pos = (poly_pos + osc->delay) % poly_len;
 					}
-					poly_inc -= poly_len;  
+					poly_inc -= poly_len; // allows more optimized inner loop below
 					
-
+					// square/poly5 wave
 					blargg_ulong wave = poly5;
-					check( poly5 & 1 );  
+					check( poly5 & 1 ); // low bit is set for pure wave
 					int poly5_inc = 0;
 					if ( !(osc_control & 0x80) )
 					{
@@ -217,13 +217,13 @@ void Sap_Apu::run_until( blip_time_t end_time )
 						poly5_inc = period % poly5_len;
 					}
 					
-
-
-
+					// Run wave and high pass interleved with each catching up to the other.
+					// Disabled high pass has no performance effect since inner wave loop
+					// makes no compromise for high pass, and only runs once in that case.
 					int osc_last_amp = osc->last_amp;
 					do
 					{
-
+						// run high pass
 						if ( time2 < time )
 						{
 							int delta = -osc_last_amp;
@@ -236,10 +236,10 @@ void Sap_Apu::run_until( blip_time_t end_time )
 								impl->synth.offset( time2, delta, output );
 							}
 						}
-						while ( time2 <= time )  
+						while ( time2 <= time ) // must advance *past* time to avoid hang
 							time2 += period2;
 						
-
+						// run wave
 						blip_time_t end = end_time;
 						if ( end > time2 )
 							end = time2;
@@ -270,14 +270,14 @@ void Sap_Apu::run_until( blip_time_t end_time )
 				osc->invert = 0;
 				if ( volume < 0 )
 				{
-
+					// undo inversion trickery
 					osc->last_amp -= volume;
 					osc->invert = 1;
 				}
 			}
 		}
 		
-
+		// maintain divider
 		blip_time_t remain = end_time - time;
 		if ( remain > 0 )
 		{
@@ -288,12 +288,12 @@ void Sap_Apu::run_until( blip_time_t end_time )
 		osc->delay = time - end_time;
 	}
 	
-
+	// advance polies
 	blip_time_t duration = end_time - last_time;
 	last_time = end_time;
 	poly4_pos = (poly4_pos + duration) % poly4_len;
 	poly5_pos = (poly5_pos + duration) % poly5_len;
-	polym_pos += duration;  
+	polym_pos += duration; // will get %'d on next call
 }
 
 void Sap_Apu::write_data( blip_time_t time, unsigned addr, int data )
@@ -315,14 +315,14 @@ void Sap_Apu::write_data( blip_time_t time, unsigned addr, int data )
 		oscs [2].delay = 0;
 		oscs [3].delay = 0;
 	}
-	  
-                                             
-                           
-  
-                        
-                 
-  
-   
+	/*
+	// TODO: are polynomials reset in this case?
+	else if ( addr == 0xD20F )
+	{
+		if ( (data & 3) == 0 )
+			polym_pos = 0;
+	}
+	*/
 }
 
 void Sap_Apu::end_frame( blip_time_t end_time )

@@ -17,9 +17,9 @@
  */
 
 class RSSCache {
-    var $BASE_CACHE = './cache';     
-    var $MAX_AGE    = 3600;          
-    var $ERROR      = "";            
+    var $BASE_CACHE = './cache';    // where the cache files are stored
+    var $MAX_AGE    = 3600;         // when are files stale, default one hour
+    var $ERROR      = "";           // accumulate error messages
     
     function RSSCache ($base='', $age='') {
         if ( $base ) {
@@ -29,11 +29,11 @@ class RSSCache {
             $this->MAX_AGE = $age;
         }
         
-
+        // attempt to make the cache directory
         if ( ! file_exists( $this->BASE_CACHE ) ) {
             $status = @mkdir( $this->BASE_CACHE, 0755 );
             
-
+            // if make failed 
             if ( ! $status ) {
                 $this->error(
                     "Cache couldn't make dir '" . $this->BASE_CACHE . "'."
@@ -42,12 +42,12 @@ class RSSCache {
         }
     }
     
-                                                                          \
-                   
-                                                      
-                                                      
-                                
-                                                                           
+/*=======================================================================*\
+    Function:   set
+    Purpose:    add an item to the cache, keyed on url
+    Input:      url from wich the rss file was fetched
+    Output:     true on sucess  
+\*=======================================================================*/
     function set ($url, $rss) {
         $this->ERROR = "";
         $cache_file = $this->file_name( $url );
@@ -68,12 +68,12 @@ class RSSCache {
         return $cache_file;
     }
     
-                                                                          \
-                   
-                                            
-                                                      
-                                                    
-                                                                            
+/*=======================================================================*\
+    Function:   get
+    Purpose:    fetch an item from the cache
+    Input:      url from wich the rss file was fetched
+    Output:     cached object on HIT, false on MISS 
+\*=======================================================================*/ 
     function get ($url) {
         $this->ERROR = "";
         $cache_file = $this->file_name( $url );
@@ -99,68 +99,68 @@ class RSSCache {
         return $rss;
     }
 
-                                                                          \
-                           
-                                                       
-                                                                        
-                                                      
-                                                    
-                                                                                
+/*=======================================================================*\
+    Function:   check_cache
+    Purpose:    check a url for membership in the cache
+                and whether the object is older then MAX_AGE (ie. STALE)
+    Input:      url from wich the rss file was fetched
+    Output:     cached object on HIT, false on MISS 
+\*=======================================================================*/     
     function check_cache ( $url ) {
         $this->ERROR = "";
         $filename = $this->file_name( $url );
         
         if ( file_exists( $filename ) ) {
-
-
+            // find how long ago the file was added to the cache
+            // and whether that is longer then MAX_AGE
             $mtime = filemtime( $filename );
             $age = time() - $mtime;
             if ( $this->MAX_AGE > $age ) {
-
+                // object exists and is current
                 return 'HIT';
             }
             else {
-
+                // object exists but is old
                 return 'STALE';
             }
         }
         else {
-
+            // object does not exist
             return 'MISS';
         }
     }
 
-                                                                          \
-                         
-                                                                                
+/*=======================================================================*\
+    Function:   serialize
+\*=======================================================================*/     
     function serialize ( $rss ) {
         return serialize( $rss );
     }
 
-                                                                          \
-                           
-                                                                                
+/*=======================================================================*\
+    Function:   unserialize
+\*=======================================================================*/     
     function unserialize ( $data ) {
         return unserialize( $data );
     }
     
-                                                                          \
-                         
-                                            
-                                                      
-                           
-                                                                                
+/*=======================================================================*\
+    Function:   file_name
+    Purpose:    map url to location in cache
+    Input:      url from wich the rss file was fetched
+    Output:     a file name
+\*=======================================================================*/     
     function file_name ($url) {
         $filename = md5( $url );
         return join( DIRECTORY_SEPARATOR, array( $this->BASE_CACHE, $filename ) );
     }
 
-                                                                          \
-                     
-                              
-                                                                                    
+/*=======================================================================*\
+    Function:   error
+    Purpose:    register error
+\*=======================================================================*/         
     function error ($errormsg, $lvl=E_USER_WARNING) {
-
+        // append PHP's error message if track_errors enabled
         if ( isset($php_errormsg) ) { 
             $errormsg .= " ($php_errormsg)";
         }

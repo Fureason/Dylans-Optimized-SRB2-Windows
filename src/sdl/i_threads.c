@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  i_threads.c
+/// \brief Multithreading abstraction
 
 #include "../doomdef.h"
 #include "../i_threads.h"
@@ -137,10 +137,10 @@ Worker (
 
 	th = link->data;
 
-	                                                                       
-                                                                           
-                                                                           
-                                                                         
+	/* Background work such as HTTPS, UPnP discovery, screenshots and movie
+	 * finalization must yield to the game/render thread. In particular, a TLS
+	 * handshake used to refresh a listen server's master-server listing could
+	 * briefly steal enough CPU to make an uncapped client visibly hitch. */
 	SDL_SetThreadPriority(SDL_THREAD_PRIORITY_LOW);
 
 	(*th->entry)(th->userdata);
@@ -173,7 +173,7 @@ I_spawn_thread (
 	th = malloc(sizeof *th);
 
 	if (! th)
-		abort(); 
+		abort();/* this is pretty GNU of me */
 
 	th->entry    = entry;
 	th->userdata = userdata;
@@ -231,7 +231,7 @@ I_stop_threads (void)
 
 	if (i_threads_running.value)
 	{
-		 
+		/* rely on the good will of thread-san */
 		SDL_AtomicSet(&i_threads_running, 0);
 
 		I_lock_mutex(&i_thread_pool_mutex);

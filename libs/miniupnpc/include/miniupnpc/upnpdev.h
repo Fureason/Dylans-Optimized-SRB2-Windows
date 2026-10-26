@@ -1,4 +1,4 @@
- 
+/* $Id: upnpdev.h,v 1.4 2021/08/21 09:45:01 nanard Exp $ */
 /* Project : miniupnp
  * Web : http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
  * Author : Thomas BERNARD
@@ -21,18 +21,18 @@ struct UPNPDev {
 	char * usn;
 	unsigned int scope_id;
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
-	 
+	/* C99 flexible array member */
 	char buffer[];
 #elif defined(__GNUC__)
 	char buffer[0];
 #else
-	 
+	/* Fallback to a hack */
 	char buffer[1];
 #endif
 };
 
-                    
-                                          
+/* freeUPNPDevlist()
+ * free list returned by upnpDiscover() */
 MINIUPNP_LIBSPEC void freeUPNPDevlist(struct UPNPDev * devlist);
 
 
@@ -41,4 +41,4 @@ MINIUPNP_LIBSPEC void freeUPNPDevlist(struct UPNPDev * devlist);
 #endif
 
 
-#endif  
+#endif /* UPNPDEV_H_INCLUDED */

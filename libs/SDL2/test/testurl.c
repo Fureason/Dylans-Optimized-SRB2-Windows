@@ -41,4 +41,4 @@ int main(int argc, char **argv)
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

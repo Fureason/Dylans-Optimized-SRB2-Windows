@@ -8,22 +8,22 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
-
+/// \file  r_plane.c
+/// \brief Here is a core component: drawing the floors and ceilings,
+///        while maintaining a per column clipping list only.
+///        Moreover, the sky areas have to be determined.
 
 #include "doomdef.h"
 #include "console.h"
-#include "m_easing.h"  
+#include "m_easing.h" // For Easing_InOutSine, used in R_UpdatePlaneRipple
 #include "g_game.h"
-#include "p_setup.h"  
+#include "p_setup.h" // levelflats
 #include "p_slopes.h"
 #include "r_data.h"
 #include "r_textures.h"
 #include "r_local.h"
 #include "r_state.h"
-#include "r_splats.h"  
+#include "r_splats.h" // faB(21jan):testing
 #include "r_sky.h"
 #include "r_portal.h"
 
@@ -32,11 +32,11 @@
 #include "z_zone.h"
 #include "p_tick.h"
 
+//
+// opening
+//
 
-
-
-
-
+//SoM: 3/23/2000: Use Boom visplane hashing.
 
 visplane_t *visplanes[MAXVISPLANES];
 static visplane_t *freetail;
@@ -49,37 +49,37 @@ static visplane_t *currentplane;
 visffloor_t ffloor[MAXFFLOORS];
 INT32 numffloors;
 
-
+//SoM: 3/23/2000: Boom visplane hashing routine.
 #define visplane_hash(picnum,lightlevel,height) \
   ((unsigned)((picnum)*3+(lightlevel)+(height)*7) & VISPLANEHASHMASK)
 
-
-
-
-
-
+//
+// Clip values are the solid pixel bounding the range.
+//  floorclip starts out SCREENHEIGHT
+//  ceilingclip starts out -1
+//
 INT16 floorclip[MAXVIDWIDTH], ceilingclip[MAXVIDWIDTH];
 fixed_t frontscale[MAXVIDWIDTH];
 
-
-
-
-
+//
+// spanstart holds the start of a plane span
+// initialized to 0 at start
+//
 static INT32 spanstart[MAXVIDHEIGHT];
 
-
-
-
+//
+// texture mapping
+//
 lighttable_t **planezlight;
 static fixed_t planeheight;
 
-
-
-
-
-
-
-
+//added : 10-02-98: yslopetab is what yslope used to be,
+//                yslope points somewhere into yslopetab,
+//                now (viewheight/2) slopes are calculated above and
+//                below the original viewheight for mouselook
+//                (this is to calculate yslopes only when really needed)
+//                (when mouselookin', yslope is moving into yslopetab)
+//                Check R_SetupFrame, R_SetViewSize for more...
 fixed_t yslopetab[MAXVIDHEIGHT*16];
 fixed_t *yslope;
 
@@ -93,11 +93,11 @@ static void CalcSlopeLightVectors(pslope_t *slope, fixed_t xpos, fixed_t ypos, d
 static void DoSlopeCrossProducts(void);
 static void DoSlopeLightCrossProduct(void);
 
-
-
-
-
-
+//
+// Water ripple effect
+// Needs the height of the plane, and the vertical position of the span.
+// Sets planeripple.xfrac and planeripple.yfrac, added to ds_xfrac and ds_yfrac, if the span is not tilted.
+//
 
 static struct
 {
@@ -106,7 +106,7 @@ static struct
 	boolean active;
 } planeripple;
 
-
+// ripples da water texture
 static fixed_t R_CalculateRippleOffset(INT32 y)
 {
 	fixed_t distance = FixedMul(planeheight, yslope[y]);
@@ -117,20 +117,20 @@ static fixed_t R_CalculateRippleOffset(INT32 y)
 static void R_CalculatePlaneRipple(angle_t angle)
 {
 	angle >>= ANGLETOFINESHIFT;
-	angle = (angle + 2048) & 8191;  
+	angle = (angle + 2048) & 8191; // 90 degrees
 	planeripple.xfrac = FixedMul(FINECOSINE(angle), ds_bgofs);
 	planeripple.yfrac = FixedMul(FINESINE(angle), ds_bgofs);
 }
 
 static void R_UpdatePlaneRipple(void)
 {
-
-
-
-
+	// ds_waterofs oscillates between 0 and 16384 every other tic
+	// Now that frame interpolation is a thing, HOW does it oscillate?
+	// The difference between linear interpolation and a sine wave is miniscule here,
+	// but a sine wave is ever so slightly smoother and sleeker
 	ds_waterofs = Easing_InOutSine(((leveltime & 1)*FRACUNIT) + rendertimefrac,16384,0);
 
-
+	// Meanwhile, planeripple.offset just counts up, so it gets simple linear interpolation
 	planeripple.offset = ((leveltime-1)*140) + ((rendertimefrac*140) / FRACUNIT);
 }
 
@@ -152,12 +152,12 @@ static void R_MapPlane(INT32 y, INT32 x1, INT32 x2)
 	planecos = FINECOSINE(angle);
 	planesin = FINESINE(angle);
 
-
-
+	// [RH] Notice that I dumped the caching scheme used by Doom.
+	// It did not offer any appreciable speedup.
 	distance = FixedMul(planeheight, yslope[y]);
 	span = abs(centery - y);
 
-	if (span)  
+	if (span) // Don't divide by zero
 	{
 		ds_xstep = FixedMul(planesin, planeheight) / span;
 		ds_ystep = FixedMul(planecos, planeheight) / span;
@@ -167,15 +167,15 @@ static void R_MapPlane(INT32 y, INT32 x1, INT32 x2)
 	else
 		ds_xstep = ds_ystep = FRACUNIT;
 
-
-
-
-
-
+	// [RH] Instead of using the xtoviewangle array, I calculated the fractional values
+	// at the middle of the screen, then used the calculated ds_xstep and ds_ystep
+	// to step from those to the proper texture coordinate to start drawing at.
+	// That way, the texture coordinate is always calculated by its position
+	// on the screen and not by its position relative to the edge of the visplane.
 	ds_xfrac = xoffs + FixedMul(currentplane->xscale, FixedMul(planecos, distance)) + (x1 - centerx) * ds_xstep;
 	ds_yfrac = yoffs - FixedMul(currentplane->yscale, FixedMul(planesin, distance)) + (x1 - centerx) * ds_ystep;
 
-
+	// Water ripple effect
 	if (planeripple.active)
 	{
 		ds_bgofs = R_CalculateRippleOffset(y);
@@ -217,7 +217,7 @@ static void R_MapTiltedPlane(INT32 y, INT32 x1, INT32 x2)
 	if (x1 >= vid.width)
 		x1 = vid.width - 1;
 
-
+	// Water ripple effect
 	if (planeripple.active)
 	{
 		ds_bgofs = R_CalculateRippleOffset(y);
@@ -302,7 +302,7 @@ void R_ClearFFloorClips (void)
 {
 	INT32 i, p;
 
-
+	// opening / clipping determination
 	for (i = 0; i < viewwidth; i++)
 	{
 		for (p = 0; p < MAXFFLOORS; p++)
@@ -315,15 +315,15 @@ void R_ClearFFloorClips (void)
 	numffloors = 0;
 }
 
-
-
-
-
+//
+// R_ClearPlanes
+// At begining of frame.
+//
 void R_ClearPlanes(void)
 {
 	INT32 i, p;
 
-
+	// opening / clipping determination
 	for (i = 0; i < viewwidth; i++)
 	{
 		floorclip[i] = (INT16)viewheight;
@@ -350,7 +350,7 @@ static visplane_t *new_visplane(unsigned hash)
 	if (!check)
 	{
 		check = malloc(sizeof (*check));
-		if (check == NULL) I_Error("%s: Out of memory", "new_visplane");  
+		if (check == NULL) I_Error("%s: Out of memory", "new_visplane"); // FIXME: ugly
 	}
 	else
 	{
@@ -363,11 +363,11 @@ static visplane_t *new_visplane(unsigned hash)
 	return check;
 }
 
-
-
-
-
-
+//
+// R_FindPlane: Seek a visplane having the identical values:
+//              Same height, same flattexture, same lightlevel.
+//              If not, allocates another of them.
+//
 visplane_t *R_FindPlane(sector_t *sector, fixed_t height, INT32 picnum, INT32 lightlevel,
 	fixed_t xoff, fixed_t yoff, fixed_t xscale, fixed_t yscale,
 	angle_t plangle, extracolormap_t *planecolormap,
@@ -382,14 +382,14 @@ visplane_t *R_FindPlane(sector_t *sector, fixed_t height, INT32 picnum, INT32 li
 	INT64 offset_x = offset_xd * FRACUNIT;
 	INT64 offset_y = offset_yd * FRACUNIT;
 
-	if (!slope)  
+	if (!slope) // Don't mess with this right now if a slope is involved
 	{
 		offset_x += viewx;
 		offset_y -= viewy;
 
 		if (plangle != 0)
 		{
-
+			// Add the view offset, rotated by the plane angle.
 			float ang = ANG2RAD(plangle);
 			float x = offset_x / (float)FRACUNIT;
 			float y = offset_y / (float)FRACUNIT;
@@ -418,10 +418,10 @@ visplane_t *R_FindPlane(sector_t *sector, fixed_t height, INT32 picnum, INT32 li
 	offset_x = ((INT64)offset_x * xscale) / FRACUNIT;
 	offset_y = ((INT64)offset_y * yscale) / FRACUNIT;
 
-
+	// This appears to fix the Nimbus Ruins sky bug.
 	if (picnum == skyflatnum && pfloor)
 	{
-		height = 0;  
+		height = 0; // all skies map together
 		lightlevel = 0;
 	}
 
@@ -480,9 +480,9 @@ visplane_t *R_FindPlane(sector_t *sector, fixed_t height, INT32 picnum, INT32 li
 	return check;
 }
 
-
-
-
+//
+// R_CheckPlane: return same visplane or alloc a new one if needed
+//
 visplane_t *R_CheckPlane(visplane_t *pl, INT32 start, INT32 stop)
 {
 	INT32 intrl, intrh;
@@ -511,17 +511,17 @@ visplane_t *R_CheckPlane(visplane_t *pl, INT32 start, INT32 stop)
 		intrh = stop;
 	}
 
-
+	// 0xff is not equal to -1 with shorts...
 	for (x = intrl; x <= intrh; x++)
 		if (pl->top[x] != 0xffff || pl->bottom[x] != 0x0000)
 			break;
 
-	if (x > intrh)  
+	if (x > intrh) /* Can use existing plane; extend range */
 	{
 		pl->minx = unionl;
 		pl->maxx = unionh;
 	}
-	else  
+	else /* Cannot use existing plane; create a new one */
 	{
 		visplane_t *new_pl;
 		if (pl->ffloor)
@@ -563,17 +563,17 @@ visplane_t *R_CheckPlane(visplane_t *pl, INT32 start, INT32 stop)
 }
 
 
-
-
-
-
-
-
-
-
+//
+// R_ExpandPlane
+//
+// This function basically expands the visplane.
+// The reason for this is that when creating 3D floor planes, there is no
+// need to create new ones with R_CheckPlane, because 3D floor planes
+// are created by subsector and there is no way a subsector can graphically
+// overlap.
 void R_ExpandPlane(visplane_t *pl, INT32 start, INT32 stop)
 {
-
+	// Don't expand polyobject planes here - we do that on our own.
 	if (pl->polyobj)
 		return;
 
@@ -583,7 +583,7 @@ void R_ExpandPlane(visplane_t *pl, INT32 start, INT32 stop)
 
 static void R_MakeSpans(void (*mapfunc)(INT32, INT32, INT32), INT32 x, INT32 t1, INT32 b1, INT32 t2, INT32 b2)
 {
-
+	//    Alam: from r_splats's R_RasterizeFloorSplat
 	if (t1 >= vid.height) t1 = vid.height-1;
 	if (b1 >= vid.height) b1 = vid.height-1;
 	if (t2 >= vid.height) t2 = vid.height-1;
@@ -629,18 +629,18 @@ void R_DrawPlanes(void)
 	}
 }
 
-
-
-
-
-
+// R_DrawSkyPlane
+//
+// Draws the sky within the plane's top/bottom bounds
+// Note: this uses column drawers instead of span drawers, since the sky is always a texture
+//
 static void R_DrawSkyPlane(visplane_t *pl)
 {
 	INT32 texture = texturetranslation[skytexture];
 
-
-
-
+	// Sky columns use the normal wrapping column drawer. Short sky textures are
+	// intentionally repeated as the camera pitches, matching SRB2's established
+	// software projection instead of stretching one edge row across the screen.
 	colfunc = colfuncs[BASEDRAWFUNC];
 
 	dc_iscale = skyscale;
@@ -661,17 +661,17 @@ static void R_DrawSkyPlane(visplane_t *pl)
 			INT32 angle = (pl->viewangle + xtoviewangle[x])>>ANGLETOSKYSHIFT;
 			dc_iscale = FixedMul(skyscale, FINECOSINE(xtoviewangle[x]>>ANGLETOFINESHIFT));
 			dc_x = x;
-			dc_source = R_GetColumn(texture, -angle)->pixels;  
+			dc_source = R_GetColumn(texture, -angle)->pixels; // get negative of angle for each column to display sky correct way round! --Monster Iestyn 27/01/18
 			colfunc();
 		}
 	}
 }
 
-
+// Returns the height of the sloped plane at (x, y) as a double
 static double R_GetSlopeZAt(const pslope_t *slope, INT64 x, INT64 y)
 {
-
-
+	// If you want to reimplement this using just the equation constants, use this instead:
+	// (d + a*x + b*y) * -(1.0 / c)
 
 	double px = (x / (double)FRACUNIT) - slope->dorigin.x;
 	double py = (y / (double)FRACUNIT) - slope->dorigin.y;
@@ -681,7 +681,7 @@ static double R_GetSlopeZAt(const pslope_t *slope, INT64 x, INT64 y)
 	return slope->dorigin.z + (dist * slope->dzdelta);
 }
 
-
+// Sets the texture origin vector of the sloped plane.
 static void R_SetSlopePlaneOrigin(pslope_t *slope, fixed_t xpos, fixed_t ypos, fixed_t zpos, INT64 xoff, INT64 yoff, fixed_t angle)
 {
 	INT64 vx = (INT64)xpos + xoff;
@@ -691,18 +691,18 @@ static void R_SetSlopePlaneOrigin(pslope_t *slope, fixed_t xpos, fixed_t ypos, f
 	float vyf = vy / (float)FRACUNIT;
 	float ang = ANG2RAD(ANGLE_270 - angle);
 
-
-
-
+	// slope_origin is the texture origin in view space
+	// Don't add in the offsets at this stage, because doing so can result in
+	// errors if the flat is rotated.
 	slope_origin.x = vxf * cos(ang) - vyf * sin(ang);
 	slope_origin.z = vxf * sin(ang) + vyf * cos(ang);
 	slope_origin.y = R_GetSlopeZAt(slope, -xoff, yoff) - FixedToDouble(zpos);
 }
 
-
+// This function calculates all of the vectors necessary for drawing a sloped plane.
 void R_SetSlopePlane(pslope_t *slope, fixed_t xpos, fixed_t ypos, fixed_t zpos, fixed_t xoff, fixed_t yoff, angle_t angle, angle_t plangle)
 {
-
+	// I copied ZDoom's code and adapted it to SRB2... -Red
 	double height, z_at_xy;
 	float ang;
 
@@ -726,11 +726,11 @@ void R_SetSlopePlane(pslope_t *slope, fixed_t xpos, fixed_t ypos, fixed_t zpos, 
 		return;
 	}
 
-
+	// the v direction vector in view space
 	slope_v.x = cos(ang);
 	slope_v.z = sin(ang);
 
-
+	// the u direction vector in view space
 	slope_u.x = sin(ang);
 	slope_u.z = -cos(ang);
 
@@ -744,7 +744,7 @@ void R_SetSlopePlane(pslope_t *slope, fixed_t xpos, fixed_t ypos, fixed_t zpos, 
 	DoSlopeLightCrossProduct();
 }
 
-
+// This function calculates all of the vectors necessary for drawing a sloped and scaled plane.
 void R_SetScaledSlopePlane(pslope_t *slope, fixed_t xpos, fixed_t ypos, fixed_t zpos, fixed_t xs, fixed_t ys, INT64 xoff, INT64 yoff, angle_t angle, angle_t plangle)
 {
 	double height, z_at_xy;
@@ -773,11 +773,11 @@ void R_SetScaledSlopePlane(pslope_t *slope, fixed_t xpos, fixed_t ypos, fixed_t 
 	float xscale = FixedToFloat(xs);
 	float yscale = FixedToFloat(ys);
 
-
+	// the v direction vector in view space
 	slope_v.x = yscale * cos(ang);
 	slope_v.z = yscale * sin(ang);
 
-
+	// the u direction vector in view space
 	slope_u.x = xscale * sin(ang);
 	slope_u.z = -xscale * cos(ang);
 
@@ -821,7 +821,7 @@ static void DoSlopeCrossProducts(void)
 	if (ds_solidcolor)
 		return;
 
-
+	// Premultiply the texture vectors with the scale factors
 	float sfmult = 65536.f;
 
 	if (ds_powersoftwo)
@@ -896,7 +896,7 @@ void R_DrawSinglePlane(visplane_t *pl)
 	if (!(pl->minx <= pl->maxx))
 		return;
 
-
+	// sky flat
 	if (pl->picnum == skyflatnum)
 	{
 		R_DrawSkyPlane(pl);
@@ -909,35 +909,35 @@ void R_DrawSinglePlane(visplane_t *pl)
 
 	if (pl->polyobj)
 	{
-
+		// Hacked up support for alpha value in software mode Tails 09-24-2002 (sidenote: ported to polys 10-15-2014, there was no time travel involved -Red)
 		if (pl->polyobj->translucency >= 10)
-			return;  
+			return; // Don't even draw it
 		else if (pl->polyobj->translucency > 0)
 		{
 			spanfunctype = (pl->polyobj->flags & POF_SPLAT) ? SPANDRAWFUNC_TRANSSPLAT : SPANDRAWFUNC_TRANS;
 			ds_transmap = R_GetTranslucencyTable(pl->polyobj->translucency);
 		}
-		else if (pl->polyobj->flags & POF_SPLAT)  
+		else if (pl->polyobj->flags & POF_SPLAT) // Opaque, but allow transparent flat pixels
 			spanfunctype = SPANDRAWFUNC_SPLAT;
 
 		if (pl->polyobj->translucency == 0 || (pl->extra_colormap && (pl->extra_colormap->flags & CMF_FOG)))
 			light = (pl->lightlevel >> LIGHTSEGSHIFT);
-		else  
+		else // TODO: 2.3: Make transparent polyobject planes always use light level
 			light = LIGHTLEVELS-1;
 	}
 	else
 	{
 		if (pl->ffloor)
 		{
-
+			// Don't draw planes that shouldn't be drawn.
 			for (rover = pl->ffloor->target->ffloors; rover; rover = rover->next)
 			{
 				if ((pl->ffloor->fofflags & FOF_CUTEXTRA) && (rover->fofflags & FOF_EXTRA))
 				{
 					if (pl->ffloor->fofflags & FOF_EXTRA)
 					{
-
-
+						// The plane is from an extra 3D floor... Check the flags so
+						// there are no undesired cuts.
 						if (((pl->ffloor->fofflags & (FOF_FOG|FOF_SWIMMABLE)) == (rover->fofflags & (FOF_FOG|FOF_SWIMMABLE)))
 							&& pl->height < *rover->topheight
 							&& pl->height > *rover->bottomheight)
@@ -950,21 +950,21 @@ void R_DrawSinglePlane(visplane_t *pl)
 			{
 				spanfunctype = (pl->ffloor->fofflags & FOF_SPLAT) ? SPANDRAWFUNC_TRANSSPLAT : SPANDRAWFUNC_TRANS;
 
-
-
+				// Hacked up support for alpha value in software mode Tails 09-24-2002
+				// ...unhacked by toaster 04-01-2021, re-hacked a little by sphere 19-11-2021
 				{
 					INT32 trans = (10*((256+12) - pl->ffloor->alpha))/255;
 					if (trans >= 10)
-						return;  
-					if (pl->ffloor->blend)  
+						return; // Don't even draw it
+					if (pl->ffloor->blend) // additive, (reverse) subtractive, modulative
 						ds_transmap = R_GetBlendTable(pl->ffloor->blend, trans);
 					else if (!(ds_transmap = R_GetTranslucencyTable(trans)) || trans == 0)
-						spanfunctype = SPANDRAWFUNC_SPLAT;  
+						spanfunctype = SPANDRAWFUNC_SPLAT; // Opaque, but allow transparent flat pixels
 				}
 
 				if ((spanfunctype == SPANDRAWFUNC_SPLAT) || (pl->extra_colormap && (pl->extra_colormap->flags & CMF_FOG)))
 					light = (pl->lightlevel >> LIGHTSEGSHIFT);
-				else  
+				else // TODO: 2.3: Make transparent FOF planes use light level instead of always being fullbright
 					light = LIGHTLEVELS-1;
 			}
 			else if (pl->ffloor->fofflags & FOF_FOG)
@@ -981,7 +981,7 @@ void R_DrawSinglePlane(visplane_t *pl)
 
 				if (spanfunctype == SPANDRAWFUNC_TRANS)
 				{
-
+					// Copy the current scene, ugh
 					INT32 top = pl->high-8;
 					INT32 bottom = pl->low+8;
 
@@ -992,7 +992,7 @@ void R_DrawSinglePlane(visplane_t *pl)
 
 					spanfunctype = SPANDRAWFUNC_WATER;
 
-
+					// Only copy the part of the screen we need
 					VID_BlitLinearScreen((splitscreen && viewplayer == &players[secondarydisplayplayer]) ? screens[0] + (top+(vid.height>>1))*vid.width : screens[0]+((top)*vid.width), screens[1]+((top)*vid.width),
 										 vid.width, bottom-top,
 										 vid.width, vid.width);
@@ -1005,15 +1005,15 @@ void R_DrawSinglePlane(visplane_t *pl)
 
 	if (ds_fog)
 	{
-
-
+		// Since all fog planes do is apply a colormap, it's not required
+		// to know any information about their textures.
 		mapfunc = R_MapFogPlane;
 	}
 	else
 	{
 		levelflat_t *levelflat = &levelflats[pl->picnum];
 
-
+		// Get the texture
 		ds_source = (UINT8 *)R_GetFlat(levelflat);
 		if (ds_source == NULL)
 			return;
@@ -1119,7 +1119,7 @@ void R_DrawSinglePlane(visplane_t *pl)
 		planezlight = zlight[light];
 	}
 
-
+	// Set the span drawer
 	if (!ds_powersoftwo)
 	{
 		if (spanfuncs_npo2[spanfunctype])
@@ -1130,7 +1130,7 @@ void R_DrawSinglePlane(visplane_t *pl)
 	else
 		spanfunc = spanfuncs[spanfunctype];
 
-
+	// set the maximum value for unsigned
 	pl->top[pl->maxx+1] = 0xffff;
 	pl->top[pl->minx-1] = 0xffff;
 	pl->bottom[pl->maxx+1] = 0x0000;

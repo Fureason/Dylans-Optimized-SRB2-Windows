@@ -1,26 +1,27 @@
 # Makefile for zlib under OS/2 using GCC (PGCC)
 # For conditions of distribution and use, see copyright notice in zlib.h
 
+# To compile and test, type:
+#   cp Makefile.os2 ..
+#   cd ..
+#   make -f Makefile.os2 test
 
-
-
-
-
-
-
-
+# This makefile will build a static library z.lib, a shared library
+# z.dll and a import library zdll.lib. You can use either z.lib or
+# zdll.lib by specifying either -lz or -lzdll on gcc's command line
 
 CC=gcc -Zomf -s
 
 CFLAGS=-O6 -Wall
+#CFLAGS=-O -DMAX_WBITS=14 -DMAX_MEM_LEVEL=7
+#CFLAGS=-g -DZLIB_DEBUG
+#CFLAGS=-O3 -Wall -Wwrite-strings -Wpointer-arith -Wconversion \
+#           -Wstrict-prototypes -Wmissing-prototypes
 
-
-
-
-
-
-
-
+#################### BUG WARNING: #####################
+## infcodes.c hits a bug in pgcc-1.0, so you have to use either
+## -O# where # <= 4 or one of (-fno-ommit-frame-pointer or -fno-force-mem)
+## This bug is reportedly fixed in pgcc >1.0, but this was not tested
 CFLAGS+=-fno-force-mem
 
 LDFLAGS=-s -L. -lzdll -Zcrtdll
@@ -113,7 +114,7 @@ tags:
 depend:
 	makedepend -- $(CFLAGS) -- *.[ch]
 
-
+# DO NOT DELETE THIS LINE -- make depend depends on it.
 
 adler32.o: zlib.h zconf.h
 compress.o: zlib.h zconf.h

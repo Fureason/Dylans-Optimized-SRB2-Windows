@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Nsf_Emu.h"
 
@@ -76,7 +76,7 @@ void Nsf_Emu::unload()
 	Music_Emu::unload();
 }
 
-
+// Track info
 
 static void copy_nsf_fields( Nsf_Emu::header_t const& h, track_info_t* out )
 {
@@ -133,14 +133,14 @@ static gme_type_t_ const gme_nsf_type_ = { "Nintendo NES", 0, &new_nsf_emu, &new
 gme_type_t const gme_nsf_type = &gme_nsf_type_;
 
 
-
+// Setup
 
 void Nsf_Emu::set_tempo_( double t )
 {
 	unsigned playback_rate = get_le16( header_.ntsc_speed );
 	unsigned standard_rate = 0x411A;
 	clock_rate_ = 1789772.72727;
-	play_period = 262 * 341L * 4 - 2;  
+	play_period = 262 * 341L * 4 - 2; // two fewer PPU clocks every four frames
 	
 	if ( pal_only )
 	{
@@ -181,7 +181,7 @@ blargg_err_t Nsf_Emu::init_sound()
 		wave_type  | 6, wave_type  | 7, wave_type | 8, wave_type | 9,
 		wave_type  |10, wave_type  |11, wave_type |12, wave_type |13
 	};
-	set_voice_types( types );  
+	set_voice_types( types ); // common to all sound chip configurations
 	
 	double adjusted_gain = gain();
 	
@@ -279,12 +279,12 @@ blargg_err_t Nsf_Emu::load_( Data_Reader& in )
 	if ( header_.vers != 1 )
 		set_warning( "Unknown file version" );
 	
-
+	// sound and memory
 	blargg_err_t err = init_sound();
 	if ( err )
 		return err;
 	
-
+	// set up data
 	nes_addr_t load_addr = get_le16( header_.load_addr );
 	init_addr = get_le16( header_.init_addr );
 	play_addr = get_le16( header_.play_addr );
@@ -302,7 +302,7 @@ blargg_err_t Nsf_Emu::load_( Data_Reader& in )
 	rom.set_addr( load_addr % bank_size );
 	int total_banks = rom.size() / bank_size;
 	
-
+	// bank switching
 	int first_bank = (load_addr - rom_begin) / bank_size;
 	for ( int i = 0; i < bank_count; i++ )
 	{
@@ -313,7 +313,7 @@ blargg_err_t Nsf_Emu::load_( Data_Reader& in )
 		
 		if ( header_.banks [i] )
 		{
-
+			// bank-switched
 			memcpy( initial_banks, header_.banks, sizeof initial_banks );
 			break;
 		}
@@ -364,7 +364,7 @@ void Nsf_Emu::set_voice( int i, Blip_Buffer* buf, Blip_Buffer*, Blip_Buffer* )
 		{
 			if ( i < Nes_Vrc6_Apu::osc_count )
 			{
-
+				// put saw first
 				if ( --i < 0 )
 					i = 2;
 				vrc6->osc_output( i, buf );
@@ -382,9 +382,9 @@ void Nsf_Emu::set_voice( int i, Blip_Buffer* buf, Blip_Buffer*, Blip_Buffer* )
 	#endif
 }
 
+// Emulation
 
-
-
+// see nes_cpu_io.h for read/write functions
 
 void Nsf_Emu::cpu_write_misc( nes_addr_t addr, int data )
 {
@@ -431,17 +431,17 @@ void Nsf_Emu::cpu_write_misc( nes_addr_t addr, int data )
 	}
 	#endif
 	
-
+	// unmapped write
 	
 	#ifndef NDEBUG
 	{
-
+		// some games write to $8000 and $8001 repeatedly
 		if ( addr == 0x8000 || addr == 0x8001 ) return;
 		
-
+		// probably namco sound mistakenly turned on in mck
 		if ( addr == 0x4800 || addr == 0xF800 ) return;
 		
-
+		// memory mapper?
 		if ( addr == 0xFFF8 ) return;
 		
 		debug_printf( "write_unmapped( 0x%04X, 0x%02X )\n", (unsigned) addr, (unsigned) data );
@@ -456,7 +456,7 @@ blargg_err_t Nsf_Emu::start_track_( int track )
 	memset( low_mem, 0, sizeof low_mem );
 	memset( sram,    0, sizeof sram );
 	
-	cpu::reset( unmapped_code );  
+	cpu::reset( unmapped_code ); // also maps low_mem
 	cpu::map_code( sram_addr, sizeof sram, sram );
 	for ( int i = 0; i < bank_count; ++i )
 		cpu_write( bank_select_addr + i, initial_banks [i] );
@@ -493,7 +493,7 @@ blargg_err_t Nsf_Emu::run_clocks( blip_time_t& duration, int )
 	while ( time() < duration )
 	{
 		nes_time_t end = min( (blip_time_t) next_play, duration );
-		end = min( end, time() + 32767 );  
+		end = min( end, time() + 32767 ); // allows CPU to use 16-bit time delta
 		if ( cpu::run( end ) )
 		{
 			if ( r.pc != badop_addr )

@@ -1,6 +1,6 @@
- 
-                                          
-                                                        
+/* $Id: minixml.c,v 1.12 2017/12/12 11:17:40 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * minixml.c : the minimum size a xml parser can be ! */
 /* Project : miniupnp
  * webpage: http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
  * Author : Thomas Bernard
@@ -34,9 +34,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include "minixml.h"
 
-                                             
-                                                               
-                                  
+/* parseatt : used to parse the argument list
+ * return 0 (false) in case of success and -1 (true) if the end
+ * of the xmlbuffer is reached. */
 static int parseatt(struct xmlparser * p)
 {
 	const char * attname;
@@ -96,8 +96,8 @@ static int parseatt(struct xmlparser * p)
 						return -1;
 				}
 			}
-			                         
-                                                        
+			/*printf("%.*s='%.*s'\n",
+			       attnamelen, attname, attvaluelen, attvalue);*/
 			if(p->attfunc)
 				p->attfunc(p->data, attname, attnamelen, attvalue, attvaluelen);
 		}
@@ -106,8 +106,8 @@ static int parseatt(struct xmlparser * p)
 	return -1;
 }
 
-                                    
-                                                
+/* parseelt parse the xml stream and
+ * call the callback functions when needed... */
 static void parseelt(struct xmlparser * p)
 {
 	int i;
@@ -117,7 +117,7 @@ static void parseelt(struct xmlparser * p)
 		if((p->xml + 4) <= p->xmlend && (0 == memcmp(p->xml, "<!--", 4)))
 		{
 			p->xml += 3;
-			 
+			/* ignore comments */
 			do
 			{
 				p->xml++;
@@ -137,7 +137,7 @@ static void parseelt(struct xmlparser * p)
 				i++; p->xml++;
 				if (p->xml >= p->xmlend)
 					return;
-				 
+				/* to ignore namespace : */
 				if(*p->xml==':')
 				{
 					i = 0;
@@ -162,10 +162,10 @@ static void parseelt(struct xmlparser * p)
 						if (p->xml >= p->xmlend)
 							return;
 					}
-					 
+					/* CDATA are at least 9 + 3 characters long : <![CDATA[ ]]> */
 					if((p->xmlend >= (p->xml + (9 + 3))) && (memcmp(p->xml, "<![CDATA[", 9) == 0))
 					{
-						 
+						/* CDATA handling */
 						p->xml += 9;
 						data = p->xml;
 						i = 0;
@@ -220,7 +220,7 @@ static void parseelt(struct xmlparser * p)
 	}
 }
 
- 
+/* the parser must be initialized before calling this function */
 void parsexml(struct xmlparser * parser)
 {
 	parser->xml = parser->xmlstart;

@@ -7,13 +7,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw_drv.h
+/// \brief imports/exports for the 3D hardware low-level interface API
 
 #ifndef __HWR_DRV_H__
 #define __HWR_DRV_H__
 
-
+// this must be here 19991024 by Kin
 #include "../screen.h"
 #include "hw_data.h"
 #include "hw_defs.h"
@@ -21,9 +21,9 @@
 
 #include "hw_dll.h"
 
-
-
-
+// ==========================================================================
+//                                                       STANDARD DLL EXPORTS
+// ==========================================================================
 
 EXPORT boolean HWRAPI(Init) (void);
 #ifndef HAVE_SDL
@@ -46,7 +46,7 @@ EXPORT void HWRAPI(ClearMipMapCache) (void);
 
 EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value);
 
-
+//Hurdler: added for new development
 EXPORT void HWRAPI(DrawModel) (model_t *model, INT32 frameIndex, float duration, float tics, INT32 nextFrameIndex, FTransform *pos, float hscale, float vscale, UINT8 flipped, UINT8 hflipped, FSurfaceInfo *Surface);
 EXPORT void HWRAPI(CreateModelVBOs) (model_t *model);
 EXPORT void HWRAPI(SetTransform) (FTransform *ptransform);
@@ -75,9 +75,9 @@ EXPORT void HWRAPI(UpdateLightTable)(UINT32 id, RGBA_t *hw_lighttable);
 EXPORT void HWRAPI(ClearLightTables)(void);
 EXPORT void HWRAPI(SetScreenPalette)(RGBA_t *palette);
 
-
-
-
+// ==========================================================================
+//                                      HWR DRIVER OBJECT, FOR CLIENT PROGRAM
+// ==========================================================================
 
 #if !defined (_CREATE_DLL_)
 
@@ -135,6 +135,6 @@ extern struct hwdriver_s hwdriver;
 
 #define HWD hwdriver
 
-#endif  
+#endif //not defined _CREATE_DLL_
 
-#endif  
+#endif //__HWR_DRV_H__

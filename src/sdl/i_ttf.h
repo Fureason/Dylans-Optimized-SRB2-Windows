@@ -13,8 +13,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file
+/// \brief SDL_ttf interface code. Necessary for platforms with SDL inits that need to run immediately.
 
 #ifndef __I_TTF__
 #define __I_TTF__
@@ -22,17 +22,17 @@
 #include "../doomdef.h"
 #include "SDL_ttf.h"
 
-
+// Default name for standard TTF file.
 #define FONTFILE "srb2.ttf"
 #define FONTPOINTSIZE 12
 
-
+// Default font foreground colours
 #define DEFAULTFONTFGR 255
 #define DEFAULTFONTFGG 255
 #define DEFAULTFONTFGB 255
 #define DEFAULTFONTFGA 255
 
-
+// Default font background colours
 #define DEFAULTFONTBGR 0
 #define DEFAULTFONTBGG 0
 #define DEFAULTFONTBGB 0
@@ -72,15 +72,15 @@ typedef enum
 	blended
 } TextQuality;
 
-
+// Load TTF font from file.
 INT32 I_TTFLoadFont(const char *file, UINT32 ptsize);
 
-
-
-
+// Draw TTF text to screen. It will accept four colour vales (red, green, blue and alpha)
+// with foreground for draw modes Solid and Blended, and an extra four values for background
+// colour with draw type Shaded.
 void I_TTFDrawText(TTF_Font *font, TextQuality quality, INT32 fgR, INT32 fgG, INT32 fgB, INT32 fgA, INT32 bgR, INT32 bgG, INT32 bgB, INT32 bgA, const char *textmsg);
 
-
+// Initialise SDL_ttf.
 void I_StartupTTF(UINT32 fontpointsize, Uint32 initflags, Uint32 vidmodeflags);
 
 void I_ShutdownTTF(void);

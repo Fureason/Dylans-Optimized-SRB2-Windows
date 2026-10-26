@@ -22,8 +22,8 @@
  * This generic __linux__ implementation requires reading /proc/self/auxv and
  * looking at each element for one that records NEON capabilities.
  */
-#include <unistd.h>  
-#include <errno.h>   
+#include <unistd.h> /* for POSIX 1003.1 */
+#include <errno.h>  /* for EINTR */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -31,10 +31,10 @@
 #include <elf.h>
 #include <asm/hwcap.h>
 
-                                                                                
-                                                                              
-              
-   
+/* A read call may be interrupted, in which case it returns -1 and sets errno to
+ * EINTR if nothing was done, otherwise (if something was done) a partial read
+ * may result.
+ */
 static size_t
 safe_read(png_structp png_ptr, int fd, void *buffer_in, size_t nbytes)
 {
@@ -46,51 +46,51 @@ safe_read(png_structp png_ptr, int fd, void *buffer_in, size_t nbytes)
       unsigned int nread;
       int iread;
 
-                                                                           
-                                                                           
-                                    
-         
+      /* Passing nread > INT_MAX to read is implementation defined in POSIX
+       * 1003.1, therefore despite the unsigned argument portable code must
+       * limit the value to INT_MAX!
+       */
       if (nbytes > INT_MAX)
          nread = INT_MAX;
 
       else
-         nread = (unsigned int) nbytes;
+         nread = (unsigned int)/*SAFE*/nbytes;
 
       iread = read(fd, buffer, nread);
 
       if (iread == -1)
       {
-                                                                               
-                                                                              
-                                            
-            
+         /* This is the devil in the details, a read can terminate early with 0
+          * bytes read because of EINTR, yet it still returns -1 otherwise end
+          * of file cannot be distinguished.
+          */
          if (errno != EINTR)
          {
             png_warning(png_ptr, "/proc read failed");
-            return 0;  
+            return 0; /* I.e., a permanent failure */
          }
       }
 
       else if (iread < 0)
       {
-          
+         /* Not a valid 'read' result: */
          png_warning(png_ptr, "OS /proc read bug");
          return 0;
       }
 
       else if (iread > 0)
       {
-          
+         /* Continue reading until a permanent failure, or EOF */
          buffer += iread;
-         nbytes -= (unsigned int) iread;
-         ntotal += (unsigned int) iread;
+         nbytes -= (unsigned int)/*SAFE*/iread;
+         ntotal += (unsigned int)/*SAFE*/iread;
       }
 
       else
          return ntotal;
    }
 
-   return ntotal;  
+   return ntotal; /* nbytes == 0 */
 }
 
 static int
@@ -99,7 +99,7 @@ png_have_neon(png_structp png_ptr)
    int fd = open("/proc/self/auxv", O_RDONLY);
    Elf32_auxv_t aux;
 
-    
+   /* Failsafe: failure to open means no NEON */
    if (fd == -1)
    {
       png_warning(png_ptr, "/proc/self/auxv open failed");

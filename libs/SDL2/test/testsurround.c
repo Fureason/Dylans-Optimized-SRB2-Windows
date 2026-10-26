@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Program to test surround sound audio channels */
 #include "SDL_config.h"
 
 #include "SDL.h"
@@ -26,7 +26,7 @@ static int active_channel;
 #define SINE_FREQ_HZ     500
 #define LFE_SINE_FREQ_HZ 50
 
- 
+/* The channel layout is defined in SDL_audio.h */
 const char *
 get_channel_name(int channel_index, int channel_count)
 {
@@ -107,18 +107,18 @@ fill_buffer(void *unused, Uint8 *stream, int len)
 
     SDL_memset(stream, 0, len);
 
-     
+    /* This can happen for a short time when switching devices */
     if (active_channel == total_channels) {
         return;
     }
 
-     
+    /* Play a sine wave on the active channel only */
     for (i = active_channel; i < samples; i += total_channels) {
         float time = (float)total_samples++ / SAMPLE_RATE_HZ;
         int sine_freq = is_lfe_channel(active_channel, total_channels) ? LFE_SINE_FREQ_HZ : SINE_FREQ_HZ;
         int amplitude;
 
-         
+        /* Gradually ramp up and down to avoid audible pops when switching between channels */
         if (total_samples < SAMPLE_RATE_HZ) {
             amplitude = total_samples * MAX_AMPLITUDE / SAMPLE_RATE_HZ;
         } else if (total_samples > (CHANNEL_TEST_TIME_SEC - 1) * SAMPLE_RATE_HZ) {
@@ -129,7 +129,7 @@ fill_buffer(void *unused, Uint8 *stream, int len)
 
         buffer[i] = (Sint16)(SDL_sin(6.283185f * sine_freq * time) * amplitude);
 
-         
+        /* Reset our state for next callback if this channel test is finished */
         if (total_samples == CHANNEL_TEST_TIME_SEC * SAMPLE_RATE_HZ) {
             total_samples = 0;
             active_channel++;
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 {
     int i;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_Init(SDL_INIT_AUDIO) < 0) {
@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-     
+    /* Show the list of available drivers */
     SDL_Log("Available audio drivers:");
     for (i = 0; i < SDL_GetNumAudioDrivers(); ++i) {
         SDL_Log("%i: %s", i, SDL_GetAudioDriver(i));
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
 
         SDL_Log("Testing audio device: %s (%d channels)\n", devname, spec.channels);
 
-         
+        /* These are used by the fill_buffer callback */
         total_channels = spec.channels;
         active_channel = 0;
 
@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
 
             SDL_Log("Playing %d Hz test tone on channel: %s\n", sine_freq, get_channel_name(j, total_channels));
 
-             
+            /* fill_buffer() will increment the active channel */
             if (SDL_getenv("SDL_TESTS_QUICK") != NULL) {
                 SDL_Delay(QUICK_TEST_TIME_MSEC);
             } else {

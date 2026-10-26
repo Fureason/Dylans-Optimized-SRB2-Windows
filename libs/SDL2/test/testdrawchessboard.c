@@ -12,7 +12,7 @@
    This file is created by : Nitin Jain (nitin.j4@samsung.com)
 */
 
- 
+/* Sample program:  Draw a Chess Board  by using SDL_CreateSoftwareRenderer API */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -33,7 +33,7 @@ void DrawChessBoard()
     int row = 0, column = 0, x = 0;
     SDL_Rect rect, darea;
 
-     
+    /* Get the Size of drawing surface */
     SDL_RenderGetViewport(renderer, &darea);
 
     for (; row < 8; row++) {
@@ -57,14 +57,14 @@ void loop()
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
 
-         
+        /* Re-create when window has been resized */
         if ((e.type == SDL_WINDOWEVENT) && (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)) {
 
             SDL_DestroyRenderer(renderer);
 
             surface = SDL_GetWindowSurface(window);
             renderer = SDL_CreateSoftwareRenderer(surface);
-             
+            /* Clear the rendering surface with the specified color */
             SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
             SDL_RenderClear(renderer);
         }
@@ -88,23 +88,23 @@ void loop()
 
     DrawChessBoard();
 
-                                           
-                                                       
+    /* Got everything on rendering surface,
+       now Update the drawing image on window screen */
     SDL_UpdateWindowSurface(window);
 }
 
 int main(int argc, char *argv[])
 {
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize SDL */
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init fail : %s\n", SDL_GetError());
         return 1;
     }
 
-     
+    /* Create window and renderer for given surface */
     window = SDL_CreateWindow("Chess Board", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_RESIZABLE);
     if (window == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window creation fail : %s\n", SDL_GetError());
@@ -117,11 +117,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-     
+    /* Clear the rendering surface with the specified color */
     SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(renderer);
 
-     
+    /* Draw the Image on rendering surface */
     done = 0;
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(loop, 0, 1);

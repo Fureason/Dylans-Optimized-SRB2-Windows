@@ -67,7 +67,7 @@ static void DumpString(const TString* s, DumpState* D)
  }
  else
  {
-  size_t size=s->tsv.len+1;		 
+  size_t size=s->tsv.len+1;		/* include trailing '\0' */
   DumpVar(size,D);
   DumpBlock(getstr(s),size,D);
  }
@@ -99,7 +99,7 @@ static void DumpConstants(const Proto* f, DumpState* D)
 	DumpString(rawtsvalue(o),D);
 	break;
    default:
-	lua_assert(0);			 
+	lua_assert(0);			/* cannot happen */
 	break;
   }
  }
@@ -147,9 +147,9 @@ static void DumpHeader(DumpState* D)
  DumpBlock(h,LUAC_HEADERSIZE,D);
 }
 
-  
-                                         
-  
+/*
+** dump Lua function as precompiled chunk
+*/
 int luaU_dump (lua_State* L, const Proto* f, lua_Writer w, void* data, int strip)
 {
  DumpState D;

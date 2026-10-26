@@ -7,11 +7,11 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
+# Location of the zlib library and include files
 ZLIBINC = ../zlib
 ZLIBLIB = ../zlib
 
-
+# Compiler, linker, lib and other tools
 CC = gcc
 LD = $(CC)
 AR_RC = ar rcs
@@ -21,25 +21,25 @@ RM_F = rm -f
 
 WARNMORE = -Wwrite-strings -Wpointer-arith -Wshadow \
 	-Wmissing-declarations -Wtraditional -Wcast-align \
-	-Wstrict-prototypes -Wmissing-prototypes  
-CPPFLAGS = -I$(ZLIBINC)  
-CFLAGS = -W -Wall -O2  
+	-Wstrict-prototypes -Wmissing-prototypes # -Wconversion
+CPPFLAGS = -I$(ZLIBINC) # -DPNG_DEBUG=5
+CFLAGS = -W -Wall -O2 # $(WARNMORE) -g
 LDFLAGS = -L$(ZLIBLIB)
 LIBS = -lz -lm
 
-
+# File extensions
 EXEEXT =
 
-
-
+# Pre-built configuration
+# See scripts/pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT = scripts/pnglibconf.h.prebuilt
 
-
+# Variables
 OBJS =  png.o pngerror.o pngget.o pngmem.o pngpread.o \
 	pngread.o pngrio.o pngrtran.o pngrutil.o pngset.o \
 	pngtrans.o pngwio.o pngwrite.o pngwtran.o pngwutil.o
 
-
+# Targets
 all: static
 
 pnglibconf.h: $(PNGLIBCONF_H_PREBUILT)

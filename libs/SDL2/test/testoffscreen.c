@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple program: picks the offscreen backend and renders each frame to a bmp */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -39,7 +39,7 @@ void draw()
     SDL_SetRenderDrawColor(renderer, 0x10, 0x9A, 0xCE, 0xFF);
     SDL_RenderClear(renderer);
 
-     
+    /* Grow based on the frame just to show a difference per frame of the region */
     Rect.x = 0;
     Rect.y = 0;
     Rect.w = (frame_number * 2) % width;
@@ -75,7 +75,7 @@ void loop()
 {
     SDL_Event event;
 
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_QUIT:
@@ -100,17 +100,17 @@ int main(int argc, char *argv[])
     Uint32 then, now, frames;
 #endif
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Force the offscreen renderer, if it cannot be created then fail out */
     if (SDL_VideoInit("offscreen") < 0) {
         SDL_Log("Couldn't initialize the offscreen video driver: %s\n",
                 SDL_GetError());
         return SDL_FALSE;
     }
 
-     
+    /* If OPENGL fails to init it will fallback to using a framebuffer for rendering */
     window = SDL_CreateWindow("Offscreen Test",
                               SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                               width, height, 0);
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
     srand((unsigned int)time(NULL));
 
 #ifndef __EMSCRIPTEN__
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
         ++frames;
         loop();
 
-         
+        /* Print out some timing information, along with remaining frames */
         if (frames % (max_frames / 10) == 0) {
             now = SDL_GetTicks();
             if (now > then) {
@@ -166,4 +166,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

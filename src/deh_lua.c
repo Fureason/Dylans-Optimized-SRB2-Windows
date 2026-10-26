@@ -7,21 +7,21 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  deh_lua.c
+/// \brief Lua SOC library
 
 #include "deh_lua.h"
 
-
-
-
-
-
-
+// freeslot takes a name (string only!)
+// and allocates it to the appropriate free slot.
+// Returns the slot number allocated for it or nil if failed.
+// ex. freeslot("MT_MYTHING","S_MYSTATE1","S_MYSTATE2")
+// TODO: Error checking! @.@; There's currently no way to know which ones failed and why!
+//
 static inline int lib_freeslot(lua_State *L)
 {
 	int n = lua_gettop(L);
-	int r = 0;  
+	int r = 0; // args returned
 	char *s, *type,*word;
 
 	if (!lua_lumploading)
@@ -72,12 +72,12 @@ static inline int lib_freeslot(lua_State *L)
 			for (j = SPR_FIRSTFREESLOT; j <= SPR_LASTFREESLOT; j++)
 			{
 				if (in_bit_array(used_spr, j - SPR_FIRSTFREESLOT))
-					continue;  
-
+					continue; // Already allocated, next.
+				// Found a free slot!
 				CONS_Printf("Sprite SPR_%s allocated.\n",word);
 				strcpy(sprnames[j], word);
-				set_bit_array(used_spr, j - SPR_FIRSTFREESLOT);  
-
+				set_bit_array(used_spr, j - SPR_FIRSTFREESLOT); // Okay, this sprite slot has been named now.
+				// Lua needs to update the value in _G if it exists
 				LUA_UpdateSprName(word, j);
 				lua_pushinteger(L, j);
 				r++;
@@ -134,12 +134,12 @@ static inline int lib_freeslot(lua_State *L)
 		}
 		else if (fastcmp(type, "SPR2"))
 		{
-
+			// Search if we already have an SPR2 by that name...
 			playersprite_t i;
 			for (i = SPR2_FIRSTFREESLOT; i < free_spr2; i++)
 				if (memcmp(spr2names[i],word,4) == 0)
 					break;
-
+			// We don't, so allocate a new one.
 			if (i >= free_spr2) {
 				if (free_spr2 < NUMPLAYERSPRITES)
 				{
@@ -155,15 +155,15 @@ static inline int lib_freeslot(lua_State *L)
 		}
 		else if (fastcmp(type, "TOL"))
 		{
-
+			// Search if we already have a typeoflevel by that name...
 			int i;
 			for (i = 0; TYPEOFLEVEL[i].name; i++)
 				if (fastcmp(word, TYPEOFLEVEL[i].name))
 					break;
 
-
+			// We don't, so allocate a new one.
 			if (TYPEOFLEVEL[i].name == NULL) {
-				if (lastcustomtol == (UINT32)MAXTOL)  
+				if (lastcustomtol == (UINT32)MAXTOL) // Unless you have way too many, since they're flags.
 					CONS_Alert(CONS_WARNING, "Ran out of free typeoflevel slots!\n");
 				else {
 					CONS_Printf("TypeOfLevel TOL_%s allocated.\n",word);
@@ -184,8 +184,8 @@ static inline int lib_freeslot(lua_State *L)
 	return r;
 }
 
-
-
+// Wrapper for ALL A_Action functions.
+// Arguments: mobj_t actor, int var1, int var2
 static int action_call(lua_State *L)
 {
 	actionf_t *action = *((actionf_t **)luaL_checkudata(L, 1, META_ACTION));
@@ -203,36 +203,36 @@ static int action_call(lua_State *L)
 	return 0;
 }
 
-
-
+// Hardcoded A_Action name to call for super() or NULL if super() would be invalid.
+// Set in lua_infolib.
 const char *luaactions[MAX_ACTION_RECURSION];
 UINT8 luaactionstack = 0;
 
 static int lib_dummysuper(lua_State *L)
 {
-
-
+	// TODO: Now that the restriction on only being allowed in state changes was lifted,
+	// it'd be nice to have super extend to Lua A_ functions too :)
 	return luaL_error(L, "Can't call super() outside of hardcode-replacing A_Action functions!");
 }
 
 static void CacheAndPushConstant(lua_State *L, const char *name, lua_Integer value)
 {
-
+	// "cache" into _G
 	lua_pushstring(L, name);
 	lua_pushinteger(L, value);
 	lua_rawset(L, LUA_GLOBALSINDEX);
-
+	// push
 	lua_pushinteger(L, value);
 }
 
-
-
+// Search for a matching constant variable.
+// Result is stored into _G for faster subsequent use. (Except for SPR_ in the SOC parser)
 static int ScanConstants(lua_State *L, boolean mathlib, const char *word)
 {
 	const char *p;
 	fixed_t i;
 
-	if (strlen(word) == 1) {  
+	if (strlen(word) == 1) { // Assume sprite frame if length 1.
 		if (*word >= 'A' && *word <= '~')
 		{
 			CacheAndPushConstant(L, word, *word-'A');
@@ -298,7 +298,7 @@ static int ScanConstants(lua_State *L, boolean mathlib, const char *word)
 			CacheAndPushConstant(L, word, (lua_Integer)PF_FULLSTASIS);
 			return 1;
 		}
-
+		// TODO: 2.3: Delete this alias
 		else if (fastcmp(p, "USEDOWN"))
 		{
 			CacheAndPushConstant(L, word, (lua_Integer)PF_SPINDOWN);
@@ -345,7 +345,7 @@ static int ScanConstants(lua_State *L, boolean mathlib, const char *word)
 				CacheAndPushConstant(L, word, ((lua_Integer)1<<i));
 				return 1;
 			}
-
+		// Aliases
 		if (fastcmp(p, "EFFECT1"))
 		{
 			lua_pushinteger(L, (lua_Integer)ML_SKEWTD);
@@ -458,8 +458,8 @@ static int ScanConstants(lua_State *L, boolean mathlib, const char *word)
 		i = R_GetSpriteNumByName(p);
 		if (i != NUMSPRITES)
 		{
-
-
+			// updating overridden sprnames is not implemented for soc parser,
+			// so don't use cache
 			if (mathlib)
 				lua_pushinteger(L, i);
 			else
@@ -475,8 +475,8 @@ static int ScanConstants(lua_State *L, boolean mathlib, const char *word)
 		for (i = 0; i < (fixed_t)free_spr2; i++)
 			if (!spr2names[i][4])
 			{
-
-
+				// special 3-char cases, e.g. SPR2_RUN
+				// the spr2names entry will have "_" on the end, as in "RUN_"
 				if (spr2names[i][3] == '_' && !p[3]) {
 					if (fastncmp(p,spr2names[i],3)) {
 						CacheAndPushConstant(L, word, i);
@@ -500,7 +500,7 @@ static int ScanConstants(lua_State *L, boolean mathlib, const char *word)
 			}
 		return 0;
 	}
-	else if (mathlib && fastncmp("SFX_",word,4)) {  
+	else if (mathlib && fastncmp("SFX_",word,4)) { // SOCs are ALL CAPS!
 		p = word+4;
 		for (i = 0; i < NUMSFX; i++)
 			if (S_sfx[i].name && fasticmp(p, S_sfx[i].name)) {
@@ -528,7 +528,7 @@ static int ScanConstants(lua_State *L, boolean mathlib, const char *word)
 			}
 		return 0;
 	}
-	else if (mathlib && fastncmp("PW_",word,3)) {  
+	else if (mathlib && fastncmp("PW_",word,3)) { // SOCs are ALL CAPS!
 		p = word+3;
 		for (i = 0; i < NUMPOWERS; i++)
 			if (fastcmp(p, POWERS_LIST[i])) {
@@ -599,7 +599,7 @@ static int ScanConstants(lua_State *L, boolean mathlib, const char *word)
 		return luaL_error(L, "translation '%s' could not be found.\n", word);
 	}
 
-
+	// TODO: 2.3: Delete this alias
 	if (fastcmp(word, "BT_USE"))
 	{
 		CacheAndPushConstant(L, word, (lua_Integer)BT_SPIN);
@@ -619,32 +619,32 @@ FUNCINLINE static ATTRINLINE int getEnum(lua_State *L, boolean mathlib, const ch
 {
 	fixed_t i;
 
-
-
+	// check actions, super and globals first, as they don't have _G caching implemented
+	// so they benefit from being checked first
 
 	if (!mathlib && fastncmp("A_",word,2)) {
 		char *caps;
 
-
-
-
+		// Hardcoded actions come first.
+		// Trying to call them will invoke LUA_CallAction, which will handle super properly.
+		// Retrieving them from this metatable allows them to be case-insensitive!
 		for (i = 0; actionpointers[i].name; i++)
 		{
 			if (fasticmp(word, actionpointers[i].name))
 			{
-
+				// We push the actionf_t* itself as userdata!
 				LUA_PushUserdata(L, &actionpointers[i].action, META_ACTION);
 				return 1;
 			}
 		}
 
-
-
-
-
+		// Now try to get Lua actions.
+		/// \todo Push a closure that sets luaactions[] and luaactionstack.
+		/// This would be part one of a step to get super functions working for custom A_ functions.
+		/// Custom functions.
 		lua_getfield(L, LUA_REGISTRYINDEX, LREG_ACTIONS);
 
-
+		// actions are stored in all uppercase.
 		caps = Z_StrDup(word);
 		strupr(caps);
 		lua_getfield(L, -1, caps);
@@ -652,18 +652,18 @@ FUNCINLINE static ATTRINLINE int getEnum(lua_State *L, boolean mathlib, const ch
 
 		if (!lua_isnil(L, -1))
 		{
-			return 1;  
+			return 1; // Success! :D That was easy.
 		}
 
-
-		lua_pop(L, 2);  
+		// Welp, that failed.
+		lua_pop(L, 2); // pop nil and LREG_ACTIONS
 		return 0;
 	}
 	else if (!mathlib && fastcmp("super",word))
 	{
 		if (!luaactionstack)
 		{
-
+			// Not in A_ action routine
 			lua_pushcfunction(L, lib_dummysuper);
 			return 1;
 		}
@@ -677,7 +677,7 @@ FUNCINLINE static ATTRINLINE int getEnum(lua_State *L, boolean mathlib, const ch
 			}
 		}
 
-
+		// Not a hardcoded A_ action.
 		lua_pushcfunction(L, lib_dummysuper);
 		return 1;
 	}
@@ -697,13 +697,13 @@ static int constants_get(lua_State *L)
 
 	key = luaL_checkstring(L, 2);
 
-
+	// In Lua, mathlib is never there
 	ret = getEnum(L, false, key);
 
 	if (ret != -1)
-
-
-
+		// Don't allow A_* or super.
+		// All userdata is meant to be considered global variables,
+		// so no need to get more specific than "is it userdata?"
 		if (!lua_isuserdata(L, -1) && !lua_isfunction(L, -1))
 			return ret;
 
@@ -729,7 +729,7 @@ static inline int lib_getenum(lua_State *L)
 	return 0;
 }
 
-
+// If a sprname has been "cached" to _G, update it to a new value.
 void LUA_UpdateSprName(const char *name, lua_Integer value)
 {
 	char fullname[4 + MAXSPRITENAME + 1] = "SPR_";
@@ -748,7 +748,7 @@ void LUA_UpdateSprName(const char *name, lua_Integer value)
 		lua_rawset(gL, LUA_GLOBALSINDEX);
 	}
 
-	lua_pop(gL, 1);  
+	lua_pop(gL, 1); // pop the rawget result
 }
 
 int LUA_EnumLib(lua_State *L)
@@ -756,60 +756,60 @@ int LUA_EnumLib(lua_State *L)
 	if (lua_gettop(L) == 0)
 		lua_pushboolean(L, 0);
 
-
+	// Set the global metatable
 	lua_createtable(L, 0, 1);
-	lua_pushvalue(L, 1);  
+	lua_pushvalue(L, 1); // boolean passed to LUA_EnumLib as first argument.
 	lua_pushcclosure(L, lib_getenum, 1);
 	lua_setfield(L, -2, "__index");
 	lua_setmetatable(L, LUA_GLOBALSINDEX);
 	return 0;
 }
 
-
+// getActionName(action) -> return action's string name
 static int lib_getActionName(lua_State *L)
 {
-	if (lua_isuserdata(L, 1))  
+	if (lua_isuserdata(L, 1)) // arg 1 is built-in action, expect action userdata
 	{
 		actionf_t *action = *((actionf_t **)luaL_checkudata(L, 1, META_ACTION));
 		const char *name = NULL;
 		if (!action)
 			return luaL_error(L, "not a valid action?");
 		name = LUA_GetActionName(action);
-		if (!name)  
+		if (!name) // that can't be right?
 			return luaL_error(L, "no name string could be found for this action");
 		lua_pushstring(L, name);
 		return 1;
 	}
-	else if (lua_isfunction(L, 1))  
+	else if (lua_isfunction(L, 1)) // arg 1 is a function (either C or Lua)
 	{
-		lua_settop(L, 1);  
-
+		lua_settop(L, 1); // set top of stack to 1 (removing any extra args, which there shouldn't be)
+		// get the name for this action, if possible.
 		lua_getfield(L, LUA_REGISTRYINDEX, LREG_ACTIONS);
 		lua_pushnil(L);
-
-
-
+		// Lua stack at this point:
+		//  1   ...       -2              -1
+		// arg  ...   LREG_ACTIONS        nil
 		while (lua_next(L, -2))
 		{
-
-
-
-			if (lua_rawequal(L, -1, 1))  
+			// Lua stack at this point:
+			//  1   ...       -3              -2           -1
+			// arg  ...   LREG_ACTIONS    "A_ACTION"    function
+			if (lua_rawequal(L, -1, 1)) // is this the same as the arg?
 			{
-
-
+				// make sure the key (i.e. "A_ACTION") is a string first
+				// (note: we don't use lua_isstring because it also returns true for numbers)
 				if (lua_type(L, -2) == LUA_TSTRING)
 				{
-					lua_pushvalue(L, -2);  
+					lua_pushvalue(L, -2); // push "A_ACTION" string to top of stack
 					return 1;
 				}
-				lua_pop(L, 2);  
-				break;  
+				lua_pop(L, 2); // pop the name and function
+				break; // probably should have succeeded but we didn't, so end the loop
 			}
 			lua_pop(L, 1);
 		}
-		lua_pop(L, 1);  
-		return 0;  
+		lua_pop(L, 1); // pop LREG_ACTIONS
+		return 0; // return nothing (don't error)
 	}
 
 	return luaL_typerror(L, 1, "action userdata or Lua function");
@@ -826,8 +826,8 @@ int LUA_SOCLib(lua_State *L)
 		LUA_SetCFunctionField(L, "__call", action_call);
 	lua_pop(L, 1);
 
-
-
+	// Allow access to constants without forcing the use of name comparison checks Lua-side
+	// This table will not access global variables, only constants
 	lua_newuserdata(L, 0);
 		lua_createtable(L, 0, 2);
 			lua_pushcfunction(L, constants_get);
@@ -859,7 +859,7 @@ void LUA_SetActionByName(void *state, const char *actiontocompare)
 		if (fasticmp(actiontocompare, actionpointers[z].name))
 		{
 			st->action = actionpointers[z].action;
-			st->action.acv = actionpointers[z].action.acv;  
+			st->action.acv = actionpointers[z].action.acv; // assign
 			st->action.acp1 = actionpointers[z].action.acp1;
 			return;
 		}

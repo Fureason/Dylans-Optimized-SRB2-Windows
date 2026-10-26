@@ -30,12 +30,12 @@ int main(int argc, char *argv[])
 #ifdef HAVE_VULKAN_H
 #include <vulkan/vulkan.h>
 #else
- 
+/* SDL includes a copy for building on systems without the Vulkan SDK */
 #include "../src/video/khronos/vulkan/vulkan.h"
 #endif
 #include "SDL_vulkan.h"
 
-#ifndef UINT64_MAX  
+#ifndef UINT64_MAX /* VS2008 */
 #define UINT64_MAX 18446744073709551615
 #endif
 
@@ -93,9 +93,9 @@ VULKAN_FUNCTIONS()
 #undef VULKAN_INSTANCE_FUNCTION
 static PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = NULL;
 
-                                
-                                                                   
-   
+/* Based on the headers found in
+ * https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers
+ */
 #if VK_HEADER_VERSION < 22
 enum
 {
@@ -179,12 +179,12 @@ typedef struct VulkanContext
 } VulkanContext;
 
 static SDLTest_CommonState *state;
-static VulkanContext *vulkanContexts = NULL;  
-static VulkanContext *vulkanContext = NULL;   
+static VulkanContext *vulkanContexts = NULL; // an array of state->num_windows items
+static VulkanContext *vulkanContext = NULL;  // for the currently-rendering window
 
 static void shutdownVulkan(SDL_bool doDestroySwapchain);
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void quit(int rc)
 {
     shutdownVulkan(SDL_TRUE);
@@ -380,15 +380,15 @@ static void findPhysicalDevice(void)
             if (supported) {
                 vulkanContext->presentQueueFamilyIndex = queueFamilyIndex;
                 if (queueFamiliesProperties[queueFamilyIndex].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                    break;  
+                    break; // use this queue because it can present and do graphics
                 }
             }
         }
 
-        if (vulkanContext->graphicsQueueFamilyIndex == queueFamiliesCount) {  
+        if (vulkanContext->graphicsQueueFamilyIndex == queueFamiliesCount) { // no good queues found
             continue;
         }
-        if (vulkanContext->presentQueueFamilyIndex == queueFamiliesCount) {  
+        if (vulkanContext->presentQueueFamilyIndex == queueFamiliesCount) { // no good queues found
             continue;
         }
         result = vkEnumerateDeviceExtensionProperties(physicalDevice, NULL, &deviceExtensionCount, NULL);
@@ -542,7 +542,7 @@ static void getSurfaceCaps(void)
         quit(2);
     }
 
-
+    // check surface usage
     if (!(vulkanContext->surfaceCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "Vulkan surface doesn't support VK_IMAGE_USAGE_TRANSFER_DST_BIT\n");
@@ -627,17 +627,17 @@ static SDL_bool createSwapchain(void)
     VkSwapchainCreateInfoKHR createInfo = { 0 };
     VkResult result;
 
-
+    // pick an image count
     vulkanContext->swapchainDesiredImageCount = vulkanContext->surfaceCapabilities.minImageCount + 1;
     if ((vulkanContext->swapchainDesiredImageCount > vulkanContext->surfaceCapabilities.maxImageCount) &&
         (vulkanContext->surfaceCapabilities.maxImageCount > 0)) {
         vulkanContext->swapchainDesiredImageCount = vulkanContext->surfaceCapabilities.maxImageCount;
     }
 
-
+    // pick a format
     if ((vulkanContext->surfaceFormatsCount == 1) &&
         (vulkanContext->surfaceFormats[0].format == VK_FORMAT_UNDEFINED)) {
-
+        // aren't any preferred formats, so we pick
         vulkanContext->surfaceFormat.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
         vulkanContext->surfaceFormat.format = VK_FORMAT_R8G8B8A8_UNORM;
     } else {
@@ -650,11 +650,11 @@ static SDL_bool createSwapchain(void)
         }
     }
 
-
+    // get size
     SDL_Vulkan_GetDrawableSize(vulkanContext->window, &w, &h);
 
-
-
+    // Clamp the size to the allowable image extent.
+    // SDL_Vulkan_GetDrawableSize()'s result it not always in this range (bug #3287)
     vulkanContext->swapchainSize.width = SDL_clamp((uint32_t)w,
                                                    vulkanContext->surfaceCapabilities.minImageExtent.width,
                                                    vulkanContext->surfaceCapabilities.maxImageExtent.width);
@@ -1087,16 +1087,16 @@ int main(int argc, char **argv)
     Uint32 then, now, frames;
     int dw, dh;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
     }
 
-     
+    /* Set Vulkan parameters */
     state->window_flags |= SDL_WINDOW_VULKAN;
     state->skip_renderer = 1;
 
@@ -1115,17 +1115,17 @@ int main(int argc, char **argv)
 
     initVulkan();
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
     while (!done) {
-         
+        /* Check for events */
         frames++;
         while (SDL_PollEvent(&event)) {
-                                                                      
-                      
-               
+            /* Need to destroy the swapchain before the window created
+             * by SDL.
+             */
             if (event.type == SDL_WINDOWEVENT_CLOSE) {
                 destroySwapchainAndSwapchainSpecificStuff(SDL_TRUE);
             }
@@ -1143,7 +1143,7 @@ int main(int argc, char **argv)
         }
     }
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         SDL_Log("%2.2f frames per second\n", ((double)frames * 1000) / (now - then));

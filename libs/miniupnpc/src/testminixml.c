@@ -13,7 +13,7 @@
 #include "minixml.h"
 #include "igd_desc_parse.h"
 
- 
+/* ---------------------------------------------------------------------- */
 void printeltname1(void * d, const char * name, int l)
 {
 	int i;
@@ -45,25 +45,25 @@ void burptest(const char * buffer, int bufsize)
 {
 	struct IGDdatas data;
 	struct xmlparser parser;
-	 
+	/*objet IGDdatas */
 	memset(&data, 0, sizeof(struct IGDdatas));
-	 
+	/* objet xmlparser */
 	parser.xmlstart = buffer;
 	parser.xmlsize = bufsize;
 	parser.data = &data;
-	                                      
-                                   
-                                
+	/*parser.starteltfunc = printeltname1;
+	parser.endeltfunc = printeltname2;
+	parser.datafunc = printdata; */
 	parser.starteltfunc = IGDstartelt;
 	parser.endeltfunc = IGDendelt;
 	parser.datafunc = IGDdata;
 	parsexml(&parser);
 #ifdef DEBUG
 	printIGD(&data);
-#endif  
+#endif /* DEBUG */
 }
 
- 
+/* ----- main ---- */
 #define XML_MAX_SIZE (8192)
 int main(int argc, char * * argv)
 {

@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  p_setup.c
+/// \brief Do all the WAD I/O, get map description, set up initial state and misc. LUTs
 
 #include "doomdef.h"
 #include "d_main.h"
@@ -22,20 +22,20 @@
 #include "p_saveg.h"
 
 #include "i_time.h"
-#include "i_sound.h"  
-#include "i_video.h"  
+#include "i_sound.h" // for I_PlayCD()..
+#include "i_video.h" // for I_FinishUpdate()..
 #include "r_sky.h"
 #include "i_system.h"
 
 #include "r_data.h"
-#include "r_things.h"  
+#include "r_things.h" // for R_AddSpriteDefs
 #include "r_textures.h"
 #include "r_translation.h"
 #include "r_patch.h"
 #include "r_picformats.h"
 #include "r_sky.h"
 #include "r_draw.h"
-#include "r_fps.h"  
+#include "r_fps.h" // R_ResetViewInterpolation in level load
 
 #include "s_sound.h"
 #include "st_stuff.h"
@@ -50,10 +50,10 @@
 #include "m_fixed.h"
 #include "m_random.h"
 
-#include "dehacked.h"  
-#include "deh_tables.h"  
+#include "dehacked.h" // for map headers
+#include "deh_tables.h" // FREE_SKINCOLORS
 #include "r_main.h"
-#include "m_cond.h"  
+#include "m_cond.h" // for emblems
 
 #include "m_argv.h"
 
@@ -61,15 +61,15 @@
 
 #include "v_video.h"
 
-#include "filesrch.h"  
+#include "filesrch.h" // refreshdirmenu
 
-#include "lua_hud.h"  
+#include "lua_hud.h" // level title
 
-#include "f_finale.h"  
+#include "f_finale.h" // wipes
 
-#include "md5.h"  
+#include "md5.h" // map MD5
 
-
+// for MapLoad hook
 #include "lua_script.h"
 #include "lua_hook.h"
 
@@ -87,22 +87,22 @@
 
 #include "p_slopes.h"
 
-#include "fastcmp.h"  
+#include "fastcmp.h" // textmap parsing
 
 #include "taglist.h"
 
 #include "netcode/net_command.h"
 
-
-
-
-
+//
+// Map MD5, calculated on level load.
+// Sent to clients in PT_SERVERINFO.
+//
 unsigned char mapmd5[16];
 
-
-
-
-
+//
+// MAP related Lookup tables.
+// Store VERTEXES, LINEDEFS, SIDEDEFS, etc.
+//
 
 boolean udmf;
 size_t numvertexes, numsegs, numsectors, numsubsectors, numnodes, numlines, numsides, nummapthings;
@@ -123,38 +123,38 @@ boolean stoppedclock;
 boolean levelloading;
 UINT8 levelfadecol;
 
-                                                                              
-                                                                     
+/* Retained only so configs written by V5.33-V5.39 still parse. Transition and
+ * title-card presentation always follow SRB2's original path now. */
 consvar_t cv_fastmaptransitions = CVAR_INIT("fastmaptransitions", "Off",
 	CV_SAVE, CV_OnOff, NULL);
 
+// BLOCKMAP
+// Created from axis aligned bounding box
+// of the map, a rectangular array of
+// blocks of size ...
+// Used to speed up collision detection
+// by spatial subdivision in 2D.
+//
+// Blockmap size.
+INT32 bmapwidth, bmapheight; // size in mapblocks
 
+INT32 *blockmap; // INT32 for large maps
+// offsets in blockmap are from here
+INT32 *blockmaplump; // Big blockmap
 
-
-
-
-
-
-
-INT32 bmapwidth, bmapheight;  
-
-INT32 *blockmap;  
-
-INT32 *blockmaplump;  
-
-
+// origin of block map
 fixed_t bmaporgx, bmaporgy;
-
+// for thing chains
 blocknode_t **blocklinks;
 
-
-
-
-
-
+// REJECT
+// For fast sight rejection.
+// Speeds up enemy AI by skipping detailed LineOf Sight calculation.
+// Without special effect, this could be used as a PVS lookup as well.
+//
 UINT8 *rejectmatrix;
 
-
+// Maintain single and multi player starting spots.
 INT32 numdmstarts, numcoopstarts, numredctfstarts, numbluectfstarts;
 
 mapthing_t *deathmatchstarts[MAX_DM_STARTS];
@@ -162,7 +162,7 @@ mapthing_t *playerstarts[MAXPLAYERS];
 mapthing_t *bluectfstarts[MAXPLAYERS];
 mapthing_t *redctfstarts[MAXPLAYERS];
 
-
+// Maintain waypoints
 mobj_t *waypoints[NUMWAYPOINTSEQUENCES][WAYPOINTSEQUENCESIZE];
 UINT16 numwaypoints[NUMWAYPOINTSEQUENCES];
 
@@ -257,7 +257,7 @@ mobj_t *P_GetClosestWaypoint(UINT8 sequence, mobj_t *mo)
 	return result;
 }
 
-
+// Return true if all waypoints are in the same location
 boolean P_IsDegeneratedWaypointSequence(UINT8 sequence)
 {
 	mobj_t *first, *waypoint;
@@ -289,22 +289,22 @@ boolean P_IsDegeneratedWaypointSequence(UINT8 sequence)
 }
 
 
-                                                            
-                                                                         
-                                                                    
-   
-                                                                              
-                                                                
-   
-                                                                             
-                                                             
-                                                                            
-                                
-                               
-    
+/** Logs an error about a map being corrupt, then terminate.
+  * This allows reporting highly technical errors for usefulness, without
+  * confusing a novice map designer who simply needs to run ZenNode.
+  *
+  * If logging is disabled in this compile, or the log file is not opened, the
+  * full technical details are printed in the I_Error() message.
+  *
+  * \param msg The message to log. This message can safely result from a call
+  *            to va(), since that function is not used here.
+  * \todo Fix the I_Error() message. On some implementations the logfile may
+  *       not be called log.txt.
+  * \sa CON_LogMessage, I_Error
+  */
 FUNCNORETURN static ATTRNORETURN void CorruptMapError(const char *msg)
 {
-
+	// don't use va() because the calling function probably uses it
 	char mapnum[10];
 
 	sprintf(mapnum, "%hd", gamemap);
@@ -316,25 +316,25 @@ FUNCNORETURN static ATTRNORETURN void CorruptMapError(const char *msg)
 	I_Error("Invalid or corrupt map.\nLook in log file or text console for technical details.");
 }
 
-                                                                           
-   
-                                           
-    
+/** Sets a header's flickies to be equivalent to the original Freed Animals
+  *
+  * \param i The header to set flickies for
+  */
 void P_SetDemoFlickies(INT16 i)
 {
 	mapheaderinfo[i]->numFlickies = 5;
 	mapheaderinfo[i]->flickies = Z_Realloc(mapheaderinfo[i]->flickies, 5*sizeof(mobjtype_t), PU_STATIC, NULL);
-	mapheaderinfo[i]->flickies[0] = MT_FLICKY_02 ;
-	mapheaderinfo[i]->flickies[1] = MT_FLICKY_01 ;
-	mapheaderinfo[i]->flickies[2] = MT_FLICKY_12 ;
-	mapheaderinfo[i]->flickies[3] = MT_FLICKY_11 ;
-	mapheaderinfo[i]->flickies[4] = MT_FLICKY_03 ;
+	mapheaderinfo[i]->flickies[0] = MT_FLICKY_02/*MT_BUNNY*/;
+	mapheaderinfo[i]->flickies[1] = MT_FLICKY_01/*MT_BIRD*/;
+	mapheaderinfo[i]->flickies[2] = MT_FLICKY_12/*MT_MOUSE*/;
+	mapheaderinfo[i]->flickies[3] = MT_FLICKY_11/*MT_COW*/;
+	mapheaderinfo[i]->flickies[4] = MT_FLICKY_03/*MT_CHICKEN*/;
 }
 
-                              
-   
-                                             
-    
+/** Clears a header's flickies
+  *
+  * \param i The header to clear flickies for
+  */
 void P_DeleteFlickies(INT16 i)
 {
 	if (mapheaderinfo[i]->flickies)
@@ -345,11 +345,11 @@ void P_DeleteFlickies(INT16 i)
 
 #define NUMLAPS_DEFAULT 4
 
-                                             
-   
-                                            
-                            
-    
+/** Clears the data from a single map header.
+  *
+  * \param i Map number to clear header for.
+  * \sa P_ClearMapHeaderInfo
+  */
 static void P_ClearSingleMapHeaderInfo(INT16 i)
 {
 	const INT16 num = (INT16)(i-1);
@@ -401,9 +401,9 @@ static void P_ClearSingleMapHeaderInfo(INT16 i)
 	mapheaderinfo[num]->maxbonuslives = -1;
 	mapheaderinfo[num]->levelflags = 0;
 	mapheaderinfo[num]->menuflags = 0;
-#if 1  
+#if 1 // equivalent to "FlickyList = DEMO"
 	P_SetDemoFlickies(num);
-#else  
+#else // equivalent to "FlickyList = NONE"
 	P_DeleteFlickies(num);
 #endif
 	P_DeleteGrades(num);
@@ -411,10 +411,10 @@ static void P_ClearSingleMapHeaderInfo(INT16 i)
 	mapheaderinfo[num]->numCustomOptions = 0;
 }
 
-                                         
-   
-                                         
-    
+/** Allocates a new map-header structure.
+  *
+  * \param i Index of header to allocate.
+  */
 void P_AllocMapHeader(INT16 i)
 {
 	if (!mapheaderinfo[i])
@@ -426,13 +426,13 @@ void P_AllocMapHeader(INT16 i)
 	P_ClearSingleMapHeaderInfo(i + 1);
 }
 
-                                          
-                            
-   
-                                                   
-                                                
-                                                                     
-    
+/** NiGHTS Grades are a special structure,
+  * we initialize them here.
+  *
+  * \param i Index of header to allocate grades for
+  * \param mare The mare we're adding grades for
+  * \param grades the string from DeHackEd, we work with it ourselves
+  */
 void P_AddGradesForMare(INT16 i, UINT8 mare, char *gtext)
 {
 	INT32 g;
@@ -448,19 +448,19 @@ void P_AddGradesForMare(INT16 i, UINT8 mare, char *gtext)
 
 	for (g = 0; g < 6; ++g)
 	{
-
+		// Allow "partial" grading systems
 		if (spos != NULL)
 		{
 			mapheaderinfo[i]->grades[mare].grade[g] = atoi(spos);
 			CONS_Debug(DBG_SETUP, "%u ", atoi(spos));
-
+			// Grab next comma
 			spos = strchr(spos, ',');
 			if (spos)
 				++spos;
 		}
 		else
 		{
-
+			// Grade not reachable
 			mapheaderinfo[i]->grades[mare].grade[g] = UINT32_MAX;
 		}
 	}
@@ -468,10 +468,10 @@ void P_AddGradesForMare(INT16 i, UINT8 mare, char *gtext)
 	CONS_Debug(DBG_SETUP, "\n");
 }
 
-                                       
-   
-                                             
-    
+/** And this removes the grades safely.
+  *
+  * \param i The header to remove grades from
+  */
 void P_DeleteGrades(INT16 i)
 {
 	if (mapheaderinfo[i]->grades)
@@ -481,17 +481,17 @@ void P_DeleteGrades(INT16 i)
 	mapheaderinfo[i]->numGradedMares = 0;
 }
 
-                               
-   
-                                     
-                            
-                                 
-    
+/** And this fetches the grades
+  *
+  * \param pscore The player's score.
+  * \param map The game map.
+  * \param mare The mare to test.
+  */
 UINT8 P_GetGrade(UINT32 pscore, INT16 map, UINT8 mare)
 {
 	INT32 i;
 
-
+	// Determining the grade
 	if (mapheaderinfo[map-1] && mapheaderinfo[map-1]->grades && mapheaderinfo[map-1]->numGradedMares >= mare + 1)
 	{
 		INT32 pgrade = 0;
@@ -507,8 +507,8 @@ UINT8 P_GetGrade(UINT32 pscore, INT16 map, UINT8 mare)
 
 UINT8 P_HasGrades(INT16 map, UINT8 mare)
 {
-
-
+	// Determining the grade
+	// Mare 0 is treated as overall and is true if ANY grades exist
 	if (mapheaderinfo[map-1] && mapheaderinfo[map-1]->grades
 		&& (mare == 0 || mapheaderinfo[map-1]->numGradedMares >= mare))
 		return true;
@@ -517,7 +517,7 @@ UINT8 P_HasGrades(INT16 map, UINT8 mare)
 
 UINT32 P_GetScoreForGrade(INT16 map, UINT8 mare, UINT8 grade)
 {
-
+	// Get the score for the grade... if it exists
 	if (grade == GRADE_F || grade > GRADE_S || !P_HasGrades(map, mare)) return 0;
 
 	return mapheaderinfo[map-1]->grades[mare].grade[grade-1];
@@ -544,7 +544,7 @@ void P_AddNiGHTSTimes(INT16 i, char *gtext)
 		{
 			mapheaderinfo[i]->nightstimer[n] = atoi(spos);
 			CONS_Debug(DBG_SETUP, "%u ", atoi(spos));
-
+			// Grab next comma
 			spos = strchr(spos, ',');
 			if (spos)
 				++spos;
@@ -557,21 +557,21 @@ void P_AddNiGHTSTimes(INT16 i, char *gtext)
 
 }
 
-
-
-
+//
+// levelflats
+//
 #define MAXLEVELFLATS 256
 
 size_t numlevelflats;
 levelflat_t *levelflats;
 levelflat_t *foundflats;
 
-
+//SoM: Other files want this info.
 size_t P_PrecacheLevelFlats(void)
 {
 	size_t i;
 
-
+	//SoM: 4/18/2000: New flat code to make use of levelflats.
 	flatmemory = 0;
 	for (i = 0; i < numlevelflats; i++)
 	{
@@ -581,14 +581,14 @@ size_t P_PrecacheLevelFlats(void)
 	return flatmemory;
 }
 
-  
-                                            
-                                      
-  
+/*
+levelflat refers to an array of level flats,
+or NULL if we want to allocate it now.
+*/
 static INT32
 Ploadflat (levelflat_t *levelflat, const char *flatname, boolean resize)
 {
-
+	// Scan through the already found flats, return if it matches.
 	for (size_t i = 0; i < numlevelflats; i++)
 	{
 		if (strnicmp(levelflat[i].name, flatname, 8) == 0)
@@ -597,7 +597,7 @@ Ploadflat (levelflat_t *levelflat, const char *flatname, boolean resize)
 
 	if (resize)
 	{
-
+		// allocate new flat memory
 		levelflats = Z_Realloc(levelflats, (numlevelflats + 1) * sizeof(*levelflats), PU_LEVEL, NULL);
 		levelflat  = levelflats + numlevelflats;
 	}
@@ -609,24 +609,24 @@ Ploadflat (levelflat_t *levelflat, const char *flatname, boolean resize)
 		levelflat += numlevelflats;
 	}
 
-
+	// Store the name.
 	strlcpy(levelflat->name, flatname, sizeof (levelflat->name));
 	strupr(levelflat->name);
 
 	levelflat->type = LEVELFLAT_TEXTURE;
 
-
+	// Look for a flat
 	int texturenum = R_CheckFlatNumForName(levelflat->name);
 	if (texturenum < 0)
 	{
-
+		// If we can't find a flat, try looking for a texture!
 		texturenum = R_CheckTextureNumForName(levelflat->name);
 		if (texturenum < 0)
 		{
-
+			// Use "not found" texture
 			texturenum = R_CheckTextureNumForName("REDWALL");
 
-
+			// Give up?
 			if (texturenum < 0)
 			{
 				levelflat->type = LEVELFLAT_NONE;
@@ -644,59 +644,59 @@ Ploadflat (levelflat_t *levelflat, const char *flatname, boolean resize)
 	return numlevelflats++;
 }
 
-
-
+// Auxiliary function. Find a flat in the active wad files,
+// allocate an id for it, and set the levelflat (to speedup search)
 INT32 P_AddLevelFlat(const char *flatname, levelflat_t *levelflat)
 {
 	return Ploadflat(levelflat, flatname, false);
 }
 
-
-
-
-
+// help function for Lua and $$$.sav reading
+// same as P_AddLevelFlat, except this is not setup so we must realloc levelflats to fit in the new flat
+// no longer a static func in lua_maplib.c because p_saveg.c also needs it
+//
 INT32 P_AddLevelFlatRuntime(const char *flatname)
 {
 	return Ploadflat(levelflats, flatname, true);
 }
 
-
-
-
+// help function for $$$.sav checking
+// this simply returns the flat # for the name given
+//
 INT32 P_CheckLevelFlat(const char *flatname)
 {
 	size_t i;
 	levelflat_t *levelflat = levelflats;
 
-
-
-
+	//
+	//  scan through the already found flats
+	//
 	for (i = 0; i < numlevelflats; i++, levelflat++)
 		if (strnicmp(levelflat->name,flatname,8)==0)
 			break;
 
 	if (i == numlevelflats)
-		return 0;  
+		return 0; // ??? flat was not found, this should not happen!
 
-
+	// level flat id
 	return (INT32)i;
 }
 
-
-
-
-
+//
+// P_ReloadRings
+// Used by NiGHTS, clears all ring/sphere/hoop/etc items and respawns them
+//
 void P_ReloadRings(void)
 {
 	mobj_t *mo;
 	thinker_t *th;
 	size_t i, numHoops = 0;
-
-
+	// Okay, if you have more than 4000 hoops in your map,
+	// you're insane.
 	mapthing_t *hoopsToRespawn[4096];
 	mapthing_t *mt = mapthings;
 
-
+	// scan the thinkers to find rings/spheres/hoops to unset
 	for (th = thlist[THINK_MOBJ].next; th != &thlist[THINK_MOBJ]; th = th->next)
 	{
 		if (th->removing)
@@ -706,8 +706,8 @@ void P_ReloadRings(void)
 
 		if (mo->type == MT_HOOPCENTER)
 		{
-
-			if (mo->threshold == 4242)  
+			// Hoops give me a headache
+			if (mo->threshold == 4242) // Dead hoop
 			{
 				hoopsToRespawn[numHoops++] = mo->spawnpoint;
 				P_RemoveMobj(mo);
@@ -719,17 +719,17 @@ void P_ReloadRings(void)
 			|| mo->type == MT_NIGHTSCHIP || mo->type == MT_NIGHTSSTAR))
 			continue;
 
-
+		// Don't auto-disintegrate things being pulled to us
 		if (mo->flags2 & MF2_NIGHTSPULL)
 			continue;
 
 		P_RemoveMobj(mo);
 	}
 
-
+	// Reiterate through mapthings
 	for (i = 0; i < nummapthings; i++, mt++)
 	{
-
+		// Notice an omission? We handle hoops differently.
 		if (mt->type == mobjinfo[MT_RING].doomednum || mt->type == mobjinfo[MT_COIN].doomednum
 			|| mt->type == mobjinfo[MT_REDTEAMRING].doomednum || mt->type == mobjinfo[MT_BLUETEAMRING].doomednum
 			|| mt->type == mobjinfo[MT_BLUESPHERE].doomednum || mt->type == mobjinfo[MT_BOMBSPHERE].doomednum)
@@ -737,7 +737,7 @@ void P_ReloadRings(void)
 			mt->mobj = NULL;
 			P_SetBonusTime(P_SpawnMapThing(mt));
 		}
-		else if (mt->type >= 600 && mt->type <= 611)  
+		else if (mt->type >= 600 && mt->type <= 611) // Item patterns
 		{
 			mt->mobj = NULL;
 			P_SpawnItemPattern(mt, true);
@@ -754,7 +754,7 @@ void P_SwitchSpheresBonusMode(boolean bonustime)
 	mobj_t *mo;
 	thinker_t *th;
 
-
+	// scan the thinkers to find spheres to switch
 	for (th = thlist[THINK_MOBJ].next; th != &thlist[THINK_MOBJ]; th = th->next)
 	{
 		if (th->removing)
@@ -788,43 +788,43 @@ void P_ScanThings(INT16 mapnum, INT16 wadnum, INT16 lumpnum)
 	flags = mapheaderinfo[mapnum-1]->levelflags;
 
 	n = W_LumpLengthPwad(wadnum, lumpnum) / (5 * sizeof (INT16));
-
+	//CONS_Printf("%u map things found!\n", n);
 
 	maprings = 0;
 	data = datastart = W_CacheLumpNumPwad(wadnum, lumpnum, PU_STATIC);
 	for (i = 0; i < n; i++)
 	{
-		data += 3 * sizeof (INT16);  
+		data += 3 * sizeof (INT16); // skip x y position, angle
 		type = READUINT16(data) & 4095;
-		data += sizeof (INT16);  
+		data += sizeof (INT16); // skip options
 
 		switch (type)
 		{
-		case 300:  
-		case 1800:  
-		case 308:  
-		case 309:  
+		case 300: // MT_RING
+		case 1800: // MT_COIN
+		case 308: // red team ring
+		case 309: // blue team ring
 			maprings++;
 			break;
-		case 400:  
-		case 414:  
-		case 415:  
-		case 603:  
+		case 400: // MT_SUPERRINGBOX
+		case 414: // red ring box
+		case 415: // blue ring box
+		case 603: // 10 diagonal rings
 			maprings += 10;
 			break;
-		case 600:  
-		case 601:  
-		case 602:  
+		case 600: // 5 vertical rings
+		case 601: // 5 vertical rings
+		case 602: // 5 diagonal rings
 			maprings += 5;
 			break;
-		case 604:  
-		case 609:  
+		case 604: // 8 circle rings
+		case 609: // 16 circle rings & wings
 			maprings += 8;
 			break;
-		case 605:  
+		case 605: // 16 circle rings
 			maprings += 16;
 			break;
-		case 608:  
+		case 608: // 8 circle rings & wings
 			maprings += 4;
 			break;
 		}
@@ -848,13 +848,13 @@ static void P_SpawnEmeraldHunt(void)
 
 	for (i = 0; i < amount; i++)
 	{
-
+		// generate random index, shuffle afterwards
 		randomkey = P_RandomKey(numhuntemeralds--);
 		emer[i] = num[randomkey];
 		num[randomkey] = num[numhuntemeralds];
 		num[numhuntemeralds] = emer[i];
 
-
+		// spawn emerald
 		x = huntemeralds[emer[i]]->x<<FRACBITS;
 		y = huntemeralds[emer[i]]->y<<FRACBITS;
 		z = P_GetMapThingSpawnHeight(MT_EMERHUNT, huntemeralds[emer[i]], x, y);
@@ -868,14 +868,14 @@ static void P_SpawnMapThings(boolean spawnemblems)
 	size_t i;
 	mapthing_t *mt;
 
-
+	// Spawn axis points first so they are at the front of the list for fast searching.
 	for (i = 0, mt = mapthings; i < nummapthings; i++, mt++)
 	{
 		switch (mt->type)
 		{
-			case 1700:  
-			case 1701:  
-			case 1702:  
+			case 1700: // MT_AXIS
+			case 1701: // MT_AXISTRANSFER
+			case 1702: // MT_AXISTRANSFERLINE
 				mt->mobj = NULL;
 				P_SpawnMapThing(mt);
 				break;
@@ -888,32 +888,32 @@ static void P_SpawnMapThings(boolean spawnemblems)
 
 	for (i = 0, mt = mapthings; i < nummapthings; i++, mt++)
 	{
-		if (mt->type == 1700  
-			|| mt->type == 1701  
-			|| mt->type == 1702)  
-			continue;  
+		if (mt->type == 1700 // MT_AXIS
+			|| mt->type == 1701 // MT_AXISTRANSFER
+			|| mt->type == 1702) // MT_AXISTRANSFERLINE
+			continue; // These were already spawned
 
 		if (!spawnemblems && mt->type == mobjinfo[MT_EMBLEM].doomednum)
 			continue;
 
 		mt->mobj = NULL;
 
-		if (mt->type >= 600 && mt->type <= 611)  
+		if (mt->type >= 600 && mt->type <= 611) // item patterns
 			P_SpawnItemPattern(mt, false);
-		else if (mt->type == 1713)  
+		else if (mt->type == 1713) // hoops
 			P_SpawnHoop(mt);
-		else  
+		else // Everything else
 			P_SpawnMapThing(mt);
 	}
 
-
+	// random emeralds for hunt
 	if (numhuntemeralds)
 		P_SpawnEmeraldHunt();
 }
 
-static void P_WriteTextmap_Things(FILE *f, const mapthing_t *wmapthings);  
+static void P_WriteTextmap_Things(FILE *f, const mapthing_t *wmapthings); // proto
 
-
+// Experimental groovy write function!
 void P_WriteThings(const char *filepath)
 {
 	size_t i, length;
@@ -967,9 +967,9 @@ void P_WriteThings(const char *filepath)
 	CONS_Printf(M_GetText("%s.lmp saved.\n"), filepath);
 }
 
-
-
-
+//
+// MAP LOADING FUNCTIONS
+//
 
 static void P_LoadVertices(UINT8 *data)
 {
@@ -977,7 +977,7 @@ static void P_LoadVertices(UINT8 *data)
 	vertex_t *v = vertexes;
 	size_t i;
 
-
+	// Copy and convert vertex coordinates, internal representation as fixed.
 	for (i = 0; i < numvertexes; i++, v++, mv++)
 	{
 		v->x = SHORT(mv->x)<<FRACBITS;
@@ -1049,7 +1049,7 @@ static void P_LoadSectors(UINT8 *data)
 	sector_t *ss = sectors;
 	size_t i;
 
-
+	// For each counted sector, copy the sector raw data from our cache pointer ms, to the global table pointer ss.
 	for (i = 0; i < numsectors; i++, ss++, ms++)
 	{
 		ss->floorheight = SHORT(ms->floorheight)<<FRACBITS;
@@ -1124,8 +1124,8 @@ static void P_InitializeLinedef(line_t *ld)
 
 	ld->midtexslope = NULL;
 
-
-
+	// cph 2006/09/30 - fix sidedef errors right away.
+	// cph 2002/07/20 - these errors are fatal if not fixed, so apply them
 	for (j = 0; j < 2; j++)
 		if (ld->sidenum[j] != NO_SIDEDEF && ld->sidenum[j] >= (UINT32)numsides)
 		{
@@ -1133,18 +1133,18 @@ static void P_InitializeLinedef(line_t *ld)
 			CONS_Debug(DBG_SETUP, "P_InitializeLinedef: Linedef %s has out-of-range sidedef number\n", sizeu1((size_t)(ld - lines)));
 		}
 
-
+	// killough 11/98: fix common wad errors (missing sidedefs):
 	if (ld->sidenum[0] == NO_SIDEDEF)
 	{
-		ld->sidenum[0] = 0;   
-
+		ld->sidenum[0] = 0;  // Substitute dummy sidedef for missing right side
+		// cph - print a warning about the bug
 		CONS_Debug(DBG_SETUP, "P_InitializeLinedef: Linedef %s missing first sidedef\n", sizeu1((size_t)(ld - lines)));
 	}
 
 	if ((ld->sidenum[1] == NO_SIDEDEF) && (ld->flags & ML_TWOSIDED))
 	{
-		ld->flags &= ~ML_TWOSIDED;   
-
+		ld->flags &= ~ML_TWOSIDED;  // Clear 2s flag for missing left side
+		// cph - print a warning about the bug
 		CONS_Debug(DBG_SETUP, "P_InitializeLinedef: Linedef %s has two-sided flag set, but no second sidedef\n", sizeu1((size_t)(ld - lines)));
 	}
 
@@ -1212,7 +1212,7 @@ static void P_LoadLinedefs(UINT8 *data)
 
 static void P_SetSidedefSector(size_t i, UINT32 sector_num)
 {
-
+	// cph 2006/09/30 - catch out-of-range sector numbers; use sector 0 instead
 	if (sector_num >= numsectors)
 	{
 		CONS_Debug(DBG_SETUP, "P_SetSidedefSector: sidedef %s has out-of-range sector num %u\n", sizeu1(i), sector_num);
@@ -1235,28 +1235,28 @@ static void P_InitializeSidedef(side_t *sd)
 
 static boolean contextdrift = false;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// In Ring Racers, this is just the reference implementation.
+// But in SRB2, backwards compatibility is a design goal!?
+// So we let the map function on load, but report that there's
+// an issue which could prevent saving it as a UDMF map.
+//
+// ... "context drift" is a term I learned from the story "Lena",
+// styled after a wikipedia article on a man whose brain scan
+// spawns an industry of digital brain emulation. It is a term
+// to describe that the understanding of the world MMAcevedo has
+// is rooted in a specific moment and time and will lose relevance
+// as societal norms, languages, and events change and are changed.
+// It is on the real wikipedia, but under the name "concept drift".
+// I am connecting the idea of the rooted-in-time brainstate with
+// the numerical evaluation of get_number(), the ground truth
+// CONTEXT for all these silly integers, that will trip up future
+// builds of SRB2 that have modified states and object lists.
+// Golden statues rotating in place of carousel rides is perhaps
+// not quite what qntm meant, but is a TEXTMAP, a human-readable
+// document for imparting a sense of place made/read by machines,
+// not its own language providing a vulnerable context?
+// ~toast 200723, see https://qntm.org/mmacevedo
+//
 static void P_WriteConstant(INT32 constant, char **target, const char *desc, UINT32 id)
 {
 	char buffer[12];
@@ -1354,9 +1354,9 @@ static void P_LoadSidedefs(UINT8 *data)
 
 		isfrontside = sd->line->sidenum[0] == i;
 
-
+		// Repeat count for midtexture
 		if (((sd->line->flags & (ML_TWOSIDED|ML_WRAPMIDTEX)) == (ML_TWOSIDED|ML_WRAPMIDTEX))
-			&& !(sd->special >= 300 && sd->special < 500))  
+			&& !(sd->special >= 300 && sd->special < 500)) // exempt linedef exec specials
 		{
 			sd->repeatcnt = (INT16)(((UINT16)textureoffset) >> 12);
 			sd->textureoffset = (((UINT16)textureoffset) & 2047) << FRACBITS;
@@ -1379,19 +1379,19 @@ static void P_LoadSidedefs(UINT8 *data)
 
 		P_SetSidedefSector(i, (UINT16)SHORT(msd->sector));
 
-
+		// Special info stored in texture fields!
 		switch (sd->special)
 		{
-			case 606:  
-			case 447:  
-			case 455:  
-
-
+			case 606: //SoM: 4/4/2000: Just colormap transfer
+			case 447: // Change colormap of tagged sectors! -- Monster Iestyn 14/06/18
+			case 455: // Fade colormaps! mazmazz 9/12/2018 (:flag_us:)
+				// SoM: R_CreateColormap will only create a colormap in software mode...
+				// Perhaps we should just call it instead of doing the calculations here.
 				sd->colormap_data = R_CreateColormapFromLinedef(msd->toptexture, msd->midtexture, msd->bottomtexture);
 				sd->toptexture = sd->midtexture = sd->bottomtexture = 0;
 				break;
 
-			case 413:  
+			case 413: // Change music
 			{
 				sd->toptexture = sd->midtexture = sd->bottomtexture = 0;
 
@@ -1421,11 +1421,11 @@ static void P_LoadSidedefs(UINT8 *data)
 					M_Memcpy(process,msd->toptexture,8);
 					process[8] = '\0';
 
-
-
+					// If they type in O_ or D_ and their music name, just shrug,
+					// then copy the rest instead.
 					if ((process[0] == 'O' || process[0] == 'D') && process[7])
 						M_Memcpy(sd->line->stringargs[0], process+2, 6);
-					else  
+					else // Assume it's a proper music name.
 						M_Memcpy(sd->line->stringargs[0], process, 6);
 					sd->line->stringargs[0][6] = '\0';
 				}
@@ -1433,8 +1433,8 @@ static void P_LoadSidedefs(UINT8 *data)
 				break;
 			}
 
-			case 4:  
-			case 414:  
+			case 4: // Speed pad parameters
+			case 414: // Play SFX
 			{
 				sd->toptexture = sd->midtexture = sd->bottomtexture = 0;
 
@@ -1451,30 +1451,30 @@ static void P_LoadSidedefs(UINT8 *data)
 				break;
 			}
 
-			case 9:  
-			case 14:  
-			case 15:  
+			case 9: // Mace parameters
+			case 14: // Bustable block parameters
+			case 15: // Fan particle spawner parameters
 			{
 				if (msd->toptexture[7] == '\0' && strcasecmp(msd->toptexture, "MT_NULL") == 0)
 				{
-
+					// Don't bulk the conversion with irrelevant types
 					break;
 				}
 			}
-
-			case 331:  
-			case 332:  
-			case 333:  
-			case 334:  
-			case 335:  
-			case 336:  
-			case 425:  
-			case 434:  
-			case 442:  
-			case 443:  
-			case 459:  
-			case 461:  
-			case 463:  
+			// FALLTHRU
+			case 331: // Trigger linedef executor: Skin - Continuous
+			case 332: // Trigger linedef executor: Skin - Each time
+			case 333: // Trigger linedef executor: Skin - Once
+			case 334: // Trigger linedef executor: Object dye - Continuous
+			case 335: // Trigger linedef executor: Object dye - Each time
+			case 336: // Trigger linedef executor: Object dye - Once
+			case 425: // Calls P_SetMobjState on calling mobj
+			case 434: // Custom Power
+			case 442: // Calls P_SetMobjState on mobjs of a given type in the tagged sectors
+			case 443: // Calls a named Lua function
+			case 459: // Control text prompt (named tag)
+			case 461: // Spawns an object on the map based on texture offsets
+			case 463: // Colorizes an object
 			{
 				char process[8*3+1];
 				memset(process,0,8*3+1);
@@ -1495,7 +1495,7 @@ static void P_LoadSidedefs(UINT8 *data)
 				break;
 			}
 
-			case 259:  
+			case 259: // Custom FOF
 				if (!isfrontside)
 				{
 					if ((msd->toptexture[0] >= '0' && msd->toptexture[0] <= '9')
@@ -1508,14 +1508,14 @@ static void P_LoadSidedefs(UINT8 *data)
 					sd->bottomtexture = R_TextureNumForName(msd->bottomtexture);
 					break;
 				}
-
-			default:  
+				// FALLTHRU
+			default: // normal cases
 				if (msd->toptexture[0] == '#')
 				{
 					char *col = msd->toptexture;
 					sd->toptexture =
 						((col[1]-'0')*100 + (col[2]-'0')*10 + col[3]-'0')+1;
-					if (col[4])  
+					if (col[4]) // extra num for blendmode
 						sd->toptexture += (col[4]-'0')*1000;
 					sd->bottomtexture = sd->toptexture;
 					sd->midtexture = R_TextureNumForName(msd->midtexture);
@@ -1555,7 +1555,7 @@ static void P_LoadThings(UINT8 *data)
 		mt->type &= 4095;
 
 		if (mt->type == 1705 || (mt->type == 750 && mt->extrainfo))
-			mt->z = mt->options;  
+			mt->z = mt->options; // NiGHTS Hoops use the full flags bits to set the height.
 		else
 			mt->z = mt->options >> ZSHIFT;
 
@@ -1563,7 +1563,7 @@ static void P_LoadThings(UINT8 *data)
 	}
 }
 
-
+// Stores positions for relevant map data spread through a TEXTMAP.
 typedef struct textmap_block_s
 {
 	UINT32 *pos;
@@ -1576,12 +1576,12 @@ static textmap_block_t sidedefBlocks;
 static textmap_block_t vertexBlocks;
 static textmap_block_t sectorBlocks;
 
-                                                                            
-                                                                           
-                                                                            
-                                                                            
-                                                                             
-                                                                       
+/* UDMF maps need one complete token pass merely to find each element before
+ * the real parsing pass begins.  Keep the compact position index for a few
+ * recently used maps so a restart/reload can skip that first pass.  The key
+ * includes the loaded-file count and lump size, so adding a replacement map
+ * cannot reuse stale offsets.  The actual map structures remain PU_LEVEL and
+ * are rebuilt normally; this cache contains no live level pointers. */
 #define TEXTMAP_INDEX_CACHE_SLOTS 16
 typedef struct textmap_index_cache_s
 {
@@ -1691,14 +1691,14 @@ static void TextmapStorePos(textmap_block_t *blocks, size_t *count)
 
 	if (blocks->pos == NULL)
 	{
-
+		// Initial capacity (half of the former one.)
 		blocks->capacity = UINT16_MAX / 2;
 
 		Z_Calloc(sizeof(blocks->pos) * blocks->capacity, PU_LEVEL, &blocks->pos);
 	}
 	else if (locCount >= blocks->capacity)
 	{
-
+		// If we hit the list's capacity, make space for 1024 more blocks
 		blocks->capacity += 1024;
 
 		Z_Realloc(blocks->pos, sizeof(blocks->pos) * blocks->capacity, PU_LEVEL, &blocks->pos);
@@ -1709,7 +1709,7 @@ static void TextmapStorePos(textmap_block_t *blocks, size_t *count)
 	(*count) = locCount;
 }
 
-
+// Determine total amount of map data in TEXTMAP.
 static boolean TextmapCount(size_t size)
 {
 	const char *tkn = M_TokenizerRead(0);
@@ -1730,21 +1730,21 @@ static boolean TextmapCount(size_t size)
 		return true;
 	}
 
-
+	// Look for namespace at the beginning.
 	if (!fastcmp(tkn, "namespace"))
 	{
 		CONS_Alert(CONS_ERROR, "No namespace at beginning of lump!\n");
 		return false;
 	}
 
-
+	// Check if namespace is valid.
 	tkn = M_TokenizerRead(0);
 	if (!fastcmp(tkn, "srb2"))
 		CONS_Alert(CONS_WARNING, "Invalid namespace '%s', only 'srb2' is supported.\n", tkn);
 
 	while ((tkn = M_TokenizerRead(0)) && M_TokenizerGetEndPos() < size)
 	{
-
+		// Avoid anything inside bracketed stuff, only look for external keywords.
 		if (brackets)
 		{
 			if (fastcmp(tkn, "}"))
@@ -1752,7 +1752,7 @@ static boolean TextmapCount(size_t size)
 		}
 		else if (fastcmp(tkn, "{"))
 			brackets++;
-
+		// Check for valid fields.
 		else if (fastcmp(tkn, "thing"))
 			TextmapStorePos(&mapthingBlocks, &nummapthings);
 		else if (fastcmp(tkn, "linedef"))
@@ -2178,7 +2178,7 @@ static void ParseTextmapLinedefParameter(UINT32 i, const char *param, const char
 	else if (fastcmp(param, "executordelay"))
 		lines[i].executordelay = atol(val);
 
-
+	// Flags
 	else if (fastcmp(param, "blocking") && fastcmp("true", val))
 		lines[i].flags |= ML_IMPASSIBLE;
 	else if (fastcmp(param, "blockmonsters") && fastcmp("true", val))
@@ -2201,8 +2201,8 @@ static void ParseTextmapLinedefParameter(UINT32 i, const char *param, const char
 		lines[i].flags |= ML_MIDSOLID;
 	else if (fastcmp(param, "wrapmidtex") && fastcmp("true", val))
 		lines[i].flags |= ML_WRAPMIDTEX;
-	                                                             
-                                 
+	/*else if (fastcmp(param, "effect6") && fastcmp("true", val))
+		lines[i].flags |= ML_EFFECT6;*/
 	else if (fastcmp(param, "nonet") && fastcmp("true", val))
 		lines[i].flags |= ML_NONET;
 	else if (fastcmp(param, "netonly") && fastcmp("true", val))
@@ -2249,7 +2249,7 @@ static void ParseTextmapThingParameter(UINT32 i, const char *param, const char *
 		mapthings[i].spriteyscale = FLOAT_TO_FIXED(atof(val));
 	else if (fastcmp(param, "mobjscale"))
 		mapthings[i].scale = FLOAT_TO_FIXED(atof(val));
-
+	// Flags
 	else if (fastcmp(param, "flip") && fastcmp("true", val))
 		mapthings[i].options |= MTF_OBJECTFLIP;
 	else if (fastcmp(param, "absolutez") && fastcmp("true", val))
@@ -2272,12 +2272,12 @@ static void ParseTextmapThingParameter(UINT32 i, const char *param, const char *
 	}
 }
 
-                                                                                              
-   
-                                                         
-                                                      
-                                   
-    
+/** From a given position table, run a specified parser function through a {}-encapsuled text.
+  *
+  * \param Position of the data to parse, in the textmap.
+  * \param Structure number (mapthings, sectors, ...).
+  * \param Parser function pointer.
+  */
 static void TextmapParse(UINT32 dataPos, size_t num, void (*parser)(UINT32, const char *, const char *))
 {
 	const char *param, *val;
@@ -2300,8 +2300,8 @@ static void TextmapParse(UINT32 dataPos, size_t num, void (*parser)(UINT32, cons
 	}
 }
 
-                                                                                     
-   
+/** Provides a fix to the flat alignment coordinate transform from standard Textmaps.
+ */
 static void TextmapFixFlatOffsets(sector_t *sec)
 {
 	if (sec->floorangle)
@@ -2376,7 +2376,7 @@ static void P_WriteTextmap_Things(FILE *f, const mapthing_t *wmapthings)
 	size_t i, j;
 	mtag_t firsttag;
 
-
+	// Actual writing
 	for (i = 0; i < nummapthings; i++)
 	{
 		fprintf(f, "thing // %s\n", sizeu1(i));
@@ -2926,8 +2926,8 @@ static void P_WriteTextmap(void)
 			INT32 fadecolor = P_RGBAToColor(wsectors[i].extra_colormap->fadergba);
 			UINT8 fadealpha = R_GetRgbaA(wsectors[i].extra_colormap->fadergba);
 
-
-
+			// For now, convert alpha from new (0-255) to old 'A-Z' (0-25) range
+			// TODO: remove this limitation in a backwards-compatible way (UDMF versioning?)
 			lightalpha /= 10;
 			fadealpha /= 10;
 
@@ -3104,8 +3104,8 @@ static void P_WriteTextmap(void)
 	}
 }
 
-                                                                                                     
-    
+/** Loads the textmap data, after obtaining the elements count and allocating their respective space.
+  */
 static void P_LoadTextmap(void)
 {
 	UINT32 i;
@@ -3116,16 +3116,16 @@ static void P_LoadTextmap(void)
 	side_t     *sd;
 	mapthing_t *mt;
 
+	//CONS_Alert(CONS_NOTICE, "UDMF support is still a work-in-progress; its specs and features are prone to change until it is fully implemented.\n");
 
-
-
-
-
-
+	/// Given the UDMF specs, some fields are given a default value.
+	/// If an element's field has a default value set, it is omitted
+	/// from the textmap, and therefore we have to account for it by
+	/// preemptively setting that value beforehand.
 
 	for (i = 0, vt = vertexes; i < numvertexes; i++, vt++)
 	{
-
+		// Defaults.
 		vt->x = vt->y = INT32_MAX;
 		vt->floorzset = vt->ceilingzset = false;
 		vt->floorz = vt->ceilingz = 0;
@@ -3140,7 +3140,7 @@ static void P_LoadTextmap(void)
 
 	for (i = 0, sc = sectors; i < numsectors; i++, sc++)
 	{
-
+		// Defaults.
 		sc->floorheight = 0;
 		sc->ceilingheight = 0;
 
@@ -3192,8 +3192,8 @@ static void P_LoadTextmap(void)
 		P_InitializeSector(sc);
 		if (textmap_colormap.used)
 		{
-
-
+			// Convert alpha values from old 'A-Z' (0-25) range to new UINT8 (0-255) range
+			// TODO: remove this limitation in a backwards-compatible way (UDMF versioning?)
 			UINT8 lightalpha = (textmap_colormap.lightalpha * 102) / 10;
 			UINT8 fadealpha = (textmap_colormap.fadealpha * 102) / 10;
 
@@ -3223,7 +3223,7 @@ static void P_LoadTextmap(void)
 
 	for (i = 0, ld = lines; i < numlines; i++, ld++)
 	{
-
+		// Defaults.
 		ld->v1 = ld->v2 = NULL;
 		ld->flags = 0;
 		ld->special = 0;
@@ -3250,7 +3250,7 @@ static void P_LoadTextmap(void)
 
 	for (i = 0, sd = sides; i < numsides; i++, sd++)
 	{
-
+		// Defaults.
 		sd->textureoffset = 0;
 		sd->rowoffset = 0;
 		sd->offsetx_top = sd->offsetx_mid = sd->offsetx_bottom = 0;
@@ -3275,7 +3275,7 @@ static void P_LoadTextmap(void)
 
 	for (i = 0, mt = mapthings; i < nummapthings; i++, mt++)
 	{
-
+		// Defaults.
 		mt->x = mt->y = 0;
 		mt->angle = mt->pitch = mt->roll = 0;
 		mt->type = 0;
@@ -3299,7 +3299,7 @@ static void P_ProcessLinedefsAfterSidedefs(void)
 	register line_t *ld = lines;
 	for (; i--; ld++)
 	{
-		ld->frontsector = sides[ld->sidenum[0]].sector;  
+		ld->frontsector = sides[ld->sidenum[0]].sector; //e6y: Can't be -1 here
 		ld->backsector = ld->sidenum[1] != NO_SIDEDEF ? sides[ld->sidenum[1]].sector : 0;
 
 		if (udmf)
@@ -3307,11 +3307,11 @@ static void P_ProcessLinedefsAfterSidedefs(void)
 
 		switch (ld->special)
 		{
-
-		case 331:  
-		case 332:  
-		case 333:  
-		case 443:  
+		// Compile linedef 'text' from both sidedefs 'text' for appropriate specials.
+		case 331: // Trigger linedef executor: Skin - Continuous
+		case 332: // Trigger linedef executor: Skin - Each time
+		case 333: // Trigger linedef executor: Skin - Once
+		case 443: // Calls a named Lua function
 			if (ld->stringargs[0] && ld->stringargs[1])
 			{
 				size_t len[2];
@@ -3328,15 +3328,15 @@ static void P_ProcessLinedefsAfterSidedefs(void)
 				ld->stringargs[1] = NULL;
 			}
 			break;
-		case 447:  
-		case 455:  
-			if (ld->flags & ML_DONTPEGBOTTOM)  
+		case 447: // Change colormap
+		case 455: // Fade colormap
+			if (ld->flags & ML_DONTPEGBOTTOM) // alternate alpha (by texture offsets)
 			{
 				extracolormap_t *exc = R_CopyColormap(sides[ld->sidenum[0]].colormap_data, false);
 				INT16 alpha = max(min(sides[ld->sidenum[0]].textureoffset >> FRACBITS, 25), -25);
 				INT16 fadealpha = max(min(sides[ld->sidenum[0]].rowoffset >> FRACBITS, 25), -25);
 
-
+				// If alpha is negative, set "subtract alpha" flag and store absolute value
 				if (alpha < 0)
 				{
 					alpha *= -1;
@@ -3369,8 +3369,8 @@ static boolean P_LoadMapData(const virtres_t *virt)
 {
 	virtlump_t *virtvertexes = NULL, *virtsectors = NULL, *virtsidedefs = NULL, *virtlinedefs = NULL, *virtthings = NULL;
 
-
-	if (udmf)  
+	// Count map data.
+	if (udmf) // Count how many entries for each type we got in textmap.
 	{
 		virtlump_t *textmap = vres_Find(virt, "TEXTMAP");
 		if (textmap->size == 0)
@@ -3404,7 +3404,7 @@ static boolean P_LoadMapData(const virtres_t *virt)
 		if (!virtlinedefs)
 			I_Error("LINEDEFS lump not found");
 
-
+		// Traditional doom map format just assumes the number of elements from the lump sizes.
 		numvertexes  = virtvertexes->size / sizeof (mapvertex_t);
 		numsectors   = virtsectors->size  / sizeof (mapsector_t);
 		numsides     = virtsidedefs->size / sizeof (mapsidedef_t);
@@ -3427,15 +3427,15 @@ static boolean P_LoadMapData(const virtres_t *virt)
 	lines     = Z_Calloc(numlines * sizeof (*lines), PU_LEVEL, NULL);
 	mapthings = Z_Calloc(nummapthings * sizeof (*mapthings), PU_LEVEL, NULL);
 
-
-
+	// Allocate a big chunk of memory as big as our MAXLEVELFLATS limit.
+	//Fab : FIXME: allocate for whatever number of flats - 512 different flats per level should be plenty
 	foundflats = calloc(MAXLEVELFLATS, sizeof (*foundflats));
 	if (foundflats == NULL)
 		I_Error("Ran out of memory while loading sectors\n");
 
 	numlevelflats = 0;
 
-
+	// Load map data.
 	if (udmf)
 	{
 		P_LoadTextmap();
@@ -3454,10 +3454,10 @@ static boolean P_LoadMapData(const virtres_t *virt)
 
 	R_ClearTextureNumCache(true);
 
-
+	// set the sky flat num
 	skyflatnum = P_AddLevelFlat(SKYFLATNAME, foundflats);
 
-
+	// copy table for global usage
 	levelflats = M_Memcpy(Z_Calloc(numlevelflats * sizeof (*levelflats), PU_LEVEL, NULL), foundflats, numlevelflats * sizeof (levelflat_t));
 	free(foundflats);
 
@@ -3506,11 +3506,11 @@ static void P_LoadNodes(UINT8 *data)
 	}
 }
 
-                                              
-   
-                                         
-                                
-    
+/** Computes the length of a seg in fracunits.
+  *
+  * \param seg Seg to compute length for.
+  * \return Length in fracunits.
+  */
 static fixed_t P_SegLength(seg_t *seg)
 {
 	INT64 dx = (seg->v2->x - seg->v1->x)>>1;
@@ -3519,17 +3519,17 @@ static fixed_t P_SegLength(seg_t *seg)
 }
 
 #ifdef HWRENDER
-                                            
-                              
-   
-                                         
-                              
-    
+/** Computes the length of a seg as a float.
+  * This is needed for OpenGL.
+  *
+  * \param seg Seg to compute length for.
+  * \return Length as a float.
+  */
 static inline float P_SegLengthFloat(seg_t *seg)
 {
 	float dx, dy;
 
-
+	// make a vector (start at origin)
 	dx = FIXED_TO_FLOAT(seg->v2->x - seg->v1->x);
 	dy = FIXED_TO_FLOAT(seg->v2->y - seg->v1->y);
 
@@ -3555,8 +3555,8 @@ static void P_InitializeSeg(seg_t *seg)
 #ifdef HWRENDER
 	seg->pv1 = seg->pv2 = NULL;
 
-
-	seg->lightmaps = NULL;  
+	//Hurdler: 04/12/2000: for now, only used in hardware mode
+	seg->lightmaps = NULL; // list of static lightmap for this seg
 #endif
 
 	seg->polyseg = NULL;
@@ -3606,7 +3606,7 @@ typedef enum {
 	NUMNODETYPES
 } nodetype_t;
 
-
+// Find out the BSP format.
 static nodetype_t P_GetNodetype(const virtres_t *virt, UINT8 **nodedata, char signature[4 + 1])
 {
 	boolean supported[NUMNODETYPES] = {0};
@@ -3636,7 +3636,7 @@ static nodetype_t P_GetNodetype(const virtres_t *virt, UINT8 **nodedata, char si
 			if (virtnodes && virtnodes->size)
 			{
 				*nodedata = virtnodes->data;
-				return NT_DOOM;  
+				return NT_DOOM; // Traditional map format BSP tree.
 			}
 		}
 		else
@@ -3644,12 +3644,12 @@ static nodetype_t P_GetNodetype(const virtres_t *virt, UINT8 **nodedata, char si
 			virtssectors = vres_Find(virt, "SSECTORS");
 
 			if (virtssectors && virtssectors->size)
-			{  
+			{ // Possibly GL nodes: NODES ignored, SSECTORS takes precedence as nodes lump (it is confusing, yeah), and has a signature.
 				*nodedata = virtssectors->data;
 				supported[NT_XGLN] = supported[NT_ZGLN] = supported[NT_XGL2] = supported[NT_XGL3] = true;
 			}
 			else
-			{  
+			{ // Possibly ZDoom extended nodes: SSECTORS is empty, NODES has a signature.
 				virtlump_t *virtnodes = vres_Find(virt, "NODES");
 				if (virtnodes && virtnodes->size)
 				{
@@ -3668,36 +3668,36 @@ static nodetype_t P_GetNodetype(const virtres_t *virt, UINT8 **nodedata, char si
 	M_Memcpy(signature, *nodedata, 4);
 	(*nodedata) += 4;
 
-
-	if (memcmp(&signature[1], "NOD", 3) == 0)  
+	// Identify node format from its starting signature.
+	if (memcmp(&signature[1], "NOD", 3) == 0) // ZDoom extended nodes
 	{
 		if (signature[0] == 'X')
 		{
-			nodetype = NT_XNOD;  
+			nodetype = NT_XNOD; // Uncompressed
 		}
 		else if (signature[0] == 'Z')
 		{
-			nodetype = NT_ZNOD;  
+			nodetype = NT_ZNOD; // Compressed
 		}
 	}
-	else if (memcmp(&signature[1], "GL", 2) == 0)  
+	else if (memcmp(&signature[1], "GL", 2) == 0) // GL nodes
 	{
 		switch (signature[0])
 		{
-		case 'X':  
+		case 'X': // Uncompressed
 			switch (signature[3])
 			{
-			case 'N': nodetype = NT_XGLN; break;  
-			case '2': nodetype = NT_XGL2; break;  
-			case '3': nodetype = NT_XGL3; break;  
+			case 'N': nodetype = NT_XGLN; break; // GL nodes
+			case '2': nodetype = NT_XGL2; break; // Version 2 GL nodes
+			case '3': nodetype = NT_XGL3; break; // Version 3 GL nodes
 			}
 			break;
-		case 'Z':  
+		case 'Z': // Compressed
 			switch (signature[3])
 			{
-			case 'N': nodetype = NT_ZGLN; break;  
-			case '2': nodetype = NT_ZGL2; break;  
-			case '3': nodetype = NT_ZGL3; break;  
+			case 'N': nodetype = NT_ZGLN; break; // GL nodes (compressed)
+			case '2': nodetype = NT_ZGL2; break; // Version 2 GL nodes (compressed)
+			case '3': nodetype = NT_ZGL3; break; // Version 3 GL nodes (compressed)
 			}
 			break;
 		}
@@ -3706,7 +3706,7 @@ static nodetype_t P_GetNodetype(const virtres_t *virt, UINT8 **nodedata, char si
 	return supported[nodetype] ? nodetype : NT_UNSUPPORTED;
 }
 
-
+// Extended node formats feature additional vertices; useful for OpenGL, but totally useless in gamelogic.
 static boolean P_LoadExtraVertices(UINT8 **data)
 {
 	UINT32 origvrtx = READUINT32((*data));
@@ -3715,7 +3715,7 @@ static boolean P_LoadExtraVertices(UINT8 **data)
 	vertex_t *oldpos = vertexes;
 	size_t i;
 
-	if (numvertexes != origvrtx)  
+	if (numvertexes != origvrtx) // If native vertex count doesn't match node original vertex count, bail out (broken data?).
 	{
 		CONS_Alert(CONS_WARNING, "Vertex count in map data and nodes differ!\n");
 		return false;
@@ -3724,7 +3724,7 @@ static boolean P_LoadExtraVertices(UINT8 **data)
 	if (!xtrvrtx)
 		return true;
 
-
+	// If extra vertexes were generated, reallocate the vertex array and fix the pointers.
 	numvertexes += xtrvrtx;
 	vertexes = Z_Realloc(vertexes, numvertexes*sizeof(*vertexes), PU_LEVEL, NULL);
 
@@ -3734,7 +3734,7 @@ static boolean P_LoadExtraVertices(UINT8 **data)
 		ld->v2 = &vertexes[ld->v2 - oldpos];
 	}
 
-
+	// Read extra vertex data.
 	for (i = origvrtx; i < numvertexes; i++)
 	{
 		vertexes[i].x = READFIXED((*data));
@@ -3750,14 +3750,14 @@ static boolean P_LoadExtendedSubsectorsAndSegs(UINT8 **data, nodetype_t nodetype
 	size_t m;
 	seg_t *seg;
 
-
+	// Subsectors
 	numsubsectors = READUINT32((*data));
 	subsectors = Z_Calloc(numsubsectors*sizeof(*subsectors), PU_LEVEL, NULL);
 
 	for (i = 0; i < numsubsectors; i++)
 		subsectors[i].numlines = READUINT32((*data));
 
-
+	// Segs
 	numsegs = READUINT32((*data));
 	segs = Z_Calloc(numsegs*sizeof(*segs), PU_LEVEL, NULL);
 
@@ -3779,7 +3779,7 @@ static boolean P_LoadExtendedSubsectorsAndSegs(UINT8 **data, nodetype_t nodetype
 
 				segs[k - 1 + ((m == 0) ? subsectors[i].numlines : 0)].v2 = segs[k].v1 = &vertexes[vertexnum];
 
-				READUINT32((*data));  
+				READUINT32((*data)); // partner, can be ignored by software renderer
 
 				if (nodetype != NT_XGLN)
 				{
@@ -3855,7 +3855,7 @@ static boolean P_LoadExtendedSubsectorsAndSegs(UINT8 **data, nodetype_t nodetype
 	return true;
 }
 
-
+// Auxiliary function: Shrink node ID from 32-bit to 16-bit.
 static UINT16 ShrinkNodeID(UINT32 x) {
 	UINT16 mask = (x >> 16) & 0xC000;
 	UINT16 result = x;
@@ -3873,19 +3873,19 @@ static void P_LoadExtendedNodes(UINT8 **data, nodetype_t nodetype)
 
 	for (i = 0, mn = nodes; i < numnodes; i++, mn++)
 	{
-
+		// Splitter
 		mn->x = xgl3 ? READINT32((*data)) : (READINT16((*data)) << FRACBITS);
 		mn->y = xgl3 ? READINT32((*data)) : (READINT16((*data)) << FRACBITS);
 		mn->dx = xgl3 ? READINT32((*data)) : (READINT16((*data)) << FRACBITS);
 		mn->dy = xgl3 ? READINT32((*data)) : (READINT16((*data)) << FRACBITS);
 
-
+		// Bounding boxes
 		for (j = 0; j < 2; j++)
 			for (k = 0; k < 4; k++)
 				mn->bbox[j][k] = READINT16((*data)) << FRACBITS;
 
-
-		mn->children[0] = ShrinkNodeID(READUINT32((*data)));  
+		//Children
+		mn->children[0] = ShrinkNodeID(READUINT32((*data))); /// \todo Use UINT32 for node children in a future, instead?
 		mn->children[1] = ShrinkNodeID(READUINT32((*data)));
 	}
 }
@@ -3944,17 +3944,17 @@ static void P_LoadMapBSP(const virtres_t *virt)
 	}
 }
 
-
-
+// Split from P_LoadBlockMap for convenience
+// -- Monster Iestyn 08/01/18
 static void P_ReadBlockMapLump(INT16 *wadblockmaplump, size_t count)
 {
 	size_t i;
 	blockmaplump = Z_Calloc(sizeof (*blockmaplump) * count, PU_LEVEL, NULL);
 
-
-
-
-
+	// killough 3/1/98: Expand wad blockmap into larger internal one,
+	// by treating all offsets except -1 as unsigned and zero-extending
+	// them. This potentially doubles the size of blockmaps allowed,
+	// because Doom originally considered the offsets as always signed.
 
 	blockmaplump[0] = SHORT(wadblockmaplump[0]);
 	blockmaplump[1] = SHORT(wadblockmaplump[1]);
@@ -3963,23 +3963,23 @@ static void P_ReadBlockMapLump(INT16 *wadblockmaplump, size_t count)
 
 	for (i = 4; i < count; i++)
 	{
-		INT16 t = SHORT(wadblockmaplump[i]);           
+		INT16 t = SHORT(wadblockmaplump[i]);          // killough 3/1/98
 		blockmaplump[i] = t == -1 ? (INT32)-1 : (INT32) t & 0xffff;
 	}
 }
 
-
-
-
-
+// This needs to be a separate function
+// because making both the WAD and PK3 loading code use
+// the same functions is trickier than it looks for blockmap
+// -- Monster Iestyn 09/01/18
 static boolean P_LoadBlockMap(UINT8 *data, size_t count)
 {
 	if (!count || count >= 0x20000)
 		return false;
 
+	//CONS_Printf("Reading blockmap lump for pk3...\n");
 
-
-
+	// no need to malloc anything, assume the data is uncompressed for now
 	count /= 2;
 	P_ReadBlockMapLump((INT16 *)data, count);
 
@@ -3988,12 +3988,12 @@ static boolean P_LoadBlockMap(UINT8 *data, size_t count)
 	bmapwidth = blockmaplump[2];
 	bmapheight = blockmaplump[3];
 
-
+	// clear out mobj chains
 	count = sizeof (*blocklinks)* bmapwidth*bmapheight;
 	blocklinks = Z_Calloc(count, PU_LEVEL, NULL);
 	blockmap = blockmaplump+4;
 
-
+	// haleyjd 2/22/06: setup polyobject blockmap
 	count = sizeof(*polyblocklinks) * bmapwidth * bmapheight;
 	polyblocklinks = Z_Calloc(count, PU_LEVEL, NULL);
 	return true;
@@ -4010,7 +4010,7 @@ static boolean LineInBlock(fixed_t cx1, fixed_t cy1, fixed_t cx2, fixed_t cy2, f
 	bbox[BOXLEFT] = bx1;
 	bbox[BOXBOTTOM] = by1;
 
-
+	// Trivial rejection
 	if (cx1 < bbox[BOXLEFT] && cx2 < bbox[BOXLEFT])
 		return false;
 
@@ -4023,9 +4023,9 @@ static boolean LineInBlock(fixed_t cx1, fixed_t cy1, fixed_t cx2, fixed_t cy2, f
 	if (cy1 > bbox[BOXTOP] && cy2 > bbox[BOXTOP])
 		return false;
 
-
-
-
+	// Rats, guess we gotta check
+	// if the line intersects
+	// any sides of the block.
 	cx1 <<= FRACBITS;
 	cy1 <<= FRACBITS;
 	cx2 <<= FRACBITS;
@@ -4050,22 +4050,22 @@ static boolean LineInBlock(fixed_t cx1, fixed_t cy1, fixed_t cx2, fixed_t cy2, f
 	return P_BoxOnLineSide(bbox, &testline) == -1;
 }
 
-
-
-
-
-
-
-
-
-
-
-
+//
+// killough 10/98:
+//
+// Rewritten to use faster algorithm.
+//
+// SSN Edit: Killough's wasn't accurate enough, sometimes excluding
+// blocks that the line did in fact exist in, so now we use
+// a fail-safe approach that puts a 'box' around each line.
+//
+// Please note: This section of code is not interchangable with TeamTNT's
+// code which attempts to fix the same problem.
 static void P_CreateBlockMap(void)
 {
 	register size_t i;
 	fixed_t minx = INT32_MAX, miny = INT32_MAX, maxx = INT32_MIN, maxy = INT32_MIN;
-
+	// First find limits of map
 
 	for (i = 0; i < numvertexes; i++)
 	{
@@ -4079,45 +4079,45 @@ static void P_CreateBlockMap(void)
 			maxy = vertexes[i].y>>FRACBITS;
 	}
 
-
+	// Save blockmap parameters
 	bmaporgx = minx << FRACBITS;
 	bmaporgy = miny << FRACBITS;
 	bmapwidth = ((maxx-minx) >> MAPBTOFRAC) + 1;
 	bmapheight = ((maxy-miny) >> MAPBTOFRAC)+ 1;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	// Compute blockmap, which is stored as a 2d array of variable-sized lists.
+	//
+	// Pseudocode:
+	//
+	// For each linedef:
+	//
+	//   Map the starting and ending vertices to blocks.
+	//
+	//   Starting in the starting vertex's block, do:
+	//
+	//     Add linedef to current block's list, dynamically resizing it.
+	//
+	//     If current block is the same as the ending vertex's block, exit loop.
+	//
+	//     Move to an adjacent block by moving towards the ending block in
+	//     either the x or y direction, to the block which contains the linedef.
 
 	{
 		typedef struct
 		{
 			INT32 n, nalloc;
 			INT32 *list;
-		} bmap_t;  
+		} bmap_t; // blocklist structure
 
-		size_t tot = bmapwidth * bmapheight;  
-		bmap_t *bmap = calloc(tot, sizeof (*bmap));  
+		size_t tot = bmapwidth * bmapheight; // size of blockmap
+		bmap_t *bmap = calloc(tot, sizeof (*bmap)); // array of blocklists
 		boolean straight;
 
 		if (bmap == NULL) I_Error("%s: Out of memory making blockmap", "P_CreateBlockMap");
 
 		for (i = 0; i < numlines; i++)
 		{
-
+			// starting coordinates
 			INT32 x = (lines[i].v1->x>>FRACBITS) - minx;
 			INT32 y = (lines[i].v1->y>>FRACBITS) - miny;
 			INT32 bxstart, bxend, bystart, byend, v2x, v2y, curblockx, curblocky;
@@ -4125,7 +4125,7 @@ static void P_CreateBlockMap(void)
 			v2x = lines[i].v2->x>>FRACBITS;
 			v2y = lines[i].v2->y>>FRACBITS;
 
-
+			// Draw a "box" around the line.
 			bxstart = (x >> MAPBTOFRAC);
 			bystart = (y >> MAPBTOFRAC);
 
@@ -4149,10 +4149,10 @@ static void P_CreateBlockMap(void)
 				byend = temp;
 			}
 
-
-
-
-
+			// Catch straight lines
+			// This fixes the error where straight lines
+			// directly on a blockmap boundary would not
+			// be included in the proper blocks.
 			if (lines[i].v1->y == lines[i].v2->y)
 			{
 				straight = true;
@@ -4168,7 +4168,7 @@ static void P_CreateBlockMap(void)
 			else
 				straight = false;
 
-
+			// Now we simply iterate block-by-block until we reach the end block.
 			for (curblockx = bxstart; curblockx <= bxend; curblockx++)
 			for (curblocky = bystart; curblocky <= byend; curblocky++)
 			{
@@ -4180,11 +4180,11 @@ static void P_CreateBlockMap(void)
 				if (!straight && !(LineInBlock((fixed_t)x, (fixed_t)y, (fixed_t)v2x, (fixed_t)v2y, (fixed_t)(curblockx << MAPBTOFRAC), (fixed_t)(curblocky << MAPBTOFRAC))))
 					continue;
 
-
+				// Increase size of allocated list if necessary
 				if (bmap[b].n >= bmap[b].nalloc)
 				{
-
-
+					// Graue 02-29-2004: make code more readable, don't realloc a null pointer
+					// (because it crashes for me, and because the comp.lang.c FAQ says so)
 					if (bmap[b].nalloc == 0)
 						bmap[b].nalloc = 8;
 					else
@@ -4194,77 +4194,77 @@ static void P_CreateBlockMap(void)
 						I_Error("Out of Memory in P_CreateBlockMap");
 				}
 
-
+				// Add linedef to end of list
 				bmap[b].list[bmap[b].n++] = (INT32)i;
 			}
 		}
 
-
-
-
-
-
-
+		// Compute the total size of the blockmap.
+		//
+		// Compression of empty blocks is performed by reserving two offset words
+		// at tot and tot+1.
+		//
+		// 4 words, unused if this routine is called, are reserved at the start.
 		{
-			size_t count = tot + 6;  
+			size_t count = tot + 6; // we need at least 1 word per block, plus reserved's
 
 			for (i = 0; i < tot; i++)
 				if (bmap[i].n)
-					count += bmap[i].n + 2;  
+					count += bmap[i].n + 2; // 1 header word + 1 trailer word + blocklist
 
-
+			// Allocate blockmap lump with computed count
 			blockmaplump = Z_Calloc(sizeof (*blockmaplump) * count, PU_LEVEL, NULL);
 		}
 
-
+		// Now compress the blockmap.
 		{
-			size_t ndx = tot += 4;  
-			bmap_t *bp = bmap;  
+			size_t ndx = tot += 4; // Advance index to start of linedef lists
+			bmap_t *bp = bmap; // Start of uncompressed blockmap
 
-			blockmaplump[ndx++] = 0;  
-			blockmaplump[ndx++] = -1;  
+			blockmaplump[ndx++] = 0; // Store an empty blockmap list at start
+			blockmaplump[ndx++] = -1; // (Used for compression)
 
 			for (i = 4; i < tot; i++, bp++)
-				if (bp->n)  
+				if (bp->n) // Non-empty blocklist
 				{
-					blockmaplump[blockmaplump[i] = (INT32)(ndx++)] = 0;  
+					blockmaplump[blockmaplump[i] = (INT32)(ndx++)] = 0; // Store index & header
 					do
-						blockmaplump[ndx++] = bp->list[--bp->n];  
+						blockmaplump[ndx++] = bp->list[--bp->n]; // Copy linedef list
 					while (bp->n);
-					blockmaplump[ndx++] = -1;  
-					Z_Free(bp->list);  
+					blockmaplump[ndx++] = -1; // Store trailer
+					Z_Free(bp->list); // Free linedef list
 				}
-				else  
+				else // Empty blocklist: point to reserved empty blocklist
 					blockmaplump[i] = (INT32)tot;
 
-			free(bmap);  
+			free(bmap); // Free uncompressed blockmap
 		}
 	}
 	{
 		size_t count = sizeof (*blocklinks) * bmapwidth * bmapheight;
-
+		// clear out mobj chains (copied from from P_LoadBlockMap)
 		blocklinks = Z_Calloc(count, PU_LEVEL, NULL);
 		blockmap = blockmaplump + 4;
 
-
+		// haleyjd 2/22/06: setup polyobject blockmap
 		count = sizeof(*polyblocklinks) * bmapwidth * bmapheight;
 		polyblocklinks = Z_Calloc(count, PU_LEVEL, NULL);
 	}
 }
 
-
-
+// PK3 version
+// -- Monster Iestyn 09/01/18
 static void P_LoadReject(UINT8 *data, size_t count)
 {
-	if (!count)  
+	if (!count) // zero length, someone probably used ZDBSP
 	{
 		rejectmatrix = NULL;
 		CONS_Debug(DBG_SETUP, "P_LoadReject: REJECT lump has size 0, will not be loaded\n");
 	}
 	else
 	{
-		rejectmatrix = Z_Malloc(count, PU_LEVEL, NULL);  
-		M_Memcpy(rejectmatrix, data, count);  
+		rejectmatrix = Z_Malloc(count, PU_LEVEL, NULL); // allocate memory for the reject matrix
+		M_Memcpy(rejectmatrix, data, count); // copy the data into it
 	}
 }
 
@@ -4273,7 +4273,7 @@ static void P_LoadMapLUT(const virtres_t *virt)
 	virtlump_t* virtblockmap = vres_Find(virt, "BLOCKMAP");
 	virtlump_t* virtreject   = vres_Find(virt, "REJECT");
 
-
+	// Lookup tables
 	if (virtreject)
 		P_LoadReject(virtreject->data, virtreject->size);
 	else
@@ -4283,11 +4283,11 @@ static void P_LoadMapLUT(const virtres_t *virt)
 		P_CreateBlockMap();
 }
 
-
-
-
-
-
+//
+// P_LinkMapData
+// Builds sector line lists and subsector sector numbers.
+// Finds block bounding boxes for sectors.
+//
 static void P_LinkMapData(void)
 {
 	size_t i, j;
@@ -4298,7 +4298,7 @@ static void P_LinkMapData(void)
 	seg_t *seg;
 	fixed_t bbox[4];
 
-
+	// look up sector number for each subsector
 	for (i = 0; i < numsubsectors; i++, ss++)
 	{
 		if (ss->firstline >= numsegs)
@@ -4321,7 +4321,7 @@ static void P_LinkMapData(void)
 		ss->sector = seg->sidedef->sector;
 	}
 
-
+	// count number of lines in each sector
 	for (i = 0, li = lines; i < numlines; i++, li++)
 	{
 		li->frontsector->linecount++;
@@ -4330,10 +4330,10 @@ static void P_LinkMapData(void)
 			li->backsector->linecount++;
 	}
 
-
+	// allocate linebuffers for each sector
 	for (i = 0, sector = sectors; i < numsectors; i++, sector++)
 	{
-		if (sector->linecount == 0)  
+		if (sector->linecount == 0) // no lines found?
 		{
 			sector->lines = NULL;
 			CONS_Debug(DBG_SETUP, "P_LinkMapData: sector %s has no lines\n", sizeu1(i));
@@ -4342,13 +4342,13 @@ static void P_LinkMapData(void)
 		{
 			sector->lines = Z_Calloc(sector->linecount * sizeof(line_t*), PU_LEVEL, NULL);
 
-
+			// zero the count, since we'll later use this to track how many we've recorded
 			sector->linecount = 0;
 		}
 	}
 
-
-
+	// iterate through lines, assigning them to sectors' linebuffers,
+	// and recalculate the counts in the process
 	for (i = 0, li = lines; i < numlines; i++, li++)
 	{
 		li->frontsector->lines[li->frontsector->linecount++] = li;
@@ -4357,7 +4357,7 @@ static void P_LinkMapData(void)
 			li->backsector->lines[li->backsector->linecount++] = li;
 	}
 
-
+	// set soundorg's position for each sector
 	for (i = 0, sector = sectors; i < numsectors; i++, sector++)
 	{
 		M_ClearBox(bbox);
@@ -4372,15 +4372,15 @@ static void P_LinkMapData(void)
 			}
 		}
 
-
+		// set the degenmobj_t to the middle of the bounding box
 		sector->soundorg.x = (((bbox[BOXRIGHT]>>FRACBITS) + (bbox[BOXLEFT]>>FRACBITS))/2)<<FRACBITS;
 		sector->soundorg.y = (((bbox[BOXTOP]>>FRACBITS) + (bbox[BOXBOTTOM]>>FRACBITS))/2)<<FRACBITS;
-		sector->soundorg.z = sector->floorheight;  
+		sector->soundorg.z = sector->floorheight; // default to sector's floor height
 	}
 }
 
-
-
+// For maps in binary format, add multi-tags from linedef specials. This must be done
+// before any linedef specials have been processed.
 static void P_AddBinaryMapTagsFromLine(sector_t *sector, line_t *line)
 {
 	Tag_Add(&sector->tags, Tag_FGet(&line->tags));
@@ -4403,23 +4403,23 @@ static void P_AddBinaryMapTags(void)
 	size_t i;
 
 	for (i = 0; i < numlines; i++) {
-
-
-
+		// 97: Apply Tag to Front Sector
+		// 98: Apply Tag to Back Sector
+		// 99: Apply Tag to Front and Back Sectors
 		if (lines[i].special == 97 || lines[i].special == 99)
 			P_AddBinaryMapTagsFromLine(lines[i].frontsector, &lines[i]);
 		if (lines[i].special == 98 || lines[i].special == 99)
 			P_AddBinaryMapTagsFromLine(lines[i].backsector, &lines[i]);
 	}
 
-
-
+	// Run this loop after the 97-99 loop to ensure that 96 can search through all of the
+	// 97-99-applied tags.
 	for (i = 0; i < numlines; i++) {
 		size_t j;
 		mtag_t tag, target_tag;
 		mtag_t offset_tags[4];
 
-
+		// 96: Apply Tag to Tagged Sectors
 		if (lines[i].special != 96)
 			continue;
 
@@ -4603,25 +4603,25 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 		switch (lines[i].special)
 		{
-		case 2:  
+		case 2: //Custom exit
 			if (lines[i].flags & ML_NOCLIMB)
 				lines[i].args[1] |= TMEF_SKIPTALLY;
 			if (lines[i].flags & ML_BLOCKMONSTERS)
 				lines[i].args[1] |= TMEF_EMERALDCHECK;
 			break;
-		case 3:  
+		case 3: //Zoom tube parameters
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[2] = !!(lines[i].flags & ML_MIDSOLID);
 			break;
-		case 4:  
+		case 4: //Speed pad parameters
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			if (lines[i].flags & ML_MIDSOLID)
 				lines[i].args[1] |= TMSP_NOTELEPORT;
 			if (lines[i].flags & ML_WRAPMIDTEX)
 				lines[i].args[1] |= TMSP_FORCESPIN;
 			break;
-		case 7:  
+		case 7: //Sector flat alignment
 			lines[i].args[0] = tag;
 			if ((lines[i].flags & (ML_NETONLY|ML_NONET)) == (ML_NETONLY|ML_NONET))
 			{
@@ -4636,13 +4636,13 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[1] = TMP_BOTH;
 			lines[i].flags &= ~(ML_NETONLY|ML_NONET);
 
-			if (lines[i].flags & ML_EFFECT6)  
+			if (lines[i].flags & ML_EFFECT6) // Set offset through x and y texture offsets
 			{
 				angle_t flatangle = InvAngle(R_PointToAngle2(lines[i].v1->x, lines[i].v1->y, lines[i].v2->x, lines[i].v2->y));
 				fixed_t xoffs = sides[lines[i].sidenum[0]].textureoffset;
 				fixed_t yoffs = sides[lines[i].sidenum[0]].rowoffset;
 
-
+				//If no tag is given, apply to front sector
 				if (lines[i].args[0] == 0)
 					P_ApplyFlatAlignment(lines[i].frontsector, flatangle, xoffs, yoffs, lines[i].args[1] != TMP_CEILING, lines[i].args[1] != TMP_FLOOR);
 				else
@@ -4654,7 +4654,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].special = 0;
 			}
 			break;
-		case 8:  
+		case 8: //Special sector properties
 		{
 			INT32 s;
 
@@ -4683,16 +4683,16 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			break;
 		}
-		case 10:  
+		case 10: //Culling plane
 			lines[i].args[0] = tag;
 			lines[i].args[1] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 11:  
+		case 11: //Rope hang parameters
 			lines[i].args[0] = (lines[i].flags & ML_NOCLIMB) ? 0 : sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[2] = !!(lines[i].flags & ML_SKEWTD);
 			break;
-		case 13:  
+		case 13: //Heat wave effect
 		{
 			INT32 s;
 
@@ -4701,15 +4701,15 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			break;
 		}
-		case 14:  
+		case 14: //Bustable block parameters
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[2] = !!(lines[i].flags & ML_SKEWTD);
 			break;
-		case 16:  
+		case 16: //Minecart parameters
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			break;
-		case 20:  
+		case 20: //PolyObject first line
 		{
 			INT32 check = -1;
 			INT32 paramline = -1;
@@ -4723,26 +4723,26 @@ static void P_ConvertBinaryLinedefTypes(void)
 				}
 			}
 
-
+			//PolyObject ID
 			lines[i].args[0] = tag;
 
-
+			//Default: Invisible planes
 			lines[i].args[3] |= TMPF_INVISIBLEPLANES;
 
-
+			//Linedef executor tag
 			lines[i].args[4] = 32000 + lines[i].args[0];
 
 			if (paramline == -1)
-				break;  
+				break; // no extra settings to apply, let's leave it
 
-
+			//Parent ID
 			lines[i].args[1] = lines[paramline].frontsector->special;
-
+			//Translucency
 			lines[i].args[2] = (lines[paramline].flags & ML_DONTPEGTOP)
 						? (sides[lines[paramline].sidenum[0]].textureoffset >> FRACBITS)
 						: ((lines[paramline].frontsector->floorheight >> FRACBITS) / 100);
 
-
+			//Flags
 			if (lines[paramline].flags & ML_SKEWTD)
 				lines[i].args[3] |= TMPF_NOINSIDES;
 			if (lines[paramline].flags & ML_NOSKEW)
@@ -4751,8 +4751,8 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[3] |= TMPF_PUSHABLESTOP;
 			if (lines[paramline].flags & ML_MIDSOLID)
 				lines[i].args[3] &= ~TMPF_INVISIBLEPLANES;
-			                                             
-                                              
+			/*if (lines[paramline].flags & ML_WRAPMIDTEX)
+				lines[i].args[3] |= TMPF_DONTCLIPPLANES;*/
 			if (lines[paramline].flags & ML_EFFECT6)
 				lines[i].args[3] |= TMPF_SPLAT;
 			if (lines[paramline].flags & ML_NOCLIMB)
@@ -4760,16 +4760,16 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			break;
 		}
-		case 30:  
+		case 30: //Polyobject - waving flag
 			lines[i].args[0] = tag;
 			lines[i].args[1] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			break;
-		case 31:  
+		case 31: //Polyobject - displacement by front sector
 			lines[i].args[0] = tag;
 			lines[i].args[1] = R_PointToDist2(lines[i].v2->x, lines[i].v2->y, lines[i].v1->x, lines[i].v1->y) >> FRACBITS;
 			break;
-		case 32:  
+		case 32: //Polyobject - angular displacement by front sector
 			lines[i].args[0] = tag;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset ? sides[lines[i].sidenum[0]].textureoffset >> FRACBITS : 128;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset ? sides[lines[i].sidenum[0]].rowoffset >> FRACBITS : 90;
@@ -4778,17 +4778,17 @@ static void P_ConvertBinaryLinedefTypes(void)
 			else if (lines[i].flags & ML_MIDSOLID)
 				lines[i].args[3] |= TMPR_ROTATEPLAYERS;
 			break;
-		case 50:  
-		case 51:  
+		case 50: //Instantly lower floor on level load
+		case 51: //Instantly raise ceiling on level load
 			lines[i].args[0] = tag;
 			break;
-		case 52:  
+		case 52: //Continuously falling sector
 			lines[i].args[0] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			lines[i].args[1] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 53:  
-		case 54:  
-		case 55:  
+		case 53: //Continuous floor/ceiling mover
+		case 54: //Continuous floor mover
+		case 55: //Continuous ceiling mover
 			lines[i].args[0] = tag;
 			lines[i].args[1] = (lines[i].special == 53) ? TMP_BOTH : lines[i].special - 54;
 			lines[i].args[2] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
@@ -4797,9 +4797,9 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[5] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].special = 53;
 			break;
-		case 56:  
-		case 57:  
-		case 58:  
+		case 56: //Continuous two-speed floor/ceiling mover
+		case 57: //Continuous two-speed floor mover
+		case 58: //Continuous two-speed ceiling mover
 			lines[i].args[0] = tag;
 			lines[i].args[1] = (lines[i].special == 56) ? TMP_BOTH : lines[i].special - 57;
 			lines[i].args[2] = abs(lines[i].dx) >> FRACBITS;
@@ -4808,8 +4808,8 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[5] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].special = 56;
 			break;
-		case 59:  
-		case 60:  
+		case 59: //Activate moving platform
+		case 60: //Activate moving platform (adjustable speed)
 			lines[i].args[0] = tag;
 			lines[i].args[1] = (lines[i].special == 60) ? P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS : 8;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
@@ -4817,8 +4817,8 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[4] = (lines[i].flags & ML_NOCLIMB) ? 1 : 0;
 			lines[i].special = 60;
 			break;
-		case 61:  
-		case 62:  
+		case 61: //Crusher (Ceiling to floor)
+		case 62: //Crusher (Floor to ceiling)
 			lines[i].args[0] = tag;
 			lines[i].args[1] = lines[i].special - 61;
 			if (lines[i].flags & ML_MIDSOLID)
@@ -4833,10 +4833,10 @@ static void P_ConvertBinaryLinedefTypes(void)
 			}
 			lines[i].special = 61;
 			break;
-		case 63:  
+		case 63: //Fake floor/ceiling planes
 			lines[i].args[0] = tag;
 			break;
-		case 64:  
+		case 64: //Appearing/disappearing FOF
 			lines[i].args[0] = (lines[i].flags & ML_BLOCKMONSTERS) ? 0 : tag;
 			lines[i].args[1] = (lines[i].flags & ML_BLOCKMONSTERS) ? tag : Tag_FGet(&lines[i].frontsector->tags);
 			lines[i].args[2] = lines[i].dx >> FRACBITS;
@@ -4844,9 +4844,9 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[4] = lines[i].frontsector->floorheight >> FRACBITS;
 			lines[i].args[5] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 66:  
-		case 67:  
-		case 68:  
+		case 66: //Move floor by displacement
+		case 67: //Move ceiling by displacement
+		case 68: //Move floor and ceiling by displacement
 			lines[i].args[0] = tag;
 			lines[i].args[1] = lines[i].special - 66;
 			lines[i].args[2] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
@@ -4854,33 +4854,33 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[2] *= -1;
 			lines[i].special = 66;
 			break;
-		case 76:  
+		case 76: //Make FOF bouncy
 			lines[i].args[0] = tag;
 			lines[i].args[1] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			break;
-		case 100:  
-		case 101:  
-		case 102:  
-		case 103:  
-		case 104:  
-		case 105:  
+		case 100: //FOF: solid, opaque, shadowcasting
+		case 101: //FOF: solid, opaque, non-shadowcasting
+		case 102: //FOF: solid, translucent
+		case 103: //FOF: solid, sides only
+		case 104: //FOF: solid, no sides
+		case 105: //FOF: solid, invisible
 			lines[i].args[0] = tag;
 
-
+			//Alpha
 			if (lines[i].special == 102)
 			{
 				if (lines[i].flags & ML_NOCLIMB)
 					lines[i].args[3] |= TMFA_INSIDES;
 				P_SetBinaryFOFAlpha(&lines[i]);
 
-
+				//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 				if (lines[i].args[1] == 256)
 					lines[i].args[3] |= TMFA_SPLAT;
 			}
 			else
 				lines[i].args[1] = 255;
 
-
+			//Appearance
 			if (lines[i].special == 105)
 				lines[i].args[3] |= TMFA_NOPLANES|TMFA_NOSIDES;
 			else if (lines[i].special == 104)
@@ -4892,7 +4892,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_EFFECT6)
 				lines[i].args[3] |= TMFA_SPLAT;
 
-
+			//Tangibility
 			if (lines[i].flags & ML_SKEWTD)
 				lines[i].args[4] |= TMFT_DONTBLOCKOTHERS;
 			if (lines[i].flags & ML_NOSKEW)
@@ -4900,31 +4900,31 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			lines[i].special = 100;
 			break;
-		case 120:  
-		case 121:  
-		case 122:  
-		case 123:  
-		case 124:  
-		case 125:  
+		case 120: //FOF: water, opaque
+		case 121: //FOF: water, translucent
+		case 122: //FOF: water, opaque, no sides
+		case 123: //FOF: water, translucent, no sides
+		case 124: //FOF: goo water, translucent
+		case 125: //FOF: goo water, translucent, no sides
 			lines[i].args[0] = tag;
 
-
+			//Alpha
 			if (lines[i].special == 120 || lines[i].special == 122)
 				lines[i].args[1] = 255;
 			else
 			{
 				P_SetBinaryFOFAlpha(&lines[i]);
 
-
+				//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 				if (lines[i].args[1] == 256)
 					lines[i].args[3] |= TMFW_SPLAT;
 			}
 
-
+			//No sides?
 			if (lines[i].special == 122 || lines[i].special == 123 || lines[i].special == 125)
 				lines[i].args[3] |= TMFW_NOSIDES;
 
-
+			//Flags
 			if (lines[i].flags & ML_NOCLIMB)
 				lines[i].args[3] |= TMFW_DOUBLESHADOW;
 			if (lines[i].flags & ML_MIDSOLID)
@@ -4932,40 +4932,40 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (!(lines[i].flags & ML_WRAPMIDTEX))
 				lines[i].args[3] |= TMFW_NORIPPLE;
 
-
+			//Goo?
 			if (lines[i].special >= 124)
 				lines[i].args[3] |= TMFW_GOOWATER;
 
-
+			//Splat rendering?
 			if (lines[i].flags & ML_EFFECT6)
 				lines[i].args[3] |= TMFW_SPLAT;
 
 			lines[i].special = 120;
 			break;
-		case 140:  
-		case 141:  
-		case 142:  
-		case 143:  
-		case 144:  
-		case 145:  
-		case 146:  
+		case 140: //FOF: intangible from bottom, opaque
+		case 141: //FOF: intangible from bottom, translucent
+		case 142: //FOF: intangible from bottom, translucent, no sides
+		case 143: //FOF: intangible from top, opaque
+		case 144: //FOF: intangible from top, translucent
+		case 145: //FOF: intangible from top, translucent, no sides
+		case 146: //FOF: only tangible from sides
 			lines[i].args[0] = tag;
 
-
+			//Alpha
 			if (lines[i].special == 141 || lines[i].special == 142 || lines[i].special == 144 || lines[i].special == 145)
 			{
 				if (lines[i].flags & ML_NOCLIMB)
 					lines[i].args[3] |= TMFA_INSIDES;
 				P_SetBinaryFOFAlpha(&lines[i]);
 
-
+				//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 				if (lines[i].args[1] == 256)
 					lines[i].args[3] |= TMFA_SPLAT;
 			}
 			else
 				lines[i].args[1] = 255;
 
-
+			//Appearance
 			if (lines[i].special == 142 || lines[i].special == 145)
 				lines[i].args[3] |= TMFA_NOSIDES;
 			else if (lines[i].special == 146)
@@ -4975,7 +4975,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_EFFECT6)
 				lines[i].args[3] |= TMFA_SPLAT;
 
-
+			//Tangibility
 			if (lines[i].special <= 142)
 				lines[i].args[4] |= TMFT_INTANGIBLEBOTTOM;
 			else if (lines[i].special <= 145)
@@ -4990,14 +4990,14 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			lines[i].special = 100;
 			break;
-		case 150:  
-		case 151:  
-		case 152:  
-		case 153:  
+		case 150: //FOF: Air bobbing
+		case 151: //FOF: Air bobbing (adjustable)
+		case 152: //FOF: Reverse air bobbing (adjustable)
+		case 153: //FOF: Dynamically sinking platform
 			lines[i].args[0] = tag;
 			lines[i].args[1] = (lines[i].special == 150) ? 16 : (P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS);
 
-
+			//Flags
 			if (lines[i].special == 152)
 				lines[i].args[2] |= TMFB_REVERSE;
 			if (lines[i].flags & ML_NOCLIMB)
@@ -5007,28 +5007,28 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			lines[i].special = 150;
 			break;
-		case 160:  
+		case 160: //FOF: Water bobbing
 			lines[i].args[0] = tag;
 			break;
-		case 170:  
-		case 171:  
-		case 172:  
-		case 173:  
-		case 174:  
-		case 175:  
-		case 176:  
-		case 177:  
-		case 178:  
-		case 179:  
-		case 180:  
+		case 170: //FOF: Crumbling, respawn
+		case 171: //FOF: Crumbling, no respawn
+		case 172: //FOF: Crumbling, respawn, intangible from bottom
+		case 173: //FOF: Crumbling, no respawn, intangible from bottom
+		case 174: //FOF: Crumbling, respawn, intangible from bottom, translucent
+		case 175: //FOF: Crumbling, no respawn, intangible from bottom, translucent
+		case 176: //FOF: Crumbling, respawn, floating, bobbing
+		case 177: //FOF: Crumbling, no respawn, floating, bobbing
+		case 178: //FOF: Crumbling, respawn, floating
+		case 179: //FOF: Crumbling, no respawn, floating
+		case 180: //FOF: Crumbling, respawn, air bobbing
 			lines[i].args[0] = tag;
 
-
+			//Alpha
 			if (lines[i].special >= 174 && lines[i].special <= 175)
 			{
 				P_SetBinaryFOFAlpha(&lines[i]);
 
-
+				//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 				if (lines[i].args[1] == 256)
 					lines[i].args[4] |= TMFC_SPLAT;
 			}
@@ -5058,27 +5058,27 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			lines[i].special = 170;
 			break;
-		case 190:  
-		case 191:  
-		case 192:  
-		case 193:  
-		case 194:  
-		case 195:  
+		case 190: // FOF: Rising, solid, opaque, shadowcasting
+		case 191: // FOF: Rising, solid, opaque, non-shadowcasting
+		case 192: // FOF: Rising, solid, translucent
+		case 193: // FOF: Rising, solid, invisible
+		case 194: // FOF: Rising, intangible from bottom, opaque
+		case 195: // FOF: Rising, intangible from bottom, translucent
 			lines[i].args[0] = tag;
 
-
+			//Translucency
 			if (lines[i].special == 192 || lines[i].special == 195)
 			{
 				P_SetBinaryFOFAlpha(&lines[i]);
 
-
+				//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 				if (lines[i].args[1] == 256)
 					lines[i].args[3] |= TMFA_SPLAT;
 			}
 			else
 				lines[i].args[1] = 255;
 
-
+			//Appearance
 			if (lines[i].special == 193)
 				lines[i].args[3] |= TMFA_NOPLANES|TMFA_NOSIDES;
 			if (lines[i].special >= 194)
@@ -5088,7 +5088,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_EFFECT6)
 				lines[i].args[3] |= TMFA_SPLAT;
 
-
+			//Tangibility
 			if (lines[i].flags & ML_SKEWTD)
 				lines[i].args[4] |= TMFT_DONTBLOCKOTHERS;
 			if (lines[i].flags & ML_NOSKEW)
@@ -5096,10 +5096,10 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].special >= 194)
 				lines[i].args[4] |= TMFT_INTANGIBLEBOTTOM;
 
-
+			//Speed
 			lines[i].args[5] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 
-
+			//Flags
 			if (lines[i].flags & ML_BLOCKMONSTERS)
 				lines[i].args[6] |= TMFR_REVERSE;
 			if (lines[i].flags & ML_NOCLIMB)
@@ -5107,35 +5107,35 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			lines[i].special = 190;
 			break;
-		case 200:  
-		case 201:  
+		case 200: //FOF: Light block
+		case 201: //FOF: Half light block
 			lines[i].args[0] = tag;
 			if (lines[i].special == 201)
 				lines[i].args[1] = 1;
 			lines[i].special = 200;
 			break;
-		case 202:  
-		case 223:  
+		case 202: //FOF: Fog block
+		case 223: //FOF: Intangible, invisible
 			lines[i].args[0] = tag;
 			break;
-		case 220:  
-		case 221:  
-		case 222:  
+		case 220: //FOF: Intangible, opaque
+		case 221: //FOF: Intangible, translucent
+		case 222: //FOF: Intangible, sides only
 			lines[i].args[0] = tag;
 
-
+			//Alpha
 			if (lines[i].special == 221)
 			{
 				P_SetBinaryFOFAlpha(&lines[i]);
 
-
+				//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 				if (lines[i].args[1] == 256)
 					lines[i].args[3] |= TMFA_SPLAT;
 			}
 			else
 				lines[i].args[1] = 255;
 
-
+			//Appearance
 			if (lines[i].special == 222)
 				lines[i].args[3] |= TMFA_NOPLANES;
 			if (lines[i].special == 221)
@@ -5147,16 +5147,16 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			lines[i].special = 220;
             break;
-		case 250:  
+		case 250: //FOF: Mario block
 			lines[i].args[0] = tag;
 			if (lines[i].flags & ML_NOCLIMB)
 				lines[i].args[1] |= TMFM_BRICK;
 			if (lines[i].flags & ML_SKEWTD)
 				lines[i].args[1] |= TMFM_INVISIBLE;
 			break;
-		case 251:  
+		case 251: //FOF: Thwomp block
 			lines[i].args[0] = tag;
-			if (lines[i].flags & ML_WRAPMIDTEX)  
+			if (lines[i].flags & ML_WRAPMIDTEX) //Custom speeds
 			{
 				lines[i].args[1] = lines[i].dy >> FRACBITS;
 				lines[i].args[2] = lines[i].dx >> FRACBITS;
@@ -5169,26 +5169,26 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_MIDSOLID)
 				P_WriteSfx(sides[lines[i].sidenum[0]].textureoffset >> FRACBITS, &lines[i].stringargs[0]);
 			break;
-		case 252:  
-		case 253:  
-		case 254:  
-		case 255:  
-		case 256:  
+		case 252: //FOF: Shatter block
+		case 253: //FOF: Shatter block, translucent
+		case 254: //FOF: Bustable block
+		case 255: //FOF: Spin-bustable block
+		case 256: //FOF: Spin-bustable block, translucent
 			lines[i].args[0] = tag;
 
-
+			//Alpha
 			if (lines[i].special == 253 || lines[i].special == 256)
 			{
 				P_SetBinaryFOFAlpha(&lines[i]);
 
-
+				//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 				if (lines[i].args[1] == 256)
 					lines[i].args[4] |= TMFB_SPLAT;
 			}
 			else
 				lines[i].args[1] = 255;
 
-
+			//Bustable type
 			if (lines[i].special <= 253)
 				lines[i].args[3] = TMFB_TOUCH;
 			else if (lines[i].special >= 255)
@@ -5198,7 +5198,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			else
 				lines[i].args[3] = TMFB_REGULAR;
 
-
+			//Flags
 			if (lines[i].flags & ML_MIDSOLID)
 				lines[i].args[4] |= TMFB_PUSHABLES;
 			if (lines[i].flags & ML_WRAPMIDTEX)
@@ -5213,28 +5213,28 @@ static void P_ConvertBinaryLinedefTypes(void)
 
 			lines[i].special = 254;
 			break;
-		case 257:  
+		case 257: //FOF: Quicksand
 			lines[i].args[0] = tag;
 			if (!(lines[i].flags & ML_WRAPMIDTEX))
-				lines[i].args[1] = 1;  
-			lines[i].args[2] = lines[i].dx >> FRACBITS;  
-			lines[i].args[3] = lines[i].dy >> FRACBITS;  
+				lines[i].args[1] = 1; //No ripple effect
+			lines[i].args[2] = lines[i].dx >> FRACBITS; //Sinking speed
+			lines[i].args[3] = lines[i].dy >> FRACBITS; //Friction
 			break;
-		case 258:  
+		case 258: //FOF: Laser
 			lines[i].args[0] = tag;
 
-
+			//Alpha
 			P_SetBinaryFOFAlpha(&lines[i]);
 
-
+			//Flags
 			if (lines[i].flags & ML_SKEWTD)
 				lines[i].args[3] |= TMFL_NOBOSSES;
-
+			//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 			if (lines[i].flags & ML_EFFECT6 || lines[i].args[1] == 256)
 				lines[i].args[3] |= TMFL_SPLAT;
 
 			break;
-		case 259:  
+		case 259: //Custom FOF
 			if (lines[i].sidenum[1] == NO_SIDEDEF)
 				I_Error("Custom FOF (tag %d) found without a linedef back side!", tag);
 
@@ -5249,16 +5249,16 @@ static void P_ConvertBinaryLinedefTypes(void)
 			{
 				P_SetBinaryFOFAlpha(&lines[i]);
 
-
+				//Replicate old hack: Translucent FOFs set to full opacity cut cyan pixels
 				if (lines[i].args[1] == 256)
 					lines[i].args[3] |= FOF_SPLAT;
 			}
 			else
 				lines[i].args[1] = 255;
 			break;
-		case 300:  
-		case 301:  
-		case 302:  
+		case 300: //Trigger linedef executor - Continuous
+		case 301: //Trigger linedef executor - Each time
+		case 302: //Trigger linedef executor - Once
 			if (lines[i].special == 302)
 				lines[i].args[0] = TMT_ONCE;
 			else if (lines[i].special == 301)
@@ -5267,8 +5267,8 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[0] = TMT_CONTINUOUS;
 			lines[i].special = 300;
 			break;
-		case 303:  
-		case 304:  
+		case 303: //Ring count - Continuous
+		case 304: //Ring count - Once
 			lines[i].args[0] = (lines[i].special == 304) ? TMT_ONCE : TMT_CONTINUOUS;
 			lines[i].args[1] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			if (lines[i].flags & ML_NOCLIMB)
@@ -5280,9 +5280,9 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[3] = !!(lines[i].flags & ML_MIDSOLID);
 			lines[i].special = 303;
 			break;
-		case 305:  
-		case 306:  
-		case 307:  
+		case 305: //Character ability - Continuous
+		case 306: //Character ability - Each time
+		case 307: //Character ability - Once
 			if (lines[i].special == 307)
 				lines[i].args[0] = TMT_ONCE;
 			else if (lines[i].special == 306)
@@ -5292,15 +5292,15 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[1] = (P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS) / 10;
 			lines[i].special = 305;
 			break;
-		case 308:  
+		case 308: //Race only - once
 			lines[i].args[0] = TMT_ONCE;
 			lines[i].args[1] = GTR_RACE;
 			lines[i].args[2] = TMF_HASANY;
 			break;
-		case 309:  
-		case 310:  
-		case 311:  
-		case 312:  
+		case 309: //CTF red team - continuous
+		case 310: //CTF red team - each time
+		case 311: //CTF blue team - continuous
+		case 312: //CTF blue team - each time
 			if (lines[i].special % 2 == 0)
 				lines[i].args[0] = (lines[i].flags & ML_BOUNCY) ? TMT_EACHTIMEENTERANDEXIT : TMT_EACHTIMEENTER;
 			else
@@ -5308,11 +5308,11 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[1] = (lines[i].special > 310) ? TMT_BLUE : TMT_RED;
 			lines[i].special = 309;
 			break;
-		case 313:  
+		case 313: //No more enemies - once
 			lines[i].args[0] = tag;
 			break;
-		case 314:  
-		case 315:  
+		case 314: //Number of pushables - Continuous
+		case 315: //Number of pushables - Once
 			lines[i].args[0] = (lines[i].special == 315) ? TMT_ONCE : TMT_CONTINUOUS;
 			lines[i].args[1] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			if (lines[i].flags & ML_NOCLIMB)
@@ -5323,20 +5323,20 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[2] = TMC_EQUAL;
 			lines[i].special = 314;
 			break;
-		case 317:  
-		case 318:  
+		case 317: //Condition set trigger - Continuous
+		case 318: //Condition set trigger - Once
 			lines[i].args[0] = (lines[i].special == 318) ? TMT_ONCE : TMT_CONTINUOUS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].special = 317;
 			break;
-		case 319:  
-		case 320:  
+		case 319: //Unlockable trigger - Continuous
+		case 320: //Unlockable trigger - Once
 			lines[i].args[0] = (lines[i].special == 320) ? TMT_ONCE : TMT_CONTINUOUS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].special = 319;
 			break;
-		case 321:  
-		case 322:  
+		case 321: //Trigger after X calls - Continuous
+		case 322: //Trigger after X calls - Each time
 			if (lines[i].special % 2 == 0)
 				lines[i].args[0] = (lines[i].flags & ML_BOUNCY) ? TMXT_EACHTIMEENTERANDEXIT : TMXT_EACHTIMEENTER;
 			else
@@ -5351,14 +5351,14 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[2] = lines[i].args[3] = 0;
 			lines[i].special = 321;
 			break;
-		case 323:  
-		case 324:  
-		case 325:  
-		case 326:  
-		case 327:  
-		case 328:  
-		case 329:  
-		case 330:  
+		case 323: //NiGHTSerize - Each time
+		case 324: //NiGHTSerize - Once
+		case 325: //DeNiGHTSerize - Each time
+		case 326: //DeNiGHTSerize - Once
+		case 327: //NiGHTS lap - Each time
+		case 328: //NiGHTS lap - Once
+		case 329: //Ideya capture touch - Each time
+		case 330: //Ideya capture touch - Once
 			lines[i].args[0] = (lines[i].special + 1) % 2;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
@@ -5424,9 +5424,9 @@ static void P_ConvertBinaryLinedefTypes(void)
 					lines[i].args[7] |= TMI_ENTER;
 			}
 			break;
-		case 331:  
-		case 332:  
-		case 333:  
+		case 331: // Player skin - continuous
+		case 332: // Player skin - each time
+		case 333: // Player skin - once
 			if (lines[i].special == 333)
 				lines[i].args[0] = TMT_ONCE;
 			else if (lines[i].special == 332)
@@ -5436,9 +5436,9 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[1] = !!(lines[i].flags & ML_NOCLIMB);
 			lines[i].special = 331;
 			break;
-		case 334:  
-		case 335:  
-		case 336:  
+		case 334: // Object dye - continuous
+		case 335: // Object dye - each time
+		case 336: // Object dye - once
 			if (lines[i].special == 336)
 				lines[i].args[0] = TMT_ONCE;
 			else if (lines[i].special == 335)
@@ -5448,9 +5448,9 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[1] = !!(lines[i].flags & ML_NOCLIMB);
 			lines[i].special = 334;
 			break;
-		case 337:  
-		case 338:  
-		case 339:  
+		case 337: //Emerald check - continuous
+		case 338: //Emerald check - each time
+		case 339: //Emerald check - once
 			if (lines[i].special == 339)
 				lines[i].args[0] = TMT_ONCE;
 			else if (lines[i].special == 338)
@@ -5461,9 +5461,9 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[2] = TMF_HASALL;
 			lines[i].special = 337;
 			break;
-		case 340:  
-		case 341:  
-		case 342:  
+		case 340: //NiGHTS mare - continuous
+		case 341: //NiGHTS mare - each time
+		case 342: //NiGHTS mare - once
 			if (lines[i].special == 342)
 				lines[i].args[0] = TMT_ONCE;
 			else if (lines[i].special == 341)
@@ -5479,9 +5479,9 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[2] = TMC_EQUAL;
 			lines[i].special = 340;
 			break;
-		case 343:  
-		case 344:  
-		case 345:  
+		case 343: //Gravity check - continuous
+		case 344: //Gravity check - each time
+		case 345: //Gravity check - once
 			if (lines[i].special == 345)
 				lines[i].args[0] = TMT_ONCE;
 			else if (lines[i].special == 344)
@@ -5494,19 +5494,19 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[1] = TMG_REVERSE;
 			lines[i].special = 343;
 			break;
-		case 400:  
-		case 401:  
+		case 400: //Set tagged sector's floor height/texture
+		case 401: //Set tagged sector's ceiling height/texture
 			lines[i].args[0] = tag;
 			lines[i].args[1] = lines[i].special - 400;
 			lines[i].args[2] = !(lines[i].flags & ML_NOCLIMB);
 			lines[i].special = 400;
 			break;
-		case 402:  
+		case 402: //Copy light level
 			lines[i].args[0] = tag;
 			lines[i].args[1] = 0;
 			break;
-		case 403:  
-		case 404:  
+		case 403: //Move tagged sector's floor
+		case 404: //Move tagged sector's ceiling
 			lines[i].args[0] = tag;
 			lines[i].args[1] = lines[i].special - 403;
 			lines[i].args[2] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
@@ -5514,8 +5514,8 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[4] = !!(lines[i].flags & ML_NOCLIMB);
 			lines[i].special = 403;
 			break;
-		case 405:  
-		case 407:  
+		case 405: //Move floor according to front texture offsets
+		case 407: //Move ceiling according to front texture offsets
 			lines[i].args[0] = tag;
 			lines[i].args[1] = (lines[i].special == 405) ? TMP_FLOOR : TMP_CEILING;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
@@ -5523,7 +5523,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[4] = !!(lines[i].flags & ML_NOCLIMB);
 			lines[i].special = 405;
 			break;
-		case 408:  
+		case 408: //Set flats
 			lines[i].args[0] = tag;
 			if ((lines[i].flags & (ML_NOCLIMB|ML_MIDSOLID)) == (ML_NOCLIMB|ML_MIDSOLID))
 			{
@@ -5537,7 +5537,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			else
 				lines[i].args[1] = TMP_BOTH;
 			break;
-		case 409:  
+		case 409: //Change tagged sector's tag
 			lines[i].args[0] = tag;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			if (lines[i].flags & ML_NOCLIMB)
@@ -5547,7 +5547,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			else
 				lines[i].args[2] = TMT_REPLACEFIRST;
 			break;
-		case 410:  
+		case 410: //Change front sector's tag
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			if (lines[i].flags & ML_NOCLIMB)
 				lines[i].args[1] = TMT_ADD;
@@ -5556,10 +5556,10 @@ static void P_ConvertBinaryLinedefTypes(void)
 			else
 				lines[i].args[1] = TMT_REPLACEFIRST;
 			break;
-		case 411:  
+		case 411: //Stop plane movement
 			lines[i].args[0] = tag;
 			break;
-		case 412:  
+		case 412: //Teleporter
 			lines[i].args[0] = tag;
 			if (lines[i].flags & ML_BLOCKMONSTERS)
 				lines[i].args[1] |= TMT_SILENT;
@@ -5573,7 +5573,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[3] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[4] = lines[i].frontsector->ceilingheight >> FRACBITS;
 			break;
-		case 413:  
+		case 413: //Change music
 			if (lines[i].flags & ML_NOCLIMB)
 				lines[i].args[0] |= TMM_ALLPLAYERS;
 			if (lines[i].flags & ML_SKEWTD)
@@ -5593,7 +5593,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[5] = (lines[i].sidenum[1] != NO_SIDEDEF) ? sides[lines[i].sidenum[1]].rowoffset >> FRACBITS : -1;
 			lines[i].args[6] = sides[lines[i].sidenum[0]].bottomtexture;
 			break;
-		case 414:  
+		case 414: //Play sound effect
 			lines[i].args[2] = tag;
 			if (tag != 0)
 			{
@@ -5632,7 +5632,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 				}
 			}
 			break;
-		case 415:  
+		case 415: //Run script
 		{
 			INT32 scrnum;
 
@@ -5657,10 +5657,10 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].stringargs[0][8] = '\0';
 			break;
 		}
-		case 416:  
-		case 417:  
-		case 602:  
-		case 603:  
+		case 416: //Start adjustable flickering light
+		case 417: //Start adjustable pulsating light
+		case 602: //Adjustable pulsating light
+		case 603: //Adjustable flickering light
 			lines[i].args[0] = tag;
 			lines[i].args[1] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			lines[i].args[2] = lines[i].frontsector->lightlevel;
@@ -5669,10 +5669,10 @@ static void P_ConvertBinaryLinedefTypes(void)
 			else
 				lines[i].args[3] = 1;
 			break;
-		case 418:  
-		case 419:  
-		case 604:  
-		case 605:  
+		case 418: //Start adjustable blinking light (unsynchronized)
+		case 419: //Start adjustable blinking light (synchronized)
+		case 604: //Adjustable blinking light (unsynchronized)
+		case 605: //Adjustable blinking light (synchronized)
 			lines[i].args[0] = tag;
 			lines[i].args[1] = abs(lines[i].dx) >> FRACBITS;
 			lines[i].args[2] = abs(lines[i].dy) >> FRACBITS;
@@ -5687,13 +5687,13 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].special--;
 			}
 			break;
-		case 420:  
+		case 420: //Fade light level
 			lines[i].args[0] = tag;
 			if (lines[i].flags & ML_DONTPEGBOTTOM)
 			{
 				lines[i].args[1] = max(sides[lines[i].sidenum[0]].textureoffset >> FRACBITS, 0);
-
-
+				// failsafe: if user specifies Back Y Offset and NOT Front Y Offset, use the Back Offset
+				// to be consistent with other light and fade specials
 				lines[i].args[2] = ((lines[i].sidenum[1] != NO_SIDEDEF && !(sides[lines[i].sidenum[0]].rowoffset >> FRACBITS)) ?
 					max(min(sides[lines[i].sidenum[1]].rowoffset >> FRACBITS, 255), 0)
 					: max(min(sides[lines[i].sidenum[0]].rowoffset >> FRACBITS, 255), 0));
@@ -5708,35 +5708,35 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_WRAPMIDTEX)
 				lines[i].args[3] |= TMF_OVERRIDE;
 			break;
-		case 421:  
+		case 421: //Stop lighting effect
 			lines[i].args[0] = tag;
 			break;
-		case 422:  
+		case 422: //Switch to cut-away view
 			lines[i].args[0] = tag;
 			lines[i].args[1] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			lines[i].args[2] = (lines[i].flags & ML_NOCLIMB) ? sides[lines[i].sidenum[0]].textureoffset >> FRACBITS : 0;
 			break;
-		case 423:  
-		case 424:  
+		case 423: //Change sky
+		case 424: //Change weather
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 426:  
+		case 426: //Stop object
 			lines[i].args[0] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 427:  
+		case 427: //Award score
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			break;
-		case 428:  
+		case 428: //Start platform movement
 			lines[i].args[0] = tag;
 			lines[i].args[1] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[3] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[4] = (lines[i].flags & ML_NOCLIMB) ? 1 : 0;
 			break;
-		case 429:  
-		case 430:  
-		case 431:  
+		case 429: //Crush ceiling once
+		case 430: //Crush floor once
+		case 431: //Crush floor and ceiling once
 			lines[i].args[0] = tag;
 			lines[i].args[1] = (lines[i].special == 429) ? TMP_CEILING : ((lines[i].special == 430) ? TMP_FLOOR : TMP_BOTH);
 			if (lines[i].special == 430 || lines[i].flags & ML_MIDSOLID)
@@ -5751,71 +5751,71 @@ static void P_ConvertBinaryLinedefTypes(void)
 			}
 			lines[i].special = 429;
 			break;
-		case 432:  
+		case 432: //Enable/disable 2D mode
 			lines[i].args[0] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 433:  
+		case 433: //Enable/disable gravity flip
 			lines[i].args[0] = !!(lines[i].flags & ML_NOCLIMB);
 			lines[i].args[1] = !!(lines[i].flags & ML_SKEWTD);
 			lines[i].args[2] = !!(lines[i].flags & ML_BLOCKMONSTERS);
 			break;
-		case 434:  
+		case 434: //Award power-up
 			if ((lines[i].flags & ML_BLOCKMONSTERS) == 0)
 			{
-
+				// do NOT read power from back sidedef if this flag is not present
 				if (lines[i].stringargs[1] != NULL)
 				{
 					Z_Free(lines[i].stringargs[1]);
 					lines[i].stringargs[1] = NULL;
 				}
 
-
+				// Instead... write the desired time!
 				P_WriteTics((lines[i].flags & ML_NOCLIMB) ? -1 : (sides[lines[i].sidenum[0]].textureoffset >> FRACBITS), &lines[i].stringargs[1]);
 			}
 			break;
-		case 435:  
+		case 435: //Change plane scroller direction
 			lines[i].args[0] = tag;
 			lines[i].args[1] = R_PointToDist2(lines[i].v2->x, lines[i].v2->y, lines[i].v1->x, lines[i].v1->y) >> FRACBITS;
 			break;
-		case 436:  
+		case 436: //Shatter FOF
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			break;
-		case 437:  
+		case 437: //Disable player control
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 438:  
+		case 438: //Change object size
 			lines[i].args[0] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			break;
-		case 439:  
+		case 439: //Change tagged linedef's textures
 			lines[i].args[0] = tag;
 			lines[i].args[1] = TMSD_FRONTBACK;
 			lines[i].args[2] = !!(lines[i].flags & ML_NOCLIMB);
 			lines[i].args[3] = !!(lines[i].flags & ML_EFFECT6);
 			break;
-		case 441:  
+		case 441: //Condition set trigger
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			break;
-		case 442:  
+		case 442: //Change object type state
 			lines[i].args[0] = tag;
 			lines[i].args[1] = (lines[i].sidenum[1] == NO_SIDEDEF) ? 1 : 0;
 			break;
-		case 443:  
+		case 443: //Call Lua function
 			if (lines[i].stringargs[0] == NULL)
 				CONS_Alert(CONS_WARNING, "Linedef %s is missing the hook name of the Lua function to call! (This should be given in the front texture fields)\n", sizeu1(i));
 			break;
-		case 444:  
+		case 444: //Earthquake
 			lines[i].args[0] = P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			break;
-		case 445:  
+		case 445: //Make FOF disappear/reappear
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[2] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 446:  
+		case 446: //Make FOF crumble
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			if (lines[i].flags & ML_NOCLIMB)
@@ -5823,7 +5823,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_BLOCKMONSTERS)
 				lines[i].args[2] |= TMFR_CHECKFLAG;
 			break;
-		case 447:  
+		case 447: //Change colormap
 			lines[i].args[0] = tag;
 			if (lines[i].flags & ML_MIDPEG)
 				lines[i].args[2] |= TMCF_RELATIVE;
@@ -5834,10 +5834,10 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_NOSKEW)
 				lines[i].args[2] |= TMCF_SUBLIGHTB|TMCF_SUBFADEB;
 			break;
-		case 448:  
+		case 448: //Change skybox
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
-			if ((lines[i].flags & (ML_MIDSOLID|ML_BLOCKMONSTERS)) == ML_MIDSOLID)  
+			if ((lines[i].flags & (ML_MIDSOLID|ML_BLOCKMONSTERS)) == ML_MIDSOLID) // Solid Midtexture is on but Block Enemies is off?
 			{
 				CONS_Alert(CONS_WARNING,
 					M_GetText("Skybox switch linedef (tag %d) doesn't have anything to do.\nConsider changing the linedef's flag configuration or removing it entirely.\n"),
@@ -5853,18 +5853,18 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[2] = TMS_VIEWPOINT;
 			lines[i].args[3] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 449:  
+		case 449: //Enable bosses with parameters
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 450:  
+		case 450: //Execute linedef executor (specific tag)
 			lines[i].args[0] = tag;
 			break;
-		case 451:  
+		case 451: //Execute linedef executor (random tag in range)
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			break;
-		case 452:  
+		case 452: //Set FOF translucency
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[2] = lines[i].sidenum[1] != NO_SIDEDEF ? (sides[lines[i].sidenum[1]].textureoffset >> FRACBITS) : (P_AproxDistance(lines[i].dx, lines[i].dy) >> FRACBITS);
@@ -5873,7 +5873,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_NOCLIMB)
 				lines[i].args[3] |= TMST_DONTDOTRANSLUCENT;
 			break;
-		case 453:  
+		case 453: //Fade FOF
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[2] = lines[i].sidenum[1] != NO_SIDEDEF ? (sides[lines[i].sidenum[1]].textureoffset >> FRACBITS) : (lines[i].dx >> FRACBITS);
@@ -5897,12 +5897,12 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_TFERLINE)
 				lines[i].args[4] |= TMFT_USEEXACTALPHA;
 			break;
-		case 454:  
+		case 454: //Stop fading FOF
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[2] = !!(lines[i].flags & ML_BLOCKMONSTERS);
 			break;
-		case 455:  
+		case 455: //Fade colormap
 		{
 			INT32 speed = (INT32)((((lines[i].flags & ML_DONTPEGBOTTOM) || !sides[lines[i].sidenum[0]].rowoffset) && lines[i].sidenum[1] != NO_SIDEDEF) ?
 				abs(sides[lines[i].sidenum[1]].rowoffset >> FRACBITS)
@@ -5927,17 +5927,17 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[3] |= TMCF_OVERRIDE;
 			break;
 		}
-		case 456:  
+		case 456: //Stop fading colormap
 			lines[i].args[0] = tag;
 			break;
-		case 457:  
+		case 457: //Track object's angle
 			lines[i].args[0] = tag;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[3] = (lines[i].sidenum[1] != NO_SIDEDEF) ? sides[lines[i].sidenum[1]].textureoffset >> FRACBITS : 0;
 			lines[i].args[4] = !!(lines[i].flags & ML_NOSKEW);
 			break;
-		case 459:  
+		case 459: //Control text prompt
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			if (lines[i].flags & ML_BLOCKMONSTERS)
@@ -5950,24 +5950,24 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[2] |= TMP_KEEPCONTROLS;
 			if (lines[i].flags & ML_MIDPEG)
 				lines[i].args[2] |= TMP_KEEPREALTIME;
-			                                  
-                                       
-                                    
-                                             
+			/*if (lines[i].flags & ML_NOCLIMB)
+				lines[i].args[2] |= TMP_ALLPLAYERS;
+			if (lines[i].flags & ML_MIDSOLID)
+				lines[i].args[2] |= TMP_FREEZETHINKERS;*/
 			lines[i].args[3] = (lines[i].sidenum[1] != NO_SIDEDEF) ? sides[lines[i].sidenum[1]].textureoffset >> FRACBITS : tag;
 			break;
-		case 460:  
+		case 460: //Award rings
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			break;
-		case 461:  
+		case 461: //Spawn object
 			lines[i].args[0] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[2] = lines[i].frontsector->floorheight >> FRACBITS;
 			lines[i].args[3] = (lines[i].flags & ML_SKEWTD) ? AngleFixed(R_PointToAngle2(lines[i].v1->x, lines[i].v1->y, lines[i].v2->x, lines[i].v2->y)) >> FRACBITS : 0;
 			if (lines[i].flags & ML_NOCLIMB)
 			{
-				if (lines[i].sidenum[1] != NO_SIDEDEF)  
+				if (lines[i].sidenum[1] != NO_SIDEDEF) // Make sure the linedef has a back side
 				{
 					lines[i].args[4] = 1;
 					lines[i].args[5] = sides[lines[i].sidenum[1]].textureoffset >> FRACBITS;
@@ -5983,39 +5983,39 @@ static void P_ConvertBinaryLinedefTypes(void)
 			else
 				lines[i].args[4] = 0;
 			break;
-		case 464:  
+		case 464: //Trigger egg capsule
 			lines[i].args[0] = tag;
 			lines[i].args[1] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 466:  
+		case 466: //Set level failure state
 			lines[i].args[0] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 467:  
+		case 467: //Set light level
 			lines[i].args[0] = tag;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[2] = TML_SECTOR;
 			lines[i].args[3] = !!(lines[i].flags & ML_MIDPEG);
 			break;
-		case 480:  
-		case 481:  
+		case 480: //Polyobject - door slide
+		case 481: //Polyobject - door move
 			lines[i].args[0] = tag;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			if (lines[i].sidenum[1] != NO_SIDEDEF)
 				lines[i].args[3] = sides[lines[i].sidenum[1]].textureoffset >> FRACBITS;
 			break;
-		case 482:  
-		case 483:  
+		case 482: //Polyobject - move
+		case 483: //Polyobject - move, override
 			lines[i].args[0] = tag;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
 			lines[i].args[3] = lines[i].special == 483;
 			lines[i].special = 482;
 			break;
-		case 484:  
-		case 485:  
-		case 486:  
-		case 487:  
+		case 484: //Polyobject - rotate right
+		case 485: //Polyobject - rotate right, override
+		case 486: //Polyobject - rotate left
+		case 487: //Polyobject - rotate left, override
 			lines[i].args[0] = tag;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
@@ -6033,7 +6033,7 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[3] |= TMPR_OVERRIDE;
 			lines[i].special = 484;
 			break;
-		case 488:  
+		case 488: //Polyobject - move by waypoints
 			lines[i].args[0] = tag;
 			lines[i].args[1] = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
 			lines[i].args[2] = sides[lines[i].sidenum[0]].rowoffset >> FRACBITS;
@@ -6048,31 +6048,31 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_MIDSOLID)
 				lines[i].args[4] |= PWF_LOOP;
 			break;
-		case 489:  
-		case 490:  
+		case 489: //Polyobject - turn invisible, intangible
+		case 490: //Polyobject - turn visible, tangible
 			lines[i].args[0] = tag;
 			lines[i].args[1] = 491 - lines[i].special;
 			if (!(lines[i].flags & ML_NOCLIMB))
 				lines[i].args[2] = lines[i].args[1];
 			lines[i].special = 489;
 			break;
-		case 491:  
+		case 491: //Polyobject - set translucency
 			lines[i].args[0] = tag;
-
+			// If Front X Offset is specified, use that. Else, use floorheight.
 			lines[i].args[1] = (sides[lines[i].sidenum[0]].textureoffset ? sides[lines[i].sidenum[0]].textureoffset : lines[i].frontsector->floorheight) >> FRACBITS;
-
+			// If DONTPEGBOTTOM, specify raw translucency value. Else, take it out of 1000.
 			if (!(lines[i].flags & ML_DONTPEGBOTTOM))
 				lines[i].args[1] /= 100;
 			lines[i].args[2] = !!(lines[i].flags & ML_MIDPEG);
 			break;
-		case 492:  
+		case 492: //Polyobject - fade translucency
 			lines[i].args[0] = tag;
-
+			// If Front X Offset is specified, use that. Else, use floorheight.
 			lines[i].args[1] = (sides[lines[i].sidenum[0]].textureoffset ? sides[lines[i].sidenum[0]].textureoffset : lines[i].frontsector->floorheight) >> FRACBITS;
-
+			// If DONTPEGBOTTOM, specify raw translucency value. Else, take it out of 1000.
 			if (!(lines[i].flags & ML_DONTPEGBOTTOM))
 				lines[i].args[1] /= 100;
-
+			// allow Back Y Offset to be consistent with other fade specials
 			lines[i].args[2] = (lines[i].sidenum[1] != NO_SIDEDEF && !sides[lines[i].sidenum[0]].rowoffset) ?
 				abs(sides[lines[i].sidenum[1]].rowoffset >> FRACBITS)
 				: abs(sides[lines[i].sidenum[0]].rowoffset >> FRACBITS);
@@ -6087,16 +6087,16 @@ static void P_ConvertBinaryLinedefTypes(void)
 			if (lines[i].flags & ML_SKEWTD)
 				lines[i].args[3] |= TMPF_GHOSTFADE;
 			break;
-		case 500:  
-		case 501:  
+		case 500: //Scroll front wall left
+		case 501: //Scroll front wall right
 			lines[i].args[0] = 0;
 			lines[i].args[1] = (lines[i].special == 500) ? -1 : 1;
 			lines[i].args[2] = 0;
 			lines[i].special = 500;
 			break;
-		case 502:  
-		case 503:  
-		case 504:  
+		case 502: //Scroll tagged wall
+		case 503: //Scroll tagged wall (accelerative)
+		case 504: //Scroll tagged wall (displacement)
 			lines[i].args[0] = tag;
 			if (lines[i].flags & ML_MIDPEG)
 			{
@@ -6123,10 +6123,10 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].args[4] = lines[i].special - 502;
 			lines[i].special = 502;
 			break;
-		case 505:  
-		case 506:  
-		case 507:  
-		case 508:  
+		case 505: //Scroll front wall by front side offsets
+		case 506: //Scroll front wall by back side offsets
+		case 507: //Scroll back wall by front side offsets
+		case 508: //Scroll back wall by back side offsets
 			lines[i].args[0] = lines[i].special >= 507;
 			if (lines[i].special % 2 == 0)
 			{
@@ -6146,33 +6146,33 @@ static void P_ConvertBinaryLinedefTypes(void)
 			}
 			lines[i].special = 500;
 			break;
-		case 510:  
-		case 511:  
-		case 512:  
-		case 513:  
-		case 514:  
-		case 515:  
-		case 516:  
-		case 517:  
-		case 518:  
-		case 520:  
-		case 521:  
-		case 522:  
-		case 523:  
-		case 524:  
-		case 525:  
-		case 526:  
-		case 527:  
-		case 528:  
-		case 530:  
-		case 531:  
-		case 532:  
-		case 533:  
-		case 534:  
-		case 535:  
-		case 536:  
-		case 537:  
-		case 538:  
+		case 510: //Scroll floor texture
+		case 511: //Scroll floor texture (accelerative)
+		case 512: //Scroll floor texture (displacement)
+		case 513: //Scroll ceiling texture
+		case 514: //Scroll ceiling texture (accelerative)
+		case 515: //Scroll ceiling texture (displacement)
+		case 516: //Scroll floor and ceiling texture
+		case 517: //Scroll floor and ceiling texture (accelerative)
+		case 518: //Scroll floor and ceiling texture (displacement)
+		case 520: //Carry objects on floor
+		case 521: //Carry objects on floor (accelerative)
+		case 522: //Carry objects on floor (displacement)
+		case 523: //Carry objects on ceiling
+		case 524: //Carry objects on ceiling (accelerative)
+		case 525: //Carry objects on ceiling (displacement)
+		case 526: //Carry objects on floor and ceiling
+		case 527: //Carry objects on floor and ceiling (accelerative)
+		case 528: //Carry objects on floor and ceiling (displacement)
+		case 530: //Scroll floor texture and carry objects
+		case 531: //Scroll floor texture and carry objects (accelerative)
+		case 532: //Scroll floor texture and carry objects (displacement)
+		case 533: //Scroll ceiling texture and carry objects
+		case 534: //Scroll ceiling texture and carry objects (accelerative)
+		case 535: //Scroll ceiling texture and carry objects (displacement)
+		case 536: //Scroll floor and ceiling texture and carry objects
+		case 537: //Scroll floor and ceiling texture and carry objects (accelerative)
+		case 538: //Scroll floor and ceiling texture and carry objects (displacement)
 			lines[i].args[0] = tag;
 			lines[i].args[1] = ((lines[i].special % 10) < 6) ? (((lines[i].special % 10) < 3) ? TMP_FLOOR : TMP_CEILING) : TMP_BOTH;
 			lines[i].args[2] = ((lines[i].special - 510)/10 + 1) % 3;
@@ -6182,31 +6182,31 @@ static void P_ConvertBinaryLinedefTypes(void)
 				lines[i].args[4] |= TMST_NONEXCLUSIVE;
 			lines[i].special = 510;
 			break;
-		case 540:  
+		case 540: //Floor friction
 		{
 			INT32 s;
-			fixed_t strength;  
-			fixed_t friction;  
+			fixed_t strength; // friction value of sector
+			fixed_t friction; // friction value to be applied during movement
 
 			strength = sides[lines[i].sidenum[0]].textureoffset >> FRACBITS;
-			if (strength > 0)  
-				strength = strength*2;  
+			if (strength > 0) // sludge
+				strength = strength*2; // otherwise, the maximum sludginess value is +967...
 
-
-
-
-			friction = ORIG_FRICTION - (0x1EB8*strength)/0x80;  
+			// The following might seem odd. At the time of movement,
+			// the move distance is multiplied by 'friction/0x10000', so a
+			// higher friction value actually means 'less friction'.
+			friction = ORIG_FRICTION - (0x1EB8*strength)/0x80; // ORIG_FRICTION is 0xE800
 
 			TAG_ITER_SECTORS(tag, s)
 				sectors[s].friction = friction;
 			break;
 		}
-		case 541:  
-		case 542:  
-		case 543:  
-		case 544:  
-		case 545:  
-		case 546:  
+		case 541: //Wind
+		case 542: //Upwards wind
+		case 543: //Downwards wind
+		case 544: //Current
+		case 545: //Upwards current
+		case 546: //Downwards current
 		{
 			fixed_t strength = (lines[i].flags & ML_EFFECT6) ? sides[lines[i].sidenum[0]].textureoffset : R_PointToDist2(lines[i].v2->x, lines[i].v2->y, lines[i].v1->x, lines[i].v1->y);
 			lines[i].args[0] = tag;
@@ -6230,23 +6230,23 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].special = 541;
 			break;
 		}
-		case 600:  
-		case 601:  
+		case 600: //Floor lighting
+		case 601: //Ceiling lighting
 			lines[i].args[0] = tag;
 			lines[i].args[1] = (lines[i].special == 601) ? TMP_CEILING : TMP_FLOOR;
 			lines[i].special = 600;
 			break;
-		case 606:  
+		case 606: //Colormap
 			lines[i].args[0] = tag;
 			break;
-		case 700:  
-		case 701:  
-		case 702:  
-		case 703:  
-		case 710:  
-		case 711:  
-		case 712:  
-		case 713:  
+		case 700: //Slope front sector floor
+		case 701: //Slope front sector ceiling
+		case 702: //Slope front sector floor and ceiling
+		case 703: //Slope front sector floor and back sector ceiling
+		case 710: //Slope back sector floor
+		case 711: //Slope back sector ceiling
+		case 712: //Slope back sector floor and ceiling
+		case 713: //Slope back sector floor and front sector ceiling
 		{
 			boolean frontfloor = (lines[i].special == 700 || lines[i].special == 702 || lines[i].special == 703);
 			boolean backfloor = (lines[i].special == 710 || lines[i].special == 712 || lines[i].special == 713);
@@ -6266,10 +6266,10 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].special = 700;
 			break;
 		}
-		case 704:  
-		case 705:  
-		case 714:  
-		case 715:  
+		case 704: //Slope front sector floor by 3 tagged vertices
+		case 705: //Slope front sector ceiling by 3 tagged vertices
+		case 714: //Slope back sector floor by 3 tagged vertices
+		case 715: //Slope back sector ceiling  by 3 tagged vertices
 		{
 			if (lines[i].special == 704)
 				lines[i].args[0] = TMSP_FRONTFLOOR;
@@ -6308,77 +6308,77 @@ static void P_ConvertBinaryLinedefTypes(void)
 			lines[i].special = 704;
 			break;
 		}
-		case 720:  
-		case 721:  
-		case 722:  
+		case 720: //Copy front side floor slope
+		case 721: //Copy front side ceiling slope
+		case 722: //Copy front side floor and ceiling slope
 			if (lines[i].special != 721)
 				lines[i].args[0] = tag;
 			if (lines[i].special != 720)
 				lines[i].args[1] = tag;
 			lines[i].special = 720;
 			break;
-		case 723:  
-		case 724:  
-		case 725:  
+		case 723: //Copy back side floor slope
+		case 724: //Copy back side ceiling slope
+		case 725: //Copy back side floor and ceiling slope
 			if (lines[i].special != 724)
 				lines[i].args[2] = tag;
 			if (lines[i].special != 723)
 				lines[i].args[3] = tag;
 			lines[i].special = 720;
 			break;
-		case 730:  
-		case 731:  
-		case 732:  
+		case 730: //Copy front side floor slope to back side
+		case 731: //Copy front side ceiling slope to back side
+		case 732: //Copy front side floor and ceiling slope to back side
 			if (lines[i].special != 731)
 				lines[i].args[4] |= TMSC_FRONTTOBACKFLOOR;
 			if (lines[i].special != 730)
 				lines[i].args[4] |= TMSC_FRONTTOBACKCEILING;
 			lines[i].special = 720;
 			break;
-		case 733:  
-		case 734:  
-		case 735:  
+		case 733: //Copy back side floor slope to front side
+		case 734: //Copy back side ceiling slope to front side
+		case 735: //Copy back side floor and ceiling slope to front side
 			if (lines[i].special != 734)
 				lines[i].args[4] |= TMSC_BACKTOFRONTFLOOR;
 			if (lines[i].special != 733)
 				lines[i].args[4] |= TMSC_BACKTOFRONTCEILING;
 			lines[i].special = 720;
 			break;
-		case 799:  
+		case 799: //Set dynamic slope vertex to front sector height
 			lines[i].args[0] = !!(lines[i].flags & ML_NOCLIMB);
 			break;
-		case 909:  
+		case 909: //Fog wall
 			lines[i].blendmode = AST_FOG;
 			break;
 		default:
 			break;
 		}
 
-
+		// Set alpha for translucent walls
 		if (lines[i].special >= 900 && lines[i].special < 909)
 			lines[i].alpha = ((909 - lines[i].special) << FRACBITS)/10;
 
-
+		// Set alpha for additive/subtractive/reverse subtractive walls
 		if (lines[i].special >= 910 && lines[i].special <= 939)
 			lines[i].alpha = ((10 - lines[i].special % 10) << FRACBITS)/10;
 
-		if (lines[i].special >= 910 && lines[i].special <= 919)  
+		if (lines[i].special >= 910 && lines[i].special <= 919) // additive
 			lines[i].blendmode = AST_ADD;
 
-		if (lines[i].special >= 920 && lines[i].special <= 929)  
+		if (lines[i].special >= 920 && lines[i].special <= 929) // subtractive
 			lines[i].blendmode = AST_SUBTRACT;
 
-		if (lines[i].special >= 930 && lines[i].special <= 939)  
+		if (lines[i].special >= 930 && lines[i].special <= 939) // reverse subtractive
 			lines[i].blendmode = AST_REVERSESUBTRACT;
 
-		if (lines[i].special == 940)  
+		if (lines[i].special == 940) // modulate
 			lines[i].blendmode = AST_MODULATE;
 
-
+		//Linedef executor delay
 		if (lines[i].special >= 400 && lines[i].special < 500)
 		{
-
-
+			//Dummy value to indicate that this executor is delayed.
+			//The real value is taken from the back sector at runtime.
 			if (lines[i].flags & ML_DONTPEGTOP)
 				lines[i].executordelay = 1;
 		}
@@ -6395,13 +6395,13 @@ static void P_ConvertBinarySectorTypes(void)
 
 		switch(GETSECSPECIAL(sectors[i].special, 1))
 		{
-			case 1:  
+			case 1: //Damage
 				sectors[i].damagetype = SD_GENERIC;
 				break;
-			case 2:  
+			case 2: //Damage (Water)
 				sectors[i].damagetype = SD_WATER;
 				break;
-			case 3:  
+			case 3: //Damage (Fire)
 			{
 				size_t j;
 				boolean isLava = false;
@@ -6425,35 +6425,35 @@ static void P_ConvertBinarySectorTypes(void)
 				sectors[i].damagetype = isLava ? SD_LAVA : SD_FIRE;
 				break;
 			}
-			case 4:  
+			case 4: //Damage (Electric)
 				sectors[i].damagetype = SD_ELECTRIC;
 				break;
-			case 5:  
+			case 5: //Spikes
 				sectors[i].damagetype = SD_SPIKE;
 				break;
-			case 6:  
+			case 6: //Death pit (camera tilt)
 				sectors[i].damagetype = SD_DEATHPITTILT;
 				break;
-			case 7:  
+			case 7: //Death pit (no camera tilt)
 				sectors[i].damagetype = SD_DEATHPITNOTILT;
 				break;
-			case 8:  
+			case 8: //Instakill
 				sectors[i].damagetype = SD_INSTAKILL;
 				break;
-			case 11:  
+			case 11: //Special stage damage
 				sectors[i].damagetype = SD_SPECIALSTAGE;
 				break;
-			case 12:  
+			case 12: //Space countdown
 				sectors[i].specialflags |= SSF_OUTERSPACE;
 				break;
-			case 13:  
+			case 13: //Ramp sector
 				sectors[i].specialflags |= SSF_DOUBLESTEPUP;
 				break;
-			case 14:  
+			case 14: //Non-ramp sector
 				sectors[i].specialflags |= SSF_NOSTEPDOWN;
 				break;
-
-			case 15:  
+			// TODO: 2.3: Delete
+			case 15: //Bouncy FOF
 				CONS_Alert(CONS_WARNING, M_GetText("Deprecated bouncy FOF sector type detected. Please use linedef type 76 instead.\n"));
 				break;
 			default:
@@ -6462,54 +6462,54 @@ static void P_ConvertBinarySectorTypes(void)
 
 		switch(GETSECSPECIAL(sectors[i].special, 2))
 		{
-			case 1:  
+			case 1: //Trigger linedef executor (pushable objects)
 				sectors[i].triggertag = tag;
 				sectors[i].flags |= MSF_TRIGGERLINE_PLANE;
 				sectors[i].triggerer = TO_MOBJ;
 				break;
-			case 2:  
+			case 2: //Trigger linedef executor (Anywhere in sector, all players)
 				sectors[i].triggertag = tag;
 				sectors[i].flags &= ~MSF_TRIGGERLINE_PLANE;
 				sectors[i].triggerer = TO_ALLPLAYERS;
 				break;
-			case 3:  
+			case 3: //Trigger linedef executor (Floor touch, all players)
 				sectors[i].triggertag = tag;
 				sectors[i].flags |= MSF_TRIGGERLINE_PLANE;
 				sectors[i].triggerer = TO_ALLPLAYERS;
 				break;
-			case 4:  
+			case 4: //Trigger linedef executor (Anywhere in sector)
 				sectors[i].triggertag = tag;
 				sectors[i].flags &= ~MSF_TRIGGERLINE_PLANE;
 				sectors[i].triggerer = TO_PLAYER;
 				break;
-			case 5:  
+			case 5: //Trigger linedef executor (Floor touch)
 				sectors[i].triggertag = tag;
 				sectors[i].flags |= MSF_TRIGGERLINE_PLANE;
 				sectors[i].triggerer = TO_PLAYER;
 				break;
-
-			case 6:  
+			// TODO: 2.3: Delete
+			case 6: //Trigger linedef executor (Emerald check)
 				CONS_Alert(CONS_WARNING, M_GetText("Deprecated emerald check sector type detected. Please use linedef types 337-339 instead.\n"));
 				sectors[i].triggertag = tag;
 				sectors[i].flags &= ~MSF_TRIGGERLINE_PLANE;
 				sectors[i].triggerer = TO_PLAYEREMERALDS;
 				break;
-
-			case 7:  
+			// TODO: 2.3: Delete
+			case 7: //Trigger linedef executor (NiGHTS mare)
 				CONS_Alert(CONS_WARNING, M_GetText("Deprecated NiGHTS mare sector type detected. Please use linedef types 340-342 instead.\n"));
 				sectors[i].triggertag = tag;
 				sectors[i].flags &= ~MSF_TRIGGERLINE_PLANE;
 				sectors[i].triggerer = TO_PLAYERNIGHTS;
 				break;
-			case 8:  
+			case 8: //Check for linedef executor on FOFs
 				sectors[i].flags |= MSF_TRIGGERLINE_MOBJ;
 				break;
-
-			case 10:  
+			// TODO: 2.3: Delete
+			case 10: //Special stage time/spheres requirements
 				CONS_Alert(CONS_WARNING, M_GetText("Deprecated sector type for special stage requirements detected. Please use the SpecialStageTime and SpecialStageSpheres level header options instead.\n"));
 				break;
-
-			case 11:  
+			// TODO: 2.3: Delete
+			case 11: //Custom global gravity
 				CONS_Alert(CONS_WARNING, M_GetText("Deprecated sector type for global gravity detected. Please use the Gravity level header option instead.\n"));
 				break;
 			default:
@@ -6518,10 +6518,10 @@ static void P_ConvertBinarySectorTypes(void)
 
 		switch(GETSECSPECIAL(sectors[i].special, 3))
 		{
-			case 5:  
+			case 5: //Speed pad
 				sectors[i].specialflags |= SSF_SPEEDPAD;
 				break;
-			case 6:  
+			case 6: //Gravity flip on jump (think VVVVVV)
 				sectors[i].specialflags |= SSF_JUMPFLIP;
 				break;
 			default:
@@ -6530,40 +6530,40 @@ static void P_ConvertBinarySectorTypes(void)
 
 		switch(GETSECSPECIAL(sectors[i].special, 4))
 		{
-			case 1:  
+			case 1: //Star post activator
 				sectors[i].specialflags |= SSF_STARPOSTACTIVATOR;
 				break;
-			case 2:  
+			case 2: //Exit/Special Stage pit/Return flag
 				sectors[i].specialflags |= SSF_EXIT|SSF_SPECIALSTAGEPIT|SSF_RETURNFLAG;
 				break;
-			case 3:  
+			case 3: //Red team base
 				sectors[i].specialflags |= SSF_REDTEAMBASE;
 				break;
-			case 4:  
+			case 4: //Blue team base
 				sectors[i].specialflags |= SSF_BLUETEAMBASE;
 				break;
-			case 5:  
+			case 5: //Fan sector
 				sectors[i].specialflags |= SSF_FAN;
 				break;
-			case 6:  
+			case 6: //Super Sonic transform
 				sectors[i].specialflags |= SSF_SUPERTRANSFORM;
 				break;
-			case 7:  
+			case 7: //Force spin
 				sectors[i].specialflags |= SSF_FORCESPIN;
 				break;
-			case 8:  
+			case 8: //Zoom tube start
 				sectors[i].specialflags |= SSF_ZOOMTUBESTART;
 				break;
-			case 9:  
+			case 9: //Zoom tube end
 				sectors[i].specialflags |= SSF_ZOOMTUBEEND;
 				break;
-			case 10:  
+			case 10: //Circuit finish line
 				sectors[i].specialflags |= SSF_FINISHLINE;
 				break;
-			case 11:  
+			case 11: //Rope hang
 				sectors[i].specialflags |= SSF_ROPEHANG;
 				break;
-			case 12:  
+			case 12: //Intangible to the camera
 				sectors[i].flags |= MSF_NOCLIPCAMERA;
 				break;
 			default:
@@ -6637,12 +6637,12 @@ static void P_ConvertBinaryThingTypes(void)
 			}
 		}
 
-		if (mapthings[i].type >= 1 && mapthings[i].type <= 35)  
+		if (mapthings[i].type >= 1 && mapthings[i].type <= 35) //Player starts
 		{
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			continue;
 		}
-		else if (mapthings[i].type >= 2200 && mapthings[i].type <= 2217)  
+		else if (mapthings[i].type >= 2200 && mapthings[i].type <= 2217) //Flickies
 		{
 			mapthings[i].args[0] = mapthings[i].angle;
 			if (mapthings[i].options & MTF_EXTRA)
@@ -6658,29 +6658,29 @@ static void P_ConvertBinaryThingTypes(void)
 
 		switch (mapthings[i].type)
 		{
-		case 102:  
-		case 1805:  
+		case 102: //SDURF
+		case 1805: //Puma
 			mapthings[i].args[0] = mapthings[i].angle;
 			break;
-		case 110:  
+		case 110: //THZ Turret
 			mapthings[i].args[0] = LE_TURRET;
 			break;
-		case 111:  
+		case 111: //Pop-up Turret
 			mapthings[i].args[0] = mapthings[i].angle;
 			break;
-		case 103:  
-		case 104:  
-		case 105:  
-		case 106:  
-		case 117:  
-		case 126:  
-		case 128:  
-		case 132:  
-		case 138:  
-		case 1602:  
+		case 103: //Buzz (Gold)
+		case 104: //Buzz (Red)
+		case 105: //Jetty-syn Bomber
+		case 106: //Jetty-syn Gunner
+		case 117: //Robo-Hood
+		case 126: //Crushstacean
+		case 128: //Bumblebore
+		case 132: //Cacolantern
+		case 138: //Banpyura
+		case 1602: //Pian
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 119:  
+		case 119: //Egg Guard
 			if ((mapthings[i].options & (MTF_EXTRA|MTF_OBJECTSPECIAL)) == MTF_OBJECTSPECIAL)
 				mapthings[i].args[0] = TMGD_LEFT;
 			else if ((mapthings[i].options & (MTF_EXTRA|MTF_OBJECTSPECIAL)) == MTF_EXTRA)
@@ -6689,99 +6689,99 @@ static void P_ConvertBinaryThingTypes(void)
 				mapthings[i].args[0] = TMGD_BACK;
 			mapthings[i].args[1] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 127:  
+		case 127: //Hive Elemental
 			mapthings[i].args[0] = mapthings[i].extrainfo;
 			break;
-		case 135:  
+		case 135: //Pterabyte Spawner
 			mapthings[i].args[0] = mapthings[i].extrainfo + 1;
 			break;
-		case 136:  
+		case 136: //Pyre Fly
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 201:  
+		case 201: //Egg Slimer
 			mapthings[i].args[5] = !(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 203:  
+		case 203: //Egg Colosseum
 			mapthings[i].args[5] = LE_BOSS4DROP + mapthings[i].extrainfo * LE_PARAMWIDTH;
 			break;
-		case 204:  
+		case 204: //Fang
 			mapthings[i].args[4] = LE_BOSS4DROP + mapthings[i].extrainfo*LE_PARAMWIDTH;
 			if (mapthings[i].options & MTF_EXTRA)
 				mapthings[i].args[5] |= TMF_GRAYSCALE;
 			if (mapthings[i].options & MTF_AMBUSH)
 				mapthings[i].args[5] |= TMF_SKIPINTRO;
 			break;
-		case 206:  
+		case 206: //Brak Eggman (Old)
 			mapthings[i].args[5] = LE_BRAKPLATFORM + mapthings[i].extrainfo*LE_PARAMWIDTH;
 			break;
-		case 207:  
-		case 2104:  
+		case 207: //Metal Sonic (Race)
+		case 2104: //Amy Cameo
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_EXTRA);
 			break;
-		case 208:  
+		case 208: //Metal Sonic (Battle)
 			mapthings[i].args[5] = !!(mapthings[i].options & MTF_EXTRA);
 			break;
-		case 209:  
+		case 209: //Brak Eggman
 			mapthings[i].args[5] = LE_BRAKVILEATACK + mapthings[i].extrainfo*LE_PARAMWIDTH;
 			if (mapthings[i].options & MTF_EXTRA)
 				mapthings[i].args[6] |= TMB_NODEATHFLING;
 			if (mapthings[i].options & MTF_AMBUSH)
 				mapthings[i].args[6] |= TMB_BARRIER;
 			break;
-		case 292:  
+		case 292: //Boss waypoint
 			mapthings[i].args[0] = mapthings[i].angle;
 			mapthings[i].args[1] = mapthings[i].options & 7;
 			break;
-		case 294:  
+		case 294: //Fang waypoint
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 300:  
-		case 301:  
-		case 302:  
-		case 303:  
-		case 304:  
-		case 305:  
-		case 306:  
-		case 307:  
-		case 308:  
-		case 309:  
-		case 312:  
-		case 320:  
-		case 321:  
-		case 330:  
-		case 331:  
-		case 332:  
-		case 333:  
-		case 334:  
-		case 335:  
-		case 520:  
-		case 521:  
-		case 1706:  
-		case 1800:  
+		case 300: //Ring
+		case 301: //Bounce ring
+		case 302: //Rail ring
+		case 303: //Infinity ring
+		case 304: //Automatic ring
+		case 305: //Explosion ring
+		case 306: //Scatter ring
+		case 307: //Grenade ring
+		case 308: //Red team ring
+		case 309: //Blue team ring
+		case 312: //Emerald token
+		case 320: //Emerald hunt location
+		case 321: //Match chaos emerald spawn
+		case 330: //Bounce ring panel
+		case 331: //Rail ring panel
+		case 332: //Automatic ring panel
+		case 333: //Explosion ring panel
+		case 334: //Scatter ring panel
+		case 335: //Grenade ring panel
+		case 520: //Bomb sphere
+		case 521: //Spikeball
+		case 1706: //Blue sphere
+		case 1800: //Coin
 			mapthings[i].args[0] = !(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 322:  
+		case 322: //Emblem
 			mapthings[i].args[1] = !(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 409:  
+		case 409: //Extra life monitor
 			mapthings[i].args[2] = !(mapthings[i].options & (MTF_AMBUSH|MTF_OBJECTSPECIAL));
 			break;
-		case 500:  
+		case 500: //Air bubble patch
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 502:  
+		case 502: //Star post
 			if (mapthings[i].extrainfo)
-
-
-
-
+				// Allow thing Parameter to define star post num too!
+				// For starposts above param 15 (the 16th), add 360 to the angle like before and start parameter from 1 (NOT 0)!
+				// So the 16th starpost is angle=0 param=15, the 17th would be angle=360 param=1.
+				// This seems more intuitive for mappers to use, since most SP maps won't have over 16 consecutive star posts.
 				mapthings[i].args[0] = mapthings[i].extrainfo + (mapthings[i].angle/360) * 15;
 			else
-
+				// Old behavior if Parameter is 0; add 360 to the angle for each consecutive star post.
 				mapthings[i].args[0] = (mapthings[i].angle/360);
 			mapthings[i].args[1] = !!(mapthings[i].options & MTF_OBJECTSPECIAL);
 			break;
-		case 522:  
+		case 522: //Wall spike
 			if (mapthings[i].options & MTF_OBJECTSPECIAL)
 			{
 				mapthings[i].args[0] = mobjinfo[MT_WALLSPIKE].speed + mapthings[i].angle/360;
@@ -6792,7 +6792,7 @@ static void P_ConvertBinaryThingTypes(void)
 			if (mapthings[i].options & MTF_AMBUSH)
 				mapthings[i].args[2] |= TMSF_INTANGIBLE;
 			break;
-		case 523:  
+		case 523: //Spike
 			if (mapthings[i].options & MTF_OBJECTSPECIAL)
 			{
 				mapthings[i].args[0] = mobjinfo[MT_SPIKE].speed + mapthings[i].angle;
@@ -6803,70 +6803,70 @@ static void P_ConvertBinaryThingTypes(void)
 			if (mapthings[i].options & MTF_AMBUSH)
 				mapthings[i].args[2] |= TMSF_INTANGIBLE;
 			break;
-		case 540:  
+		case 540: //Fan
 			mapthings[i].args[0] = mapthings[i].angle;
 			if (mapthings[i].options & MTF_OBJECTSPECIAL)
 				mapthings[i].args[1] |= TMF_INVISIBLE;
 			if (mapthings[i].options & MTF_AMBUSH)
 				mapthings[i].args[1] |= TMF_NODISTANCECHECK;
 			break;
-		case 541:  
+		case 541: //Gas jet
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 543:  
+		case 543: //Balloon
 			if (mapthings[i].angle > 0)
 				P_WriteSkincolor(((mapthings[i].angle - 1) % (numskincolors - 1)) + 1, &mapthings[i].stringargs[0]);
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 555:  
-		case 556:  
-		case 557:  
+		case 555: //Diagonal yellow spring
+		case 556: //Diagonal red spring
+		case 557: //Diagonal blue spring
 			if (mapthings[i].options & MTF_OBJECTSPECIAL)
 				mapthings[i].args[0] |= TMDS_NOGRAVITY;
 			if (mapthings[i].options & MTF_AMBUSH)
 				mapthings[i].args[0] |= TMDS_ROTATEEXTRA;
 			break;
-		case 558:  
-		case 559:  
-		case 560:  
+		case 558: //Horizontal yellow spring
+		case 559: //Horizontal red spring
+		case 560: //Horizontal blue spring
 			mapthings[i].args[0] = !(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 700:  
-		case 701:  
-		case 702:  
-		case 703:  
-		case 704:  
-		case 705:  
-		case 706:  
-		case 707:  
+		case 700: //Water ambience A
+		case 701: //Water ambience B
+		case 702: //Water ambience C
+		case 703: //Water ambience D
+		case 704: //Water ambience E
+		case 705: //Water ambience F
+		case 706: //Water ambience G
+		case 707: //Water ambience H
 			mapthings[i].args[0] = 35;
 			P_WriteSfx(sfx_amwtr1 + mapthings[i].type - 700, &mapthings[i].stringargs[0]);
 			mapthings[i].type = 700;
 			break;
-		case 708:  
+		case 708: //Disco ambience
 			mapthings[i].args[0] = 512;
 			P_WriteSfx(sfx_ambint, &mapthings[i].stringargs[0]);
 			mapthings[i].type = 700;
 			break;
-		case 709:  
+		case 709: //Volcano ambience
 			mapthings[i].args[0] = 220;
 			P_WriteSfx(sfx_ambin2, &mapthings[i].stringargs[0]);
 			mapthings[i].type = 700;
 			break;
-		case 710:  
+		case 710: //Machine ambience
 			mapthings[i].args[0] = 24;
 			P_WriteSfx(sfx_ambmac, &mapthings[i].stringargs[0]);
 			mapthings[i].type = 700;
 			break;
-		case 750:  
+		case 750: //Slope vertex
 			mapthings[i].args[0] = mapthings[i].extrainfo;
 			break;
-		case 753:  
+		case 753: //Zoom tube waypoint
 			mapthings[i].args[0] = mapthings[i].angle >> 8;
 			mapthings[i].args[1] = mapthings[i].angle & 255;
 			break;
-		case 754:  
-		case 755:  
+		case 754: //Push point
+		case 755: //Pull point
 		{
 			subsector_t *ss = R_PointInSubsector(mapthings[i].x << FRACBITS, mapthings[i].y << FRACBITS);
 			sector_t *s;
@@ -6900,10 +6900,10 @@ static void P_ConvertBinaryThingTypes(void)
 			mapthings[i].type = 754;
 			break;
 		}
-		case 756:  
+		case 756: //Blast linedef executor
 			mapthings[i].args[0] = mapthings[i].angle;
 			break;
-		case 757:  
+		case 757: //Fan particle generator
 		{
 			INT32 j = Tag_FindLineSpecial(15, mapthings[i].angle);
 
@@ -6921,7 +6921,7 @@ static void P_ConvertBinaryThingTypes(void)
 			P_WriteDuplicateText(lines[j].stringargs[0], &mapthings[i].stringargs[0]);
 			break;
 		}
-		case 762:  
+		case 762: //PolyObject spawn point (crush)
 		{
 			INT32 check = -1;
 			INT32 firstline = -1;
@@ -6942,29 +6942,29 @@ static void P_ConvertBinaryThingTypes(void)
 			mapthings[i].type = 761;
 			break;
 		}
-		case 780:  
+		case 780: //Skybox
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_OBJECTSPECIAL);
 			break;
-		case 799:  
+		case 799: //Tutorial plant
 			mapthings[i].args[0] = mapthings[i].extrainfo;
 			break;
-		case 1002:  
+		case 1002: //Dripping water
 			mapthings[i].args[0] = mapthings[i].angle;
 			break;
-		case 1007:  
-		case 1008:  
-		case 1011:  
+		case 1007: //Kelp
+		case 1008: //Stalagmite (DSZ1)
+		case 1011: //Stalagmite (DSZ2)
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_OBJECTSPECIAL);
 			break;
-		case 1102:  
+		case 1102: //Eggman Statue
 			mapthings[i].args[1] = !!(mapthings[i].options & MTF_EXTRA);
 			break;
-		case 1104:  
-		case 1105:  
-		case 1106:  
-		case 1107:  
-		case 1109:  
-		case 1110:  
+		case 1104: //Mace spawnpoint
+		case 1105: //Chain with maces spawnpoint
+		case 1106: //Chained spring spawnpoint
+		case 1107: //Chain spawnpoint
+		case 1109: //Firebar spawnpoint
+		case 1110: //Custom mace spawnpoint
 		{
 			mtag_t tag = (mtag_t)mapthings[i].angle;
 			INT32 j = Tag_FindLineSpecial(9, tag);
@@ -7012,18 +7012,18 @@ static void P_ConvertBinaryThingTypes(void)
 			}
 			break;
 		}
-		case 1101:  
-		case 1119:  
-		case 1120:  
+		case 1101: //Torch
+		case 1119: //Candle
+		case 1120: //Candle pricket
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_EXTRA);
 			break;
-		case 1121:  
+		case 1121: //Flame holder
 			if (mapthings[i].options & MTF_OBJECTSPECIAL)
 				mapthings[i].args[0] |= TMFH_NOFLAME;
 			if (mapthings[i].options & MTF_EXTRA)
 				mapthings[i].args[0] |= TMFH_CORONA;
 			break;
-		case 1127:  
+		case 1127: //Spectator EggRobo
 			if (mapthings[i].options & MTF_AMBUSH)
 				mapthings[i].args[0] = TMED_LEFT;
 			else if (mapthings[i].options & MTF_OBJECTSPECIAL)
@@ -7031,11 +7031,11 @@ static void P_ConvertBinaryThingTypes(void)
 			else
 				mapthings[i].args[0] = TMED_NONE;
 			break;
-		case 1200:  
-		case 1201:  
+		case 1200: //Tumbleweed (Big)
+		case 1201: //Tumbleweed (Small)
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 1202:  
+		case 1202: //Rock spawner
 		{
 			mtag_t tag = (mtag_t)mapthings[i].angle;
 			INT32 j = Tag_FindLineSpecial(12, tag);
@@ -7050,51 +7050,51 @@ static void P_ConvertBinaryThingTypes(void)
 			mapthings[i].args[1] = sides[lines[j].sidenum[0]].textureoffset >> FRACBITS;
 			mapthings[i].args[2] = !!(lines[j].flags & ML_NOCLIMB);
 			INT32 id = (sides[lines[j].sidenum[0]].rowoffset >> FRACBITS);
-
-
+			// Rather than introduce deh_tables.h as a dependency for literally one
+			// conversion, we just... recreate the string expected to be produced.
 			if (id > 0 && id < 16)
 				P_WriteDuplicateText(va("MT_ROCKCRUMBLE%d", id+1), &mapthings[i].stringargs[0]);
 			else
 				P_WriteConstant(MT_ROCKCRUMBLE1 + id, &mapthings[i].stringargs[0], "Mapthing", i);
 			break;
 		}
-		case 1221:  
+		case 1221: //Minecart saloon door
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 1229:  
+		case 1229: //Minecart switch point
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 1300:  
-		case 1301:  
+		case 1300: //Flame jet (horizontal)
+		case 1301: //Flame jet (vertical)
 			mapthings[i].args[0] = (mapthings[i].angle >> 13)*TICRATE/2;
 			mapthings[i].args[1] = ((mapthings[i].angle >> 10) & 7)*TICRATE/2;
 			mapthings[i].args[2] = 80 - 5*mapthings[i].extrainfo;
 			mapthings[i].args[3] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 1304:  
+		case 1304: //Lavafall
 			mapthings[i].args[0] = mapthings[i].angle;
 			mapthings[i].args[1] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 1305:  
+		case 1305: //Rollout Rock
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 1500:  
-		case 1501:  
-		case 1502:  
-		case 1503:  
+		case 1500: //Glaregoyle
+		case 1501: //Glaregoyle (Up)
+		case 1502: //Glaregoyle (Down)
+		case 1503: //Glaregoyle (Long)
 			if (mapthings[i].angle >= 360)
 				mapthings[i].args[1] = 7*(mapthings[i].angle/360) + 1;
 			break;
-		case 1700:  
+		case 1700: //Axis
 			mapthings[i].args[2] = mapthings[i].angle & 16383;
 			mapthings[i].args[3] = !!(mapthings[i].angle & 16384);
-			 
-		case 1701:  
-		case 1702:  
+			/* FALLTHRU */
+		case 1701: //Axis transfer
+		case 1702: //Axis transfer line
 			mapthings[i].args[0] = mapthings[i].extrainfo;
 			mapthings[i].args[1] = mapthings[i].options;
 			break;
-		case 1703:  
+		case 1703: //Ideya drone
 			mapthings[i].args[0] = mapthings[i].angle & 0xFFF;
 			mapthings[i].args[1] = mapthings[i].extrainfo*32;
 			mapthings[i].args[2] = ((mapthings[i].angle & 0xF000) >> 12)*32;
@@ -7108,12 +7108,12 @@ static void P_ConvertBinaryThingTypes(void)
 				mapthings[i].args[3] = TMDA_BOTTOMOFFSET;
 			mapthings[i].args[4] = !!(mapthings[i].options & MTF_AMBUSH);
 			break;
-		case 1704:  
+		case 1704: //NiGHTS bumper
 			mapthings[i].pitch = 30 * (((mapthings[i].options & 15) + 9) % 12);
 			mapthings[i].options &= ~0xF;
 			break;
-		case 1705:  
-		case 1713:  
+		case 1705: //Hoop
+		case 1713: //Hoop (Customizable)
 		{
 			UINT16 oldangle = mapthings[i].angle;
 			mapthings[i].angle = (mapthings[i].extrainfo == 1) ? oldangle - 90  : ((oldangle >> 8)*360)/256;
@@ -7123,32 +7123,32 @@ static void P_ConvertBinaryThingTypes(void)
 			mapthings[i].type = 1713;
 			break;
 		}
-		case 1710:  
+		case 1710: //Ideya capture
 			mapthings[i].args[0] = mapthings[i].extrainfo;
 			mapthings[i].args[1] = mapthings[i].angle;
 			break;
-		case 1714:  
+		case 1714: //Ideya anchor point
 			mapthings[i].args[0] = mapthings[i].extrainfo;
 			break;
-		case 1806:  
+		case 1806: //King Bowser
 			mapthings[i].args[0] = LE_KOOPA;
 			break;
-		case 1807:  
+		case 1807: //Axe
 			mapthings[i].args[0] = LE_AXE;
 			break;
-		case 2000:  
+		case 2000: //Smashing spikeball
 			mapthings[i].args[0] = mapthings[i].angle;
 			break;
-		case 2006:  
-		case 2007:  
-		case 2008:  
+		case 2006: //Jack-o'-lantern 1
+		case 2007: //Jack-o'-lantern 2
+		case 2008: //Jack-o'-lantern 3
 			mapthings[i].args[0] = !!(mapthings[i].options & MTF_EXTRA);
 			break;
 		default:
 			break;
 		}
 
-
+		// Clear binary thing height hacks, to prevent interfering with UDMF-only flags
 		mapthings[i].options &= 0xF;
 	}
 }
@@ -7188,7 +7188,7 @@ static void P_ConvertBinaryLinedefFlags(void)
 	}
 }
 
-
+//For maps in binary format, converts setup of specials to UDMF format.
 static void P_ConvertBinaryMap(void)
 {
 	contextdrift = false;
@@ -7200,15 +7200,15 @@ static void P_ConvertBinaryMap(void)
 		P_WriteTextmap();
 }
 
-                                                                
-   
-                                                                         
-                          
-   
-                                
-                                          
-                                                                                
-    
+/** Compute MD5 message digest for bytes read from memory source
+  *
+  * The resulting message digest number will be written into the 16 bytes
+  * beginning at RESBLOCK.
+  *
+  * \param filename path of file
+  * \param resblock resulting MD5 checksum
+  * \return 0 if MD5 checksum was made, and is at resblock, 1 if error was found
+  */
 static INT32 P_MakeBufferMD5(const char *buffer, size_t len, void *resblock)
 {
 #ifdef NOMD5
@@ -7243,8 +7243,8 @@ static void P_MakeMapMD5(virtres_t *virt, void *dest)
 		unsigned char sidedefmd5[16];
 		UINT8 i;
 
-
-
+		// Create a hash for the current map
+		// get the actual lumps!
 		virtlump_t* virtlines   = vres_Find(virt, "LINEDEFS");
 		virtlump_t* virtsectors = vres_Find(virt, "SECTORS");
 		virtlump_t* virtmthings = vres_Find(virt, "THINGS");
@@ -7284,7 +7284,7 @@ static boolean P_LoadMapFromFile(void)
 	if (!udmf)
 		P_ConvertBinaryMap();
 
-
+	// Copy relevant map data for NetArchive purposes.
 	spawnsectors = Z_Calloc(numsectors * sizeof(*sectors), PU_LEVEL, NULL);
 	spawnlines = Z_Calloc(numlines * sizeof(*lines), PU_LEVEL, NULL);
 	spawnsides = Z_Calloc(numsides * sizeof(*sides), PU_LEVEL, NULL);
@@ -7303,13 +7303,13 @@ static boolean P_LoadMapFromFile(void)
 	return true;
 }
 
+//
+// LEVEL INITIALIZATION FUNCTIONS
+//
 
-
-
-
-                                               
-                                              
-    
+/** Sets up a sky texture to use for the level.
+  * The sky texture is used instead of F_SKY1.
+  */
 void P_SetupLevelSky(INT32 skynum, boolean global)
 {
 	char skytexname[12];
@@ -7318,26 +7318,26 @@ void P_SetupLevelSky(INT32 skynum, boolean global)
 	skytexture = R_TextureNumForName(skytexname);
 	levelskynum = skynum;
 
-
+	// Global change
 	if (global)
 		globallevelskynum = levelskynum;
 
-
+	// Don't go beyond for dedicated servers
 	if (dedicated)
 		return;
 
-
+	// scale up the old skies, if needed
 	R_SetupSkyDraw();
 }
 
 static const char *maplumpname;
-lumpnum_t lastloadedmaplumpnum;  
+lumpnum_t lastloadedmaplumpnum; // for comparative savegame
 
-
-
-
-
-
+//
+// P_LevelInitStuff
+//
+// Some player initialization for map start.
+//
 static void P_InitLevelSettings(void)
 {
 	INT32 i;
@@ -7347,7 +7347,7 @@ static void P_InitLevelSettings(void)
 
 	modulothing = 0;
 
-
+	// special stage tokens, emeralds, and ring total
 	tokenbits = 0;
 	runemeraldmanager = false;
 	emeraldspawndelay = 60*TICRATE;
@@ -7356,10 +7356,10 @@ static void P_InitLevelSettings(void)
 	else
 		nummaprings = mapheaderinfo[gamemap-1]->startrings;
 
-
+	// emerald hunt
 	hunt1 = hunt2 = hunt3 = NULL;
 
-
+	// map time limit
 	if (mapheaderinfo[gamemap-1]->countdown)
 	{
 		tic_t maxtime = 0;
@@ -7377,23 +7377,23 @@ static void P_InitLevelSettings(void)
 		countdowntimer = 0;
 	countdowntimeup = false;
 
-
+	// clear ctf pointers
 	redflag = blueflag = NULL;
 	rflagpoint = bflagpoint = NULL;
 
-
+	// circuit, race and competition stuff
 	circuitmap = false;
 	numstarposts = 0;
 	ssspheres = timeinmap = 0;
 
-
-
+	// Assume Special Stages were failed in unless proven otherwise - via P_GiveEmerald or emerald touchspecial
+	// Normal stages will default to be OK, until a Lua script / linedef executor says otherwise.
 	stagefailed = G_IsSpecialStage(gamemap);
 
-
+	// Reset temporary record data
 	memset(&ntemprecords, 0, sizeof(ntemprecords));
 
-
+	// earthquake camera
 	memset(&quake,0,sizeof(struct quake));
 
 	if ((netgame || multiplayer) && G_GametypeUsesCoopStarposts() && cv_coopstarposts.value == 2)
@@ -7416,18 +7416,18 @@ static void P_InitLevelSettings(void)
 
 		if (canresetlives && (netgame || multiplayer) && playeringame[i] && (G_CompetitionGametype() || players[i].lives <= 0))
 		{
-
+			// In Co-Op, replenish a user's lives if they are depleted.
 			players[i].lives = cv_startinglives.value;
 		}
 
-
+		// obliteration station...
 		players[i].numboxes = players[i].totalring =\
 		 players[i].laps = players[i].marescore = players[i].lastmarescore =\
 		 players[i].mare = players[i].exiting = 0;
 
 		players[i].drillmeter = 40*20;
 
-
+		// hit these too
 		players[i].pflags &= ~(PF_GAMETYPEOVER);
 	}
 
@@ -7435,21 +7435,21 @@ static void P_InitLevelSettings(void)
 		CV_SetValue(&cv_analog[1], true);
 }
 
-
+// Respawns all the mapthings and mobjs in the map from the already loaded map data.
 void P_RespawnThings(void)
 {
-
+	// Search through all the thinkers.
 	thinker_t *think;
-	INT32 i, viewid = -1, centerid = -1;  
+	INT32 i, viewid = -1, centerid = -1; // for skyboxes
 
-
+	// check if these are any of the normal viewpoint/centerpoint mobjs in the level or not
 	if (skyboxmo[0] || skyboxmo[1])
 		for (i = 0; i < 16; i++)
 		{
 			if (skyboxmo[0] && skyboxmo[0] == skyboxviewpnts[i])
-				viewid = i;  
+				viewid = i; // save id just in case
 			if (skyboxmo[1] && skyboxmo[1] == skyboxcenterpnts[i])
-				centerid = i;  
+				centerid = i; // save id just in case
 		}
 
 	for (think = thlist[THINK_MOBJ].next; think != &thlist[THINK_MOBJ]; think = think->next)
@@ -7466,7 +7466,7 @@ void P_RespawnThings(void)
 
 	P_SpawnMapThings(true);
 
-
+	// restore skybox viewpoint/centerpoint if necessary, set them to defaults if we can't do that
 	skyboxmo[0] = skyboxviewpnts[(viewid >= 0) ? viewid : 0];
 	skyboxmo[1] = skyboxcenterpnts[(centerid >= 0) ? centerid : 0];
 }
@@ -7496,12 +7496,12 @@ static void P_RunLevelScript(const char *scriptname)
 	{
 		COM_ExecFile(scriptname, COM_LUA, false);
 	}
-	COM_BufExecute();  
+	COM_BufExecute(); // Run it!
 }
 
 static void P_ForceCharacter(const char *forcecharskin)
 {
-
+	// Don't do anything if the server is forcing a skin already.
 	if (netgame && cv_forceskin.value >= 0)
 		return;
 
@@ -7527,7 +7527,7 @@ static void P_ResetSpawnpoints(void)
 
 	numdmstarts = numredctfstarts = numbluectfstarts = 0;
 
-
+	// reset the player starts
 	for (i = 0; i < MAXPLAYERS; i++)
 		playerstarts[i] = bluectfstarts[i] = redctfstarts[i] = NULL;
 
@@ -7552,7 +7552,7 @@ static void P_LoadRecordGhosts(void)
 
 	sprintf(gpath,"%s"PATHSEP"replay"PATHSEP"%s"PATHSEP"%s", srb2home, timeattackfolder, G_BuildMapName(gamemap));
 
-
+	// Best Score ghost
 	if (cv_ghost_bestscore.value)
 	{
 		for (i = 0; i < numskins; ++i)
@@ -7565,7 +7565,7 @@ static void P_LoadRecordGhosts(void)
 		}
 	}
 
-
+	// Best Time ghost
 	if (cv_ghost_besttime.value)
 	{
 		for (i = 0; i < numskins; ++i)
@@ -7578,7 +7578,7 @@ static void P_LoadRecordGhosts(void)
 		}
 	}
 
-
+	// Best Rings ghost
 	if (cv_ghost_bestrings.value)
 	{
 		for (i = 0; i < numskins; ++i)
@@ -7591,7 +7591,7 @@ static void P_LoadRecordGhosts(void)
 		}
 	}
 
-
+	// Last ghost
 	if (cv_ghost_last.value)
 	{
 		for (i = 0; i < numskins; ++i)
@@ -7604,7 +7604,7 @@ static void P_LoadRecordGhosts(void)
 		}
 	}
 
-
+	// Guest ghost
 	if (cv_ghost_guest.value && FIL_FileExists(va("%s-guest.lmp", gpath)))
 		G_AddGhost(va("%s-guest.lmp", gpath));
 
@@ -7622,7 +7622,7 @@ static void P_LoadNightsGhosts(void)
 
 	sprintf(gpath,"%s"PATHSEP"replay"PATHSEP"%s"PATHSEP"%s", srb2home, timeattackfolder, G_BuildMapName(gamemap));
 
-
+	// Best Score ghost
 	if (cv_ghost_bestscore.value)
 	{
 		for (i = 0; i < numskins; ++i)
@@ -7635,7 +7635,7 @@ static void P_LoadNightsGhosts(void)
 		}
 	}
 
-
+	// Best Time ghost
 	if (cv_ghost_besttime.value)
 	{
 		for (i = 0; i < numskins; ++i)
@@ -7648,7 +7648,7 @@ static void P_LoadNightsGhosts(void)
 		}
 	}
 
-
+	// Last ghost
 	if (cv_ghost_last.value)
 	{
 		for (i = 0; i < numskins; ++i)
@@ -7661,7 +7661,7 @@ static void P_LoadNightsGhosts(void)
 		}
 	}
 
-
+	// Guest ghost
 	if (cv_ghost_guest.value && FIL_FileExists(va("%s-guest.lmp", gpath)))
 		G_AddGhost(va("%s-guest.lmp", gpath));
 
@@ -7674,37 +7674,37 @@ static void P_InitTagGametype(void)
 	INT32 realnumplayers = 0;
 	INT32 playersactive[MAXPLAYERS];
 
-
-
-
-
-
-
+	//I just realized how problematic this code can be.
+	//D_NumPlayers() will not always cover the scope of the netgame.
+	//What if one player is node 0 and the other node 31?
+	//The solution? Make a temp array of all players that are currently playing and pick from them.
+	//Future todo? When a player leaves, shift all nodes down so D_NumPlayers() can be used as intended?
+	//Also, you'd never have to loop through all 32 players slots to find anything ever again.
 	for (i = 0; i < MAXPLAYERS; i++)
 	{
 		if (playeringame[i] && !(players[i].spectator || players[i].quittime))
 		{
-			playersactive[realnumplayers] = i;  
+			playersactive[realnumplayers] = i; //stores the player's node in the array.
 			realnumplayers++;
 		}
 	}
 
-	if (!realnumplayers)  
+	if (!realnumplayers) //this should also fix the dedicated crash bug. You only pick a player if one exists to be picked.
 	{
 		CONS_Printf(M_GetText("No player currently available to become IT. Awaiting available players.\n"));
 		return;
 	}
 
 	i = P_RandomKey(realnumplayers);
-	players[playersactive[i]].pflags |= PF_TAGIT;  
+	players[playersactive[i]].pflags |= PF_TAGIT; //choose our initial tagger before map starts.
 
-
-
-
+	// Taken and modified from G_DoReborn()
+	// Remove the player so he can respawn elsewhere.
+	// first disassociate the corpse
 	if (players[playersactive[i]].mo)
 		P_RemoveMobj(players[playersactive[i]].mo);
 
-	G_SpawnPlayer(playersactive[i]);  
+	G_SpawnPlayer(playersactive[i]); //respawn the lucky player in his dedicated spawn location.
 }
 
 static void P_SetupCamera(void)
@@ -7715,7 +7715,7 @@ static void P_SetupCamera(void)
 		camera.y = players[displayplayer].mo->y;
 		camera.z = players[displayplayer].mo->z;
 		camera.angle = players[displayplayer].mo->angle;
-		camera.subsector = R_PointInSubsector(camera.x, camera.y);  
+		camera.subsector = R_PointInSubsector(camera.x, camera.y); // make sure camera has a subsector set -- Monster Iestyn (12/11/18)
 	}
 	else
 	{
@@ -7732,7 +7732,7 @@ static void P_SetupCamera(void)
 			camera.y = thing->y;
 			camera.z = thing->z;
 			camera.angle = FixedAngle((fixed_t)thing->angle << FRACBITS);
-			camera.subsector = R_PointInSubsector(camera.x, camera.y);  
+			camera.subsector = R_PointInSubsector(camera.x, camera.y); // make sure camera has a subsector set -- Monster Iestyn (12/11/18)
 		}
 	}
 }
@@ -7743,18 +7743,18 @@ static void P_InitCamera(void)
 	{
 		P_SetupCamera();
 
+		// Salt: CV_ClearChangedFlags() messes with your settings :(
+		/*if (!cv_cam_height.changed)
+			CV_Set(&cv_cam_height, cv_cam_height.defaultvalue);
+		if (!cv_cam2_height.changed)
+			CV_Set(&cv_cam2_height, cv_cam2_height.defaultvalue);
 
-		                             
-                                                      
-                              
-                                                        
+		if (!cv_cam_dist.changed)
+			CV_Set(&cv_cam_dist, cv_cam_dist.defaultvalue);
+		if (!cv_cam2_dist.changed)
+			CV_Set(&cv_cam2_dist, cv_cam2_dist.defaultvalue);*/
 
-                           
-                                                  
-                            
-                                                      
-
-
+			// Though, I don't think anyone would care about cam_rotate being reset back to the only value that makes sense :P
 		if (!cv_cam_rotate.changed)
 			CV_Set(&cv_cam_rotate, cv_cam_rotate.defaultvalue);
 		if (!cv_cam2_rotate.changed)
@@ -7765,7 +7765,7 @@ static void P_InitCamera(void)
 		if (!cv_analog[1].changed)
 			CV_SetValue(&cv_analog[1], 0);
 
-		displayplayer = consoleplayer;  
+		displayplayer = consoleplayer; // Start with your OWN view, please!
 
 		if (twodlevel)
 		{
@@ -7791,17 +7791,17 @@ static void P_RunSpecialStageWipe(void)
 
 	S_StartSound(NULL, sfx_s3kaf);
 
-
+	// Fade music! Time it to S3KAF: 0.25 seconds is snappy.
 	if (RESETMUSIC ||
 		strnicmp(S_MusicName(),
 		(mapmusflags & MUSIC_RELOADRESET) ? mapheaderinfo[gamemap - 1]->musname : mapmusname, 7))
-		S_FadeOutStopMusic(MUSICRATE/4);  
+		S_FadeOutStopMusic(MUSICRATE/4); //FixedMul(FixedDiv(F_GetWipeLength(wipedefs[wipe_speclevel_towhite])*NEWTICRATERATIO, NEWTICRATE), MUSICRATE)
 
 	F_WipeStartScreen();
 	wipestyleflags |= (WSF_FADEOUT|WSF_TOWHITE);
 
 #ifdef HWRENDER
-
+	// uh..........
 	if (rendermode == render_opengl)
 		F_WipeColorFill(0);
 #endif
@@ -7810,25 +7810,25 @@ static void P_RunSpecialStageWipe(void)
 	F_RunWipe(wipedefs[wipe_speclevel_towhite], false);
 
 	I_OsPolling();
-	I_FinishUpdate();  
+	I_FinishUpdate(); // page flip or blit buffer
 	if (moviemode)
 		M_SaveFrame();
 
 	nowtime = lastwipetic;
 
-
+	// Hold on white for extra effect.
 	while (nowtime < endtime)
 	{
-
+		// wait loop
 		while (!((nowtime = I_GetTime()) - lastwipetic))
 		{
 			I_Sleep(cv_sleep.value);
 			I_UpdateTime(cv_timescale.value);
 		}
 		lastwipetic = nowtime;
-		if (moviemode)  
+		if (moviemode) // make sure we save frames for the white hold too
 			M_SaveFrame();
-		NetKeepAlive();  
+		NetKeepAlive(); // Prevent timeout
 	}
 }
 
@@ -7838,14 +7838,14 @@ static void P_RunLevelWipe(void)
 	wipestyleflags |= WSF_FADEOUT;
 
 #ifdef HWRENDER
-
+	// uh..........
 	if (rendermode == render_opengl)
 		F_WipeColorFill(31);
 #endif
 
 	F_WipeEndScreen();
-
-
+	// for titlemap: run a specific wipe if specified
+	// needed for exiting time attack
 	if (wipetypepre != INT16_MAX)
 		F_RunWipe(
 		(wipetypepre >= 0 && F_WipeExists(wipetypepre)) ? wipetypepre : wipedefs[wipe_level_toblack],
@@ -7862,14 +7862,14 @@ static void P_InitPlayers(void)
 		if (!playeringame[i])
 			continue;
 
-
+		// Start players with pity shields if possible
 		players[i].pity = -1;
 
 		players[i].mo = NULL;
 
 		if (!G_PlatformGametype())
 			G_DoReborn(i);
-		else  
+		else // gametype is GT_COOP or GT_RACE
 		{
 			G_SpawnPlayer(i);
 			if (players[i].starposttime)
@@ -7882,7 +7882,7 @@ static void P_WriteLetter(void)
 {
 	char *buf, *b;
 
-	if (!serverGamedata->unlocked[28])  
+	if (!serverGamedata->unlocked[28]) // pandora's box
 		return;
 
 	if (modeattacking)
@@ -7927,10 +7927,10 @@ static void P_InitGametype(void)
 
 	P_InitPlayers();
 
-
+	// restore time in netgame (see also g_game.c)
 	if ((netgame || multiplayer) && G_GametypeUsesCoopStarposts() && cv_coopstarposts.value == 2)
 	{
-
+		// is this a hack? maybe
 		tic_t maxstarposttime = 0;
 		for (i = 0; i < MAXPLAYERS; i++)
 		{
@@ -7956,16 +7956,16 @@ static void P_InitGametype(void)
 			: mapheaderinfo[gamemap - 1]->numlaps);
 }
 
-                                              
-   
-                                                                                         
-                                                             
-    
+/** Loads a level from a lump or external wad.
+  *
+  * \param fromnetsave If true, skip some stuff because we're loading a netgame snapshot.
+  * \todo Clean up, refactor, split up; get rid of the bloat.
+  */
 boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 {
-
-
-
+	// use gamemap to get map number.
+	// 99% of the things already did, so.
+	// Map header should always be in place at this point
 	INT32 i, ranspecialwipe = 0;
 	sector_t *ss;
 #if defined(_WIN32) && !defined(DEDICATED)
@@ -7980,22 +7980,22 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		G_BuildMapName(gamemap), fromnetsave, reloadinggamestate));
 #endif
 
-
+	// This is needed. Don't touch.
 	maptol = mapheaderinfo[gamemap-1]->typeoflevel;
 	gametyperules = gametypedefaultrules[gametype];
 
-
+	// clear the target on map change, since the object will be invalidated
 	P_SetTarget(&ticcmd_ztargetfocus[0], NULL);
 	P_SetTarget(&ticcmd_ztargetfocus[1], NULL);
 
-	CON_Drawer();  
-	I_FinishUpdate();  
+	CON_Drawer(); // let the user know what we are going to do
+	I_FinishUpdate(); // page flip or blit buffer
 
-
+	// Reset the palette
 	if (rendermode != render_none)
 		V_SetPaletteLump("PLAYPAL");
 
-
+	// Initialize sector node list.
 	P_Initsecnode();
 
 	if (netgame || multiplayer)
@@ -8004,7 +8004,7 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 	if (metalplayback)
 		G_StopMetalDemo();
 
-
+	// Clear CECHO messages
 	HU_ClearCEcho();
 
 	if (mapheaderinfo[gamemap-1]->runsoc[0] != '#')
@@ -8022,12 +8022,12 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 
 	if (!dedicated)
 	{
-
+		// chasecam on in first-person gametypes and 2D
 		boolean chase = (!(gametyperules & GTR_FIRSTPERSON)) || (maptol & TOL_2D);
 
-
-		                            
-                                                      
+		// Salt: CV_ClearChangedFlags() messes with your settings :(
+		/*if (!cv_cam_speed.changed)
+			CV_Set(&cv_cam_speed, cv_cam_speed.defaultvalue);*/
 
 		CV_UpdateCamDist();
 		CV_UpdateCam2Dist();
@@ -8035,24 +8035,24 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		if (!cv_chasecam.changed)
 			CV_SetValue(&cv_chasecam, chase);
 
-
+		// same for second player
 		if (!cv_chasecam2.changed)
 			CV_SetValue(&cv_chasecam2, chase);
 	}
 
-
-
+	// Initial height of PointOfView
+	// will be set by player think.
 	players[consoleplayer].viewz = 1;
 
-
+	// Cancel all d_main.c fadeouts (keep fade in though).
 	if (reloadinggamestate)
-		wipegamestate = gamestate;  
+		wipegamestate = gamestate; // Don't fade if reloading the gamestate
 	else
 		wipegamestate = FORCEWIPEOFF;
 	wipestyleflags = 0;
 
-
-
+	// Special stage & record attack retry fade to white
+	// This is handled BEFORE sounds are stopped.
 	if (G_GetModeAttackRetryFlag())
 	{
 		if (modeattacking && !demoplayback)
@@ -8068,15 +8068,15 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		ranspecialwipe = 1;
 	}
 
-
-
-
-
+	// Stop channels before old level objects are purged. Decoded samples use the
+	// non-level PU_SOUND tag and remain valid across maps; retaining them avoids
+	// repeating expensive OGG/WAV decoding on the first playback in every map.
+	// Runtime add-on loading explicitly invalidates each sound it replaces.
 	S_StopSounds();
 	S_ResetSoundPrecacheQueue();
 
-
-
+	// Fade out music here. Deduct 2 tics so the fade volume actually reaches 0.
+	// But don't halt the music! S_Start will take care of that. This dodges a MIDI crash bug.
 	if (!(reloadinggamestate || titlemapinaction) && (RESETMUSIC ||
 		strnicmp(S_MusicName(),
 			(mapmusflags & MUSIC_RELOADRESET) ? mapheaderinfo[gamemap-1]->musname : mapmusname, 7)))
@@ -8085,14 +8085,14 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 			FixedDiv((F_GetWipeLength(wipedefs[wipe_level_toblack])-2)*NEWTICRATERATIO, NEWTICRATE), MUSICRATE));
 	}
 
-
-
+	// Let's fade to black here
+	// But only if we didn't do the special stage wipe
 	if (rendermode != render_none && !(ranspecialwipe || reloadinggamestate))
 		P_RunLevelWipe();
 
 #if defined(_WIN32) && !defined(DEDICATED)
-	                                                                        
-                                                                        
+	/* The wipe above is an intentional, user-visible delay. Begin measuring
+	 * actual teardown here so it is not mislabeled as slow map cleanup. */
 	content_started = phase_started = I_GetPreciseTime();
 #endif
 
@@ -8100,14 +8100,14 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 	{
 		if (ranspecialwipe == 2)
 		{
-			pausedelay = -3;  
+			pausedelay = -3; // preticker plus one
 			S_StartSound(NULL, sfx_s3k73);
 		}
 
-
+		// Print "SPEEDING OFF TO [ZONE] [ACT 1]..."
 		if (rendermode != render_none)
 		{
-
+			// Don't include these in the fade!
 			char tx[64];
 			V_DrawSmallString(1, 191, V_ALLOWLOWERCASE|V_TRANSLUCENT|V_SNAPTOLEFT|V_SNAPTOBOTTOM, M_GetText("Speeding off to..."));
 			snprintf(tx, 63, "%s%s%s",
@@ -8118,21 +8118,21 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 			I_UpdateNoVsync();
 		}
 
-
-
-
+		// As oddly named as this is, this handles music only.
+		// We should be fine starting it here.
+		// Don't do this during titlemap, because the menu code handles music by itself.
 		S_Start();
 	}
 
 	levelfadecol = (ranspecialwipe) ? 0 : 31;
 
-
+	// Close text prompt before freeing the old level
 	F_EndTextPrompt(false, true);
 
-	                                                                         
-                                                                           
-                                                                         
-                                                                               
+	/* A map change can be requested from inside a Lua hook, before the outer
+	 * game tic reaches its usual P_MapEnd. Clear collision scratch references
+	 * while their old-level mobjs are still valid; otherwise the next map's
+	 * P_MapStart tries to adjust a reference count through freed level memory. */
 	P_MapEnd();
 
 	LUA_InvalidateLevel();
@@ -8145,17 +8145,17 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 
 	P_ClearBlockNodes();
 
-
+	// Clear pointers that would be left dangling by the purge
 	R_FlushTranslationColormapCache();
 
 #ifdef HWRENDER
-	                                                                          
-                                                                              
-                                                                           
+	/* Keep reusable decoded/GPU textures between maps when requested. The old
+	 * unconditional flush made every large custom level pay the same upload cost
+	 * again. Map-owned and colormapped patch data is still discarded here. */
 	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED))
 		HWR_ClearLevelTextures();
 
-
+	// Delete light table textures
 	HWR_ClearLightTables();
 #endif
 
@@ -8181,7 +8181,7 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 	P_InitCachedActions();
 	P_InitSectorPortals();
 
-
+	// internal game map
 	maplumpname = G_BuildMapName(gamemap);
 	lastloadedmaplumpnum = W_CheckNumForMap(maplumpname);
 	if (lastloadedmaplumpnum == LUMPERROR)
@@ -8190,14 +8190,14 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 	R_ReInitColormaps(mapheaderinfo[gamemap-1]->palette);
 	CON_SetupBackColormap();
 
-
+	// SRB2 determines the sky texture to be used depending on the map header.
 	P_SetupLevelSky(mapheaderinfo[gamemap-1]->skynum, true);
 
 	P_ResetSpawnpoints();
 
 	P_ResetWaypoints();
 
-	P_MapStart();  
+	P_MapStart(); // tmthing can be used starting from this point
 
 	P_InitSlopes();
 
@@ -8238,7 +8238,7 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		}
 	}
 
-
+	// init anything that P_SpawnSlopes/P_LoadThings needs to know
 	P_InitSpecials();
 
 	P_SpawnSlopes(fromnetsave);
@@ -8251,19 +8251,19 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		if (!playerstarts[numcoopstarts])
 			break;
 
-
+	// set up world state
 	P_SpawnSpecials(fromnetsave);
 
-	if (!fromnetsave)  
+	if (!fromnetsave) //  ugly hack for P_NetUnArchiveMisc (and P_LoadNetGame)
 		P_SpawnPrecipitation();
 
-#ifdef HWRENDER  
+#ifdef HWRENDER // not win32 only 19990829 by Kin
 	gl_maploaded = false;
 
-
+	// Lactozilla: Free extrasubsectors regardless of renderer.
 	HWR_FreeExtraSubsectors();
 
-
+	// Create plane polygons.
 	if (rendermode == render_opengl)
 		HWR_LoadLevel();
 #endif
@@ -8278,11 +8278,11 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		NetKeepAlive();
 	}
 
-
-
-
-
-
+	// oh god I hope this helps
+	// (addendum: apparently it does!
+	//  none of this needs to be done because it's not the beginning of the map when
+	//  a netgame save is being loaded, and could actively be harmful by messing with
+	//  the client's view of the data.)
 	if (!fromnetsave)
 		P_InitGametype();
 
@@ -8293,10 +8293,10 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		localaiming2 = 0;
 	}
 
-
+	// clear special respawning que
 	iquehead = iquetail = 0;
 
-
+	// Remove the loading shit from the screen
 	if (rendermode != render_none && !(titlemapinaction || reloadinggamestate))
 		F_WipeColorFill(levelfadecol);
 
@@ -8318,26 +8318,26 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 
 	P_RunCachedActions();
 
-	P_MapEnd();  
+	P_MapEnd(); // tmthing is no longer needed from this point onwards
 
-
+	// Took me 3 hours to figure out why my progression kept on getting overwritten with the titlemap...
 	if (!titlemapinaction)
 	{
-		if (!lastmaploaded)  
+		if (!lastmaploaded) // Start a new game?
 		{
-
+			// I'd love to do this in the menu code instead of here, but everything's a mess and I can't guarantee saving proper player struct info before the first act's started. You could probably refactor it, but it'd be a lot of effort. Easier to just work off known good code. ~toast 22/06/2020
 			if (!(ultimatemode || netgame || multiplayer || demoplayback || demorecording || metalrecording || modeattacking || marathonmode)
 				&& !usedCheats && cursaveslot > 0)
 			{
 				G_SaveGame((UINT32)cursaveslot, gamemap);
 			}
-
+			// If you're looking for saving sp file progression (distinct from G_SaveGameOver), check G_DoCompleted.
 		}
-		lastmaploaded = gamemap;  
+		lastmaploaded = gamemap; // HAS to be set after saving!!
 	}
 
-	if (!fromnetsave)  
-	{  
+	if (!fromnetsave) // uglier hack
+	{ // to make a newly loaded level start on the second frame.
 		INT32 buf = gametic % BACKUPTICS;
 		for (i = 0; i < MAXPLAYERS; i++)
 		{
@@ -8356,16 +8356,16 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		I_SetCrashContext(va("running Lua MapLoad hooks for %s",
 			G_BuildMapName(gamemap)));
 		#endif
-		P_MapStart();  
+		P_MapStart(); // just in case MapLoad modifies tmthing
 		LUA_HookInt(gamemap, HOOK(MapLoad));
-		P_MapEnd();  
+		P_MapEnd(); // just in case MapLoad modifies tmthing
 		#if defined(_WIN32) && !defined(DEDICATED)
 		I_ReportHitch("Lua MapLoad hooks", phase_started, 50);
 		phase_started = I_GetPreciseTime();
 		I_SetCrashContext(va("precaching post-hook sounds for %s",
 			G_BuildMapName(gamemap)));
 		#endif
-
+		// Include objects created by the MapLoad hook as well.
 		S_PrecacheLevelSounds();
 		#if defined(_WIN32) && !defined(DEDICATED)
 		I_ReportHitch("post-hook sound precache", phase_started, 50);
@@ -8382,45 +8382,45 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 #if defined(_WIN32) && !defined(DEDICATED)
 	I_SetCrashContext(va("map %s active", G_BuildMapName(gamemap)));
 	I_ReportHitch("map data, objects, scripts, and renderer setup", content_started, 25);
-	                                                                          
-                                                                           
-                                       
+	/* Fast transitions are expected to finish below the old 250 ms threshold.
+	 * Keep recording them so performance reports can distinguish presentation
+	 * time from actual map setup time. */
 	I_ReportHitch("complete level transition (fade + load)", load_started, 25);
 	I_MarkLevelTransitionEnd();
 #endif
 
-
+	// No render mode or reloading gamestate, stop here.
 	if (rendermode == render_none || reloadinggamestate)
 		return true;
 
 	R_ResetViewInterpolation(0);
 	R_UpdateMobjInterpolators();
 
-
+	// Title card!
 	G_StartTitleCard();
 
-
+	// Can the title card actually run, though?
 	if (!WipeStageTitle)
 		return true;
 	if (ranspecialwipe == 2)
 		return true;
-	                                                                           
-                                                                              
-                                                                           
+	/* The 24-tic pre-title loop is presentation-only and blocks the game loop.
+	 * In multiplayer the regular wipe already advances and draws the title card,
+	 * so let that path animate it without an extra apparent server freeze. */
 	if (netgame)
 		return true;
 
-
+	// If so...
 	G_PreLevelTitleCard();
 
 	return true;
 }
 
-
-
-
-
-
+//
+// P_RunSOC
+//
+// Runs a SOC file or a lump, depending on if ".SOC" exists in the filename
+//
 boolean P_RunSOC(const char *socfilename)
 {
 	lumpnum_t lump;
@@ -8438,33 +8438,33 @@ boolean P_RunSOC(const char *socfilename)
 	return true;
 }
 
-
-
+// Auxiliary function for PK3 loading - looks for sound replacements.
+// NOTE: it does not really add any new sound entry or anything.
 void P_LoadSoundsRange(UINT16 wadnum, UINT16 first, UINT16 num)
 {
 	size_t j;
 	lumpinfo_t *lumpinfo = wadfiles[wadnum]->lumpinfo + first;
 	for (; num > 0; num--, lumpinfo++)
 	{
-
+		// Let's check whether it's replacing an existing sound or it's a brand new one.
 		for (j = 1; j < NUMSFX; j++)
 		{
 			if (S_sfx[j].name && !strnicmp(S_sfx[j].name, lumpinfo->name + 2, 6))
 			{
-
-
+				// the sound will be reloaded when needed,
+				// since sfx->data will be NULL
 				CONS_Debug(DBG_SETUP, "Sound %.8s replaced\n", lumpinfo->name);
 
 				I_FreeSfx(&S_sfx[j]);
 				S_QueueSoundPrecache((sfxenum_t)j);
-				break;  
+				break; // there shouldn't be two sounds with the same name, so stop looking
 			}
 		}
 	}
 }
 
-
-
+// Auxiliary function for PK3 loading - looks for music and music replacements.
+// NOTE: does nothing but print debug messages. The code is handled somewhere else.
 void P_LoadMusicsRange(UINT16 wadnum, UINT16 first, UINT16 num)
 {
 	lumpinfo_t *lumpinfo = wadfiles[wadnum]->lumpinfo + first;
@@ -8484,7 +8484,7 @@ void P_LoadMusicsRange(UINT16 wadnum, UINT16 first, UINT16 num)
 	return;
 }
 
-
+// Auxiliary function - input a folder name and gives us the resource markers positions.
 static lumpinfo_t* FindFolder(const char *folName, UINT16 *start, UINT16 *end, lumpinfo_t *lumpinfo, UINT16 *pnumlumps, size_t *pi)
 {
 	UINT16 numlumps = *pnumlumps;
@@ -8505,10 +8505,10 @@ static lumpinfo_t* FindFolder(const char *folName, UINT16 *start, UINT16 *end, l
 	return lumpinfo;
 }
 
-                                                                             
-                                                                                
-                                                                             
-                                 
+/* A single addfile command can contain several archives.  Loading their Lua,
+ * SOC and per-WAD resources must stay ordered, but rebuilding global animation,
+ * HUD, model and status-bar caches after every archive only throws that work
+ * away again on the next one. */
 static UINT16 addonbatchdepth;
 static boolean addonbatchanimations;
 static boolean addonbatchhud;
@@ -8529,9 +8529,9 @@ void P_EndAddonBatch(void)
 	started = I_GetPreciseTime();
 	if (addonbatchanimations)
 		P_InitPicAnims();
-	                                                                           
-                                                                           
-                                                                         
+	/* Headless companions need the definitions above, not graphics caches that
+	 * can never be displayed. Keep the normal client/software behavior intact
+	 * so changing renderers later still sees every newly added resource. */
 	if (addonbatchhud && rendermode != render_none)
 	{
 		ST_UnloadGraphics();
@@ -8551,10 +8551,10 @@ void P_EndAddonBatch(void)
 	I_ReportHitch("batched add-on final resource refresh", started, 50);
 }
 
-
-
-
-
+//
+// Add a wadfile to the active wad files,
+// replace sounds, musics, patches, textures, sprites and maps
+//
 static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 {
 	const UINT16 wadnum = (UINT16)(numwadfiles-1);
@@ -8564,22 +8564,22 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 	char *name;
 	lumpinfo_t *lumpinfo;
 
-
+	//boolean texturechange = false; ///\todo Useless; broken when back-frontporting PK3 changes?
 	boolean mapsadded = false;
 	boolean replacedcurrentmap = false;
 
-
-
-
-
-
+	// Vars to help us with the position start and amount of each resource type.
+	// Useful for PK3s since they use folders.
+	// WADs use markers for some resources, but others such as sounds are checked lump-by-lump anyway.
+//	UINT16 luaPos, luaNum = 0;
+//	UINT16 socPos, socNum = 0;
 	UINT16 sfxPos = 0, sfxNum = 0;
 	UINT16 musPos = 0, musNum = 0;
-
+//	UINT16 sprPos, sprNum = 0;
 	UINT16 texPos = 0, texNum = 0;
-
-
-
+//	UINT16 patPos, patNum = 0;
+//	UINT16 flaPos, flaNum = 0;
+//	UINT16 mapPos, mapNum = 0;
 
 	if (numlumps == INT16_MAX)
 	{
@@ -8591,37 +8591,37 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 	{
 	case RET_PK3:
 	case RET_FOLDER:
-
+		// Look for the lumps that act as resource delimitation markers.
 		lumpinfo = wadfiles[wadnum]->lumpinfo;
 		for (i = 0; i < numlumps; i++, lumpinfo++)
 		{
-
-
+//			lumpinfo = FindFolder("Lua/",      &luaPos, &luaNum, lumpinfo, &numlumps, &i);
+//			lumpinfo = FindFolder("SOC/",      &socPos, &socNum, lumpinfo, &numlumps, &i);
 			lumpinfo = FindFolder("Sounds/",   &sfxPos, &sfxNum, lumpinfo, &numlumps, &i);
 			lumpinfo = FindFolder("Music/",    &musPos, &musNum, lumpinfo, &numlumps, &i);
-
+//			lumpinfo = FindFolder("Sprites/",  &sprPos, &sprNum, lumpinfo, &numlumps, &i);
 			lumpinfo = FindFolder("Textures/", &texPos, &texNum, lumpinfo, &numlumps, &i);
-
-
-
+//			lumpinfo = FindFolder("Patches/",  &patPos, &patNum, lumpinfo, &numlumps, &i);
+//			lumpinfo = FindFolder("Flats/",    &flaPos, &flaNum, lumpinfo, &numlumps, &i);
+//			lumpinfo = FindFolder("Maps/",     &mapPos, &mapNum, lumpinfo, &numlumps, &i);
 		}
 
-
-
-
-
-
-
-		if (sfxNum)  
+		// Update the detected resources.
+		// Note: ALWAYS load Lua scripts first, SOCs right after, and the remaining resources afterwards.
+//		if (luaNum) // Lua scripts.
+//			P_LoadLuaScrRange(wadnum, luaPos, luaNum);
+//		if (socNum) // SOCs.
+//			P_LoadDehackRange(wadnum, socPos, socNum);
+		if (sfxNum) // Sounds. TODO: Function currently only updates already existing sounds, the rest is handled somewhere else.
 			P_LoadSoundsRange(wadnum, sfxPos, sfxNum);
-		if (musNum)  
+		if (musNum) // Music. TODO: Useless function right now.
 			P_LoadMusicsRange(wadnum, musPos, musNum);
-
-
-
-
-
-
+//		if (sprNum) // Sprites.
+//			R_LoadSpritsRange(wadnum, sprPos, sprNum);
+//		if (texNum) // Textures. TODO: R_LoadTextures() does the folder positioning once again. New function maybe?
+//			R_LoadTextures();
+//		if (mapNum) // Maps. TODO: Actually implement the map WAD loading code, lulz.
+//			P_LoadWadMapRange(wadnum, mapPos, mapNum);
 		break;
 	default:
 		lumpinfo = wadfiles[wadnum]->lumpinfo;
@@ -8636,15 +8636,15 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 					{
 						if (S_sfx[j].name && !strnicmp(S_sfx[j].name, name + 2, 6))
 						{
-
-
+							// the sound will be reloaded when needed,
+							// since sfx->data will be NULL
 							CONS_Debug(DBG_SETUP, "Sound %.8s replaced\n", name);
 
 							I_FreeSfx(&S_sfx[j]);
 							S_QueueSoundPrecache((sfxenum_t)j);
 
 							sreplaces++;
-							break;  
+							break; // there shouldn't be two sounds with the same name, so stop looking
 						}
 					}
 				}
@@ -8672,26 +8672,26 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 	phasestarted = I_GetPreciseTime();
 
 #ifdef HWRENDER
-
+	// Free GPU textures before freeing patches.
 	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED))
 		HWR_ClearAllTextures();
 #endif
 
 	R_LoadParsedTranslations();
 
-
-
-
+	//
+	// search for sprite replacements
+	//
 	Patch_FreeTag(PU_SPRITE);
 	Patch_FreeTag(PU_PATCH_ROTATED);
 	R_AddSpriteDefs(wadnum);
 
+	// Reload it all anyway, just in case they
+	// added some textures but didn't insert a
+	// TEXTURES/etc. list.
+	R_LoadTexturesPwad(wadnum); // numtexture changes
 
-
-
-	R_LoadTexturesPwad(wadnum);  
-
-
+	// Reload ANIMDEFS
 	if (addonbatchdepth)
 		addonbatchanimations = true;
 	else
@@ -8699,7 +8699,7 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 	I_ReportHitch("add-on translations, sprites, textures, and animations", phasestarted, 10);
 	phasestarted = I_GetPreciseTime();
 
-
+	// Flush and reload HUD graphics
 	if (addonbatchdepth)
 		addonbatchhud = true;
 	else if (rendermode != render_none)
@@ -8709,36 +8709,36 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 		ST_LoadGraphics();
 	}
 
-
-
-
-	R_AddSkins(wadnum, false);  
-	R_PatchSkins(wadnum, false);  
+	//
+	// look for skins
+	//
+	R_AddSkins(wadnum, false); // faB: wadfile index in wadfiles[]
+	R_PatchSkins(wadnum, false); // toast: PATCH PATCH
 	if (!addonbatchdepth && rendermode != render_none)
 		ST_ReloadSkinFaceGraphics();
 
-
-
-
+	//
+	// edit music defs
+	//
 	S_LoadMusicDefs(wadnum);
 	I_ReportHitch("add-on HUD, skins, and music definitions", phasestarted, 10);
 	phasestarted = I_GetPreciseTime();
 
-
-
-
+	//
+	// search for maps
+	//
 	lumpinfo = wadfiles[wadnum]->lumpinfo;
 	for (i = 0; i < numlumps; i++, lumpinfo++)
 	{
 		name = lumpinfo->name;
-		if (name[0] == 'M' && name[1] == 'A' && name[2] == 'P')  
+		if (name[0] == 'M' && name[1] == 'A' && name[2] == 'P') // Ignore the headers
 		{
 			INT16 num;
 			if (name[5]!='\0')
 				continue;
 			num = (INT16)M_MapNumber(name[3], name[4]);
 
-
+			//If you replaced the map you're on, end the level when done.
 			if (num == gamemap)
 				replacedcurrentmap = true;
 
@@ -8758,7 +8758,7 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 		HWR_ReloadModels();
 #endif
 
-
+	// reload status bar (warning should have valid player!)
 	if (gamestate == GS_LEVEL && rendermode != render_none)
 	{
 		if (addonbatchdepth)
@@ -8768,7 +8768,7 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 	}
 	I_ReportHitch("add-on maps, sprite metadata, models, and status bar", phasestarted, 10);
 
-
+	// Prevent savefile cheating
 	if (modifiedgame && (cursaveslot > 0) && !bypass)
 		cursaveslot = 0;
 
@@ -8779,11 +8779,11 @@ static boolean P_LoadAddon(UINT16 numlumps, boolean bypass)
 			SendNetXCmd(XD_EXITLEVEL, NULL, 0);
 	}
 
-	               
-                                                  
-                              
-                
-    
+	/*if (bypass) {
+		// Remove the WAD file from the list and free it
+		free(wadfiles[numwadfiles]);
+		--numwadfiles;
+	}*/
 
 	return true;
 }

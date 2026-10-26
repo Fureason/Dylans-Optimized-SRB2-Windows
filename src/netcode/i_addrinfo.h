@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  i_addrinfo.h
+/// \brief getaddrinfo stub
 
 #ifndef __I_ADDRINFO__
 #define __I_ADDRINFO__
@@ -39,8 +39,8 @@
 #define EAI_NONAME -2
 #endif
 
-#ifdef _WIN32  
-
+#ifdef _WIN32 // already use the stub for Win32
+// w32api, ws2tcpip.h, r1.12
 struct my_addrinfo {
         int     ai_flags;
         int     ai_family;

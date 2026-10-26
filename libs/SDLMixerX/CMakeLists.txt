@@ -5,8 +5,8 @@ include(FindPkgConfig)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
-
-
+#include(CheckCSourceRuns)
+#include(CheckCCompilerFlag)
 
 if(NOT CMAKE_VERSION VERSION_LESS 2.8.12)
     set(CMAKE_MACOSX_RPATH 0)
@@ -38,7 +38,7 @@ option(SSE                 "Use SSE assembly routines" ${OPT_DEF_ASM})
 option(SSE2                "Use SSE2 assembly routines" ${OPT_DEF_SSEMATH})
 option(SSE3                "Use SSE3 assembly routines" ${OPT_DEF_SSEMATH})
 
-
+# Settings
 option(SDL_MIXER_X_STATIC   "Build static library of SDL Mixer X" ON)
 option(SDL_MIXER_X_SHARED   "Build shared library of SDL Mixer X" ON)
 
@@ -47,10 +47,10 @@ set(AUDIO_CODECS_REPO_PATH "" CACHE PATH "Path to the AudioCodecs dependencies p
 set(AUDIO_CODECS_INSTALL_PATH "" CACHE PATH "Path to installed AudioCodecs prefix")
 
 if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-
+    # Turn on warnings and legacy C/C++ standards to support more compilers
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -std=c90")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -std=c++98")
-
+    # Deny undefined symbols
     if(NOT APPLE)
         set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined" )
         set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--no-undefined" )
@@ -60,9 +60,9 @@ endif()
 set(SDL_MIXER_INCLUDE_PATHS)
 
 if(NOT AUDIO_CODECS_REPO_PATH AND NOT AUDIO_CODECS_INSTALL_PATH)
-
+    # Try to resolve sqlite dependency
     if(DOWNLOAD_AUDIO_CODECS_DEPENDENCY)
-
+        # Download and configure AudioCodecs dependency
         set(SDL2_REPO_PATH ${CMAKE_INSTALL_PREFIX})
         set(SDL2_INCLUDE_PATH ${CMAKE_INSTALL_PREFIX}/include/SDL2)
         set(SDL2_LIBS_PATH ${CMAKE_INSTALL_PREFIX}/lib)
@@ -131,7 +131,7 @@ add_definitions(-Dmain=SDL_main -DPIC -D_REENTRANT -D_USE_MATH_DEFINES)
 set(SDLMixerX_SOURCES)
 set(SDLMixerX_LINK_LIBS)
 
-
+# Recognize SDL2 library from the system
 if(USE_SYSTEM_AUDIO_LIBRARIES)
     find_package(PkgConfig)
     pkg_check_modules(SDL2 REQUIRED sdl2)
@@ -350,7 +350,7 @@ if(USE_MP3_MPG123)
     add_definitions(-DMUSIC_MP3_MPG123)
 
     message(WARNING "MPG123 SUPPORT IS WIP, DON'T USE IT IN PRODUCTION!!!")
-
+    # ======= Until AudioCodecs will receive buildable mpg123, detect it externally =======
     include(cmake/FindMpg123.cmake)
 
     if(NOT MPG123_FOUND)
@@ -460,7 +460,7 @@ if(USE_GME)
     endif()
 endif()
 
-if(NOT WIN32)  
+if(NOT WIN32) # CMD Music is not supported on Windows
     option(USE_CMD             "Build with CMD music player support" ON)
     if(USE_CMD)
         message("== using CMD Music ==")
@@ -581,7 +581,7 @@ if(USE_MIDI)
         endif()
     endif()
 
-
+     # Native MIDI correctly works on Windows and macOS only.
     if(WIN32 OR APPLE)
         set(NATIVE_MIDI_SUPPORTED ON)
     else()

@@ -1,4 +1,4 @@
-
+#Add-on Makefile for wxDev-C++ project file
 SRCDIR=src
 ifdef ComSpec
 COMSPEC=$(ComSpec)

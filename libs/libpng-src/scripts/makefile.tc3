@@ -1,13 +1,13 @@
+# Makefile for libpng
+# TurboC/C++ (Note: All modules are compiled in C mode)
 
+# To use, do "make -fmakefile.tc3"
 
-
-
-
-
+# ----- Turbo C 3.00 (can be modified to work with earlier versions) -----
 
 MODEL=l
 CFLAGS=-O2 -Z -m$(MODEL) -I..\zlib
-
+#CFLAGS=-D_NO_PROTO -O2 -Z -m$(MODEL) -I..\zlib  # Turbo C older than 3.00
 CC=tcc
 LD=tcc
 LIB=tlib
@@ -15,7 +15,7 @@ LDFLAGS=-m$(MODEL) -L..\zlib
 O=.obj
 E=.exe
 
-
+# variables
 OBJS1 = png$(O) pngset$(O) pngget$(O) pngrutil$(O) pngtrans$(O) pngwutil$(O)
 OBJS2 = pngmem$(O) pngpread$(O) pngread$(O) pngerror$(O) pngwrite$(O)
 OBJS3 = pngrtran$(O) pngwtran$(O) pngrio$(O) pngwio$(O)
@@ -86,4 +86,4 @@ libpng$(MODEL).lib: $(OBJS1) $(OBJS2) $(OBJS3)
 pngtest$(E): pngtest$(O) libpng$(MODEL).lib
 	$(LD) $(LDFLAGS) pngtest.obj libpng$(MODEL).lib zlib_$(MODEL).lib
 
-
+# End of makefile for libpng

@@ -7,10 +7,10 @@
 # unlimited permission to copy and/or distribute it, with or without
 # modifications, as long as this notice is preserved.
 
+# @configure_input@
 
-
-
-
+# serial 4179 ltversion.m4
+# This file is part of GNU Libtool
 
 m4_define([LT_PACKAGE_VERSION], [2.4.6])
 m4_define([LT_PACKAGE_REVISION], [2.4.6])

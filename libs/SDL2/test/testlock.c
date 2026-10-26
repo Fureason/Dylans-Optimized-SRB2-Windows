@@ -10,13 +10,13 @@
   freely.
 */
 
-                                              
-                                                        
-  
+/* Test the thread and mutex locking functions
+   Also exercises the system's signal/thread interaction
+*/
 
 #include <signal.h>
 #include <stdio.h>
-#include <stdlib.h>  
+#include <stdlib.h> /* for atexit() */
 
 #include "SDL.h"
 
@@ -25,10 +25,10 @@ static SDL_threadID mainthread;
 static SDL_Thread *threads[6];
 static SDL_atomic_t doterminate;
 
-  
-                                                              
-                                    
-   
+/*
+ * SDL_Quit() shouldn't be used with atexit() directly because
+ * calling conventions may differ...
+ */
 static void
 SDL_Quit_Wrapper(void)
 {
@@ -78,7 +78,7 @@ Run(void *data)
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't unlock mutex: %s", SDL_GetError());
             exit(1);
         }
-         
+        /* If this sleep isn't done, then threads may starve */
         SDL_Delay(10);
     }
     if (SDL_ThreadID() == mainthread && SDL_AtomicGet(&doterminate)) {
@@ -93,10 +93,10 @@ int main(int argc, char *argv[])
     int i;
     int maxproc = 6;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(0) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s\n", SDL_GetError());
         exit(1);
@@ -125,5 +125,5 @@ int main(int argc, char *argv[])
     (void)signal(SIGINT, terminate);
     Run(NULL);
 
-    return 0;  
+    return 0; /* Never reached */
 }

@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple test of the SDL threading code */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +23,7 @@
 
 static SDL_atomic_t time_for_threads_to_die[NUMTHREADS];
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -35,7 +35,7 @@ int SDLCALL
 SubThreadFunc(void *data)
 {
     while (!*(int volatile *)data) {
-        ;    
+        ; /* SDL_Delay(10); */ /* do nothing */
     }
     return 0;
 }
@@ -59,7 +59,7 @@ ThreadFunc(void *data)
 
     SDL_Log("Thread '%d' waiting for signal\n", tid);
     while (SDL_AtomicGet(&time_for_threads_to_die[tid]) != 1) {
-        ;  
+        ; /* do nothing */
     }
 
     SDL_Log("Thread '%d' sending signals to subthreads\n", tid);
@@ -78,10 +78,10 @@ int main(int argc, char *argv[])
     SDL_Thread *threads[NUMTHREADS];
     int i;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(0) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;

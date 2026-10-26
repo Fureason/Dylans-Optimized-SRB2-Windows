@@ -9,11 +9,11 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* Simple program:  Create a native window and attach an SDL renderer */
 
 #include <stdio.h>
-#include <stdlib.h>  
-#include <time.h>    
+#include <stdlib.h> /* for srand() */
+#include <time.h>   /* for time() */
 
 #include "testnative.h"
 #include "testutils.h"
@@ -42,7 +42,7 @@ static NativeWindowFactory *factory = NULL;
 static void *native_window;
 static SDL_Rect *positions, *velocities;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -60,15 +60,15 @@ void MoveSprites(SDL_Renderer *renderer, SDL_Texture *sprite)
     SDL_Rect viewport;
     SDL_Rect *position, *velocity;
 
-     
+    /* Query the sizes */
     SDL_RenderGetViewport(renderer, &viewport);
     SDL_QueryTexture(sprite, NULL, NULL, &sprite_w, &sprite_h);
 
-     
+    /* Draw a gray background */
     SDL_SetRenderDrawColor(renderer, 0xA0, 0xA0, 0xA0, 0xFF);
     SDL_RenderClear(renderer);
 
-     
+    /* Move the sprite, bounce at the wall, and draw */
     for (i = 0; i < NUM_SPRITES; ++i) {
         position = &positions[i];
         velocity = &velocities[i];
@@ -83,11 +83,11 @@ void MoveSprites(SDL_Renderer *renderer, SDL_Texture *sprite)
             position->y += velocity->y;
         }
 
-         
+        /* Blit the sprite onto the screen */
         SDL_RenderCopy(renderer, sprite, NULL, position);
     }
 
-     
+    /* Update the screen! */
     SDL_RenderPresent(renderer);
 }
 
@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
     int sprite_w, sprite_h;
     SDL_Event event;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_VideoInit(NULL) < 0) {
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
     }
     driver = SDL_GetCurrentVideoDriver();
 
-     
+    /* Find a native window driver and create a native window */
     for (i = 0; factories[i]; ++i) {
         if (SDL_strcmp(driver, factories[i]->tag) == 0) {
             factory = factories[i];
@@ -137,14 +137,14 @@ int main(int argc, char *argv[])
     }
     SDL_SetWindowTitle(window, "SDL Native Window Test");
 
-     
+    /* Create the renderer */
     renderer = SDL_CreateRenderer(window, -1, 0);
     if (renderer == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create renderer: %s\n", SDL_GetError());
         quit(5);
     }
 
-     
+    /* Clear the window, load the sprite and go! */
     SDL_SetRenderDrawColor(renderer, 0xA0, 0xA0, 0xA0, 0xFF);
     SDL_RenderClear(renderer);
 
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
         quit(6);
     }
 
-     
+    /* Allocate memory for the sprite info */
     SDL_GetWindowSize(window, &window_w, &window_h);
     SDL_QueryTexture(sprite, NULL, NULL, &sprite_w, &sprite_h);
     positions = (SDL_Rect *)SDL_malloc(NUM_SPRITES * sizeof(SDL_Rect));
@@ -176,10 +176,10 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Main render loop */
     done = 0;
     while (!done) {
-         
+        /* Check for events */
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
             case SDL_WINDOWEVENT:
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 
     quit(0);
 
-    return 0;  
+    return 0; /* to prevent compiler warning */
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

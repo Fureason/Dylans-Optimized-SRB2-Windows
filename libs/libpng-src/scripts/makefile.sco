@@ -9,17 +9,17 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
+# Library name:
 LIBNAME = libpng16
 PNGMAJ = 16
 
-
+# Shared library names:
 LIBSO=$(LIBNAME).so
 LIBSOMAJ=$(LIBNAME).so.$(PNGMAJ)
 LIBSOREL=$(LIBSOMAJ).$(RELEASE)
 OLDSO=libpng.so
 
-
+# Utilities:
 CC=cc
 AR_RC=ar rc
 MKDIR_P=mkdir
@@ -28,13 +28,13 @@ RANLIB=echo
 CP=cp
 RM_F=/bin/rm -f
 
-
+# where make install puts libpng.a, $(OLDSO)*, and png.h
 prefix=/usr/local
 exec_prefix=$(prefix)
 
-
-
-
+# Where the zlib library and include files are located
+#ZLIBLIB=/usr/local/lib
+#ZLIBINC=/usr/local/include
 ZLIBLIB=../zlib
 ZLIBINC=../zlib
 
@@ -47,14 +47,14 @@ LIBPATH=$(exec_prefix)/lib
 MANPATH=$(prefix)/man
 BINPATH=$(exec_prefix)/bin
 
-
-
-
-
-
-
-
-
+# override DESTDIR= on the make install command line to easily support
+# installing into a temporary location.  Example:
+#
+#    make install DESTDIR=/tmp/build/libpng
+#
+# If you're going to install into a temporary location
+# via DESTDIR, $(DESTDIR)$(prefix) must already exist before
+# you execute make install.
 DESTDIR=
 
 DB=$(DESTDIR)$(BINPATH)
@@ -62,8 +62,8 @@ DI=$(DESTDIR)$(INCPATH)
 DL=$(DESTDIR)$(LIBPATH)
 DM=$(DESTDIR)$(MANPATH)
 
-
-
+# Pre-built configuration
+# See scripts/pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT = scripts/pnglibconf.h.prebuilt
 
 OBJS = png.o pngset.o pngget.o pngrutil.o pngtrans.o pngwutil.o \

@@ -74,7 +74,7 @@ typedef unsigned short  ush;
 typedef unsigned long   ulg;
 
 
- 
+/* prototypes for public functions in readpng.c */
 
 void readpng_version_info(void);
 

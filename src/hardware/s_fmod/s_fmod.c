@@ -13,14 +13,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
-
-
-
-
+//-----------------------------------------------------------------------------
+/// \file
+/// \brief General driver for 3D sound system
+///
+///	Implementend via FMOD_SOUND API
 
 #ifdef _WINDOWS
-
+//#define WIN32_LEAN_AND_MEAN
 #define RPC_NO_WINDOWS_H
 #include <windows.h>
 #else
@@ -40,16 +40,16 @@ FILE *logstream = NULL;
 #include <fmod.h>
 #endif
 
-#ifdef FSOUND_INIT_DONTLATENCYADJUST  
+#ifdef FSOUND_INIT_DONTLATENCYADJUST //Alam: why didn't I think about this before? :)
 #define FSOUND_Sample_Load(index,data,mode,length) FSOUND_Sample_Load(index,data,mode,0,length)
 #else
-#define OLDFMOD  
+#define OLDFMOD //Alam: Yea!
 #endif
 
 #ifdef __MINGW32__
 #include <FMOD/fmod_errors.h>
 #else
-#include <fmod_errors.h>	 
+#include <fmod_errors.h>	/* optional */
 #endif
 
 #define MAXCHANNEL 1024
@@ -60,7 +60,7 @@ FILE *logstream = NULL;
 #endif
 
 #ifndef MORESTUFF
-
+//#define MORESTUFF
 #define REL2D
 #endif
 
@@ -69,25 +69,25 @@ FILE *logstream = NULL;
 #include "../hw3dsdrv.h"
 #define INT2CHAR(p) (char *)p + 8
 
-
+//Doom sound sample format
 #define FSOUND_UNORMAL (FSOUND_8BITS | FSOUND_MONO | FSOUND_UNSIGNED)
-
+//Load Raw
 #define FSOUND_RAWLOAD (FSOUND_LOADRAW | FSOUND_LOADMEMORY)
-
+//Load Sample Raw from pointer
 #define FSOUND_DOOMLOAD (FSOUND_UNORMAL | FSOUND_RAWLOAD)
-
+//length of SFX
 #define SFXLENGTH (sfx->length-8)
 
-
-
-
-
+//SRB2 treats +X as east, +Y as north, +Z as up.
+//FSOUND treats +X as right, +Y as up, and +Z as forwards.
+//So SRB2's XZY is FSOUND's XYZ
+//And FSOUND's XZY is SRB2's XYZ
 
 static I_Error_t I_ErrorFMOD = NULL;
 
 static FSOUND_SAMPLE *blankfmsample = NULL;
 
-
+// Calculate sound pitching
 static float recalc_pitch(INT32 doom_pitch)
 {
 #ifdef MORESTUFF
@@ -99,19 +99,19 @@ static float recalc_pitch(INT32 doom_pitch)
 #endif
 }
 
-                                                                
-  
-             
-                                                                  
-                  
-  
-                                                               
-   
-
-
-
-
-
+/***************************************************************
+ *
+ * DBG_Printf
+ * Output error messages to debug log if DEBUG_TO_FILE is defined,
+ * else do nothing
+ *
+ **************************************************************
+ */
+// -----------------+
+// DBG_Printf       : Output error messages to debug log if DEBUG_TO_FILE is defined,
+//                  : else do nothing
+// Returns          :
+// -----------------+
 FUNCPRINTF void DBG_Printf(const char *lpFmt, ...)
 {
 #ifdef DEBUG_TO_FILE
@@ -127,7 +127,7 @@ FUNCPRINTF void DBG_Printf(const char *lpFmt, ...)
 #endif
 }
 
-
+// Start of head_relative system for FMOD3D
 
 typedef struct rellistener_s
 {
@@ -135,22 +135,22 @@ typedef struct rellistener_s
 	INT32 active;
 	float vel[3];
 
-} rellistener_s_t;  
+} rellistener_s_t; //Easy
 
-static rellistener_s_t rellistener[2];  
+static rellistener_s_t rellistener[2]; //The 2 listeners
 
 typedef struct relarray_s
 {
-	INT32             handle;              
-	INT32             chan;                
-	INT32             listener;            
-	rellistener_s_t pos;                 
+	INT32             handle;             // handle number
+	INT32             chan;               // real channel
+	INT32             listener;           // for which listener
+	rellistener_s_t pos;                // source position in 3D
 } relarray_s_t;
 
-static relarray_s_t relarray[STATIC_SOURCES_NUM+1];  
+static relarray_s_t relarray[STATIC_SOURCES_NUM+1]; // array of chans
 
 
-
+//set listener
 static void relset(INT32 which)
 {
 	INT32 i;
@@ -159,7 +159,7 @@ static void relset(INT32 which)
 	{
 		which = -which;
 
-		memset(&rellistener[which-1], 0, sizeof (rellistener_s_t));  
+		memset(&rellistener[which-1], 0, sizeof (rellistener_s_t)); //Delete me
 		for (i = 0; i <= STATIC_SOURCES_NUM; i++)
 		{
 			if (relarray[i].pos.active && relarray[i].listener == which)
@@ -172,10 +172,10 @@ static void relset(INT32 which)
 	}
 	else if (which == 1 || which ==2)
 	{
-		float pos[3], vel[3];  
-		which -= 1;  
+		float pos[3], vel[3]; // Temp bin
+		which -= 1; //Hello!
 
-
+		//Get update
 		FSOUND_3D_Listener_GetAttributes(&pos[0],&vel[0],NULL,NULL,NULL,NULL,NULL,NULL);
 		memcpy(&rellistener[which].pos[0],&pos[0],sizeof (pos));
 		memcpy(&rellistener[which].vel[0],&vel[0],sizeof (vel));
@@ -199,12 +199,12 @@ static void relset(INT32 which)
 	}
 }
 
-
+//setup system
 static void relsetup()
 {
 	INT32 i;
 
-
+	// Setup the rel array for use
 	for (i = 0; i <= STATIC_SOURCES_NUM; i++)
 	{
 		relarray[i].handle = FSOUND_FREE;
@@ -213,12 +213,12 @@ static void relsetup()
 		memset(&relarray[i].pos, 0, sizeof (rellistener_s_t));
 	}
 
-
+	// Set up the Listener array
 	relset(0);
 }
 
 
-
+//checkup for stack
 static INT32 relstack(INT32 chan)
 {
 	INT32 i;
@@ -231,7 +231,7 @@ static INT32 relstack(INT32 chan)
 	return -1;
 }
 
-
+//checkup for fake rel chan
 static INT32 relcheckup(INT32 chan)
 {
 	INT32 i = relstack(chan);
@@ -242,7 +242,7 @@ static INT32 relcheckup(INT32 chan)
 		return relarray[i].chan;
 }
 
-
+	//Update place rel chan's vol
 static void relvol(INT32 chan)
 {
 	INT32 vol = FSOUND_GetVolume(chan);
@@ -257,7 +257,7 @@ static void relvol(INT32 chan)
 		DBG_Printf("FMOD(relvol, FSOUND_SetVolume, Channel # %i): %s\n",chan,FMOD_ErrorString(FSOUND_GetError()));
 }
 
-
+//Copy rel chan
 static INT32 relcopy(INT32 handle)
 {
 	FSOUND_SAMPLE *fmsample = NULL;
@@ -293,7 +293,7 @@ static INT32 relcopy(INT32 handle)
 		if (FSOUND_GetError() != FMOD_ERR_NONE)
 			DBG_Printf("FMOD(relcopy, FSOUND_GetCurrentSample, handle# %i): %s\n",handle,FMOD_ErrorString(FSOUND_GetError()));
 		chan = FSOUND_PlaySoundEx(FSOUND_FREE,blankfmsample,NULL,true);
-
+		//return FSOUND_FREE;
 	}
 
 	if (FSOUND_GetCurrentSample(chan))
@@ -305,17 +305,17 @@ static INT32 relcopy(INT32 handle)
 		if (!FSOUND_3D_SetAttributes(chan,pos,vel))
 			DBG_Printf("FMOD(relcopy, FSOUND_3D_SetAttributes, handle#%i, channel#%i): %s\n",handle,chan,FMOD_ErrorString(FSOUND_GetError()));
 #endif
-  
-                                      
-                                                                                                                                 
-  
+/*
+		if (!FSOUND_SetReserved(chan, TURE))
+			DBG_Printf("FMOD(relcopy, FSOUND_SetReserved, handle#%i, channel# %i): %s\n",handle,chan,FMOD_ErrorString(FSOUND_GetError()));
+*/
 		return chan;
 	}
 
 	return FSOUND_FREE;
 }
 
-
+//update the rel chans
 static void relupdate(INT32 handle)
 {
 	if (handle == FSOUND_FREE)
@@ -324,8 +324,8 @@ static void relupdate(INT32 handle)
 
 		for (stack = 0; stack <= STATIC_SOURCES_NUM;stack++)
 		{
-
-
+			//if (FSOUND_GetCurrentSample(relarray[stack].handle))
+			//	relarray[stack].chan = relcopy(relarray[stack].handle);
 
 			if (relarray[stack].chan != FSOUND_FREE)
 			{
@@ -359,10 +359,10 @@ static void relupdate(INT32 handle)
 #endif
 }
 
-
+	//Update place rel chan's pos
 static void relplace(INT32 chan)
 {
-	float pos[3], vel[3];  
+	float pos[3], vel[3]; // Temp bin
 
 	if (chan == relcheckup(chan))
 		return;
@@ -384,7 +384,7 @@ static void relplace(INT32 chan)
 	}
 }
 
-
+//New rel chan
 static void reladd(INT32 chan)
 {
 	if (chan != relcheckup(chan))
@@ -422,14 +422,14 @@ static void reladd(INT32 chan)
 	}
 }
 
+// End of head_relative system for FMOD3D
 
 
-
-                                                                               
-  
-                                 
-  
-                                                                               
+/******************************************************************************
+ *
+ * Initialise driver and listener
+ *
+ *****************************************************************************/
 EXPORT INT32 HWRAPI(Startup) (I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 {
 	boolean inited = false;
@@ -458,7 +458,7 @@ EXPORT INT32 HWRAPI(Startup) (I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 
 		if (FSOUND_GetDriverCaps(i, &caps))
 		{
-			DBG_Printf("FMOD: Driver# %d - %s\n", i+1, FSOUND_GetDriverName(i));     
+			DBG_Printf("FMOD: Driver# %d - %s\n", i+1, FSOUND_GetDriverName(i));    // print driver names
 			if (caps & FSOUND_CAPS_HARDWARE)
 				DBG_Printf("This sound hardware supports hardware accelerated 3d sound.\n");
 
@@ -586,11 +586,11 @@ EXPORT void HWRAPI(Shutdown) (void)
 	FSOUND_Close();
 }
 
-                                                                               
-  
-                    
-  
-                                                                                
+/******************************************************************************
+ *
+ * Creates 3D source
+ *
+ ******************************************************************************/
 
 EXPORT INT32 HWRAPI (Add3DSource) (source3D_data_t *src, sfx_data_t *sfx)
 {
@@ -671,11 +671,11 @@ EXPORT INT32 HWRAPI (Add3DSource) (source3D_data_t *src, sfx_data_t *sfx)
 	return chan;
 }
 
-                                                                               
-  
-                             
-  
-                                                                                
+/******************************************************************************
+ *
+ * Creates 2D (stereo) source
+ *
+ ******************************************************************************/
 EXPORT INT32 HWRAPI (Add2DSource) (sfx_data_t *sfx)
 {
 	FSOUND_SAMPLE *fmsample = NULL;
@@ -739,12 +739,12 @@ EXPORT INT32 HWRAPI (StartSource) (INT32 chan)
 	if (FSOUND_Sample_GetMode(fmsample) & FSOUND_2D)
 	{
 		DBG_Printf("FMOD(StartSource,Main): Starting 2D channel %i?\n",chan);
-
+		//return -1;
 	}
 	else
 	{
 		DBG_Printf("FMOD(StartSource,Main): Starting 3D Channel %i?\n",chan);
-
+		//return -1;
 	}
 #endif
 
@@ -816,14 +816,14 @@ EXPORT INT32 HWRAPI (IsPlaying) (INT32 chan)
 	return FSOUND_IsPlaying(relcheckup(chan));
 }
 
-                                                                               
-                 
-  
-                                   
-             
-                
-             
-                                                                               
+/******************************************************************************
+ * UpdateListener
+ *
+ * Set up main listener properties:
+ * - position
+ * - orientation
+ * - velocity
+ *****************************************************************************/
 EXPORT void HWRAPI (UpdateListener) (listener_data_t *data)
 {
 	if (data)
@@ -895,11 +895,11 @@ EXPORT void HWRAPI (UpdateSourceVolume) (INT32 chan, INT32 vol)
 	}
 }
 
-                                                                               
-  
-                                                      
-  
-                                                                               
+/******************************************************************************
+ *
+ * Update volume and separation (panning) of 2D source
+ *
+ *****************************************************************************/
 EXPORT void HWRAPI (Update2DSoundParms) (INT32 chan, INT32 vol, INT32 sep)
 {
 	FSOUND_SAMPLE *fmsample;
@@ -914,7 +914,7 @@ EXPORT void HWRAPI (Update2DSoundParms) (INT32 chan, INT32 vol, INT32 sep)
 		if (!FSOUND_Sample_GetMode(fmsample) & FSOUND_2D)
 		{
 			DBG_Printf("FMOD(Update2DSoundParms,Main): 2D Vol/Pan on 3D channel %i?\n",chan);
-
+			//return;
 		}
 	}
 	else
@@ -933,9 +933,9 @@ EXPORT void HWRAPI (Update2DSoundParms) (INT32 chan, INT32 vol, INT32 sep)
 		DBG_Printf("FMOD(Update2DSoundParms, FSOUND_SetPaused, Resume, channel %i): %s\n", chan,FMOD_ErrorString(FSOUND_GetError()));
 }
 
-
-
-
+// --------------------------------------------------------------------------
+// Set the global volume for sound effects
+// --------------------------------------------------------------------------
 EXPORT void HWRAPI (SetGlobalSfxVolume) (INT32 vol)
 {
 	INT32 realvol = (vol<<3)+(vol>>2);
@@ -946,7 +946,7 @@ EXPORT void HWRAPI (SetGlobalSfxVolume) (INT32 vol)
 #endif
 }
 
-
+//Alam_GBC: Not Used?
 EXPORT INT32 HWRAPI (SetCone) (INT32 chan, cone_def_t *cone_def)
 {
 	FSOUND_SAMPLE *fmsample;
@@ -1000,8 +1000,8 @@ EXPORT void HWRAPI (Update3DSource) (INT32 chan, source3D_pos_t *sfx)
 	{
 		if (FSOUND_Sample_GetMode(fmsample) & FSOUND_2D)
 		{
-
-
+			//DBG_Printf("FMOD(Update3DSource,Main): 3D Pos/Vel on 2D Channel %i?\n",chan);
+			//return;
 		}
 	}
 	else
@@ -1015,9 +1015,9 @@ EXPORT void HWRAPI (Update3DSource) (INT32 chan, source3D_pos_t *sfx)
 		relplace(chan);
 }
 
-
-
-
+//-------------------------------------------------------------
+// Load new sound data into source
+//-------------------------------------------------------------
 EXPORT INT32 HWRAPI (Reload3DSource) (INT32 handle, sfx_data_t *sfx)
 {
 	source3D_data_t src;
@@ -1055,13 +1055,13 @@ EXPORT INT32 HWRAPI (Reload3DSource) (INT32 handle, sfx_data_t *sfx)
 	if (!FSOUND_3D_GetAttributes(handle,&pos[0],&vel[0]))
 		DBG_Printf("FMOD(Reload3DSource, FSOUND_3D_GetAttributes, channel %i, for sfxid# %i): %s\n",handle,sfx->id,FMOD_ErrorString(FSOUND_GetError()));
 
-
+	//if (handle == chan)
 	{
 		if (fmsample != blankfmsample) FSOUND_Sample_Free(fmsample);
 	}
-
+	//else
 	{
-
+	//	fmsample = FSOUND_GetCurrentSample(handle);
 	}
 
 	fmsample = FSOUND_Sample_Load(FSOUND_FREE, INT2CHAR(sfx->data), FSOUND_DOOMLOAD, SFXLENGTH);
@@ -1109,12 +1109,12 @@ EXPORT INT32 HWRAPI (Reload3DSource) (INT32 handle, sfx_data_t *sfx)
 	return chan;
 }
 
-                                                                               
-  
-                                                                
-                                  
-  
-                                                                               
+/******************************************************************************
+ *
+ * Destroy source and remove it from stack if it is a 2D source.
+ * Otherwise put source into cache
+ *
+ *****************************************************************************/
 EXPORT void HWRAPI (KillSource) (INT32 chan)
 {
 	FSOUND_SAMPLE *fmsample;
@@ -1133,7 +1133,7 @@ EXPORT void HWRAPI (KillSource) (INT32 chan)
 #ifdef MORESTUFF
 	if (FSOUND_IsPlaying(relchan))
 		if (!FSOUND_SetLoopMode(relchan, FSOUND_LOOP_OFF))
-			DBG_Printf("FMOD(KillSource,FSOUND_SetLoopMode, for channel %i): %s\n", chan,FMOD_ErrorString(FSOUND_GetError()));  
+			DBG_Printf("FMOD(KillSource,FSOUND_SetLoopMode, for channel %i): %s\n", chan,FMOD_ErrorString(FSOUND_GetError())); //Alam_GBC: looping off
 	else
 #endif
 	if (!FSOUND_StopSound(relchan))
@@ -1147,17 +1147,17 @@ EXPORT void HWRAPI (KillSource) (INT32 chan)
 }
 
 #ifdef _WINDOWS
-BOOL WINAPI DllMain(HINSTANCE hinstDLL,  
-                    DWORD fdwReason,     
-                    LPVOID lpvReserved)  
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, // handle to DLL module
+                    DWORD fdwReason,    // reason for calling function
+                    LPVOID lpvReserved) // reserved
 {
-
+	// Perform actions based on the reason for calling.
 	UNREFERENCED_PARAMETER(lpvReserved);
 	switch (fdwReason)
 	{
 		case DLL_PROCESS_ATTACH:
-
-
+			// Initialize once for each new process.
+			// Return FALSE to fail DLL load.
 #ifdef DEBUG_TO_FILE
 			logstream = fopen("s_fmod.log", "wt");
 			if (logstream == NULL)
@@ -1167,15 +1167,15 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL,
 			break;
 
 		case DLL_THREAD_ATTACH:
-
+			// Do thread-specific initialization.
 			break;
 
 		case DLL_THREAD_DETACH:
-
+			// Do thread-specific cleanup.
 			break;
 
 		case DLL_PROCESS_DETACH:
-
+			// Perform any necessary cleanup.
 #ifdef DEBUG_TO_FILE
 			if (logstream)
 			{
@@ -1185,13 +1185,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL,
 #endif
 			break;
 	}
-	return TRUE;  
+	return TRUE; // Successful DLL_PROCESS_ATTACH.
 }
 #elif !defined (HAVE_SDL)
 
-
-
-
+// **************************************************************************
+//                                                                  FUNCTIONS
+// **************************************************************************
 
 EXPORT void _init()
 {

@@ -10,19 +10,19 @@
 #include "u_list.h"
 #include "z_zone.h"
 
+// Utility for managing
+// structures in a linked
+// list.
+//
+// Struct must have "next" and "prev" pointers
+// as its first two variables.
+//
 
-
-
-
-
-
-
-
-
-
-
-
-
+//
+// ListAdd
+//
+// Adds an item to the list
+//
 void ListAdd(void *pItem, listitem_t **itemHead)
 {
 	listitem_t *item = (listitem_t*)pItem;
@@ -48,12 +48,12 @@ void ListAdd(void *pItem, listitem_t **itemHead)
 	}
 }
 
-
-
-
-
-
-
+//
+// ListAddFront
+//
+// Adds an item to the front of the list
+// (This is much faster)
+//
 void ListAddFront(void *pItem, listitem_t **itemHead)
 {
 	listitem_t *item = (listitem_t*)pItem;
@@ -72,11 +72,11 @@ void ListAddFront(void *pItem, listitem_t **itemHead)
 	}
 }
 
-
-
-
-
-
+//
+// ListAddBefore
+//
+// Adds an item before the item specified in the list
+//
 void ListAddBefore(void *pItem, void *pSpot, listitem_t **itemHead)
 {
 	listitem_t *item = (listitem_t*)pItem;
@@ -95,11 +95,11 @@ void ListAddBefore(void *pItem, void *pSpot, listitem_t **itemHead)
 	}
 }
 
-
-
-
-
-
+//
+// ListAddAfter
+//
+// Adds an item after the item specified in the list
+//
 void ListAddAfter(void *pItem, void *pSpot, listitem_t **itemHead)
 {
 	listitem_t *item = (listitem_t*)pItem;
@@ -118,27 +118,27 @@ void ListAddAfter(void *pItem, void *pSpot, listitem_t **itemHead)
 	}
 }
 
-
-
-
-
-
+//
+// ListRemove
+//
+// Take an item out of the list and free its memory.
+//
 void ListRemove(void *pItem, listitem_t **itemHead)
 {
 	listitem_t *item = (listitem_t*)pItem;
 
-	if (item == *itemHead)  
+	if (item == *itemHead) // Start of list
 	{
 		*itemHead = item->next;
 
 		if (*itemHead)
 			(*itemHead)->prev = NULL;
 	}
-	else if (item->next == NULL)  
+	else if (item->next == NULL) // end of list
 	{
 		item->prev->next = NULL;
 	}
-	else  
+	else // Somewhere in between
 	{
 		item->prev->next = item->next;
 		item->next->prev = item->prev;
@@ -147,11 +147,11 @@ void ListRemove(void *pItem, listitem_t **itemHead)
 	Z_Free (item);
 }
 
-
-
-
-
-
+//
+// ListRemoveAll
+//
+// Removes all items from the list, freeing their memory.
+//
 void ListRemoveAll(listitem_t **itemHead)
 {
 	listitem_t *item;
@@ -163,39 +163,39 @@ void ListRemoveAll(listitem_t **itemHead)
 	}
 }
 
-
-
-
-
-
+//
+// ListRemoveNoFree
+//
+// Take an item out of the list, but don't free its memory.
+//
 void ListRemoveNoFree(void *pItem, listitem_t **itemHead)
 {
 	listitem_t *item = (listitem_t*)pItem;
 
-	if (item == *itemHead)  
+	if (item == *itemHead) // Start of list
 	{
 		*itemHead = item->next;
 
 		if (*itemHead)
 			(*itemHead)->prev = NULL;
 	}
-	else if (item->next == NULL)  
+	else if (item->next == NULL) // end of list
 	{
 		item->prev->next = NULL;
 	}
-	else  
+	else // Somewhere in between
 	{
 		item->prev->next = item->next;
 		item->next->prev = item->prev;
 	}
 }
 
-
-
-
-
-
-
+//
+// ListGetCount
+//
+// Counts the # of items in a list
+// Should not be used in performance-minded code
+//
 unsigned int ListGetCount(void *itemHead)
 {
 	listitem_t *item = (listitem_t*)itemHead;
@@ -207,12 +207,12 @@ unsigned int ListGetCount(void *itemHead)
 	return count;
 }
 
-
-
-
-
-
-
+//
+// ListGetByIndex
+//
+// Gets an item in the list by its index
+// Should not be used in performance-minded code
+//
 listitem_t *ListGetByIndex(void *itemHead, unsigned int index)
 {
 	listitem_t *head = (listitem_t*)itemHead;

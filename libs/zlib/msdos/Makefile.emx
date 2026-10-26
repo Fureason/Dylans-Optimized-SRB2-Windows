@@ -2,24 +2,24 @@
 # Copyright (C) 1995-1998 Jean-loup Gailly.
 # For conditions of distribution and use, see copyright notice in zlib.h
 
-
-
-
-
+# To compile, or to compile and test, type:
+#
+#   make -fmakefile.emx;  make test -fmakefile.emx
+#
 
 CC=gcc
 
-
-
-
+#CFLAGS=-MMD -O
+#CFLAGS=-O -DMAX_WBITS=14 -DMAX_MEM_LEVEL=7
+#CFLAGS=-MMD -g -DZLIB_DEBUG
 CFLAGS=-MMD -O3 $(BUTT) -Wall -Wwrite-strings -Wpointer-arith -Wconversion \
              -Wstrict-prototypes -Wmissing-prototypes
 
-
+# If cp.exe is available, replace "copy /Y" with "cp -fp" .
 CP=copy /Y
-
+# If gnu install.exe is available, replace $(CP) with ginstall.
 INSTALL=$(CP)
-
+# The default value of RM is "rm -f."  If "rm.exe" is found, comment out:
 RM=del
 LDLIBS=-L. -lzlib
 LD=$(CC) -s -o

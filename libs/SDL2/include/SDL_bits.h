@@ -19,11 +19,11 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-   
-                    
-  
-                                                  
-   
+/**
+ *  \file SDL_bits.h
+ *
+ *  Functions for fiddling with bits and bitmasks.
+ */
 
 #ifndef SDL_bits_h_
 #define SDL_bits_h_
@@ -31,22 +31,22 @@
 #include "SDL_stdinc.h"
 
 #include "begin_code.h"
- 
+/* Set up for C function definitions, even when using C++ */
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-   
-                    
-   
+/**
+ *  \file SDL_bits.h
+ */
 
-   
-                                                                              
-                                                                           
-                 
-  
-                                                                           
-   
+/**
+ *  Get the index of the most significant bit. Result is undefined when called
+ *  with 0. This operation can also be stated as "count leading zeroes" and
+ *  "log base 2".
+ *
+ *  \return the index of the most significant bit, or -1 if the value is 0.
+ */
 #if defined(__WATCOMC__) && defined(__386__)
 extern __inline int _SDL_bsr_watcom(Uint32);
 #pragma aux _SDL_bsr_watcom = \
@@ -60,9 +60,9 @@ SDL_FORCE_INLINE int
 SDL_MostSignificantBitIndex32(Uint32 x)
 {
 #if defined(__GNUC__) && (__GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4))
-                                           
-                                                                      
-       
+    /* Count Leading Zeroes builtin in GCC.
+     * http://gcc.gnu.org/onlinedocs/gcc-4.3.4/gcc/Other-Builtins.html
+     */
     if (x == 0) {
         return -1;
     }
@@ -115,12 +115,12 @@ SDL_HasExactlyOneBitSet32(Uint32 x)
     return SDL_FALSE;
 }
 
- 
+/* Ends C function definitions when using C++ */
 #ifdef __cplusplus
 }
 #endif
 #include "close_code.h"
 
-#endif  
+#endif /* SDL_bits_h_ */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

@@ -9,11 +9,11 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
-                                                                                 
-                                                                                 
-                                                                                 
-                                                                                 
-                                                                                  
+/********************************************************************************
+ *                                                                              *
+ * Running moose :) Coded by Mike Gorchak.                                      *
+ *                                                                              *
+ ********************************************************************************/
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,7 +31,7 @@
 #define MOOSEFRAME_SIZE   (MOOSEPIC_W * MOOSEPIC_H)
 #define MOOSEFRAMES_COUNT 10
 
-   
+/* *INDENT-OFF* */ /* clang-format off */
 SDL_Color MooseColors[84] = {
     {49, 49, 49, 255}, {66, 24, 0, 255}, {66, 33, 0, 255}, {66, 66, 66, 255},
     {66, 115, 49, 255}, {74, 33, 0, 255}, {74, 41, 16, 255}, {82, 33, 8, 255},
@@ -55,7 +55,7 @@ SDL_Color MooseColors[84] = {
     {214, 173, 140, 255}, {222, 181, 148, 255}, {222, 189, 132, 255}, {222, 189, 156, 255},
     {222, 222, 222, 255}, {231, 198, 165, 255}, {231, 231, 231, 255}, {239, 206, 173, 255}
 };
-   
+/* *INDENT-ON* */ /* clang-format on */
 
 Uint8 MooseFrames[MOOSEFRAMES_COUNT][MOOSEFRAME_SIZE];
 
@@ -131,7 +131,7 @@ int main(int argc, char **argv)
     SDL_RWops *handle;
     char *filename = NULL;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -139,7 +139,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-     
+    /* load the moose images */
     filename = GetResourceFilename(NULL, "moose.dat");
     if (filename == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Out of memory\n");
@@ -154,7 +154,7 @@ int main(int argc, char **argv)
     SDL_RWread(handle, MooseFrames, MOOSEFRAME_SIZE, MOOSEFRAMES_COUNT);
     SDL_RWclose(handle);
 
-     
+    /* Create the window and renderer */
     window = SDL_CreateWindow("Happy Moose",
                               SDL_WINDOWPOS_UNDEFINED,
                               SDL_WINDOWPOS_UNDEFINED,
@@ -177,7 +177,7 @@ int main(int argc, char **argv)
         quit(5);
     }
 
-     
+    /* Loop, waiting for QUIT or the escape key */
     frame = 0;
 
 #ifdef __EMSCRIPTEN__
@@ -194,4 +194,4 @@ int main(int argc, char **argv)
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

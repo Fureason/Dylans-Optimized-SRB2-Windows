@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Kss_Scc_Apu.h"
 
@@ -15,8 +15,8 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
-
-
+// Tones above this frequency are treated as disabled tone at half volume.
+// Power of two is more efficient (avoids division).
 unsigned const inaudible_freq = 16384;
 
 int const wave_size = 0x20;
@@ -45,7 +45,7 @@ void Scc_Apu::run_until( blip_time_t end_time )
 		
 		BOOST::int8_t const* wave = (BOOST::int8_t*) regs + index * wave_size;
 		if ( index == osc_count - 1 )
-			wave -= wave_size;  
+			wave -= wave_size; // last two oscs share wave
 		{
 			int amp = wave [osc.phase] * volume;
 			int delta = amp - osc.last_amp;
@@ -61,7 +61,7 @@ void Scc_Apu::run_until( blip_time_t end_time )
 		{
 			if ( !volume )
 			{
-
+				// maintain phase
 				blargg_long count = (end_time - time + period - 1) / period;
 				osc.phase = (osc.phase + count) & (wave_size - 1);
 				time += count * period;
@@ -71,7 +71,7 @@ void Scc_Apu::run_until( blip_time_t end_time )
 				
 				int phase = osc.phase;
 				int last_wave = wave [phase];
-				phase = (phase + 1) & (wave_size - 1);  
+				phase = (phase + 1) & (wave_size - 1); // pre-advance for optimal inner loop
 				
 				do
 				{
@@ -87,7 +87,7 @@ void Scc_Apu::run_until( blip_time_t end_time )
 				}
 				while ( time < end_time );
 				
-				osc.phase = phase = (phase - 1) & (wave_size - 1);  
+				osc.phase = phase = (phase - 1) & (wave_size - 1); // undo pre-advance
 				osc.last_amp = wave [phase] * volume;
 			}
 		}

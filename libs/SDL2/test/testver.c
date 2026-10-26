@@ -10,9 +10,9 @@
   freely.
 */
 
-                                                                          
-                 
-  
+/* Test program to compare the compile-time version of SDL with the linked
+   version of SDL
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
     SDL_version compiled;
     SDL_version linked;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)

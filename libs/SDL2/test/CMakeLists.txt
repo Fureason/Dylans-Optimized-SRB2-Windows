@@ -67,25 +67,25 @@ else()
 endif()
 
 if(WINDOWS)
-
+    # mingw32 must come before SDL2main to link successfully
     if(MINGW OR CYGWIN)
         link_libraries(mingw32)
     endif()
 
-
+    # CET support was added in VS 16.7
     if(MSVC_VERSION GREATER 1926 AND CMAKE_GENERATOR_PLATFORM MATCHES "Win32|x64")
         link_libraries(-CETCOMPAT)
     endif()
 
-
-
+    # FIXME: Parent directory CMakeLists.txt only sets these for mingw/cygwin,
+    # but we need them for VS as well.
     link_libraries(SDL2main)
     add_definitions(-Dmain=SDL_main)
 endif()
 
-
+# CMake incorrectly detects opengl32.lib being present on MSVC ARM64
 if(NOT MSVC OR NOT CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
-
+    # Prefer GLVND, if present
     set(OpenGL_GL_PREFERENCE GLVND)
     find_package(OpenGL)
 endif()
@@ -239,7 +239,7 @@ if(OPENGL_FOUND)
         if(EMSCRIPTEN AND OPENGL_gl_LIBRARY STREQUAL "nul")
             set(OPENGL_gl_LIBRARY GL)
         endif()
-
+        # emscripten's FindOpenGL.cmake does not create OpenGL::GL
         target_link_libraries(testshader ${OPENGL_gl_LIBRARY})
         target_link_libraries(testgl2 ${OPENGL_gl_LIBRARY})
     endif()
@@ -252,7 +252,7 @@ file(GLOB RESOURCE_FILES *.bmp *.wav *.hex moose.dat utf8.txt)
 file(COPY ${RESOURCE_FILES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 if(PSP)
-
+    # Build EBOOT files if building for PSP
     set(BUILD_EBOOT
         ${SDL_TESTS_NEEDS_ESOURCES}
         testatomic
@@ -372,18 +372,18 @@ foreach(APP IN LISTS SDL_TESTS_NEEDS_RESOURCES)
         endif()
     endforeach(RESOURCE_FILE)
     if(APPLE)
-
+        # Make sure resource files get installed into macOS/iOS .app bundles.
         target_sources(${APP} PRIVATE "${RESOURCE_FILES}")
         set_target_properties(${APP} PROPERTIES RESOURCE "${RESOURCE_FILES}")
     endif()
 endforeach()
 
-
-
+# Set Apple App ID / Bundle ID.  This is needed to launch apps on some Apple
+# platforms (iOS, for example).
 if(APPLE)
     if(${CMAKE_VERSION} VERSION_LESS "3.7.0")
-
-
+        # CMake's 'BUILDSYSTEM_TARGETS' property is only available in
+        # CMake 3.7 and above.
         message(WARNING "Unable to set Bundle ID for Apple .app builds due to old CMake (pre 3.7).")
     else()
         get_property(TARGETS DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY BUILDSYSTEM_TARGETS)

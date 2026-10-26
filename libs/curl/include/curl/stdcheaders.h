@@ -30,4 +30,4 @@ size_t fwrite(const void *, size_t, size_t, FILE *);
 int strcasecmp(const char *, const char *);
 int strncasecmp(const char *, const char *, size_t);
 
-#endif  
+#endif /* CURLINC_STDCHEADERS_H */

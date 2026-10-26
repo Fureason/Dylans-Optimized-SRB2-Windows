@@ -1,4 +1,4 @@
-
+#Add-on Makefile for wxDev-C++ project file
 ifdef ComSpec
 COMSPEC=$(ComSpec)
 endif

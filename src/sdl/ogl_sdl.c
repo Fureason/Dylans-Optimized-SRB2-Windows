@@ -14,9 +14,9 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
-
-
+//-----------------------------------------------------------------------------
+/// \file
+/// \brief SDL specific part of the OpenGL API for SRB2
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4214 4244)
@@ -73,8 +73,8 @@ PFNglGetIntegerv pglGetIntegerv;
 PFNglGetString pglGetString;
 #endif
 
-                                    
-  
+/**	\brief SDL video display surface
+*/
 INT32 oglflags = 0;
 SDL_GLContext sdlglcontext = 0;
 
@@ -105,9 +105,9 @@ static void OglSdlLoadDwmFlush(void)
 boolean OglSdlCompositorProvidesPacing(void)
 {
 #if defined(_WIN32)
-	                                                                            
-                                                                          
-                                
+	/* While DWM has recently missed several presentation deadlines the engine's
+	 * absolute-deadline limiter is a smoother fallback than blocking another
+	 * render frame in DwmFlush. */
 	return windowed_compositor_pacing && !windowed_dwm_cooldown;
 #else
 	return false;
@@ -124,10 +124,10 @@ void OglSdlSetVSync(INT32 mode, boolean report)
 	boolean compositorpacing = false;
 
 #if defined(_WIN32)
-	                                                                           
-                                                                          
-                                                                         
-                                                                        
+	/* A composited Windows OpenGL window is already presented by DWM. Blocking
+	 * WGL VSync on top of that can miss alternating compositor deadlines and
+	 * produce 70-90 FPS on a 165 Hz display. Submit immediately and let the
+	 * engine pace frames to the monitor; fullscreen keeps normal VSync. */
 	if (mode && window
 	&& !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN))
 	{
@@ -142,9 +142,9 @@ void OglSdlSetVSync(INT32 mode, boolean report)
 	actual = SDL_GL_GetSwapInterval();
 	compositorpacing = compositorpacing && actual == 0;
 #if defined(_WIN32)
-	                                                                            
-                                                                           
-                                                                    
+	/* DwmFlush gives us the compositor's real cadence. Unlike sleeping after an
+	 * early swap, this keeps the completed frame queued for as little time as
+	 * possible and avoids an extra frame of windowed input latency. */
 	windowed_compositor_pacing = compositorpacing && windowed_dwm_flush != NULL;
 	windowed_dwm_cooldown = 0;
 	windowed_dwm_slow_score = 0;
@@ -188,14 +188,14 @@ boolean LoadGL(void)
 	return SetupGLfunc();
 }
 
-                                     
+/**	\brief	The OglSdlSurface function
 
-               
-                
-                                           
+	\param	w	width
+	\param	h	height
+	\param	isFullscreen	if true, go fullscreen
 
-                                    
-  
+	\return	if true, changed video mode
+*/
 boolean OglSdlSurface(INT32 w, INT32 h)
 {
 	INT32 cbpp = cv_scr_depth.value < 16 ? 16 : cv_scr_depth.value;
@@ -217,11 +217,11 @@ boolean OglSdlSurface(INT32 w, INT32 h)
 		if (strcmp((const char*)gl_renderer, "GDI Generic") == 0 &&
 			strcmp((const char*)gl_version, "1.1.0") == 0)
 		{
-
-
-
-
-
+			// Oh no... Windows gave us the GDI Generic rasterizer, so something is wrong...
+			// The game will crash later on when unsupported OpenGL commands are encountered.
+			// Instead of a nondescript crash, show a more informative error message.
+			// Also set the renderer variable back to software so the next launch won't
+			// repeat this error.
 			CV_StealthSet(&cv_renderer, "Software");
 			I_Error("OpenGL Error: Failed to access the GPU. Possible reasons include:\n"
 					"- GPU vendor has dropped OpenGL support on your GPU and OS. (Old GPU?)\n"
@@ -243,9 +243,9 @@ boolean OglSdlSurface(INT32 w, INT32 h)
 
 	SetupGLFunc4();
 
-	                                                                         
-                                                                           
-                                                                
+	/* Auto was added before the original Min/Max range. The hardware maximum
+	 * therefore belongs to the third entry; assigning it to entry 1 turns Min
+	 * into Max and leaves two duplicate Max values in the menu. */
 	glanisotropicmode_cons_t[2].value = maximumAnisotropy;
 
 	OglSdlSetVSync(cv_vidwait.value, true);
@@ -260,21 +260,21 @@ boolean OglSdlSurface(INT32 w, INT32 h)
 	return true;
 }
 
-                                          
+/**	\brief	The OglSdlFinishUpdate function
 
-                                   
+	\param	vidwait	wait for video sync
 
-             
-  
+	\return	void
+*/
 void OglSdlFinishUpdate(INT32 waitvbl)
 {
 	static INT32 oldwaitvbl = -1;
 	int sdlw, sdlh;
 	if (oldwaitvbl != waitvbl)
 	{
-		                                                                          
-                                                                         
-                                                                         
+		/* Reporting uses the console, which may finish the partially drawn frame.
+		 * Commit the new value first so that re-entry cannot recurse until the
+		 * process exhausts its stack during startup or a live VSync change. */
 		oldwaitvbl = waitvbl;
 		OglSdlSetVSync(waitvbl, true);
 	}
@@ -294,14 +294,14 @@ void OglSdlFinishUpdate(INT32 waitvbl)
 		const precise_t elapsed = I_GetPreciseTime() - started;
 		const precise_t precision = I_GetPrecisePrecision();
 		const UINT32 refresh = max(30u, I_GetRefreshRate());
-		                                                                      
-                                                                         
+		/* Allow two and a half refresh intervals. A single missed deadline is
+		 * harmless; repeated 30-40 ms waits are the visible windowed hitch. */
 		const precise_t slow = (precise_t)(((UINT64)precision * 5) / (2 * refresh));
 
 		if (FAILED(result))
 		{
-			                                                                        
-                                                                           
+			/* Fall back to the engine's absolute-deadline limiter if composition is
+			 * unavailable or changes underneath us (for example remote desktop). */
 			windowed_compositor_pacing = false;
 			CONS_Alert(CONS_WARNING,
 				"Windows compositor pacing became unavailable; using engine pacing.\n");
@@ -311,9 +311,9 @@ void OglSdlFinishUpdate(INT32 waitvbl)
 			windowed_dwm_slow_score = min(4, windowed_dwm_slow_score + 2);
 			if (windowed_dwm_slow_score >= 4)
 			{
-				                                                                        
-                                                                          
-                                         
+				/* Retry DWM after a short quiet period. This is deliberately temporary:
+				 * moving the window or a compositor transition should not permanently
+				 * change the selected VSync mode. */
 				windowed_dwm_cooldown = 2 * refresh;
 				windowed_dwm_slow_score = 0;
 			}
@@ -325,10 +325,10 @@ void OglSdlFinishUpdate(INT32 waitvbl)
 
 	GClipRect(0, 0, realwidth, realheight, NZCLIP_PLANE);
 
-
-
-
-
+	// Sryder:	We need to draw the final screen texture again into the other buffer in the original position so that
+	//			effects that want to take the old screen can do so after this
+	// Generic2 has the screen image without palette rendering brightness adjustments.
+	// Using that here will prevent brightness adjustments being applied twice.
 	DrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0);
 }
 
@@ -354,7 +354,7 @@ void OglSdlDestroySoftwarePresenter(void)
 EXPORT void HWRAPI(OglSdlSetPalette) (RGBA_t *palette)
 {
 	size_t palsize = (sizeof(RGBA_t) * 256);
-
+	// on a palette change, you have to reload all of the textures
 	if (memcmp(&myPaletteData, palette, palsize))
 	{
 		memcpy(&myPaletteData, palette, palsize);
@@ -362,5 +362,5 @@ EXPORT void HWRAPI(OglSdlSetPalette) (RGBA_t *palette)
 	}
 }
 
-#endif  
-#endif  
+#endif //HWRENDER
+#endif //SDL

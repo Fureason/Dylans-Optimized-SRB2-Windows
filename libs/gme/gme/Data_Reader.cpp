@@ -1,4 +1,4 @@
-
+// File_Extractor 0.4.0. http://www.slack.net/~ant/
 
 #include "Data_Reader.h"
 
@@ -68,7 +68,7 @@ blargg_err_t File_Reader::skip( long n )
 	return seek( tell() + n );
 }
 
-
+// Subset_Reader
 
 Subset_Reader::Subset_Reader( Data_Reader* dr, long size )
 {
@@ -89,7 +89,7 @@ long Subset_Reader::read_avail( void* p, long s )
 	return in->read_avail( p, s );
 }
 
-
+// Remaining_Reader
 
 Remaining_Reader::Remaining_Reader( void const* h, long size, Data_Reader* r )
 {
@@ -139,7 +139,7 @@ blargg_err_t Remaining_Reader::read( void* out, long count )
 	return in->read( (char*) out + first, second );
 }
 
-
+// Mem_File_Reader
 
 Mem_File_Reader::Mem_File_Reader( const void* p, long s ) :
 	begin( (const char*) p ),
@@ -172,7 +172,7 @@ blargg_err_t Mem_File_Reader::seek( long n )
 	return 0;
 }
 
-
+// Callback_Reader
 
 Callback_Reader::Callback_Reader( callback_t c, long size, void* d ) :
 	callback( c ),
@@ -200,7 +200,7 @@ blargg_err_t Callback_Reader::read( void* out, long count )
 	return callback( data, out, count );
 }
 
-
+// Std_File_Reader
 
 Std_File_Reader::Std_File_Reader() : file_( 0 ) { }
 
@@ -258,7 +258,7 @@ void Std_File_Reader::close()
 	}
 }
 
-
+// Gzip_File_Reader
 
 #ifdef HAVE_ZLIB_H
 

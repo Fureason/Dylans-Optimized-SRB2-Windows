@@ -9,12 +9,12 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* Call SDL_GetPrefPath to warm the SHGetFolderPathW cache */
 
-   
-                                                                            
-                                                             
-   
+/**
+ * We noticed frequent ci timeouts running testfilesystem on 32-bit Windows.
+ * Internally, this functions calls Shell32.SHGetFolderPathW.
+ */
 
 #include "SDL.h"
 

@@ -10,11 +10,11 @@
   freely.
 */
 
- 
+/* Program to load a wave file and loop playing it using SDL audio */
 
-                                                            
-                                 
-  
+/* loopwaves.c is much more robust in handling WAVE files --
+    This is only for simple WAVEs
+*/
 #include "SDL_config.h"
 
 #include <stdio.h>
@@ -30,14 +30,14 @@
 static struct
 {
     SDL_AudioSpec spec;
-    Uint8 *sound;     
-    Uint32 soundlen;  
-    int soundpos;     
+    Uint8 *sound;    /* Pointer to wave data */
+    Uint32 soundlen; /* Length of wave data */
+    int soundpos;    /* Current play position */
 } wave;
 
 static SDL_AudioDeviceID device;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -57,7 +57,7 @@ close_audio()
 static void
 open_audio()
 {
-     
+    /* Initialize fillerup() variables */
     device = SDL_OpenAudioDevice(NULL, SDL_FALSE, &wave.spec, NULL, 0);
     if (!device) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't open audio: %s\n", SDL_GetError());
@@ -65,7 +65,7 @@ open_audio()
         quit(2);
     }
 
-     
+    /* Let the audio run */
     SDL_PauseAudioDevice(device, SDL_FALSE);
 }
 
@@ -83,11 +83,11 @@ fillerup(void *unused, Uint8 *stream, int len)
     Uint8 *waveptr;
     int waveleft;
 
-     
+    /* Set up the pointers */
     waveptr = wave.sound + wave.soundpos;
     waveleft = wave.soundlen - wave.soundpos;
 
-     
+    /* Go! */
     while (waveleft <= len) {
         SDL_memcpy(stream, waveptr, waveleft);
         stream += waveleft;
@@ -116,10 +116,10 @@ int main(int argc, char *argv[])
     int i;
     char *filename = NULL;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_EVENTS) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
         quit(1);
     }
 
-     
+    /* Load the wave file into memory */
     if (SDL_LoadWAV(filename, &wave.spec, &wave.sound, &wave.soundlen) == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load %s: %s\n", filename, SDL_GetError());
         quit(1);
@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 
     wave.spec.callback = fillerup;
 
-     
+    /* Show the list of available drivers */
     SDL_Log("Available audio drivers:");
     for (i = 0; i < SDL_GetNumAudioDrivers(); ++i) {
         SDL_Log("%i: %s", i, SDL_GetAudioDriver(i));
@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
+    /* Clean up on signal */
     close_audio();
     SDL_FreeWAV(wave.sound);
     SDL_free(filename);
@@ -179,4 +179,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw3sound.c
+/// \brief Hardware 3D sound general code
 
 #include "../doomdef.h"
 
@@ -33,7 +33,7 @@
 #define NORM_SEP 128
 #if 1
 #define TPS(x) (x)
-#else  
+#else //Alam_GBC: MPS, not MPF!
 #define TPS(x) ((float)(x)/(float)TICRATE)
 #endif
 
@@ -44,8 +44,8 @@ typedef struct source_s
 {
 	sfxinfo_t       *sfxinfo;
 	const void      *origin;
-	INT32           handle;      
-	channel_type_t  type;        
+	INT32           handle;     // Internal source handle
+	channel_type_t  type;       // Sound type (attack, scream, etc)
 } source_t;
 
 
@@ -62,38 +62,38 @@ typedef struct ambient_source_s
 	source_t    right;
 } ambient_source_t;
 
+// Static sources
+// This sources always creates
+static source_t p_attack_source;        // Player attack source
+static source_t p_attack_source2;        // Player2 attack source
+static source_t p_scream_source;        // Player scream source
+static source_t p_scream_source2;        // Player2 scream source
 
 
-static source_t p_attack_source;         
-static source_t p_attack_source2;         
-static source_t p_scream_source;         
-static source_t p_scream_source2;         
+static ambient_source_t ambient_source; // Ambinet sound sources
 
+//  abuse???
+//static source3D_data_t  p_attack_sdata; // ?? Now just holds precalculated player attack source data
+//static source3D_data_t  p_default_sdata;// ?? ---- // ---- // ---- // ---- player scream source data
 
-static ambient_source_t ambient_source;  
+static ambient_sdata_t  ambient_sdata;  // Precalculated datas of an ambient sound sources
 
-
-
-
-
-static ambient_sdata_t  ambient_sdata;   
-
-
-static source_t      *sources       = NULL;      
+// Stack of dynamic sources
+static source_t      *sources       = NULL;     // Much like original channels
 static INT32           num_sources    = 0;
 
-
-
+// Current mode of 3D sound system
+// Default is original (stereo) mode
 INT32                  hws_mode       = HWS_DEFAULT_MODE;
 
-
+//=============================================================================
 void HW3S_SetSourcesNum(void)
 {
 	INT32 i;
 
-
-
-
+	// Allocating the internal channels for mixing
+	// (the maximum number of sounds rendered
+	// simultaneously) within zone memory.
 	if (sources)
 		HW3S_StopSounds();
 	Z_Free(sources);
@@ -105,7 +105,7 @@ void HW3S_SetSourcesNum(void)
 
 	sources = (source_t *) Z_Malloc(num_sources * sizeof (*sources), PU_STATIC, 0);
 
-
+	// Free all channels for use
 	for (i = 0; i < num_sources; i++)
 	{
 		sources[i].sfxinfo = NULL;
@@ -115,7 +115,7 @@ void HW3S_SetSourcesNum(void)
 }
 
 
-
+//=============================================================================
 static void HW3S_KillSource(INT32 snum)
 {
 	source_t *  s = &sources[snum];
@@ -132,22 +132,22 @@ static void HW3S_KillSource(INT32 snum)
 }
 
 
+//=============================================================================
+/*
+static void HW3S_StopSource(INT32 snum)
+{
+	source_t * s = &sources[snum];
 
-  
-                                       
- 
-                               
-
-                
-  
-                           
-                                 
-  
- 
-  
+	if (s->sfxinfo)
+	{
+		// stop the sound playing
+		HW3DS.pfnStopSource(s->handle);
+	}
+}
+*/
 
 
-
+//=============================================================================
 void HW3S_StopSound(void *origin)
 {
 	INT32 snum;
@@ -190,18 +190,18 @@ void HW3S_StopSoundByNum(sfxenum_t sfxnum)
 	}
 }
 
-
+//=============================================================================
 void HW3S_StopSounds(void)
 {
 	INT32 snum;
 
-
-
+	// kill all playing sounds at start of level
+	//  (trust me - a good idea)
 	for (snum = 0; snum < num_sources; snum++)
 		if (sources[snum].sfxinfo)
 			HW3S_KillSource(snum);
 
-
+	// Also stop all static sources
 	HW3DS.pfnStopSource(p_attack_source.handle);
 	HW3DS.pfnStopSource(p_attack_source2.handle);
 	HW3DS.pfnStopSource(p_scream_source.handle);
@@ -211,12 +211,12 @@ void HW3S_StopSounds(void)
 }
 
 
-
+//=============================================================================
 static INT32 HW3S_GetSource(const void *origin, sfxinfo_t *sfxinfo, boolean splitsound)
 {
-
-
-
+	//
+	//   If none available, return -1.  Otherwise source #.
+	//   source number to use
 
 	INT32         snum;
 	source_t *  src;
@@ -224,7 +224,7 @@ static INT32 HW3S_GetSource(const void *origin, sfxinfo_t *sfxinfo, boolean spli
 
 	(void)splitsound;
 
-
+	// Find an open source
 	for (snum = 0, src = sources; snum < num_sources; src++, snum++)
 	{
 		if (!src->sfxinfo)
@@ -240,7 +240,7 @@ static INT32 HW3S_GetSource(const void *origin, sfxinfo_t *sfxinfo, boolean spli
 	}
 
 #if 0
-
+	// Check to see if it is audible
 	if (origin && origin != listenmobj)
 	{
 		INT32 rc;
@@ -255,22 +255,22 @@ static INT32 HW3S_GetSource(const void *origin, sfxinfo_t *sfxinfo, boolean spli
 	(void)sep;
 #endif
 
-
+	// None available
 	if (snum == num_sources)
 	{
-
+		// Look for lower priority
 		for (snum = 0, src = sources; snum < num_sources; src++, snum++)
 			if (src->sfxinfo->priority <= sfxinfo->priority)
 				break;
 
 		if (snum == num_sources)
 		{
-
+			// No lower priority. Sorry, Charlie.
 			return -1;
 		}
 		else
 		{
-
+			// Otherwise, kick out lower priority
 			HW3S_KillSource(snum);
 		}
 	}
@@ -278,7 +278,7 @@ static INT32 HW3S_GetSource(const void *origin, sfxinfo_t *sfxinfo, boolean spli
 }
 
 
-
+//=============================================================================
 static void HW3S_FillSourceParameters
                               (const mobj_t     *origin,
                                source3D_data_t  *data,
@@ -326,22 +326,22 @@ static void HW3S_FillSourceParameters
 }
 
 #define HEADER_SIZE 8
+//==============================================================
+/*
+static void make_outphase_sfx(void *dest, void *src, INT32 size)
+{
+	SINT8    *s = (SINT8 *)src + HEADER_SIZE, *d = (SINT8 *)dest + HEADER_SIZE;
 
-  
-                                                                
- 
-                                                                            
+	M_Memcpy(dest, src, HEADER_SIZE);
+	size -= HEADER_SIZE;
 
-                                  
-                     
+	while (size--)
+		*d++ = -(*s++);
+}
+*/
 
-               
-                 
- 
-  
-
-
-
+//INT32 HW3S_Start3DSound(const void *origin, source3D_data_t *source_parm, cone_def_t *cone_parm, channel_type_t channel, INT32 sfx_id, INT32 vol, INT32 pitch);
+//=============================================================================
 INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, channel_type_t c_type, sfxenum_t sfx_id, INT32 volume, INT32 pitch, INT32 sep)
 {
 	sfxinfo_t       *sfx;
@@ -361,7 +361,7 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 
 	if (sfx->skinsound!=-1 && origin && origin->skin)
 	{
-
+		// it redirect player sound to the sound in the skin table
 		sfx_id = ((skin_t *)origin->skin)->soundsid[sfx->skinsound];
 		sfx    = &S_sfx[sfx_id];
 	}
@@ -369,19 +369,19 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 	if (!sfx->data)
 		sfx->data = HW3S_GetSfx(sfx);
 
-
-
+	// judgecutor 08-16-2002
+	// Sound pitching for both Doom and Heretic
 #if 0
 	if (cv_rndsoundpitch.value)
 	{
-		                          
-   
-                                                   
-                                     
-                                                       
-                                      
-   
-        
+		/*if (gamemode != heretic)
+		{
+			if (sfx_id >= sfx_sawup && sfx_id <= sfx_sawhit)
+				pitch += 8 - (M_RandomByte()&15);
+			else if (sfx_id != sfx_itemup && sfx_id != sfx_tink)
+				pitch += 16 - (M_RandomByte()&31);
+		}
+		else*/
 			pitch = 128 + (M_RandomByte() & 7) - (M_RandomByte() & 7);
 	}
 #endif
@@ -395,7 +395,7 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 	if (sep < 0)
 		sep = 128;
 
-	if (splitscreen && listenmobj2)  
+	if (splitscreen && listenmobj2) // Copy the sound for the split player
 	{
 		if (c_type != CT_NORMAL && origin && (origin == listenmobj2))
 		{
@@ -418,31 +418,31 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 			{
 				HW3DS.pfnStopSource(source->handle);
 				source->handle = HW3DS.pfnReloadSource(source->handle, sfx->volume);
-
+				//I_OutputMsg("PlayerSound data reloaded\n");
 			}
 		}
 		else if (c_type == CT_AMBIENT)
 		{
-
+	//        sfx_data_t  outphased_sfx;
 
 			if (ambient_source.left.sfxinfo != sfx)
 			{
 				HW3DS.pfnStopSource(ambient_source.left.handle);
 				HW3DS.pfnStopSource(ambient_source.right.handle);
 
-
-
-	  
-                                                                  
-                                                                           
-                                            
-                                    
-   
+				// judgecutor:
+				// Outphased sfx's temporarily not used!!!
+	/*
+					outphased_sfx.data = Z_Malloc(sfx_data.length, PU_STATIC, 0);
+					make_outphase_sfx(outphased_sfx.data, sfx_data.data, sfx_data.length);
+					outphased_sfx.length = sfx_data.length;
+					outphased_sfx.id = sfx_data.id;
+	*/
 				ambient_source.left.handle = HW3DS.pfnReloadSource(ambient_source.left.handle, (u_int)sfx->length);
-
+				//ambient_source.right.handle = HW3DS.pfnReloadSource(ambient_source.right.handle, &outphased_sfx);
 				ambient_source.right.handle = HW3DS.pfnReloadSource(ambient_source.right.handle, (u_int)sfx->length);
 				ambient_source.left.sfxinfo = ambient_source.right.sfxinfo = sfx;
-
+				//Z_Free(outphased_sfx.data);
 			}
 
 			HW3DS.pfnUpdateSourceParms(ambient_source.left.handle, volume, -1);
@@ -451,7 +451,7 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 			if (sfx->usefulness++ < 0)
 				sfx->usefulness = -1;
 
-
+			// Ambient sound is special case
 			HW3DS.pfnStartSource(ambient_source.left.handle);
 			HW3DS.pfnStartSource(ambient_source.right.handle);
 		}
@@ -461,7 +461,7 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 
 			if (s_num  < 0)
 			{
-
+				//I_OutputMsg("No free source, aborting\n");
 				return -1;
 			}
 
@@ -482,7 +482,7 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 				source->handle = HW3DS.pfnAddSource(NULL, (u_int)sfx->length);
 		}
 
-
+		// increase the usefulness
 		if (sfx->usefulness++ < 0)
 			sfx->usefulness = -1;
 
@@ -512,31 +512,31 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 		{
 			HW3DS.pfnStopSource(source->handle);
 			source->handle = HW3DS.pfnReloadSource(source->handle, sfx->volume);
-
+			//I_OutputMsg("PlayerSound data reloaded\n");
 		}
 	}
 	else if (c_type == CT_AMBIENT)
 	{
-
+//        sfx_data_t  outphased_sfx;
 
 		if (ambient_source.left.sfxinfo != sfx)
 		{
 			HW3DS.pfnStopSource(ambient_source.left.handle);
 			HW3DS.pfnStopSource(ambient_source.right.handle);
 
-
-
-  
-                                                                 
-                                                                          
-                                           
-                                   
-  
+			// judgecutor:
+			// Outphased sfx's temporarily not used!!!
+/*
+				outphased_sfx.data = Z_Malloc(sfx_data.length, PU_STATIC, 0);
+				make_outphase_sfx(outphased_sfx.data, sfx_data.data, sfx_data.length);
+				outphased_sfx.length = sfx_data.length;
+				outphased_sfx.id = sfx_data.id;
+*/
 			ambient_source.left.handle = HW3DS.pfnReloadSource(ambient_source.left.handle, (u_int)sfx->length);
-
+			//ambient_source.right.handle = HW3DS.pfnReloadSource(ambient_source.right.handle, &outphased_sfx);
 			ambient_source.right.handle = HW3DS.pfnReloadSource(ambient_source.right.handle, (u_int)sfx->length);
 			ambient_source.left.sfxinfo = ambient_source.right.sfxinfo = sfx;
-
+			//Z_Free(outphased_sfx.data);
 		}
 
 		HW3DS.pfnUpdateSourceParms(ambient_source.left.handle, volume, -1);
@@ -545,7 +545,7 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 		if (sfx->usefulness++ < 0)
 			sfx->usefulness = -1;
 
-
+		// Ambient sound is special case
 		HW3DS.pfnStartSource(ambient_source.left.handle);
 		HW3DS.pfnStartSource(ambient_source.right.handle);
 		return -1;
@@ -556,7 +556,7 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 
 		if (s_num  < 0)
 		{
-
+			//I_OutputMsg("No free source, aborting\n");
 			return -1;
 		}
 
@@ -578,7 +578,7 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 
 	}
 
-
+	// increase the usefulness
 	if (sfx->usefulness++ < 0)
 		sfx->usefulness = -1;
 
@@ -590,15 +590,15 @@ INT32 HW3S_I_StartSound(const void *origin_p, source3D_data_t *source_parm, chan
 }
 
 
-
-
+// Start normal sound
+//=============================================================================
 void HW3S_StartSound(const void *origin, sfxenum_t sfx_id)
 {
 	HW3S_I_StartSound(origin, NULL, CT_NORMAL, sfx_id, 255, NORMAL_PITCH, NORMAL_SEP);
 }
 
 
-
+//=============================================================================
 void S_StartAttackSound(const void *origin, sfxenum_t sfx_id)
 {
 	if (hws_mode != HWS_DEFAULT_MODE)
@@ -615,7 +615,7 @@ void S_StartScreamSound(const void *origin, sfxenum_t sfx_id)
 		S_StartSound(origin, sfx_id);
 }
 
-#if 0  
+#if 0 /// NOTE: not used
 void S_StartAmbientSound(sfxenum_t sfx_id, INT32 volume)
 {
 	if (hws_mode != HWS_DEFAULT_MODE)
@@ -638,7 +638,7 @@ FUNCMATH static inline float AmbientPos(angle_t an)
 }
 
 
-
+//=============================================================================
 INT32 HW3S_Init(I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 {
 	INT32                succ;
@@ -646,7 +646,7 @@ INT32 HW3S_Init(I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 
 	if (HW3DS.pfnStartup(FatalErrorFunction, snd_dev))
 	{
-
+		// Attack source
 		source_data.head_relative = 1;
 		source_data.pos.x = 0.0f;
 		source_data.pos.y = 16.0f;
@@ -665,7 +665,7 @@ INT32 HW3S_Init(I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 		p_attack_source.handle = HW3DS.pfnAddSource(&source_data, sfx_None);
 		p_attack_source2.handle = HW3DS.pfnAddSource(&source_data, sfx_None);
 
-
+		// Scream source
 		source_data.pos.y = 0;
 		source_data.pos.z = 0;
 
@@ -676,10 +676,10 @@ INT32 HW3S_Init(I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 		p_scream_source.handle = HW3DS.pfnAddSource(&source_data, sfx_None);
 		p_scream_source2.handle = HW3DS.pfnAddSource(&source_data, sfx_None);
 
+		//FIXED_TO_FLOAT(mobjinfo[MT_PLAYER].height - (5 * FRACUNIT));
 
-
-
-
+		// Ambient sources (left and right) at 210 and 330 degree
+		// relative to listener
 		memset(&ambient_sdata, 0, sizeof (ambient_sdata));
 
 		ambient_sdata.left.head_relative = 1;
@@ -699,7 +699,7 @@ INT32 HW3S_Init(I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 			p_attack_source2.handle > -1 && p_scream_source2.handle > -1 &&
 			ambient_source.left.handle > -1 && ambient_source.right.handle > -1;
 
-
+		//I_OutputMsg("Player handles: attack %d, default %d\n", p_attack_source.handle, p_scream_source.handle);
 		return succ;
 	}
 	return 0;
@@ -708,14 +708,14 @@ INT32 HW3S_Init(I_Error_t FatalErrorFunction, snddev_t *snd_dev)
 
 
 
-
+//=============================================================================
 INT32 HW3S_GetVersion(void)
 {
 	return HW3DS.pfnGetHW3DSVersion();
 }
 
 
-
+//=============================================================================
 void HW3S_BeginFrameUpdate(void)
 {
 	if (hws_mode != HWS_DEFAULT_MODE)
@@ -723,7 +723,7 @@ void HW3S_BeginFrameUpdate(void)
 }
 
 
-
+//=============================================================================
 void HW3S_EndFrameUpdate(void)
 {
 	if (hws_mode != HWS_DEFAULT_MODE)
@@ -732,7 +732,7 @@ void HW3S_EndFrameUpdate(void)
 
 
 
-
+//=============================================================================
 INT32 HW3S_SoundIsPlaying(INT32 handle)
 {
 	return HW3DS.pfnIsPlaying(handle);
@@ -775,7 +775,7 @@ INT32 HW3S_SoundPlaying(void *origin, sfxenum_t id)
 	return 0;
 }
 
-
+//=============================================================================
 static void HW3S_UpdateListener(mobj_t *listener)
 {
 	listener_data_t data;
@@ -888,13 +888,13 @@ void HW3S_UpdateSources(void)
 			{
 				if (src->origin)
 				{
-
-					volume = 255;  
+					// initialize parameters
+					volume = 255; // 8 bits internal volume precision
 					pitch = NORM_PITCH;
 					sep = NORM_SEP;
 
-
-
+					// check non-local sounds for distance clipping
+					//  or modify their params
 					if (src->origin && listener != src->origin && !(listener2 && src->origin == listener2))
 					{
 						INT32 audible2;
@@ -916,20 +916,20 @@ void HW3S_UpdateSources(void)
 						}
 
 						if (audible)
-							HW3S_Update3DSource(src);  
+							HW3S_Update3DSource(src); // Update positional sources
 						else
-							HW3S_KillSource(snum);  
+							HW3S_KillSource(snum); //Kill it!
 					}
 				}
 			}
 			else
 			{
-
+				// Source allocated but stopped. Kill.
 				HW3S_KillSource(snum);
 			}
 #else
 			if (src->origin && listener != src->origin && !(listener2 && src->origin == listener2))
-				HW3S_Update3DSource(src);  
+				HW3S_Update3DSource(src); // Update positional sources
 			(void)pitch;
 			(void)sep;
 			(void)volume;

@@ -1,11 +1,11 @@
 
-
-
-
-
-
-
-
+; Defines general parameters of the game for which wadfiles are intended.
+;
+;	Name		textual name for internal use
+;	IWAD		standard 8.3 base name and extension of main wadfile
+;	NewMap		default name for new map -- dictates format for all maps
+;	Directory	directory in which main wadfile (and game files) reside
+;	Run			command to execute (from the directory) for running a map
 
 [WadGame]
 Name=Sonic Robo Blast 2
@@ -14,8 +14,8 @@ NewMap=MAP01
 Directory=C:\Documents and Settings\Ben\My Documents\srb2
 Run=fd\srb2win.exe -file $_Wadfile -warp $_Wadmap
 
-
-
+; Defines parameters of the default sector motif created when no motif
+; file can be located at startup.
 
 [Default.Sector]
 Above=GFZROCK
@@ -27,8 +27,8 @@ CeilingHeight=4096
 FloorHeight=0
 Lighting=255
 
-
-
+; Defines parameters of the default door motif created when no motif
+; file can be located at startup.
 
 [Default.Door]
 Base=FLAT1
@@ -36,8 +36,8 @@ Door=BIGDOOR2
 Track=DOORTRAK
 Type=1
 
-
-
+; Defines parameters of the default stair motif created when no motif
+; file can be located at startup.
 
 [Default.Stair]
 FloorRunner=GFZROCK
@@ -47,13 +47,13 @@ FloorInc=8
 CeilingInc=0
 LightingInc=0
 
-
-
-
-
-
-
-
+;	ID				used to classify things
+;	Flags			supplies some additional information:
+;						0x0001 - indicate thing facing angle
+;	Red				red value for drawing things of said class
+;	Green			green value for drawing things of said class
+;	Blue			blue value for drawing things of said class
+;	Name			textual description of class
 
 [Things.Classes]
 0x001   0x0001  255 255 255 Starts
@@ -68,11 +68,11 @@ LightingInc=0
 0x00b   0x0000  0   0   255 Rings
 0x00c   0x0000  0   224 0   Springs and Such
 
-
-
-
-
-
+;	ID				used to uniquely identify things in a map
+;	Class			classification (defined above section)
+;	Size			approximate thing size (in map units)
+;	Sprite			name of the sprite to use for display purposes
+;	Name			textual description of thing
 
 [Things.Types]
 0x001   1   32  suptd0      Player 01 Start
@@ -197,7 +197,7 @@ LightingInc=0
 0x7f3   7   20  thzpa0      THZ Flower
 0x00d   7   20  xms2a0      Palm Tree
 0x051   7   20  garga1      Gargoyle
-
+;wtraa0 through wtrha0 are empty sprites, formerly used for the below
 0x7ea   7   20  dumba0      Ambient Water SFX 1A (Large)
 0x7e8   7   20  dumba0      Ambient Water SFX 1B (Large)
 0x7e7   7   20  dumba0      Ambient Water SFX 2A (Medium)
@@ -249,11 +249,11 @@ LightingInc=0
 0x01e   12  20  stemd0      THZ Gas Jet
 0x020   12  20  fansa0      THZ Fan
 
-
-
-
-
-
+;	ID				used to classify linedefs
+;	Name			textual description of class
+;
+;	Note:	When converting a sector to a door, the linedef types
+;			available are those in class number two.
 
 [LineDefs.Classes]
 0x001   *Important
@@ -265,25 +265,25 @@ LightingInc=0
 0x007   Pushers
 0x008   Miscellaneous
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+;	ID
+;	class
+;	codes
+;		n       does NOT require a tag number
+;		W       walk-over activation
+;		S       switch (triggered by player use)
+;		G       gunfire (pistol, shotgun, chaingun) cross or hit line
+;		1       the line may be activated once only
+;		R       potentially repeatable activation
+;		&       affected sectors locked out from further changes
+;		m       monster actions can activate the line's effect
+;	speed
+;		(slow=1, medium = 2, fast = 3, turbo = 4)
+;	time
+;	texture changes
+;	description
 
 [LineDefs.Types]
-
+; Commonly used types
 0x019 1 - - - - Floor Over Floor: Solid, Opaque, Shadowcasting
 0x02d 1 - - - - Floor Over Floor: Water, Translucent
 0x010 1 - - - - Colormap

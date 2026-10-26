@@ -58,7 +58,7 @@ loop()
     SDL_RenderPresent(renderer);
 
     if (please_quit) {
-         
+        /* stop playing back, quit. */
         SDL_Log("Shutting down.\n");
         SDL_PauseAudioDevice(devid_in, 1);
         SDL_CloseAudioDevice(devid_in);
@@ -73,9 +73,9 @@ loop()
         exit(0);
     }
 
-                                                                         
-                                                                      
-                                                                     
+    /* Note that it would be easier to just have a one-line function that
+        calls SDL_QueueAudio() as a capture device callback, but we're
+        trying to test the API, so we use SDL_DequeueAudio() here. */
     while (SDL_TRUE) {
         Uint8 buf[1024];
         const Uint32 br = SDL_DequeueAudio(devid_in, buf, sizeof(buf));
@@ -88,16 +88,16 @@ loop()
 
 int main(int argc, char **argv)
 {
-     
+    /* (argv[1] == NULL means "open default device.") */
     const char *devname = argv[1];
     SDL_AudioSpec wanted;
     int devcount;
     int i;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
@@ -125,11 +125,11 @@ int main(int argc, char **argv)
 
     SDL_zero(spec);
 
-                                                                           
-                                                                        
-                                                                            
-                                                                         
-                        
+    /* DirectSound can fail in some instances if you open the same hardware
+       for both capture and output and didn't open the output end first,
+       according to the docs, so if you're doing something like this, always
+       open your capture devices second in case you land in those bizarre
+       circumstances. */
 
     SDL_Log("Opening default playback device...\n");
     devid_out = SDL_OpenAudioDevice(NULL, SDL_FALSE, &wanted, &spec, SDL_AUDIO_ALLOW_ANY_CHANGE);

@@ -8,16 +8,16 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  doomdef.h
+/// \brief Internally used data structures for virtually everything,
+///        key definitions, lots of other stuff.
 
 #ifndef __DOOMDEF__
 #define __DOOMDEF__
 
-
-
-
+// Sound system select
+// This should actually be in the makefile,
+// but I can't stand that gibberish. D:
 #define SOUND_DUMMY   0
 #define SOUND_SDL     1
 #define SOUND_MIXER   2
@@ -26,7 +26,7 @@
 #ifndef SOUND
 #ifdef HAVE_SDL
 
-
+// Use Mixer interface?
 #ifdef HAVE_MIXER
     #define SOUND SOUND_MIXER
     #ifdef HW3SOUND
@@ -34,21 +34,21 @@
     #endif
 #endif
 
-
+// Use generic SDL interface.
 #ifndef SOUND
 #define SOUND SOUND_SDL
 #endif
 
-#else  
+#else // No SDL.
 
-
+// Use FMOD?
 #ifdef HAVE_FMOD
     #define SOUND SOUND_FMOD
     #ifdef HW3SOUND
     #undef HW3SOUND
     #endif
 #else
-
+    // No more interfaces. :(
     #define SOUND SOUND_DUMMY
 #endif
 
@@ -73,10 +73,10 @@
 #pragma warning(disable : 4306)
 #endif
 #endif
-
-
-
-
+// warning level 4
+// warning C4127: conditional expression is constant
+// warning C4152: nonstandard extension, function/data pointer conversion in expression
+// warning C4213: nonstandard extension used : cast on l-value
 
 
 #include "version.h"
@@ -88,13 +88,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define _USE_MATH_DEFINES  
+#define _USE_MATH_DEFINES // fixes M_PI errors in r_plane.c for Visual Studio
 #include <math.h>
 
 #ifdef GETTEXT
 #include <libintl.h>
 #endif
-#include <locale.h>  
+#include <locale.h> // locale should not be dependent on GETTEXT -- 11/01/20 Monster Iestyn
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -106,9 +106,9 @@
 
 FILE *fopenfile(const char*, const char*);
 
+//#define NOMD5
 
-
-
+// If you don't disable ALL debug first, you get ALL debug enabled
 #if !defined (NDEBUG)
 #ifndef PACKETDROP
 #define PACKETDROP
@@ -124,14 +124,14 @@ FILE *fopenfile(const char*, const char*);
 #endif
 #endif
 
-
-
-
-
-
-
+// Uncheck this to compile debugging code
+//#define RANGECHECK
+//#ifndef PARANOIA
+//#define PARANOIA // do some tests that never fail but maybe
+// turn this on by make etc.. DEBUGMODE = 1 or use the Debug profile in the VC++ projects
+//#endif
 #if defined (_WIN32) || defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON) || defined (macintosh)
-#define LOGMESSAGES  
+#define LOGMESSAGES // write message in log.txt
 #endif
 
 #ifdef LOGMESSAGES
@@ -139,16 +139,16 @@ extern FILE *logstream;
 extern char logfilename[1024];
 #endif
 
- 
+/* A mod name to further distinguish versions. */
 #define SRB2APPLICATION "SRB2"
 
-
+//#define DEVELOP // Disable this for release builds to remove excessive cheat commands and enable MD5 checking and stuff, all in one go. :3
 #ifdef DEVELOP
 #define VERSIONSTRING "Development EXE"
 #define VERSIONSTRING_RC "Development EXE" "\0"
-
-
-
+// most interface strings are ignored in development mode.
+// we use comprevision and compbranch instead.
+// VERSIONSTRING_RC is for the resource-definition script used by windows builds
 #else
 #ifdef BETAVERSION
 #define VERSIONSTRING "v"SRB2VERSION" "BETAVERSION
@@ -157,37 +157,37 @@ extern char logfilename[1024];
 #define VERSIONSTRING "v"SRB2VERSION
 #define VERSIONSTRING_RC SRB2VERSION "\0"
 #endif
-
-
+// Hey! If you change this, add 1 to the MODVERSION below!
+// Otherwise we can't force updates!
 #endif
 
 #define VERSIONSTRINGW WSTRING (VERSIONSTRING)
 
- 
+/* A custom URL protocol for server links. */
 #define SERVER_URL_PROTOCOL "srb2://"
 
+// Does this version require an added patch file?
+// Comment or uncomment this as necessary.
+//#define USE_PATCH_DTA
 
+// Enforce a limit of loaded WAD files.
+//#define ENFORCE_WAD_LIMIT
 
+// Use .kart extension addons
+//#define USE_KART
 
+// Modification options
+// If you want to take advantage of the Master Server's ability to force clients to update
+// to the latest version, fill these out.  Otherwise, just comment out UPDATE_ALERT and leave
+// the other options the same.
 
-
-
-
-
-
-
-
-
-
-
-
-
+// Comment out this line to completely disable update alerts (recommended for testing, but not for release)
 #ifndef BETAVERSION
 #define UPDATE_ALERT
 #endif
 
-
-
+// The string used in the alert that pops up in the event of an update being available.
+// Please change to apply to your modification (we don't want everyone asking where your mod is on SRB2.org!).
 #define UPDATE_ALERT_STRING \
 "A new update is available for SRB2.\n"\
 "Please visit SRB2.org to download it.\n"\
@@ -203,8 +203,8 @@ extern char logfilename[1024];
 "\n"\
 "(Press a key)\n"
 
-
-
+// The string used in the I_Error alert upon trying to host through command line parameters.
+// Generally less filled with newlines, since Windows gives you lots more room to work with.
 #define UPDATE_ALERT_STRING_CONSOLE \
 "A new update is available for SRB2.\n"\
 "Please visit SRB2.org to download it.\n"\
@@ -216,42 +216,42 @@ extern char logfilename[1024];
 "You will not be able to connect to the Master Server\n"\
 "until you update to the newest version of the game.\n"
 
-
-
-
-
+// For future use, the codebase is the version of SRB2 that the modification is based on,
+// and should not be changed unless you have merged changes between versions of SRB2
+// (such as 2.0.4 to 2.0.5, etc) into your working copy.
+// Will always resemble the versionstring, 205 = 2.0.5, 210 = 2.1, etc.
 #define CODEBASE 220
 
-
-
-
-
+// To version config.cfg, MAJOREXECVERSION is set equal to MODVERSION automatically.
+// Increment MINOREXECVERSION whenever a config change is needed that does not correspond
+// to an increment in MODVERSION. This might never happen in practice.
+// If MODVERSION increases, set MINOREXECVERSION to 0.
 #define MAJOREXECVERSION MODVERSION
 #define MINOREXECVERSION 0
+// (It would have been nice to use VERSION and SUBVERSION but those are zero'd out for DEVELOP builds)
 
-
-
+// Macros
 #define GETMAJOREXECVERSION(v) (v & 0xFFFF)
 #define GETMINOREXECVERSION(v) (v >> 16)
 #define GETEXECVERSION(major,minor) (major + (minor << 16))
 #define EXECVERSION GETEXECVERSION(MAJOREXECVERSION, MINOREXECVERSION)
 
+// =========================================================================
 
-
-
-
+// The maximum number of players, multiplayer/networking.
+// NOTE: it needs more than this to increase the number of players...
 
 #define MAXPLAYERS 32
 #define MAXPLAYERNAME 21
 #define PLAYERSMASK (MAXPLAYERS-1)
 
-
-
-
-
-
+// Don't make MAXSKINS higher than 255, since skin numbers are used with an UINT8 in
+// various parts of the codebase, and one number is reserved. If you do anyway,
+// the data type of those variables will have to be changed into at least an UINT16.
+// This change must affect code such as demo recording and playback,
+// and the structure of some networking packets and commands.
 #define MAXSKINS 255
-#define MAXCHARACTERSLOTS (MAXSKINS * 3)  
+#define MAXCHARACTERSLOTS (MAXSKINS * 3) // Should be higher than MAXSKINS.
 
 #define COLORRAMPSIZE 16
 #define MAXCOLORNAME 32
@@ -259,19 +259,19 @@ extern char logfilename[1024];
 
 typedef struct skincolor_s
 {
-	char name[MAXCOLORNAME+1];   
-	UINT8 ramp[COLORRAMPSIZE];   
-	UINT16 invcolor;             
-	UINT8 invshade;              
-	UINT16 chatcolor;            
-	boolean accessible;          
+	char name[MAXCOLORNAME+1];  // Skincolor name
+	UINT8 ramp[COLORRAMPSIZE];  // Colormap ramp
+	UINT16 invcolor;            // Signpost color
+	UINT8 invshade;             // Signpost color shade
+	UINT16 chatcolor;           // Chat color
+	boolean accessible;         // Accessible by the color command + setup menu
 } skincolor_t;
 
 typedef enum
 {
 	SKINCOLOR_NONE = 0,
 
-
+	// Greyscale ranges
 	SKINCOLOR_WHITE,
 	SKINCOLOR_BONE,
 	SKINCOLOR_CLOUDY,
@@ -281,7 +281,7 @@ typedef enum
 	SKINCOLOR_JET,
 	SKINCOLOR_BLACK,
 
-
+	// Desaturated
 	SKINCOLOR_AETHER,
 	SKINCOLOR_SLATE,
 	SKINCOLOR_MOONSTONE,
@@ -303,8 +303,8 @@ typedef enum
 	SKINCOLOR_EGGPLANT,
 	SKINCOLOR_LAVENDER,
 
-
-
+	// Viv's vivid colours (toast 21/07/17)
+	// Tweaks & additions (Lach, sphere, Alice, MotorRoach 26/10/22)
 	SKINCOLOR_RUBY,
 	SKINCOLOR_CHERRY,
 	SKINCOLOR_SALMON,
@@ -359,7 +359,7 @@ typedef enum
 	SKINCOLOR_DREAM,
 	SKINCOLOR_ICY,
 	SKINCOLOR_DAYBREAK,
-	SKINCOLOR_SAPPHIRE,  
+	SKINCOLOR_SAPPHIRE, // sweet mother, i cannot weave – slender aphrodite has overcome me with longing for a girl
 	SKINCOLOR_ARCTIC,
 	SKINCOLOR_CORNFLOWER,
 	SKINCOLOR_BLUE,
@@ -392,7 +392,7 @@ typedef enum
 
 	FIRSTSUPERCOLOR,
 
-
+	// Super special awesome Super flashing colors!
 	SKINCOLOR_SUPERSILVER1 = FIRSTSUPERCOLOR,
 	SKINCOLOR_SUPERSILVER2,
 	SKINCOLOR_SUPERSILVER3,
@@ -459,36 +459,36 @@ extern UINT16 numskincolors;
 
 extern skincolor_t skincolors[MAXSKINCOLORS];
 
-
-
+// State updates, number of tics / second.
+// NOTE: used to setup the timer rate, see I_StartupTimer().
 #define TICRATE 35
-#define NEWTICRATERATIO 1  
+#define NEWTICRATERATIO 1 // try 4 for 140 fps :)
 #define NEWTICRATE (TICRATE*NEWTICRATERATIO)
 
-#define MUSICRATE 1000  
+#define MUSICRATE 1000 // sound timing is calculated by milliseconds
 
-#define RING_DIST 512*FRACUNIT  
+#define RING_DIST 512*FRACUNIT // how close you need to be to a ring to attract it
 
-#define PUSHACCEL (2*FRACUNIT)  
+#define PUSHACCEL (2*FRACUNIT) // Acceleration for MF2_SLIDEPUSH items.
 
-
+// Special linedef executor tag numbers! Binary map format only (UDMF has other ways of doing these things).
 enum {
-	LE_PINCHPHASE      =    -2,  
-	LE_ALLBOSSESDEAD   =    -3,  
-	LE_BOSSDEAD        =    -4,  
-	LE_BOSS4DROP       =    -5,  
-	LE_BRAKVILEATACK   =    -6,  
-	LE_TURRET          = 32000,  
-	LE_BRAKPLATFORM    =  4200,  
-	LE_CAPSULE2        =   682,  
-	LE_CAPSULE1        =   681,  
-	LE_CAPSULE0        =   680,  
-	LE_KOOPA           =   650,  
-	LE_AXE             =   649,  
-	LE_PARAMWIDTH      =  -100   
+	LE_PINCHPHASE      =    -2, // A boss entered pinch phase (and, in most cases, is preparing their pinch phase attack!)
+	LE_ALLBOSSESDEAD   =    -3, // All bosses in the map are dead (Egg capsule raise)
+	LE_BOSSDEAD        =    -4, // A boss in the map died (Chaos mode boss tally)
+	LE_BOSS4DROP       =    -5, // CEZ boss dropped its cage (also subtract the number of hitpoints it's lost)
+	LE_BRAKVILEATACK   =    -6, // Brak's doing his LOS attack, oh noes
+	LE_TURRET          = 32000, // THZ turret
+	LE_BRAKPLATFORM    =  4200, // v2.0 Black Eggman destroys platform
+	LE_CAPSULE2        =   682, // Egg Capsule
+	LE_CAPSULE1        =   681, // Egg Capsule
+	LE_CAPSULE0        =   680, // Egg Capsule
+	LE_KOOPA           =   650, // Distant cousin to Gay Bowser
+	LE_AXE             =   649, // MKB Axe object
+	LE_PARAMWIDTH      =  -100  // If an object that calls LinedefExecute has a nonzero parameter value, this times the parameter will be subtracted. (Mostly for the purpose of coexisting bosses...)
 };
 
-
+// Name of local directory for config files and savegames
 #if (defined (__unix__) || defined (UNIXCOMMON)) && !defined (__CYGWIN__) && !defined (__APPLE__)
 #define DEFAULTDIR ".srb2"
 #else
@@ -497,28 +497,28 @@ enum {
 
 #include "g_state.h"
 
+// commonly used routines - moved here for include convenience
+
+/**	\brief	The I_Error function
+
+	\param	error	the error message
+
+	\return	void
 
 
-                               
-
-                               
-
-             
-
-
-  
+*/
 void I_Error(const char *error, ...) FUNCIERROR;
 
-                                                                                                       
-                               
+/**	\brief	write a message to stderr (use before I_Quit) for when you need to quit with a msg, but need
+ the return code 0 of I_Quit();
 
-                            
+	\param	error	message string
 
-             
-  
+	\return	void
+*/
 void I_OutputMsg(const char *error, ...) FUNCPRINTF;
 
-
+// console.h
 typedef enum
 {
 	CONS_NOTICE,
@@ -530,22 +530,22 @@ void CONS_Printf(const char *fmt, ...) FUNCPRINTF;
 void CONS_Alert(alerttype_t level, const char *fmt, ...) FUNCDEBUG;
 void CONS_Debug(INT32 debugflags, const char *fmt, ...) FUNCDEBUG;
 
-
+// For help debugging functions.
 #define POTENTIALLYUNUSED CONS_Alert(CONS_WARNING, "(%s:%d) Unused code appears to be used.\n", __FILE__, __LINE__)
 
 #include "m_swap.h"
 
-
+// Things that used to be in dstrings.h
 #define SAVEGAMENAME "srb2sav"
 extern char savegamename[256];
 extern char liveeventbackup[256];
 
-
+// m_misc.h
 #ifdef GETTEXT
 #define M_GetText(String) gettext(String)
 #else
-
-
+// If no translations are to be used, make a stub
+// M_GetText function that just returns the string.
 #define M_GetText(x) (x)
 #endif
 void M_StartupLocale(void);
@@ -565,11 +565,11 @@ char *sizeu3(size_t num);
 char *sizeu4(size_t num);
 char *sizeu5(size_t num);
 
-
+// d_main.c
 extern int    VERSION;
 extern int SUBVERSION;
-extern boolean devparm;  
-
+extern boolean devparm; // development mode (-debug)
+// d_netcmd.c
 extern INT32 cv_debug;
 
 #define DBG_BASIC       0x0001
@@ -587,24 +587,24 @@ extern INT32 cv_debug;
 #define DBG_RANDOMIZER  0x1000
 #define DBG_VIEWMORPH   0x2000
 
-
-
-
+// =======================
+// Misc stuff for later...
+// =======================
 
 #define ANG2RAD(angle) ((float)((angle)*M_PI)/ANGLE_180)
 
-
+// Modifier key variables, accessible anywhere
 extern UINT8 shiftdown, ctrldown, altdown;
 extern boolean capslock;
 
-
+// if we ever make our alloc stuff...
 #define ZZ_Alloc(x) Z_Malloc(x, PU_STATIC, NULL)
 #define ZZ_Calloc(x) Z_Calloc(x, PU_STATIC, NULL)
 
-
+// i_system.c, replace getchar() once the keyboard has been appropriated
 INT32 I_GetKey(void);
 
- 
+/* http://www.cse.yorku.ca/~oz/hash.html */
 static inline
 UINT32 quickncasehash (const char *p, size_t n)
 {
@@ -620,21 +620,21 @@ UINT32 quickncasehash (const char *p, size_t n)
 	return x;
 }
 
-#ifndef min  
+#ifndef min // Double-Check with WATTCP-32's cdefs.h
 #define min(x, y) (((x) < (y)) ? (x) : (y))
 #endif
-#ifndef max  
+#ifndef max // Double-Check with WATTCP-32's cdefs.h
 #define max(x, y) (((x) > (y)) ? (x) : (y))
 #endif
 
-
+// Max gamepad/joysticks that can be detected/used.
 #define MAX_JOYSTICKS 4
 
 #ifndef M_PIl
 #define M_PIl 3.1415926535897932384626433832795029L
 #endif
 
-
+// Floating point comparison epsilons from float.h
 #ifndef FLT_EPSILON
 #define FLT_EPSILON 1.1920928955078125e-7f
 #endif
@@ -643,7 +643,7 @@ UINT32 quickncasehash (const char *p, size_t n)
 #define DBL_EPSILON 2.2204460492503131e-16l
 #endif
 
-
+// An assert-type mechanism.
 #ifdef PARANOIA
 #define I_Assert(e) ((e) ? (void)0 : I_Error("assert failed: %s, file %s, line %d", #e, __FILE__, __LINE__))
 #else
@@ -651,8 +651,8 @@ UINT32 quickncasehash (const char *p, size_t n)
 #endif
 #define I_StaticAssert(e) static_assert(e, "Static assertion failed: " #e)
 
-
-
+// The character that separates pathnames. Forward slash on
+// most systems, but reverse solidus (\) on Windows.
 #if defined (_WIN32)
 	#define PATHSEP "\\"
 #else
@@ -661,7 +661,7 @@ UINT32 quickncasehash (const char *p, size_t n)
 
 #define PUNCTUATION "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
-
+// Compile date and time and revision.
 extern const char
 	*compdate,
 	*comptime,
@@ -673,62 +673,62 @@ extern int
 	compuncommitted,
 	compoptimized;
 
+// Disabled code and code under testing
+// None of these that are disabled in the normal build are guaranteed to work perfectly
+// Compile them at your own risk!
 
+///	Allows the use of devmode in multiplayer. AKA "fishcake"
+//#define NETGAME_DEVMODE
 
+///	Allows gravity changes in netgames, no questions asked.
+//#define NETGAME_GRAVITY
 
+///	Dumps the contents of a network save game upon consistency failure for debugging.
+//#define DUMPCONSISTENCY
 
+///	Who put weights on my recycler?  ... Inuyasha did.
+///	\note	XMOD port.
+//#define WEIGHTEDRECYCLER
 
+///	Allow loading of savegames between different versions of the game.
+///	\note	XMOD port.
+///	    	Most modifications should probably enable this.
+//#define SAVEGAME_OTHERVERSIONS
 
+///	Shuffle's incomplete OpenGL sorting code.
+#define SHUFFLE // This has nothing to do with sorting, why was it disabled?
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#define SHUFFLE  
-
-
-
-
-
-
+///	Allow the use of the SOC RESETINFO command.
+///	\note	Builds that are tight on memory should disable this.
+///	    	This stops the game from storing backups of the states, sprites, and mobjinfo tables.
+///	    	Though this info is compressed under normal circumstances, it's still a lot of extra
+///	    	memory that never gets touched.
 #define ALLOW_RESETDATA
 
+/// Experimental tweaks to analog mode. (Needs a lot of work before it's ready for primetime.)
+//#define REDSANALOG
 
+/// Experimental attempts at preventing MF_PAPERCOLLISION objects from getting stuck in walls.
+//#define PAPER_COLLISIONCORRECTION
 
-
-
-
-
-
+/// OpenGL shaders
 #define GL_SHADERS
 
-
-
+/// Handle touching sector specials in P_PlayerAfterThink instead of P_PlayerThink.
+/// \note   Required for proper collision with moving sloped surfaces that have sector specials on them.
 #define SECTORSPECIALSAFTERTHINK
 
-
+/// Sprite rotation
 #define ROTSPRITE
-#define ROTANGLES 72  
+#define ROTANGLES 72 // Needs to be a divisor of 360 (45, 60, 90, 120...)
 #define ROTANGDIFF (360 / ROTANGLES)
 
-
+/// PNG support
 #ifndef HAVE_PNG
 #define NO_PNG_LUMPS
 #endif
 
-
+/// Maintain compatibility with older 2.2 demos
 #define OLD22DEMOCOMPAT
 
 #ifdef HAVE_CURL
@@ -737,4 +737,4 @@ extern int
 #undef UPDATE_ALERT
 #endif
 
-#endif  
+#endif // __DOOMDEF__

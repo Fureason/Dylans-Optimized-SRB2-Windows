@@ -14,8 +14,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file wadconv.c
+/// \brief Converts wads made for version 2.0 to 2.1.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,7 +37,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-
+	// Open the WAD files.
 	puts("Opening WADs...");
 	for (i = 1; i < (unsigned)argc; i++)
 	{

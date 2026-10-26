@@ -1,11 +1,11 @@
-
-
-
-
-
-
-
-
+// SONIC ROBO BLAST 2
+//-----------------------------------------------------------------------------
+// Discord Social SDK rich presence for the optimized Windows build.
+//
+// The SDK is loaded dynamically so the game remains usable when Discord is
+// closed or discord_partner_sdk.dll is missing. Presence updates are local UI
+// only: no SRB2 packets, sync state, physics, demos, or file hashes are changed.
+//-----------------------------------------------------------------------------
 
 #include <ctype.h>
 #include <stdint.h>
@@ -51,9 +51,9 @@ consvar_t cv_discordjoinaddress = CVAR_INIT(
 
 #ifdef _WIN32
 
-                                                                           
-                                                                             
-                                            
+/* Minimal ABI declarations from Discord Social SDK 1.10.19337. Keeping the
+ * bridge on the C ABI lets the existing C engine load the DLL without adding
+ * a C++ runtime or link-time dependency. */
 typedef struct { void *opaque; } Discord_Client;
 typedef struct { void *opaque; } Discord_ClientResult;
 typedef struct { void *opaque; } Discord_Activity;
@@ -248,8 +248,8 @@ static boolean DRPC_HasPort(const char *address)
 		return close && close[1] == ':' && close[2] != '\0';
 	}
 
-	                                                                        
-                                                                         
+	/* A single colon is a hostname/IPv4 port separator. Unbracketed IPv6 is
+	 * deliberately rejected by DRPC_BuildJoinAddress to avoid ambiguity. */
 	return firstcolon == lastcolon && lastcolon[1] != '\0';
 }
 
@@ -454,10 +454,10 @@ static boolean DRPC_ResolveAsset(char kind, const char *id, UINT16 wadnum,
 	return false;
 }
 
-                                                                             
-                                                                             
-                                                                             
-                                                                      
+/* Add-ons are often rebuilt without changing their map preview.  The archive
+ * MD5 then changes even though the content-addressed artwork is still valid.
+ * Fall back only when every index entry for this map code points at the same
+ * image; common slots such as MAP01 deliberately remain ambiguous. */
 static boolean DRPC_ResolveUniqueMapAsset(const char *id, char *output,
 	size_t output_size)
 {
@@ -524,8 +524,8 @@ static void DRPC_FallbackAsset(char *output, size_t output_size)
 			return;
 	}
 
-	                                                                         
-                     
+	/* This key remains a last-resort fallback for installs without the local
+	 * artwork index. */
 	snprintf(output, output_size, "srb2");
 }
 
@@ -838,7 +838,7 @@ void DRPC_Init(void) {}
 void DRPC_Update(void) {}
 void DRPC_Shutdown(void) {}
 
-#endif  
+#endif // _WIN32
 
 void DRPC_RegisterVariables(void)
 {

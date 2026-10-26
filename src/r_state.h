@@ -8,13 +8,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_state.h
+/// \brief Refresh/render internal state variables (global)
 
 #ifndef __R_STATE__
 #define __R_STATE__
 
-
+// Need data structure definitions.
 #include "d_player.h"
 #include "r_data.h"
 
@@ -22,11 +22,11 @@
 #pragma interface
 #endif
 
+//
+// Refresh internal data structures, for rendering.
+//
 
-
-
-
-
+// needed for pre rendering (fracs)
 typedef struct
 {
 	fixed_t width;
@@ -40,18 +40,18 @@ extern sprcache_t *spritecachedinfo;
 extern lighttable_t *colormaps;
 extern lighttable_t *fadecolormap;
 
-
+// Boom colormaps.
 extern extracolormap_t *extra_colormaps;
 
-
+// for global animation
 extern INT32 *texturetranslation;
 
-
+// Sprites
 extern size_t numspritelumps, max_spritelumps;
 
-
-
-
+//
+// Lookup tables for map data.
+//
 extern boolean udmf;
 
 extern size_t numsprites;
@@ -81,9 +81,9 @@ extern size_t numsides;
 extern side_t *sides;
 extern side_t *spawnsides;
 
-
-
-
+//
+// POV data.
+//
 extern fixed_t viewx, viewy, viewz;
 extern angle_t viewangle, aimingangle;
 extern sector_t *viewsector;
@@ -93,9 +93,9 @@ extern mobj_t *r_viewmobj;
 extern consvar_t cv_allowmlook;
 extern consvar_t cv_maxportals;
 
-                                                                                 
-                                                                                
-                                                                 
+/* Keep portal recursion deliberately shallow. Besides avoiding the large cost of
+ * rendering the scene repeatedly, this also clamps older configs that saved the
+ * former 3-10/32 choices before the menu control was removed. */
 static inline INT32 R_PortalDepthLimit(void)
 {
 	return min(2, max(1, cv_maxportals.value));
@@ -110,7 +110,7 @@ extern angle_t xtoviewangle[MAXVIDWIDTH+1];
 extern fixed_t rw_distance;
 extern angle_t rw_normalangle;
 
-
+// angle to line origin
 extern angle_t rw_angle1;
 
 #endif

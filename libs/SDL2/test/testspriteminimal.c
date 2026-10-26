@@ -9,7 +9,7 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* Simple program:  Move N sprites around on the screen as fast as possible */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,7 +35,7 @@ static int sprite_w, sprite_h;
 SDL_Renderer *renderer;
 int done;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -50,11 +50,11 @@ void MoveSprites()
     int window_h = WINDOW_HEIGHT;
     SDL_Rect *position, *velocity;
 
-     
+    /* Draw a gray background */
     SDL_SetRenderDrawColor(renderer, 0xA0, 0xA0, 0xA0, 0xFF);
     SDL_RenderClear(renderer);
 
-     
+    /* Move the sprite, bounce at the wall, and draw */
     for (i = 0; i < NUM_SPRITES; ++i) {
         position = &positions[i];
         velocity = &velocities[i];
@@ -69,11 +69,11 @@ void MoveSprites()
             position->y += velocity->y;
         }
 
-         
+        /* Blit the sprite onto the screen */
         SDL_RenderCopy(renderer, sprite, NULL, position);
     }
 
-     
+    /* Update the screen! */
     SDL_RenderPresent(renderer);
 }
 
@@ -81,7 +81,7 @@ void loop()
 {
     SDL_Event event;
 
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT || event.type == SDL_KEYDOWN) {
             done = 1;
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
     SDL_Window *window;
     int i;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, 0, &window, &renderer) < 0) {
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
         quit(2);
     }
 
-     
+    /* Initialize the sprite positions */
     srand((unsigned int)time(NULL));
     for (i = 0; i < NUM_SPRITES; ++i) {
         positions[i].x = rand() % (WINDOW_WIDTH - sprite_w);
@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Main render loop */
     done = 0;
 
 #ifdef __EMSCRIPTEN__
@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 #endif
     quit(0);
 
-    return 0;  
+    return 0; /* to prevent compiler warning */
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

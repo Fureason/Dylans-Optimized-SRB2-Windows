@@ -24,7 +24,7 @@ if(WCECOMPAT_INCLUDE_DIR)
     endif(WCECOMPAT_LIBRARIES)
 endif(WCECOMPAT_INCLUDE_DIR)
 
-
+# I have no idea what this is about, but it seems to be used quite often, so I add this here
 set(WCECOMPAT_CONST const)
 
 include(FindPackageHandleStandardArgs)

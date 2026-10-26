@@ -8,9 +8,9 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  m_fixed.h
+/// \brief Fixed point arithmetics implementation
+///        Fixed point, 32bit as 16.16.
 
 #ifndef __M_FIXED__
 #define __M_FIXED__
@@ -20,25 +20,25 @@
 #include <stdlib.h>
 #endif
 
-   
-                             
-  
+/*!
+  \brief bits of the fraction
+*/
 #define FRACBITS 16
-   
-                              
-  
+/*!
+  \brief units of the fraction
+*/
 #define FRACUNIT (1<<FRACBITS)
 #define FRACMASK (FRACUNIT -1)
-                                           
-                     
-  
+/**	\brief	Redefinition of INT32 as fixed_t
+	unit used as fixed_t
+*/
 
 typedef INT32 fixed_t;
 typedef UINT32 ufixed_t;
 
-   
-                                             
-  
+/*!
+  \brief convert fixed_t into floating number
+*/
 
 FUNCMATH FUNCINLINE static ATTRINLINE float FixedToFloat(fixed_t x)
 {
@@ -50,9 +50,9 @@ FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FloatToFixed(float f)
 	return (fixed_t)(f * FRACUNIT);
 }
 
-   
-                                                              
-  
+/*!
+  \brief convert fixed_t into double-precision floating number
+*/
 
 FUNCMATH FUNCINLINE static ATTRINLINE double FixedToDouble(fixed_t x)
 {
@@ -64,61 +64,61 @@ FUNCMATH FUNCINLINE static ATTRINLINE fixed_t DoubleToFixed(double f)
 	return (fixed_t)(f * FRACUNIT);
 }
 
+// for backwards compat
+#define FIXED_TO_FLOAT(x) FixedToFloat(x) // (((float)(x)) / ((float)FRACUNIT))
+#define FLOAT_TO_FIXED(f) FloatToFixed(f) // (fixed_t)((f) * ((float)FRACUNIT))
 
-#define FIXED_TO_FLOAT(x) FixedToFloat(x)  
-#define FLOAT_TO_FIXED(f) FloatToFixed(f)  
+/**	\brief	The FixedMul function
 
-                                
+	\param	a	fixed_t number
+	\param	b	fixed_t number
 
-                        
-                        
+	\return	a*b>>FRACBITS
 
-                      
-
-  
+*/
 FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedMul(fixed_t a, fixed_t b)
 {
-
-
+	// Need to cast to unsigned before shifting to avoid undefined behaviour
+	// for negative integers
 	return (fixed_t)(((UINT64)((INT64)a * b)) >> FRACBITS);
 }
 
-                                 
+/**	\brief	The FixedDiv2 function
 
-                        
-                        
+	\param	a	fixed_t number
+	\param	b	fixed_t number
 
-                       
+	\return	a/b * FRACUNIT
 
-  
+*/
 FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedDiv2(fixed_t a, fixed_t b)
 {
-
-
+	// This does not check for division overflow or division by 0!
+	// That is the caller's responsibility.
 	return (fixed_t)(((INT64)a * FRACUNIT) / b);
 }
 
-                                
+/**	\brief	The FixedInt function
 
-                        
+	\param	a	fixed_t number
 
-                    
-  
+	\return	 a/FRACUNIT
+*/
 
 FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedInt(fixed_t a)
 {
 	return FixedMul(a, 1);
 }
 
-                                
+/**	\brief	The FixedDiv function
 
-                        
-                        
+	\param	a	fixed_t number
+	\param	b	fixed_t number
 
-            
+	\return	a/b
 
 
-  
+*/
 FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedDiv(fixed_t a, fixed_t b)
 {
 	if (((ufixed_t)abs(a) >> (FRACBITS-2)) >= (ufixed_t)abs(b))
@@ -127,44 +127,44 @@ FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedDiv(fixed_t a, fixed_t b)
 	return FixedDiv2(a, b);
 }
 
-                                 
+/**	\brief	The FixedSqrt function
 
-                        
+	\param	x	fixed_t number
 
-                
+	\return	sqrt(x)
 
 
-  
+*/
 FUNCMATH fixed_t FixedSqrt(fixed_t x);
 
-                                  
+/**	\brief	The FixedHypot function
 
-                        
-                        
+	\param	x	fixed_t number
+	\param	y	fixed_t number
 
-                      
+	\return	sqrt(x*x+y*y)
 
 
-  
+*/
 FUNCMATH fixed_t FixedHypot(fixed_t x, fixed_t y);
 
-                                  
+/**	\brief	The FixedFloor function
 
-                        
+	\param	x	fixed_t number
 
-                 
+	\return	floor(x)
 
 
-  
+*/
 FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedFloor(fixed_t x)
 {
-	const fixed_t a = abs(x);  
-	const fixed_t i = (a>>FRACBITS)<<FRACBITS;  
-	const fixed_t f = a-i;  
+	const fixed_t a = abs(x); //absolute of x
+	const fixed_t i = (a>>FRACBITS)<<FRACBITS; // cut out the fractional part
+	const fixed_t f = a-i; // cut out the integral part
 	if (f == 0)
 		return x;
 	if (x != INT32_MIN)
-	{  
+	{ // return rounded down to nearest whole number
 		if (x > 0)
 			return x-f;
 		else
@@ -173,21 +173,21 @@ FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedFloor(fixed_t x)
 	return INT32_MIN;
 }
 
-                                  
+/**	\brief	The FixedTrunc function
 
-                        
+	\param	x	fixed_t number
 
-                 
+	\return trunc(x)
 
 
-  
+*/
 FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedTrunc(fixed_t x)
 {
-	const fixed_t a = abs(x);  
-	const fixed_t i = (a>>FRACBITS)<<FRACBITS;  
-	const fixed_t f = a-i;  
+	const fixed_t a = abs(x); //absolute of x
+	const fixed_t i = (a>>FRACBITS)<<FRACBITS; // cut out the fractional part
+	const fixed_t f = a-i; // cut out the integral part
 	if (x != INT32_MIN)
-	{  
+	{ // return rounded to nearest whole number, towards zero
 		if (x > 0)
 			return x-f;
 		else
@@ -196,25 +196,25 @@ FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedTrunc(fixed_t x)
 	return INT32_MIN;
 }
 
-                                 
+/**	\brief	The FixedCeil function
 
-                        
+	\param	x	fixed_t number
 
-                
+	\return	ceil(x)
 
 
-  
+*/
 FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedCeil(fixed_t x)
 {
-	const fixed_t a = abs(x);  
-	const fixed_t i = (a>>FRACBITS)<<FRACBITS;  
-	const fixed_t f = a-i;  
+	const fixed_t a = abs(x); //absolute of x
+	const fixed_t i = (a>>FRACBITS)<<FRACBITS; // cut out the fractional part
+	const fixed_t f = a-i; // cut out the integral part
 	if (f == 0)
 		return x;
 	if (x == INT32_MIN)
 		return INT32_MIN;
 	else if (x < FixedFloor(INT32_MAX))
-	{  
+	{ // return rounded up to nearest whole number
 		if (x > 0)
 			return x+(FRACUNIT-f);
 		else
@@ -223,25 +223,25 @@ FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedCeil(fixed_t x)
 	return INT32_MAX;
 }
 
-                                  
+/**	\brief	The FixedRound function
 
-                        
+	\param	x	fixed_t number
 
-                 
+	\return	round(x)
 
 
-  
+*/
 FUNCMATH FUNCINLINE static ATTRINLINE fixed_t FixedRound(fixed_t x)
 {
-	const fixed_t a = abs(x);  
-	const fixed_t i = (a>>FRACBITS)<<FRACBITS;  
-	const fixed_t f = a-i;  
+	const fixed_t a = abs(x); //absolute of x
+	const fixed_t i = (a>>FRACBITS)<<FRACBITS; // cut out the fractional part
+	const fixed_t f = a-i; // cut out the integral part
 	if (f == 0)
 		return x;
 	if (x == INT32_MIN)
 		return INT32_MIN;
 	else if (x < FixedFloor(INT32_MAX))
-	{  
+	{ // return rounded to nearest whole number, away from zero
 		if (x > 0)
 			return x+(FRACUNIT-f);
 		else
@@ -357,4 +357,4 @@ void FM_MultMatrix(matrix_t *dest, const matrix_t *multme);
 void FM_Translate(matrix_t *dest, fixed_t x, fixed_t y, fixed_t z);
 void FM_Scale(matrix_t *dest, fixed_t x, fixed_t y, fixed_t z);
 
-#endif  
+#endif //m_fixed.h

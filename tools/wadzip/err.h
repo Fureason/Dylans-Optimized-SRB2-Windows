@@ -3,7 +3,7 @@
 #endif
 
 #ifndef NEED_ERR
-#include <err.h>  
+#include <err.h> /* system version of this file */
 #else
 
 #ifndef _ERR_H

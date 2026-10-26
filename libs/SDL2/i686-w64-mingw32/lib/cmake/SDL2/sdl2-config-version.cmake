@@ -1,4 +1,4 @@
-
+# sdl2 cmake project-config-version input for ./configure scripts
 
 set(PACKAGE_VERSION "2.28.5")
 

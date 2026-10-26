@@ -1,14 +1,14 @@
-
+// convert corona.raw in a pic_t as corona2.raw
 
 #include <stdio.h>
 
 typedef struct
 {
 	short width;
-	char reserved0;  
-	char mode;  
+	char reserved0; // set to 0
+	char mode; // see pic_mode_t above
 	short height;
-	short reserved1;  
+	short reserved1; // set to 0
 } pic_t;
 
 void main(int argc, char *argv[])

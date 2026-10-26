@@ -9,8 +9,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_fps.h
+/// \brief Uncapped framerate stuff.
 
 #include "r_fps.h"
 
@@ -23,14 +23,14 @@
 #include "p_slopes.h"
 #include "r_state.h"
 #include "z_zone.h"
-#include "m_perfstats.h"  
+#include "m_perfstats.h" // ps_metric_t
 #ifdef HWRENDER
-#include "hardware/hw_main.h"  
+#include "hardware/hw_main.h" // for cv_glshearing
 #endif
 
 static CV_PossibleValue_t fpscap_cons_t[] = {
 #ifdef DEVELOP
-
+	// Lower values are actually pretty useful for debugging interp problems!
 	{1, "MIN"},
 #else
 	{TICRATE, "MIN"},
@@ -78,9 +78,9 @@ void R_UpdateAdaptiveEffects(precise_t active_time, precise_t frame_budget)
 		return;
 
 	workload = active_time;
-	                                                                            
-                                                                         
-                                                                           
+	/* Preserve some headroom for network and Lua bursts before a frame actually
+	 * misses its deadline. Two consecutive busy frames are enough to react;
+	 * the culled objects are visual-only effects, never gameplay thinkers. */
 	if (workload * 100ULL >= budget * 85ULL)
 	{
 		adaptive_headroom_frames = 0;
@@ -120,26 +120,26 @@ UINT32 R_GetFramerateCap(void)
 {
 	if (rendermode == render_none)
 	{
-
-
+		// If we're not rendering (dedicated server),
+		// we shouldn't be using any interpolation.
 		return TICRATE;
 	}
 
 	if (cv_fpscap.value == 0)
 	{
-
+		// 0: Match refresh rate
 		return I_GetRefreshRate();
 	}
 
 	if (cv_fpscap.value < 0)
 	{
-		                                                                         
-                                                                           
-                                                                   
+		/* Uncapped rendering often feels uneven in a window and consumes the CPU
+		 * headroom crowded maps need. Smooth mode keeps the old Unlimited choice
+		 * available while pacing it to the active display by default. */
 		if (cv_smoothframepacing.value)
 			return I_GetRefreshRate();
 
-
+		// -1: Truly unlimited when smooth pacing is explicitly disabled.
 		return 0;
 	}
 
@@ -211,9 +211,9 @@ static dvector3_t *R_LerpDVector3(const dvector3_t *from, const dvector3_t *to, 
 	return out;
 }
 
-
-
-
+// recalc necessary stuff for mouseaiming
+// slopes are already calculated for the full possible view (which is 4*viewheight).
+// 18/08/18: (No it's actually 16*viewheight, thanks Jimita for finding this out)
 static void R_SetupFreelook(player_t *player, boolean skybox)
 {
 #ifndef HWRENDER
@@ -221,8 +221,8 @@ static void R_SetupFreelook(player_t *player, boolean skybox)
 	(void)skybox;
 #endif
 
-
-
+	// clip it in the case we are looking a hardware 90 degrees full aiming
+	// (lmps, network and use F12...)
 	if (rendermode == render_soft
 #ifdef HWRENDER
 		|| (rendermode == render_opengl
@@ -269,7 +269,7 @@ void R_InterpolateView(fixed_t frac)
 
 	if (oldview_invalid[i] != 0)
 	{
-
+		// interpolate from newview to newview
 		prevview = newview;
 	}
 
@@ -283,12 +283,12 @@ void R_InterpolateView(fixed_t frac)
 	viewsin = FINESINE(viewangle>>ANGLETOFINESHIFT);
 	viewcos = FINECOSINE(viewangle>>ANGLETOFINESHIFT);
 
-
-
+	// this is gonna create some interesting visual errors for long distance teleports...
+	// might want to recalculate the view sector every frame instead...
 	viewplayer = newview->player;
 	viewsector = R_PointInSubsector(viewx, viewy)->sector;
 
-
+	// well, this ain't pretty
 	if (newview == &sky1view_new || newview == &sky2view_new)
 	{
 		skybox = 1;
@@ -403,7 +403,7 @@ void R_InterpolateMobjState(mobj_t *mobj, fixed_t frac, interpmobjstate_t *out)
 	out->spritexscale = mobj->resetinterp ? mobj->spritexscale : R_LerpFixed(mobj->old_spritexscale, mobj->spritexscale, frac);
 	out->spriteyscale = mobj->resetinterp ? mobj->spriteyscale : R_LerpFixed(mobj->old_spriteyscale, mobj->spriteyscale, frac);
 
-	if (mobj->scale == mobj->old_scale)  
+	if (mobj->scale == mobj->old_scale) // Tiny optimisation - scale is usually unchanging, so let's skip a lerp, two FixedMuls, and two FixedDivs
 	{
 		out->scale = mobj->scale;
 		out->radius = mobj->radius;
@@ -416,8 +416,8 @@ void R_InterpolateMobjState(mobj_t *mobj, fixed_t frac, interpmobjstate_t *out)
 		out->height = FixedMul(mobj->height, FixedDiv(out->scale, mobj->scale));
 	}
 
-
-
+	// Sprite offsets are not interpolated until we have a way to interpolate them explicitly in Lua.
+	// It seems existing mods visually break more often than not if it is interpolated.
 	out->spritexoffset = mobj->spritexoffset;
 	out->spriteyoffset = mobj->spriteyoffset;
 
@@ -701,7 +701,7 @@ void R_ClearLevelInterpolatorState(thinker_t *thinker)
 
 		if (interp->thinker == thinker)
 		{
-
+			// Do it twice to make the old state match the new
 			UpdateLevelInterpolatorState(interp);
 			UpdateLevelInterpolatorState(interp);
 		}
@@ -843,7 +843,7 @@ void R_DestroyLevelInterpolators(thinker_t *thinker)
 
 		if (interp->thinker == thinker)
 		{
-
+			// Swap the tail of the level interpolators to this spot
 			levelinterpolators[i] = levelinterpolators[levelinterpolators_len - 1];
 			levelinterpolators_len -= 1;
 
@@ -857,8 +857,8 @@ static mobj_t **interpolated_mobjs = NULL;
 static size_t interpolated_mobjs_len = 0;
 static size_t interpolated_mobjs_capacity = 0;
 
-
-
+// NOTE: This will NOT check that the mobj has already been added, for perf
+// reasons.
 void R_AddMobjInterpolator(mobj_t *mobj)
 {
 	if (interpolated_mobjs_len >= interpolated_mobjs_capacity)
@@ -908,8 +908,8 @@ void R_RemoveMobjInterpolator(mobj_t *mobj)
 
 void R_InitMobjInterpolators(void)
 {
-
-
+	// apparently it's not acceptable to free something already unallocated
+	// Z_Free(interpolated_mobjs);
 	interpolated_mobjs = NULL;
 	interpolated_mobjs_len = 0;
 	interpolated_mobjs_capacity = 0;
@@ -926,11 +926,11 @@ void R_UpdateMobjInterpolators(void)
 	}
 }
 
-
-
-
-
-
+//
+// P_ResetMobjInterpolationState
+//
+// Reset the rendering interpolation state of the mobj.
+//
 void R_ResetMobjInterpolationState(mobj_t *mobj)
 {
 	mobj->old_x2 = mobj->old_x;
@@ -967,11 +967,11 @@ void R_ResetMobjInterpolationState(mobj_t *mobj)
 	mobj->resetinterp = false;
 }
 
-
-
-
-
-
+//
+// P_ResetPrecipitationMobjInterpolationState
+//
+// Reset the rendering interpolation state of the precipmobj.
+//
 void R_ResetPrecipitationMobjInterpolationState(precipmobj_t *mobj)
 {
 	mobj->old_x2 = mobj->old_x;

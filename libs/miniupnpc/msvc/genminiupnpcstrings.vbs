@@ -9,7 +9,7 @@ outfilerc = "..\rc_version.h"
 
 On Error Resume Next
 
-
+'Wscript.Echo revision
 
 Err.Clear
 Set f = FSO.OpenTextFile(versionfile, 1, False) ' 1 = Read
@@ -17,7 +17,7 @@ If Err.Number = 0 Then
 	version = f.ReadLine
 	f.Close
 Else
-
+	' Exit error
 	WScript.Quit 1
 End If
 
@@ -26,16 +26,16 @@ strComputer = "."
 Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
 Set colOperatingSystems = objWMIService.ExecQuery ("Select * from Win32_OperatingSystem")
 For Each objOperatingSystem in colOperatingSystems
-
+    'Wscript.Echo objOperatingSystem.Caption & " -- " 
 	os_version = objOperatingSystem.Version
 Next
 
-
+'Wscript.Echo os_version
 
 Dim array
 needWrite = True
 
-
+' First Check if the file already contains the right versions
 Err.Clear
 Set f_in = FSO.OpenTextFile(outfile, 1, False)
 If Err.Number = 0 Then
@@ -63,7 +63,7 @@ If Err.Number = 0 Then
 End If
 
 If Not needWrite Then
-
+	' check files dates
 	Set fIn1 = FSO.GetFile(versionfile)
 	Set fIn2 = FSO.GetFile(infile)
 	Set fOut = FSO.GetFile(outfile)
@@ -76,11 +76,11 @@ If Not needWrite Then
 End If
 
 If Not needWrite Then
-
+    ' nothing to do
 	WScript.Quit 0
 End if
 
-
+' generate the file
 Err.Clear
 Set f_in = FSO.OpenTextFile(infile, 1, False)
 If Err.Number = 0 Then

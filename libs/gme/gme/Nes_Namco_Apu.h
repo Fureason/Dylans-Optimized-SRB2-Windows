@@ -1,6 +1,6 @@
+// Namco 106 sound chip emulator
 
-
-
+// Nes_Snd_Emu 0.1.8
 #ifndef NES_NAMCO_APU_H
 #define NES_NAMCO_APU_H
 
@@ -11,7 +11,7 @@ struct namco_state_t;
 
 class Nes_Namco_Apu {
 public:
-
+	// See Nes_Apu.h for reference.
 	void volume( double );
 	void treble_eq( const blip_eq_t& );
 	void output( Blip_Buffer* );
@@ -20,16 +20,16 @@ public:
 	void reset();
 	void end_frame( blip_time_t );
 	
-
+	// Read/write data register is at 0x4800
 	enum { data_reg_addr = 0x4800 };
 	void write_data( blip_time_t, int );
 	int read_data();
 	
-
+	// Write-only address register is at 0xF800
 	enum { addr_reg_addr = 0xF800 };
 	void write_addr( int );
 	
-
+	// to do: implement save/restore
 	void save_state( namco_state_t* out ) const;
 	void load_state( namco_state_t const& );
 	
@@ -37,7 +37,7 @@ public:
 	Nes_Namco_Apu();
 	BLARGG_DISABLE_NOTHROW
 private:
-
+	// noncopyable
 	Nes_Namco_Apu( const Nes_Namco_Apu& );
 	Nes_Namco_Apu& operator = ( const Nes_Namco_Apu& );
 	
@@ -60,16 +60,16 @@ private:
 	BOOST::uint8_t& access();
 	void run_until( blip_time_t );
 };
-  
-                    
- 
-                            
-                     
-                       
-                              
-                            
-  
-  
+/*
+struct namco_state_t
+{
+	BOOST::uint8_t regs [0x80];
+	BOOST::uint8_t addr;
+	BOOST::uint8_t unused;
+	BOOST::uint8_t positions [8];
+	BOOST::uint32_t delays [8];
+};
+*/
 
 inline BOOST::uint8_t& Nes_Namco_Apu::access()
 {

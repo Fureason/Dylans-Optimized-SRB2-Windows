@@ -58,8 +58,8 @@ static int InstallRule(void)
 	wcscpy(slash + 1, L"srb2win.exe");
 	if (GetFileAttributesW(program) == INVALID_FILE_ATTRIBUTES)
 	{
-		                                                                     
-                                                                     
+		/* Packaged builds keep this tool in an Easy Host subfolder. Look one
+		 * directory above it while retaining same-folder compatibility. */
 		*slash = L'\0';
 		parentslash = wcsrchr(program, L'\\');
 		if (!parentslash)
@@ -74,8 +74,8 @@ static int InstallRule(void)
 		}
 	}
 
-	                                                                       
-                                                                           
+	/* Delete every old copy first. netsh returns an error when none exist,
+	 * which is harmless because the new rule is created immediately after. */
 	RunNetsh(L"advfirewall firewall delete rule name=\"" RULE_NAME L"\"");
 
 	_snwprintf(arguments, sizeof arguments / sizeof *arguments,
@@ -100,9 +100,9 @@ static int InstallRule(void)
 
 static int RemoveRule(void)
 {
-	                                                                            
-                                                                         
-                                                   
+	/* Delete removes every duplicate with this name. A nonzero delete result is
+	 * also returned when no matching rule exists, so verify with a separate
+	 * query instead of treating that as a failure. */
 	RunNetsh(L"advfirewall firewall delete rule name=\"" RULE_NAME L"\"");
 	if (!RunNetsh(L"advfirewall firewall show rule name=\"" RULE_NAME L"\""))
 	{

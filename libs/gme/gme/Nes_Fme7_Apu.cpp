@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Nes_Fme7_Apu.h"
 
@@ -53,7 +53,7 @@ void Nes_Fme7_Apu::run_until( blip_time_t end_time )
 			continue;
 		osc_output->set_modified();
 		
-
+		// check for unsupported mode
 		#ifndef NDEBUG
 			if ( (mode & 011) <= 001 && vol_mode & 0x1F )
 				debug_printf( "FME7 used unimplemented sound mode: %02X, vol_mode: %02X\n",
@@ -61,20 +61,20 @@ void Nes_Fme7_Apu::run_until( blip_time_t end_time )
 		#endif
 		
 		if ( (mode & 001) | (vol_mode & 0x10) )
-			volume = 0;  
+			volume = 0; // noise and envelope aren't supported
 		
-
+		// period
 		int const period_factor = 16;
 		unsigned period = (regs [index * 2 + 1] & 0x0F) * 0x100 * period_factor +
 				regs [index * 2] * period_factor;
-		if ( period < 50 )  
+		if ( period < 50 ) // around 22 kHz
 		{
 			volume = 0;
-			if ( !period )  
+			if ( !period ) // on my AY-3-8910A, period doesn't have extra one added
 				period = period_factor;
 		}
 		
-
+		// current amplitude
 		int amp = volume;
 		if ( !phases [index] )
 			amp = 0;
@@ -106,7 +106,7 @@ void Nes_Fme7_Apu::run_until( blip_time_t end_time )
 			}
 			else
 			{
-
+				// maintain phase when silent
 				int count = (end_time - time + period - 1) / period;
 				phases [index] ^= count & 1;
 				time += (blargg_long) count * period;

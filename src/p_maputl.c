@@ -8,9 +8,9 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  p_maputl.c
+/// \brief Movement/collision utility functions, as used by functions in p_map.c
+///        Blockmap iterator functions, and some PIT_* functions to use for iteration
 
 #include "doomdef.h"
 #include "doomstat.h"
@@ -24,10 +24,10 @@
 #include "p_slopes.h"
 #include "z_zone.h"
 
-
-
-
-
+//
+// P_AproxDistance
+// Gives an estimation of distance (not exact)
+//
 fixed_t P_AproxDistance(fixed_t dx, fixed_t dy)
 {
 	dx = abs(dx);
@@ -37,10 +37,10 @@ fixed_t P_AproxDistance(fixed_t dx, fixed_t dy)
 	return dx + dy - (dy>>1);
 }
 
-
-
-
-
+//
+// P_ClosestPointOnLine
+// Finds the closest point on a given line to the supplied point
+//
 void P_ClosestPointOnLine(fixed_t x, fixed_t y, line_t *line, vertex_t *result)
 {
 	fixed_t startx = line->v1->x;
@@ -48,38 +48,38 @@ void P_ClosestPointOnLine(fixed_t x, fixed_t y, line_t *line, vertex_t *result)
 	fixed_t dx = line->dx;
 	fixed_t dy = line->dy;
 
-
+	// Determine t (the length of the vector from �Line[0]� to �p�)
 	fixed_t cx, cy;
 	fixed_t vx, vy;
 	fixed_t magnitude;
 	fixed_t t;
 
-
+	//Sub (p, &Line[0], &c);
 	cx = x - startx;
 	cy = y - starty;
 
-
+	//Sub (&Line[1], &Line[0], &V);
 	vx = dx;
 	vy = dy;
 
-
+	//Normalize (&V, &V);
 	magnitude = R_PointToDist2(line->v2->x, line->v2->y, startx, starty);
 	vx = FixedDiv(vx, magnitude);
 	vy = FixedDiv(vy, magnitude);
 
 	t = (FixedMul(vx, cx) + FixedMul(vy, cy));
 
-
+	// Return the point between �Line[0]� and �Line[1]�
 	vx = FixedMul(vx, t);
 	vy = FixedMul(vy, t);
 
-
+	//Add (&Line[0], &V, out);
 	result->x = startx + vx;
 	result->y = starty + vy;
 	return;
 }
 
-
+/// Similar to FV3_ClosestPointOnLine() except it actually works.
 void P_ClosestPointOnLine3D(const vector3_t *p, const vector3_t *Line, vector3_t *result)
 {
 	const vector3_t* v1 = &Line[0];
@@ -95,7 +95,7 @@ void P_ClosestPointOnLine3D(const vector3_t *p, const vector3_t *Line, vector3_t
 
 	t = FV3_Dot(&n, &c);
 
-
+	// Set closest point to the end if it extends past -Red
 	if (t <= 0)
 	{
 		FV3_Copy(result, v1);
@@ -113,10 +113,10 @@ void P_ClosestPointOnLine3D(const vector3_t *p, const vector3_t *Line, vector3_t
 	return;
 }
 
-
-
-
-
+//
+// P_PointOnLineSide
+// Returns 0 or 1
+//
 INT32 P_PointOnLineSide(fixed_t x, fixed_t y, line_t *line)
 {
 	const vertex_t *v1 = line->v1;
@@ -144,15 +144,15 @@ INT32 P_PointOnLineSide(fixed_t x, fixed_t y, line_t *line)
 	right = FixedMul(dy, line->dx>>FRACBITS);
 
 	if (right < left)
-		return 0;  
-	return 1;  
+		return 0; // front side
+	return 1; // back side
 }
 
-
-
-
-
-
+//
+// P_BoxOnLineSide
+// Considers the line to be infinite
+// Returns side 0 or 1, -1 if box crosses the line.
+//
 INT32 P_BoxOnLineSide(fixed_t *tmbox, line_t *ld)
 {
 	INT32 p1, p2;
@@ -199,10 +199,10 @@ INT32 P_BoxOnLineSide(fixed_t *tmbox, line_t *ld)
 	return -1;
 }
 
-
-
-
-
+//
+// P_PointOnDivlineSide
+// Returns 0 or 1.
+//
 static INT32 P_PointOnDivlineSide(fixed_t x, fixed_t y, divline_t *line)
 {
 	fixed_t dx, dy, left, right;
@@ -225,11 +225,11 @@ static INT32 P_PointOnDivlineSide(fixed_t x, fixed_t y, divline_t *line)
 	dx = (x - line->x);
 	dy = (y - line->y);
 
-
+	// try to quickly decide by looking at sign bits
 	if ((line->dy ^ line->dx ^ dx ^ dy) & 0x80000000)
 	{
 		if ((line->dy ^ dx) & 0x80000000)
-			return 1;  
+			return 1; // left is negative
 		return 0;
 	}
 
@@ -237,13 +237,13 @@ static INT32 P_PointOnDivlineSide(fixed_t x, fixed_t y, divline_t *line)
 	right = FixedMul(dy>>8, line->dx>>8);
 
 	if (right < left)
-		return 0;  
-	return 1;  
+		return 0; // front side
+	return 1; // back side
 }
 
-
-
-
+//
+// P_MakeDivline
+//
 void P_MakeDivline(line_t *li, divline_t *dl)
 {
 	dl->x = li->v1->x;
@@ -252,11 +252,11 @@ void P_MakeDivline(line_t *li, divline_t *dl)
 	dl->dy = li->dy;
 }
 
-
-
-
-
-
+//
+// P_InterceptVector
+// Returns the fractional intercept point along the first divline.
+// This is only called by the addthings and addlines traversers.
+//
 fixed_t P_InterceptVector(divline_t *v2, divline_t *v1)
 {
 	fixed_t frac, num, den;
@@ -272,18 +272,18 @@ fixed_t P_InterceptVector(divline_t *v2, divline_t *v1)
 	return frac;
 }
 
-
-
-
-
-
+//
+// P_LineOpening
+// Sets opentop and openbottom to the window through a two sided line.
+// OPTIMIZE: keep this precalculated
+//
 fixed_t opentop, openbottom, openrange, lowfloor, highceiling;
 pslope_t *opentopslope, *openbottomslope;
 ffloor_t *openfloorrover, *openceilingrover;
 
-
-
-
+// P_CameraLineOpening
+// P_LineOpening, but for camera
+// Tails 09-29-2002
 void P_CameraLineOpening(line_t *linedef)
 {
 	sector_t *front;
@@ -292,7 +292,7 @@ void P_CameraLineOpening(line_t *linedef)
 
 	if (linedef->sidenum[1] == NO_SIDEDEF)
 	{
-
+		// single sided line
 		openrange = 0;
 		return;
 	}
@@ -300,18 +300,18 @@ void P_CameraLineOpening(line_t *linedef)
 	front = linedef->frontsector;
 	back = linedef->backsector;
 
-
-
+	// Cameras use the heightsec's heights rather then the actual sector heights.
+	// If you can see through it, why not move the camera through it too?
 	if (front->camsec >= 0)
 	{
-
+		// SRB2CBTODO: ESLOPE (sectors[front->heightsec].f_slope)
 		frontfloor   = P_GetSectorFloorZAt  (&sectors[front->camsec], camera.x, camera.y);
 		frontceiling = P_GetSectorCeilingZAt(&sectors[front->camsec], camera.x, camera.y);
 
 	}
 	else if (front->heightsec >= 0)
 	{
-
+		// SRB2CBTODO: ESLOPE (sectors[front->heightsec].f_slope)
 		frontfloor   = P_GetSectorFloorZAt  (&sectors[front->heightsec], camera.x, camera.y);
 		frontceiling = P_GetSectorCeilingZAt(&sectors[front->heightsec], camera.x, camera.y);
 	}
@@ -322,13 +322,13 @@ void P_CameraLineOpening(line_t *linedef)
 	}
 	if (back->camsec >= 0)
 	{
-
+		// SRB2CBTODO: ESLOPE (sectors[back->heightsec].f_slope)
 		backfloor   = P_GetSectorFloorZAt  (&sectors[back->camsec], camera.x, camera.y);
 		backceiling = P_GetSectorCeilingZAt(&sectors[back->camsec], camera.x, camera.y);
 	}
 	else if (back->heightsec >= 0)
 	{
-
+		// SRB2CBTODO: ESLOPE (sectors[back->heightsec].f_slope)
 		backfloor   = P_GetSectorFloorZAt  (&sectors[back->heightsec], camera.x, camera.y);
 		backceiling = P_GetSectorCeilingZAt(&sectors[back->heightsec], camera.x, camera.y);
 	}
@@ -363,13 +363,13 @@ void P_CameraLineOpening(line_t *linedef)
 			lowfloor = frontfloor;
 		}
 
-
+		// Check for fake floors in the sector.
 		if (front->ffloors || back->ffloors)
 		{
 			ffloor_t *rover;
 			fixed_t delta1, delta2;
 
-
+			// Check for frontsector's fake floors
 			if (front->ffloors)
 				for (rover = front->ffloors; rover; rover = rover->next)
 				{
@@ -393,7 +393,7 @@ void P_CameraLineOpening(line_t *linedef)
 						lowfloor = topheight;
 				}
 
-
+			// Check for backsectors fake floors
 			if (back->ffloors)
 				for (rover = back->ffloors; rover; rover = rover->next)
 				{
@@ -428,7 +428,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 
 	if (linedef->sidenum[1] == NO_SIDEDEF)
 	{
-
+		// single sided line
 		openrange = 0;
 		return;
 	}
@@ -442,7 +442,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 	openfloorrover = openceilingrover = NULL;
 	if (linedef->polyobj)
 	{
-
+		// set these defaults so that polyobjects don't interfere with collision above or below them
 		opentop = INT32_MAX;
 		openbottom = INT32_MIN;
 		highceiling = INT32_MIN;
@@ -450,7 +450,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 		opentopslope = openbottomslope = NULL;
 	}
 	else
-	{  
+	{ // Set open and high/low values here
 		fixed_t frontheight, backheight;
 
 		frontheight = P_GetCeilingZ(mobj, front, tmx, tmy, linedef);
@@ -490,14 +490,14 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 	{
 		fixed_t thingtop = mobj->z + mobj->height;
 
-
+		// Check for collision with front side's midtexture if Effect 4 is set
 		if (linedef->flags & ML_MIDSOLID
-			&& !linedef->polyobj  
+			&& !linedef->polyobj // don't do anything for polyobjects! ...for now
 			) {
 			side_t *side = &sides[linedef->sidenum[0]];
 			fixed_t textop, texbottom, texheight;
 			fixed_t texmid, delta1, delta2;
-			INT32 texnum = R_GetTextureNum(side->midtexture);  
+			INT32 texnum = R_GetTextureNum(side->midtexture); // make sure the texture is actually valid
 
 			if (texnum) {
 				fixed_t scaley = abs(side->scaley_mid);
@@ -506,7 +506,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 
 				if (linedef->flags & ML_NOSKEW)
 				{
-
+					// Use the sector's actual heights if the midtexture is not skewed
 					midopentop = min(front->ceilingheight, back->ceilingheight);
 					midopenbottom = max(front->floorheight, back->floorheight);
 				}
@@ -516,15 +516,15 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 					midopenbottom = openbottom;
 				}
 
-
+				// Get the midtexture's height
 				texheight = FixedDiv(textureheight[texnum], scaley);
 
-
+				// Set texbottom and textop to the Z coordinates of the texture's boundaries
 #if 0
-
-
+				// don't remove this code unless solid midtextures
+				// on non-solid polyobjects should NEVER happen in the future
 				if (linedef->polyobj && (linedef->polyobj->flags & POF_TESTHEIGHT)) {
-					if (linedef->flags & ML_WRAPMIDTEX && !side->repeatcnt) {  
+					if (linedef->flags & ML_WRAPMIDTEX && !side->repeatcnt) { // "infinite" repeat
 						texbottom = back->floorheight + offsetvalue;
 						textop = back->ceilingheight + offsetvalue;
 					} else if (linedef->flags & ML_MIDTEX) {
@@ -537,7 +537,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 				} else
 #endif
 				{
-					if (linedef->flags & ML_WRAPMIDTEX && !side->repeatcnt) {  
+					if (linedef->flags & ML_WRAPMIDTEX && !side->repeatcnt) { // "infinite" repeat
 						texbottom = midopenbottom + offsetvalue;
 						textop = midopentop + offsetvalue;
 					} else if (linedef->flags & ML_MIDPEG) {
@@ -554,19 +554,19 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 				delta1 = abs(mobj->z - texmid);
 				delta2 = abs(thingtop - texmid);
 
-				if (delta1 > delta2) {  
+				if (delta1 > delta2) { // Below
 					if (opentop > texbottom) {
 						opentop = texbottom;
 						if (linedef->flags & ML_NOSKEW)
-							opentopslope = NULL;  
+							opentopslope = NULL; // Object is not actually on a slope
 						else
 							opentopslope = linedef->midtexslope;
 					}
-				} else {  
+				} else { // Above
 					if (openbottom < textop) {
 						openbottom = textop;
 						if (linedef->flags & ML_NOSKEW)
-							openbottomslope = NULL;  
+							openbottomslope = NULL; // Object is not actually on a slope
 						else
 							openbottomslope = linedef->midtexslope;
 					}
@@ -575,7 +575,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 		}
 		if (linedef->polyobj)
 		{
-
+			// Treat polyobj's backsector like a 3D Floor
 			if (linedef->polyobj->flags & POF_TESTHEIGHT)
 			{
 				const sector_t *polysec = linedef->backsector;
@@ -606,17 +606,17 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 				else if (polytop > lowfloor && delta1 < delta2)
 					lowfloor = polytop;
 			}
-
+			// otherwise don't do anything special, pretend there's nothing else there
 		}
 		else
 		{
-
+			// Check for fake floors in the sector.
 			if (front->ffloors || back->ffloors)
 			{
 				ffloor_t *rover;
 				fixed_t delta1, delta2;
 
-
+				// Check for frontsector's fake floors
 				for (rover = front->ffloors; rover; rover = rover->next)
 				{
 					fixed_t topheight, bottomheight;
@@ -635,7 +635,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 					delta1 = abs(mobj->z - (bottomheight + ((topheight - bottomheight)/2)));
 					delta2 = abs(thingtop - (bottomheight + ((topheight - bottomheight)/2)));
 
-					if (delta1 >= delta2 && (rover->fofflags & FOF_INTANGIBLEFLATS) != FOF_PLATFORM)  
+					if (delta1 >= delta2 && (rover->fofflags & FOF_INTANGIBLEFLATS) != FOF_PLATFORM) // thing is below FOF
 					{
 						if (bottomheight < opentop) {
 							opentop = bottomheight;
@@ -646,7 +646,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 							highceiling = bottomheight;
 					}
 
-					if (delta1 < delta2 && (rover->fofflags & FOF_INTANGIBLEFLATS) != FOF_REVERSEPLATFORM)  
+					if (delta1 < delta2 && (rover->fofflags & FOF_INTANGIBLEFLATS) != FOF_REVERSEPLATFORM) // thing is above FOF
 					{
 						if (topheight > openbottom) {
 							openbottom = topheight;
@@ -658,7 +658,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 					}
 				}
 
-
+				// Check for backsectors fake floors
 				for (rover = back->ffloors; rover; rover = rover->next)
 				{
 					fixed_t topheight, bottomheight;
@@ -677,7 +677,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 					delta1 = abs(mobj->z - (bottomheight + ((topheight - bottomheight)/2)));
 					delta2 = abs(thingtop - (bottomheight + ((topheight - bottomheight)/2)));
 
-					if (delta1 >= delta2 && (rover->fofflags & FOF_INTANGIBLEFLATS) != FOF_PLATFORM)  
+					if (delta1 >= delta2 && (rover->fofflags & FOF_INTANGIBLEFLATS) != FOF_PLATFORM) // thing is below FOF
 					{
 						if (bottomheight < opentop) {
 							opentop = bottomheight;
@@ -688,7 +688,7 @@ void P_LineOpening(line_t *linedef, mobj_t *mobj)
 							highceiling = bottomheight;
 					}
 
-					if (delta1 < delta2 && (rover->fofflags & FOF_INTANGIBLEFLATS) != FOF_REVERSEPLATFORM)  
+					if (delta1 < delta2 && (rover->fofflags & FOF_INTANGIBLEFLATS) != FOF_REVERSEPLATFORM) // thing is above FOF
 					{
 						if (topheight > openbottom) {
 							openbottom = topheight;
@@ -736,17 +736,17 @@ static void P_ReleaseBlockNode(blocknode_t *node)
 	freeblocks = node;
 }
 
+//
+// THING POSITION SETTING
+//
 
-
-
-
-
-
-
-
-
-
-
+//
+// P_UnsetThingPosition
+// Unlinks a thing from block map and sectors.
+// On each position change, BLOCKMAP and other
+// lookups maintaining lists ot things inside
+// these structures need to be updated.
+//
 void P_UnsetThingPosition(mobj_t *thing)
 {
 	I_Assert(thing != NULL);
@@ -754,38 +754,38 @@ void P_UnsetThingPosition(mobj_t *thing)
 
 	if (!(thing->flags & MF_NOSECTOR))
 	{
-		                                                   
-                         
-   
-                                                                        
-                                                                          
-    
+		/* invisible things don't need to be in sector list
+		* unlink from subsector
+		*
+		* killough 8/11/98: simpler scheme using pointers-to-pointers for prev
+		* pointers, allows head node pointers to be treated like everything else
+		*/
 
 		mobj_t **sprev = thing->sprev;
 		mobj_t  *snext = thing->snext;
-		if ((*sprev = snext) != NULL)   
+		if ((*sprev = snext) != NULL)  // unlink from sector list
 			snext->sprev = sprev;
 
-
-
-
-
-
-
-
-
-
-
-
-
+		// phares 3/14/98
+		//
+		// Save the sector list pointed to by touching_sectorlist.
+		// In P_SetThingPosition, we'll keep any nodes that represent
+		// sectors the Thing still touches. We'll add new ones then, and
+		// delete any nodes for sectors the Thing has vacated. Then we'll
+		// put it back into touching_sectorlist. It's done this way to
+		// avoid a lot of deleting/creating for nodes, when most of the
+		// time you just get back what you deleted anyway.
+		//
+		// If this Thing is being removed entirely, then the calling
+		// routine will clear out the nodes in sector_list.
 
 		sector_list = thing->touching_sectorlist;
-		thing->touching_sectorlist = NULL;  
+		thing->touching_sectorlist = NULL; //to be restored by P_SetThingPosition
 	}
 
 	if (!(thing->flags & MF_NOBLOCKMAP))
 	{
-
+		// [RH] Unlink from all blocks this actor uses
 		blocknode_t *block = thing->blocknode;
 
 		while (block != NULL)
@@ -806,21 +806,21 @@ void P_UnsetPrecipThingPosition(precipmobj_t *thing)
 {
 	precipmobj_t **sprev = thing->sprev;
 	precipmobj_t  *snext = thing->snext;
-	if ((*sprev = snext) != NULL)   
+	if ((*sprev = snext) != NULL)  // unlink from sector list
 		snext->sprev = sprev;
 
 	precipsector_list = thing->touching_sectorlist;
-	thing->touching_sectorlist = NULL;  
+	thing->touching_sectorlist = NULL; //to be restored by P_SetPrecipThingPosition
 }
 
-
-
-
-
-
-
+//
+// P_SetThingPosition
+// Links a thing into both a block and a subsector
+// based on it's x y.
+// Sets thing->subsector properly
+//
 void P_SetThingPosition(mobj_t *thing)
-{                                                       
+{                                                      // link into subsector
 	subsector_t *ss;
 	sector_t *oldsec = NULL;
 	fixed_t tfloorz, tceilz;
@@ -835,10 +835,10 @@ void P_SetThingPosition(mobj_t *thing)
 
 	if (!(thing->flags & MF_NOSECTOR))
 	{
+		// invisible things don't go into the sector links
 
-
-
-
+		// killough 8/11/98: simpler scheme using pointer-to-pointer prev
+		// pointers, allows head nodes to be treated like everything else
 
 		mobj_t **link = &ss->sector->thinglist;
 		mobj_t *snext = *link;
@@ -847,28 +847,28 @@ void P_SetThingPosition(mobj_t *thing)
 		thing->sprev = link;
 		*link = thing;
 
+		// phares 3/16/98
+		//
+		// If sector_list isn't NULL, it has a collection of sector
+		// nodes that were just removed from this Thing.
 
+		// Collect the sectors the object will live in by looking at
+		// the existing sector_list and adding new nodes and deleting
+		// obsolete ones.
 
-
-
-
-
-
-
-
-
-
-
+		// When a node is deleted, its sector links (the links starting
+		// at sector_t->touching_thinglist) are broken. When a node is
+		// added, new sector links are created.
 
 		P_CreateSecNodeList(thing,thing->x,thing->y);
-		thing->touching_sectorlist = sector_list;  
-		sector_list = NULL;  
+		thing->touching_sectorlist = sector_list; // Attach to Thing's mobj_t
+		sector_list = NULL; // clear for next time
 	}
 
-
+	// link into blockmap
 	if (!(thing->flags & MF_NOBLOCKMAP))
 	{
-
+		// inert things don't need to be in blockmap
 		INT32 x1 = (unsigned)(thing->x - thing->radius - bmaporgx)>>MAPBLOCKSHIFT;
 		INT32 y1 = (unsigned)(thing->y - thing->radius - bmaporgy)>>MAPBLOCKSHIFT;
 		INT32 x2 = (unsigned)(thing->x + thing->radius - bmaporgx)>>MAPBLOCKSHIFT;
@@ -880,7 +880,7 @@ void P_SetThingPosition(mobj_t *thing)
 
 		if (!(x1 >= bmapwidth || x2 < 0 || y1 >= bmapheight || y2 < 0))
 		{
-
+			// [RH] Link into every block this actor touches, not just the center one
 			x1 = max(0, x1);
 			y1 = max(0, y1);
 			x2 = min(bmapwidth - 1, x2);
@@ -892,7 +892,7 @@ void P_SetThingPosition(mobj_t *thing)
 					blocknode_t **link = &blocklinks[y*bmapwidth + x];
 					blocknode_t *node = P_CreateBlockNode(thing, x, y);
 
-
+					// Link in to block
 					if ((node->mnext = *link) != NULL)
 					{
 						(*link)->mprev = &node->mnext;
@@ -900,7 +900,7 @@ void P_SetThingPosition(mobj_t *thing)
 					node->mprev = link;
 					*link = node;
 
-
+					// Link in to actor
 					node->bprev = alink;
 					node->bnext = NULL;
 					(*alink) = node;
@@ -910,8 +910,8 @@ void P_SetThingPosition(mobj_t *thing)
 		}
 	}
 
-
-
+	// Allows you to 'step' on a new linedef exec when the previous
+	// sector's floor is the same height.
 	if (thing->player && oldsec != NULL && thing->subsector && oldsec != thing->subsector->sector)
 	{
 		tfloorz = P_GetFloorZ(thing, ss->sector, thing->x, thing->y, NULL);
@@ -927,14 +927,14 @@ void P_SetThingPosition(mobj_t *thing)
 	}
 }
 
-
-
-
-
-
-
+//
+// P_SetUnderlayPosition
+// Links a thing into a subsector at the other end of the stack,
+// so it appears behind all other sprites in that subsector.
+// Sets thing->subsector properly
+//
 void P_SetUnderlayPosition(mobj_t *thing)
-{                                                       
+{                                                      // link into subsector
 	subsector_t *ss;
 	mobj_t **link, *lend;
 	I_Assert(thing);
@@ -956,8 +956,8 @@ void P_SetUnderlayPosition(mobj_t *thing)
 	}
 
 	P_CreateSecNodeList(thing,thing->x,thing->y);
-	thing->touching_sectorlist = sector_list;  
-	sector_list = NULL;  
+	thing->touching_sectorlist = sector_list; // Attach to Thing's mobj_t
+	sector_list = NULL; // clear for next time
 }
 
 void P_SetPrecipitationThingPosition(precipmobj_t *thing)
@@ -972,32 +972,32 @@ void P_SetPrecipitationThingPosition(precipmobj_t *thing)
 	*link = thing;
 
 	P_CreatePrecipSecNodeList(thing, thing->x, thing->y);
-	thing->touching_sectorlist = precipsector_list;  
-	precipsector_list = NULL;  
+	thing->touching_sectorlist = precipsector_list; // Attach to Thing's precipmobj_t
+	precipsector_list = NULL; // clear for next time
 }
 
+//
+// BLOCK MAP ITERATORS
+// For each line/thing in the given mapblock,
+// call the passed PIT_* function.
+// If the function returns false,
+// exit with false without checking anything else.
+//
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//
+// P_BlockLinesIterator
+// The validcount flags are used to avoid checking lines
+// that are marked in multiple mapblocks,
+// so increment validcount before the first call
+// to P_BlockLinesIterator, then make one or more calls
+// to it.
+//
 boolean P_BlockLinesIterator(INT32 x, INT32 y, boolean (*func)(line_t *))
 {
 	INT32 offset;
-	const INT32 *list;  
-	polymaplink_t *plink;  
+	const INT32 *list; // Big blockmap
+	polymaplink_t *plink; // haleyjd 02/22/06
 	line_t *ld;
 
 	if (x < 0 || y < 0 || x >= bmapwidth || y >= bmapheight)
@@ -1005,21 +1005,21 @@ boolean P_BlockLinesIterator(INT32 x, INT32 y, boolean (*func)(line_t *))
 
 	offset = y*bmapwidth + x;
 
-
+	// haleyjd 02/22/06: consider polyobject lines
 	plink = polyblocklinks[offset];
 
 	while (plink)
 	{
 		polyobj_t *po = plink->po;
 
-		if (po->validcount != validcount)  
+		if (po->validcount != validcount) // if polyobj hasn't been checked
 		{
 			size_t i;
 			po->validcount = validcount;
 
 			for (i = 0; i < po->numLines; ++i)
 			{
-				if (po->lines[i]->validcount == validcount)  
+				if (po->lines[i]->validcount == validcount) // line has been checked
 					continue;
 				po->lines[i]->validcount = validcount;
 				if (!func(po->lines[i]))
@@ -1029,27 +1029,27 @@ boolean P_BlockLinesIterator(INT32 x, INT32 y, boolean (*func)(line_t *))
 		plink = (polymaplink_t *)(plink->link.next);
 	}
 
-	offset = *(blockmap + offset);  
+	offset = *(blockmap + offset); // offset = blockmap[y*bmapwidth+x];
 
-
+	// First index is really empty, so +1 it.
 	for (list = blockmaplump + offset + 1; *list != -1; list++)
 	{
 		ld = &lines[*list];
 
 		if (ld->validcount == validcount)
-			continue;  
+			continue; // Line has already been checked.
 
 		ld->validcount = validcount;
 
 		if (!func(ld))
 			return false;
 	}
-	return true;  
+	return true; // Everything was checked.
 }
 
-
-
-
+//
+// P_BlockThingsIterator
+//
 boolean P_BlockThingsIterator(INT32 x, INT32 y, boolean (*func)(mobj_t *))
 {
 	blocknode_t *block, *next = NULL;
@@ -1057,15 +1057,15 @@ boolean P_BlockThingsIterator(INT32 x, INT32 y, boolean (*func)(mobj_t *))
 	if (x < 0 || y < 0 || x >= bmapwidth || y >= bmapheight)
 		return true;
 
-
+	// Check interaction with the objects in the blockmap.
 	for (block = blocklinks[y*bmapwidth + x]; block != NULL; block = next)
 	{
-		next = block->mnext;  
+		next = block->mnext; // We want to note our reference to mnext here!
 
 		if (!func(block->mobj))
 			return false;
 
-		if (P_MobjWasRemoved(tmthing))  
+		if (P_MobjWasRemoved(tmthing)) // func just popped our tmthing, cannot continue.
 			return true;
 	}
 
@@ -1100,7 +1100,7 @@ static blocknode_t *GetBlockmapBlock(int x, int y)
 	}
 	else
 	{
-
+		// invalid block
 		return NULL;
 	}
 }
@@ -1158,15 +1158,15 @@ mobj_t *P_BlockThingsIteratorNext(bthingit_t *it, boolean centeronly)
 
 			it->block = it->block->mnext;
 
-
+			// Don't recheck things that were already checked
 			if (node->bnext == NULL && node->bprev == &mobj->blocknode)
 			{
-
+				// This actor doesn't span blocks, so we know it can only ever be checked once.
 				return mobj;
 			}
 			else
 			{
-
+				// Block boundaries for compatibility mode
 				if (centeronly)
 				{
 					fixed_t blockleft = (it->curx * MAPBLOCKUNITS) + bmaporgx;
@@ -1174,7 +1174,7 @@ mobj_t *P_BlockThingsIteratorNext(bthingit_t *it, boolean centeronly)
 					fixed_t blockbottom = (it->cury * MAPBLOCKUNITS) + bmaporgy;
 					fixed_t blocktop = blockbottom + MAPBLOCKUNITS;
 
-
+					// only return actors with the center in this block
 					if (mobj->x >= blockleft && mobj->x < blockright &&
 						mobj->y >= blockbottom && mobj->y < blocktop)
 					{
@@ -1192,7 +1192,7 @@ mobj_t *P_BlockThingsIteratorNext(bthingit_t *it, boolean centeronly)
 						entry = GetHashEntryForIterator(it, i);
 						if (entry->mobj == mobj)
 						{
-
+							// I've already been checked. Skip to the next mobj.
 							break;
 						}
 						i = entry->next;
@@ -1200,7 +1200,7 @@ mobj_t *P_BlockThingsIteratorNext(bthingit_t *it, boolean centeronly)
 
 					if (i < 0)
 					{
-
+						// Add mobj to the hash table and return it.
 						if (it->numfixedhash < NUM_BTHINGIT_FIXEDHASH)
 						{
 							entry = &it->fixedhash[it->numfixedhash];
@@ -1261,18 +1261,18 @@ void P_ClearBlockNodes(void)
 	freeiters = NULL;
 }
 
+//
+// INTERCEPT ROUTINES
+//
 
-
-
-
-
+//SoM: 4/6/2000: Limit removal
 static intercept_t *intercepts = NULL;
 static intercept_t *intercept_p = NULL;
 
 divline_t trace;
 static boolean earlyout;
 
-
+//SoM: 4/6/2000: Remove limit on intercepts.
 static void P_CheckIntercepts(void)
 {
 	static size_t max_intercepts = 0;
@@ -1291,29 +1291,29 @@ static void P_CheckIntercepts(void)
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
+//
+// PIT_AddLineIntercepts.
+// Looks for lines in the given block
+// that intercept the given trace
+// to add to the intercepts list.
+//
+// A line is crossed if its endpoints
+// are on opposite sides of the trace.
+// Returns true if earlyout and a solid line hit.
+//
 static boolean PIT_AddLineIntercepts(line_t *ld)
 {
 	INT32 s1, s2;
 	fixed_t frac;
 	divline_t dl;
 
-
+	// avoid precision problems with two routines
 	if (trace.dx > FRACUNIT*16 || trace.dy > FRACUNIT*16
 		|| trace.dx < -FRACUNIT*16 || trace.dy < -FRACUNIT*16)
 	{
-
-
-
+		// Hurdler: crash here with phobia when you shoot
+		// on the door next the stone bridge
+		// stack overflow???
 		s1 = P_PointOnDivlineSide(ld->v1->x, ld->v1->y, &trace);
 		s2 = P_PointOnDivlineSide(ld->v2->x, ld->v2->y, &trace);
 	}
@@ -1324,18 +1324,18 @@ static boolean PIT_AddLineIntercepts(line_t *ld)
 	}
 
 	if (s1 == s2)
-		return true;  
+		return true; // Line isn't crossed.
 
-
+	// Hit the line.
 	P_MakeDivline(ld, &dl);
 	frac = P_InterceptVector(&trace, &dl);
 
 	if (frac < 0)
-		return true;  
+		return true; // Behind source.
 
-
+	// Try to take an early out of the check.
 	if (earlyout && frac < FRACUNIT && !ld->backsector)
-		return false;  
+		return false; // stop checking
 
 	P_CheckIntercepts();
 
@@ -1344,12 +1344,12 @@ static boolean PIT_AddLineIntercepts(line_t *ld)
 	intercept_p->d.line = ld;
 	intercept_p++;
 
-	return true;  
+	return true; // continue
 }
 
-
-
-
+//
+// PIT_AddThingIntercepts
+//
 static boolean PIT_AddThingIntercepts(mobj_t *thing)
 {
 	fixed_t px1, py1, px2, py2, frac;
@@ -1359,7 +1359,7 @@ static boolean PIT_AddThingIntercepts(mobj_t *thing)
 
 	tracepositive = (trace.dx ^ trace.dy) > 0;
 
-
+	// check a corner to corner crossection for hit
 	if (tracepositive)
 	{
 		px1 = thing->x - thing->radius;
@@ -1381,7 +1381,7 @@ static boolean PIT_AddThingIntercepts(mobj_t *thing)
 	s2 = P_PointOnDivlineSide(px2, py2, &trace);
 
 	if (s1 == s2)
-		return true;  
+		return true; // Line isn't crossed.
 
 	dl.x = px1;
 	dl.y = py1;
@@ -1391,7 +1391,7 @@ static boolean PIT_AddThingIntercepts(mobj_t *thing)
 	frac = P_InterceptVector(&trace, &dl);
 
 	if (frac < 0)
-		return true;  
+		return true; // Behind source.
 
 	P_CheckIntercepts();
 
@@ -1400,14 +1400,14 @@ static boolean PIT_AddThingIntercepts(mobj_t *thing)
 	intercept_p->d.thing = thing;
 	intercept_p++;
 
-	return true;  
+	return true; // Keep going.
 }
 
-
-
-
-
-
+//
+// P_TraverseIntercepts
+// Returns true if the traverser function returns true
+// for all lines.
+//
 static boolean P_TraverseIntercepts(traverser_t func, fixed_t maxfrac)
 {
 	size_t count;
@@ -1429,24 +1429,24 @@ static boolean P_TraverseIntercepts(traverser_t func, fixed_t maxfrac)
 		}
 
 		if (dist > maxfrac)
-			return true;  
+			return true; // Checked everything in range.
 
 		if (!func(in))
-			return false;  
+			return false; // Don't bother going farther.
 
 		in->frac = INT32_MAX;
 	}
 
-	return true;  
+	return true; // Everything was traversed.
 }
 
-
-
-
-
-
-
-
+//
+// P_PathTraverse
+// Traces a line from x1, y1 to x2, y2,
+// calling the traverser function for each.
+// Returns true if the traverser function returns true
+// for all lines.
+//
 boolean P_PathTraverse(fixed_t px1, fixed_t py1, fixed_t px2, fixed_t py2,
 	INT32 flags, traverser_t trav)
 {
@@ -1460,10 +1460,10 @@ boolean P_PathTraverse(fixed_t px1, fixed_t py1, fixed_t px2, fixed_t py2,
 	intercept_p = intercepts;
 
 	if (((px1 - bmaporgx) & (MAPBLOCKSIZE-1)) == 0)
-		px1 += FRACUNIT;  
+		px1 += FRACUNIT; // Don't side exactly on a line.
 
 	if (((py1 - bmaporgy) & (MAPBLOCKSIZE-1)) == 0)
-		py1 += FRACUNIT;  
+		py1 += FRACUNIT; // Don't side exactly on a line.
 
 	trace.x = px1;
 	trace.y = py1;
@@ -1521,9 +1521,9 @@ boolean P_PathTraverse(fixed_t px1, fixed_t py1, fixed_t px2, fixed_t py2,
 	}
 	xintercept = (px1>>MAPBTOFRAC) + FixedMul(partial, xstep);
 
-
-
-
+	// Step through map blocks.
+	// Count is present to prevent a round off error
+	// from skipping the break.
 	mapx = xt1;
 	mapy = yt1;
 
@@ -1531,11 +1531,11 @@ boolean P_PathTraverse(fixed_t px1, fixed_t py1, fixed_t px2, fixed_t py2,
 	{
 		if (flags & PT_ADDLINES)
 			if (!P_BlockLinesIterator(mapx, mapy, PIT_AddLineIntercepts))
-				return false;  
+				return false; // early out
 
 		if (flags & PT_ADDTHINGS)
 			if (!P_BlockThingsIterator(mapx, mapy, PIT_AddThingIntercepts))
-				return false;  
+				return false; // early out
 
 		if (mapx == xt2 && mapy == yt2)
 			break;
@@ -1551,43 +1551,43 @@ boolean P_PathTraverse(fixed_t px1, fixed_t py1, fixed_t px2, fixed_t py2,
 			mapy += mapystep;
 		}
 	}
-
+	// Go through the sorted list
 	return P_TraverseIntercepts(trav, FRACUNIT);
 }
 
 
+// =========================================================================
+//                                                        BLOCKMAP ITERATORS
+// =========================================================================
 
+// blockmap iterator for all sorts of use
+// your routine must return FALSE to exit the loop earlier
+// returns FALSE if the loop exited early after a false return
+// value from your user function
 
+//abandoned, maybe I'll need it someday..
+/*
+boolean P_RadiusLinesCheck(fixed_t radius, fixed_t x, fixed_t y,
+	boolean (*func)(line_t *))
+{
+	INT32 xl, xh, yl, yh;
+	INT32 bx, by;
 
+	tmbbox[BOXTOP] = y + radius;
+	tmbbox[BOXBOTTOM] = y - radius;
+	tmbbox[BOXRIGHT] = x + radius;
+	tmbbox[BOXLEFT] = x - radius;
 
+	// check lines
+	xl = (unsigned)(tmbbox[BOXLEFT] - bmaporgx)>>MAPBLOCKSHIFT;
+	xh = (unsigned)(tmbbox[BOXRIGHT] - bmaporgx)>>MAPBLOCKSHIFT;
+	yl = (unsigned)(tmbbox[BOXBOTTOM] - bmaporgy)>>MAPBLOCKSHIFT;
+	yh = (unsigned)(tmbbox[BOXTOP] - bmaporgy)>>MAPBLOCKSHIFT;
 
-
-
-
-
-
-  
-                                                                
-                           
- 
-                      
-              
-
-                             
-                                
-                               
-                              
-
-               
-                                                            
-                                                             
-                                                              
-                                                           
-
-                              
-                               
-                                           
-                 
-             
- 
-  
+	for (bx = xl; bx <= xh; bx++)
+		for (by = yl; by <= yh; by++)
+			if (!P_BlockLinesIterator(bx, by, func))
+				return false;
+	return true;
+}
+*/

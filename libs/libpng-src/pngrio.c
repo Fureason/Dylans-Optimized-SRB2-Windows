@@ -22,13 +22,13 @@
 
 #ifdef PNG_READ_SUPPORTED
 
-                                                                        
-                                                                           
-                                                                       
-                                                                           
-                                             
-   
-void  
+/* Read the data from whatever input you are using.  The default routine
+ * reads from a file pointer.  Note that this routine sometimes gets called
+ * with very small lengths, so you should implement some kind of simple
+ * buffering if you are using unbuffered reads.  This should never be asked
+ * to read more than 64K on a 16-bit machine.
+ */
+void /* PRIVATE */
 png_read_data(png_structrp png_ptr, png_bytep data, size_t length)
 {
    png_debug1(4, "reading %d bytes", (int)length);
@@ -41,11 +41,11 @@ png_read_data(png_structrp png_ptr, png_bytep data, size_t length)
 }
 
 #ifdef PNG_STDIO_SUPPORTED
-                                                                         
-                                                                        
-                                                                           
-                             
-   
+/* This is the function that does the actual reading of data.  If you are
+ * not reading from a standard C stream, you should create a replacement
+ * read_data function and use it at run time with png_set_read_fn(), rather
+ * than changing the library.
+ */
 void PNGCBAPI
 png_default_read_data(png_structp png_ptr, png_bytep data, size_t length)
 {
@@ -54,9 +54,9 @@ png_default_read_data(png_structp png_ptr, png_bytep data, size_t length)
    if (png_ptr == NULL)
       return;
 
-                                                                       
-                                                                
-      
+   /* fread() returns 0 on error, so it is OK to store this in a size_t
+    * instead of an int, which is what fread() actually returns.
+    */
    check = fread(data, 1, length, png_voidcast(png_FILE_p, png_ptr->io_ptr));
 
    if (check != length)
@@ -64,25 +64,25 @@ png_default_read_data(png_structp png_ptr, png_bytep data, size_t length)
 }
 #endif
 
-                                                                      
-                                                      
-  
-                                        
-  
-                                                       
-  
-                                                                          
-                                                    
-  
-                                                                   
-                                                                   
-                                                                         
-                                                                      
-                                                                           
-                                                                       
-                                                                           
-                          
-   
+/* This function allows the application to supply a new input function
+ * for libpng if standard C streams aren't being used.
+ *
+ * This function takes as its arguments:
+ *
+ * png_ptr      - pointer to a png input data structure
+ *
+ * io_ptr       - pointer to user supplied structure containing info about
+ *                the input functions.  May be NULL.
+ *
+ * read_data_fn - pointer to a new input function that takes as its
+ *                arguments a pointer to a png_struct, a pointer to
+ *                a location where input data can be stored, and a 32-bit
+ *                unsigned int that is the number of bytes to be read.
+ *                To exit and output any fatal error messages the new write
+ *                function should call png_error(png_ptr, "Error msg").
+ *                May be NULL, in which case libpng's default function will
+ *                be used.
+ */
 void PNGAPI
 png_set_read_fn(png_structrp png_ptr, png_voidp io_ptr,
     png_rw_ptr read_data_fn)
@@ -103,7 +103,7 @@ png_set_read_fn(png_structrp png_ptr, png_voidp io_ptr,
 #endif
 
 #ifdef PNG_WRITE_SUPPORTED
-    
+   /* It is an error to write to a read device */
    if (png_ptr->write_data_fn != NULL)
    {
       png_ptr->write_data_fn = NULL;
@@ -117,4 +117,4 @@ png_set_read_fn(png_structrp png_ptr, png_voidp io_ptr,
    png_ptr->output_flush_fn = NULL;
 #endif
 }
-#endif  
+#endif /* READ */

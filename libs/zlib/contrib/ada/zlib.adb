@@ -6,7 +6,7 @@
 --  Open source license information is in the zlib.ads file.  --
 ----------------------------------------------------------------
 
-
+--  $Id: zlib.adb,v 1.31 2004/09/06 06:53:19 vagul Exp $
 
 with Ada.Exceptions;
 with Ada.Unchecked_Conversion;
@@ -49,18 +49,18 @@ package body ZLib is
    subtype Footer_Array is Stream_Element_Array (1 .. 8);
 
    Simple_GZip_Header : constant Stream_Element_Array (1 .. 10)
-     := (16#1f#, 16#8b#,                  
-         16#08#,                          
-         16#00#,                          
-         16#00#, 16#00#, 16#00#, 16#00#,  
-         16#00#,                          
-         16#03#                           
+     := (16#1f#, 16#8b#,                 --  Magic header
+         16#08#,                         --  Z_DEFLATED
+         16#00#,                         --  Flags
+         16#00#, 16#00#, 16#00#, 16#00#, --  Time
+         16#00#,                         --  XFlags
+         16#03#                          --  OS code
         );
-
-
-
-
-
+   --  The simplest gzip header is not for informational, but just for
+   --  gzip format compatibility.
+   --  Note that some code below is using assumption
+   --  Simple_GZip_Header'Last > Footer_Array'Last, so do not make
+   --  Simple_GZip_Header'Last <= Footer_Array'Last.
 
    Return_Code : constant array (Thin.Int range <>) of Return_Code_Enum
      := (0 => OK,
@@ -103,7 +103,7 @@ package body ZLib is
       Out_Data  :    out Ada.Streams.Stream_Element_Array;
       Out_Last  :    out Ada.Streams.Stream_Element_Offset;
       Flush     : in     Flush_Mode);
-
+   --  Separate translate routine for make gzip header.
 
    procedure Translate_Auto
      (Filter    : in out Filter_Type;
@@ -112,11 +112,11 @@ package body ZLib is
       Out_Data  :    out Ada.Streams.Stream_Element_Array;
       Out_Last  :    out Ada.Streams.Stream_Element_Offset;
       Flush     : in     Flush_Mode);
+   --  translate routine without additional headers.
 
-
-
-
-
+   -----------------
+   -- Check_Error --
+   -----------------
 
    procedure Check_Error (Stream : in Z_Stream; Code : in Thin.Int) is
       use type Thin.Int;
@@ -334,21 +334,21 @@ package body ZLib is
          when None =>
             Check_Version;
 
-
-
+            --  Inflate data without headers determined
+            --  by negative Win_Bits.
 
             Win_Bits := -Win_Bits;
          when GZip =>
             Check_Version;
 
-
+            --  Inflate gzip data defined by flag 16.
 
             Win_Bits := Win_Bits + 16;
          when Auto =>
             Check_Version;
 
-
-
+            --  Inflate with automatic detection
+            --  of gzip or native header defined by flag 32.
 
             Win_Bits := Win_Bits + 32;
          when Default => null;
@@ -366,18 +366,18 @@ package body ZLib is
       end if;
    end Inflate_Init;
 
-
-
-
+   -------------
+   -- Is_Open --
+   -------------
 
    function Is_Open (Filter : in Filter_Type) return Boolean is
    begin
       return Filter.Strm /= null;
    end Is_Open;
 
-
-
-
+   -----------------
+   -- Raise_Error --
+   -----------------
 
    procedure Raise_Error (Message : in String) is
    begin
@@ -438,9 +438,9 @@ package body ZLib is
       end loop;
    end Read;
 
-
-
-
+   ----------------
+   -- Stream_End --
+   ----------------
 
    function Stream_End (Filter : in Filter_Type) return Boolean is
    begin
@@ -600,9 +600,9 @@ package body ZLib is
          Out_First  := Out_Last + 1;
       end Add_Data;
 
-
-
-
+      ------------
+      -- Put_32 --
+      ------------
 
       procedure Put_32
         (Item : in out Stream_Element_Array;
@@ -634,8 +634,8 @@ package body ZLib is
       end if;
 
       if Filter.Stream_End and then Out_Last <= Out_Data'Last then
-
-
+         --  This detection method would work only when
+         --  Simple_GZip_Header'Last > Footer_Array'Last
 
          if Filter.Offset = Simple_GZip_Header'Last + 1 then
             Filter.Offset := Footer_Array'First;
@@ -652,18 +652,18 @@ package body ZLib is
       end if;
    end Translate_GZip;
 
-
-
-
+   -------------
+   -- Version --
+   -------------
 
    function Version return String is
    begin
       return Interfaces.C.Strings.Value (Thin.zlibVersion);
    end Version;
 
-
-
-
+   -----------
+   -- Write --
+   -----------
 
    procedure Write
      (Filter : in out Filter_Type;

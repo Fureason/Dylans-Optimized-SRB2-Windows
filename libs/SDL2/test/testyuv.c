@@ -17,16 +17,16 @@
 #include "SDL_test_font.h"
 #include "testyuv_cvt.h"
 
- 
+/* 422 (YUY2, etc) formats are the largest */
 #define MAX_YUV_SURFACE_SIZE(W, H, P) (H * 4 * (W + P + 1) / 2)
 
- 
+/* Return true if the YUV format is packed pixels */
 static SDL_bool is_packed_yuv_format(Uint32 format)
 {
     return format == SDL_PIXELFORMAT_YUY2 || format == SDL_PIXELFORMAT_UYVY || format == SDL_PIXELFORMAT_YVYU;
 }
 
- 
+/* Create a surface with a good pattern for verifying YUV conversion */
 static SDL_Surface *generate_test_pattern(int pattern_size)
 {
     SDL_Surface *pattern = SDL_CreateRGBSurfaceWithFormat(0, pattern_size, pattern_size, 0, SDL_PIXELFORMAT_RGB24);
@@ -34,9 +34,9 @@ static SDL_Surface *generate_test_pattern(int pattern_size)
     if (pattern) {
         int i, x, y;
         Uint8 *p, c;
-        const int thickness = 2;  
+        const int thickness = 2; /* Important so 2x2 blocks of color are the same, to avoid Cr/Cb interpolation over pixels */
 
-         
+        /* R, G, B in alternating horizontal bands */
         for (y = 0; y < pattern->h; y += thickness) {
             for (i = 0; i < thickness; ++i) {
                 p = (Uint8 *)pattern->pixels + (y + i) * pattern->pitch + ((y / thickness) % 3);
@@ -47,7 +47,7 @@ static SDL_Surface *generate_test_pattern(int pattern_size)
             }
         }
 
-         
+        /* Black and white in alternating vertical bands */
         c = 0xFF;
         for (x = 1 * thickness; x < pattern->w; x += 2 * thickness) {
             for (i = 0; i < thickness; ++i) {
@@ -131,7 +131,7 @@ static int run_automated_tests(int pattern_size, int extra_pitch)
         goto done;
     }
 
-     
+    /* Verify conversion from YUV formats */
     for (i = 0; i < SDL_arraysize(formats); ++i) {
         if (!ConvertRGBtoYUV(formats[i], pattern->pixels, pattern->pitch, yuv1, pattern->w, pattern->h, SDL_GetYUVConversionModeForResolution(pattern->w, pattern->h), 0, 100)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ConvertRGBtoYUV() doesn't support converting to %s\n", SDL_GetPixelFormatName(formats[i]));
@@ -144,7 +144,7 @@ static int run_automated_tests(int pattern_size, int extra_pitch)
         }
     }
 
-     
+    /* Verify conversion to YUV formats */
     for (i = 0; i < SDL_arraysize(formats); ++i) {
         yuv1_pitch = CalculateYUVPitch(formats[i], pattern->w) + extra_pitch;
         if (SDL_ConvertPixels(pattern->w, pattern->h, pattern->format->format, pattern->pixels, pattern->pitch, formats[i], yuv1, yuv1_pitch) < 0) {
@@ -157,7 +157,7 @@ static int run_automated_tests(int pattern_size, int extra_pitch)
         }
     }
 
-     
+    /* Verify conversion between YUV formats */
     for (i = 0; i < SDL_arraysize(formats); ++i) {
         for (j = 0; j < SDL_arraysize(formats); ++j) {
             yuv1_pitch = CalculateYUVPitch(formats[i], pattern->w) + extra_pitch;
@@ -177,11 +177,11 @@ static int run_automated_tests(int pattern_size, int extra_pitch)
         }
     }
 
-     
+    /* Verify conversion between YUV formats in-place */
     for (i = 0; i < SDL_arraysize(formats); ++i) {
         for (j = 0; j < SDL_arraysize(formats); ++j) {
             if (is_packed_yuv_format(formats[i]) != is_packed_yuv_format(formats[j])) {
-                 
+                /* Can't change plane vs packed pixel layout in-place */
                 continue;
             }
 
@@ -219,26 +219,26 @@ int main(int argc, char **argv)
         int pattern_size;
         int extra_pitch;
     } automated_test_params[] = {
-         
+        /* Test: even width and height */
         { SDL_FALSE, 2, 0 },
         { SDL_FALSE, 4, 0 },
-         
+        /* Test: odd width and height */
         { SDL_FALSE, 1, 0 },
         { SDL_FALSE, 3, 0 },
-         
+        /* Test: even width and height, extra pitch */
         { SDL_FALSE, 2, 3 },
         { SDL_FALSE, 4, 3 },
-         
+        /* Test: odd width and height, extra pitch */
         { SDL_FALSE, 1, 3 },
         { SDL_FALSE, 3, 3 },
-         
+        /* Test: even width and height with intrinsics */
         { SDL_TRUE, 32, 0 },
-         
+        /* Test: odd width and height with intrinsics */
         { SDL_TRUE, 33, 0 },
         { SDL_TRUE, 37, 0 },
-         
+        /* Test: even width and height with intrinsics, extra pitch */
         { SDL_TRUE, 32, 3 },
-         
+        /* Test: odd width and height with intrinsics, extra pitch */
         { SDL_TRUE, 33, 3 },
         { SDL_TRUE, 37, 3 },
     };
@@ -307,7 +307,7 @@ int main(int argc, char **argv)
         ++arg;
     }
 
-     
+    /* Run automated tests */
     if (should_run_automated_tests) {
         for (i = 0; i < SDL_arraysize(automated_test_params); ++i) {
             SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Running automated test, pattern size %d, extra pitch %d, intrinsics %s\n",
@@ -422,7 +422,7 @@ int main(int argc, char **argv)
                 }
             }
 
-             
+            /* Handle wrapping */
             if (current < 0) {
                 current += SDL_arraysize(output);
             }
@@ -447,4 +447,4 @@ int main(int argc, char **argv)
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

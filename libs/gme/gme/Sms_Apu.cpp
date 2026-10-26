@@ -1,4 +1,4 @@
-
+// Sms_Snd_Emu 0.1.4. http://www.slack.net/~ant/
 
 #include "Sms_Apu.h"
 
@@ -15,12 +15,12 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
-
+// Sms_Osc
 
 Sms_Osc::Sms_Osc()
 {
 	output = 0;
-	outputs [0] = 0;  
+	outputs [0] = 0; // always stays NULL
 	outputs [1] = 0;
 	outputs [2] = 0;
 	outputs [3] = 0;
@@ -35,7 +35,7 @@ void Sms_Osc::reset()
 	output = outputs [3];
 }
 
-
+// Sms_Square
 
 inline void Sms_Square::reset()
 {
@@ -48,7 +48,7 @@ void Sms_Square::run( blip_time_t time, blip_time_t end_time )
 {
 	if ( !volume || period <= 128 )
 	{
-
+		// ignore 16kHz and higher
 		if ( last_amp )
 		{
 			synth->offset( time, -last_amp, output );
@@ -61,7 +61,7 @@ void Sms_Square::run( blip_time_t time, blip_time_t end_time )
 		}
 		else if ( time < end_time )
 		{
-
+			// keep calculating phase
 			int count = (end_time - time + period - 1) / period;
 			phase = (phase + count) & 1;
 			time += count * period;
@@ -98,7 +98,7 @@ void Sms_Square::run( blip_time_t time, blip_time_t end_time )
 	delay = time - end_time;
 }
 
-
+// Sms_Noise
 
 static int const noise_periods [3] = { 0x100, 0x200, 0x400 };
 
@@ -142,7 +142,7 @@ void Sms_Noise::run( blip_time_t time, blip_time_t end_time )
 		{
 			int changed = shifter + 1;
 			shifter = (feedback & -(shifter & 1)) ^ (shifter >> 1);
-			if ( changed & 2 )  
+			if ( changed & 2 ) // true if bits 0 and 1 differ
 			{
 				delta = -delta;
 				synth.offset_inline( time, delta, output );
@@ -157,7 +157,7 @@ void Sms_Noise::run( blip_time_t time, blip_time_t end_time )
 	delay = time - end_time;
 }
 
-
+// Sms_Apu
 
 Sms_Apu::Sms_Apu()
 {
@@ -216,7 +216,7 @@ void Sms_Apu::reset( unsigned feedback, int noise_width )
 		feedback = 0x0009;
 		noise_width = 16;
 	}
-
+	// convert to "Galios configuration"
 	looped_feedback = 1 << (noise_width - 1);
 	noise_feedback  = 0;
 	while ( noise_width-- )
@@ -233,11 +233,11 @@ void Sms_Apu::reset( unsigned feedback, int noise_width )
 
 void Sms_Apu::run_until( blip_time_t end_time )
 {
-	require( end_time >= last_time );  
+	require( end_time >= last_time ); // end_time must not be before previous time
 	
 	if ( end_time > last_time )
 	{
-
+		// run oscillators
 		for ( int i = 0; i < osc_count; ++i )
 		{
 			Sms_Osc& osc = *oscs [i];
@@ -289,7 +289,7 @@ void Sms_Apu::write_ggstereo( blip_time_t time, int data )
 	}
 }
 
-
+// volumes [i] = 64 * pow( 1.26, 15 - i ) / pow( 1.26, 15 )
 static unsigned char const volumes [16] = {
 	64, 50, 39, 31, 24, 19, 15, 12, 9, 7, 5, 4, 3, 2, 1, 0
 };

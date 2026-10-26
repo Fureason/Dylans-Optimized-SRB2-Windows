@@ -13,13 +13,13 @@
 
 #include "testutils.h"
 
-  
-                                                                           
-                                                                  
-                                                    
-  
-                                           
-   
+/*
+ * Return the absolute path to def in the SDL_GetBasePath() if possible, or
+ * the relative path to def on platforms that don't have a working
+ * SDL_GetBasePath(). Free the result with SDL_free.
+ *
+ * Fails and returns NULL if out of memory.
+ */
 char *
 GetNearbyFilename(const char *file)
 {
@@ -49,7 +49,7 @@ GetNearbyFilename(const char *file)
             return path;
         }
 
-         
+        /* Couldn't find the file in the base path */
         SDL_free(path);
     }
 
@@ -60,15 +60,15 @@ GetNearbyFilename(const char *file)
     return path;
 }
 
-  
-                                                                          
-  
-                                                                         
-                                                                       
-                                                            
-  
-                                           
-   
+/*
+ * If user_specified is non-NULL, return a copy of it. Free with SDL_free.
+ *
+ * Otherwise, return the absolute path to def in the SDL_GetBasePath() if
+ * possible, or the relative path to def on platforms that don't have a
+ * working SDL_GetBasePath(). Free the result with SDL_free.
+ *
+ * Fails and returns NULL if out of memory.
+ */
 char *
 GetResourceFilename(const char *user_specified, const char *def)
 {
@@ -85,16 +85,16 @@ GetResourceFilename(const char *user_specified, const char *def)
     }
 }
 
-  
-                                                                       
-                                                    
-  
-                                                                              
-  
-                                                         
-  
-                                                           
-   
+/*
+ * Load the .bmp file whose name is file, from the SDL_GetBasePath() if
+ * possible or the current working directory if not.
+ *
+ * If transparent is true, set the transparent colour from the top left pixel.
+ *
+ * If width_out is non-NULL, set it to the texture width.
+ *
+ * If height_out is non-NULL, set it to the texture height.
+ */
 SDL_Texture *
 LoadTexture(SDL_Renderer *renderer, const char *file, SDL_bool transparent,
             int *width_out, int *height_out)
@@ -113,7 +113,7 @@ LoadTexture(SDL_Renderer *renderer, const char *file, SDL_bool transparent,
     if (temp == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load %s: %s", file, SDL_GetError());
     } else {
-         
+        /* Set transparent pixel as the pixel at (0,0) */
         if (transparent) {
             if (temp->format->palette) {
                 SDL_SetColorKey(temp, SDL_TRUE, *(Uint8 *)temp->pixels);

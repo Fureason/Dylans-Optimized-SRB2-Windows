@@ -10,14 +10,14 @@
   freely.
 */
 
-          
-                                                         
-                                              
-                                              
-   
+/*  Usage:
+ *  Spacebar to begin recording a gesture on all touches.
+ *  s to save all touches into "./gestureSave"
+ *  l to load all touches from "./gestureSave"
+ */
 
 #include "SDL.h"
-#include <stdlib.h>  
+#include <stdlib.h> /* for exit() */
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -30,7 +30,7 @@
 #define HEIGHT 480
 #define BPP    4
 
- 
+/* MUST BE A POWER OF 2! */
 #define EVENT_BUF_SIZE 256
 
 #define VERBOSE 0
@@ -74,10 +74,10 @@ setpix(SDL_Surface *screen, float _x, float _y, unsigned int col)
 
     SDL_GetRGB(colour, screen->format, &r, &g, &b);
 
-     
+    /* r = 0;g = 0; b = 0; */
     a = (float)((col >> 24) & 0xFF);
     if (a == 0) {
-        a = 0xFF;  
+        a = 0xFF; /* Hack, to make things easier. */
     }
 
     a = (a == 0.0f) ? 1 : (a / 255.0f);
@@ -89,7 +89,7 @@ setpix(SDL_Surface *screen, float _x, float _y, unsigned int col)
     *pixmem32 = colour;
 }
 
-#if 0  
+#if 0 /* unused */
 static void
 drawLine(SDL_Surface *screen, float x0, float y0, float x1, float y1, unsigned int col)
 {
@@ -106,7 +106,7 @@ drawCircle(SDL_Surface *screen, float x, float y, float r, unsigned int c)
     float tx, ty, xr;
     for (ty = (float)-SDL_fabs(r); ty <= (float)SDL_fabs((int)r); ty++) {
         xr = (float)SDL_sqrt(r * r - ty * ty);
-        if (r > 0) {  
+        if (r > 0) { /* r > 0 ==> filled circle */
             for (tx = -xr + 0.5f; tx <= xr - 0.5f; tx++) {
                 setpix(screen, x + tx, y + ty, c);
             }
@@ -137,7 +137,7 @@ DrawScreen(SDL_Window *window)
 
     SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 75, 75, 75));
 
-     
+    /* draw Touch History */
     for (i = eventWrite; i < eventWrite + EVENT_BUF_SIZE; ++i) {
         const SDL_Event *event = &events[i & (EVENT_BUF_SIZE - 1)];
         const float age = (float)(i - eventWrite) / EVENT_BUF_SIZE;
@@ -150,7 +150,7 @@ DrawScreen(SDL_Window *window)
             x = event->tfinger.x;
             y = event->tfinger.y;
 
-             
+            /* draw the touch: */
             c = colors[event->tfinger.fingerId % 7];
             col = ((unsigned int)(c * (0.1f + 0.85f))) | (unsigned int)(0xFF * age) << 24;
 
@@ -179,7 +179,7 @@ loop(void)
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &quitting);
 
-         
+        /* Record _all_ events */
         events[eventWrite & (EVENT_BUF_SIZE - 1)] = event;
         eventWrite++;
 

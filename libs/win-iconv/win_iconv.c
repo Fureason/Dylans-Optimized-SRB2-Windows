@@ -4,7 +4,7 @@
  * This file is placed in the public domain.
  */
 
- 
+/* for WC_NO_BEST_FIT_CHARS */
 #ifndef WINVER
 # define WINVER 0x0500
 #endif
@@ -31,8 +31,8 @@
 #define UNICODE_MODE_SWAPPED    2
 
 #define FLAG_USE_BOM            1
-#define FLAG_TRANSLIT           2  
-#define FLAG_IGNORE             4  
+#define FLAG_TRANSLIT           2 /* //TRANSLIT */
+#define FLAG_IGNORE             4 /* //IGNORE (not implemented) */
 
 typedef unsigned char uchar;
 typedef unsigned short ushort;
@@ -44,12 +44,12 @@ iconv_t iconv_open(const char *tocode, const char *fromcode);
 int iconv_close(iconv_t cd);
 size_t iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
 
- 
+/* libiconv interface for vim */
 #if defined(MAKE_DLL)
 int
 iconvctl (iconv_t cd, int request, void* argument)
 {
-     
+    /* not supported */
     return 0;
 }
 #endif
@@ -70,7 +70,7 @@ typedef int (*f_flush)(csconv_t *cv, uchar *buf, int bufsize);
 #define COMPAT_IN   1
 #define COMPAT_OUT  2
 
- 
+/* unicode mapping for compatibility with other conversion table. */
 struct compat_t {
     uint in;
     uint out;
@@ -175,10 +175,10 @@ static struct {
     {12001, "UCS-4BE"},
 
 #ifndef GLIB_COMPILATION
-      
-                             
-                                                            
-       
+    /*
+     * Default is big endian.
+     * See rfc2781 4.3 Interpreting text labelled as UTF-16.
+     */
     {1201, "UTF16"},
     {1201, "UTF-16"},
     {12001, "UTF32"},
@@ -186,7 +186,7 @@ static struct {
     {12001, "UCS-4"},
     {12001, "UCS4"},
 #else
-     
+    /* Default is little endian, because the platform is */
     {1200, "UTF16"},
     {1200, "UTF-16"},
     {1200, "UCS2"},
@@ -197,8 +197,8 @@ static struct {
     {12000, "UCS-4"},
 #endif
 
-     
-     
+    /* copy from libiconv `iconv -l` */
+    /* !IsValidCodePage(367) */
     {20127, "ANSI_X3.4-1968"},
     {20127, "ANSI_X3.4-1986"},
     {20127, "ASCII"},
@@ -211,7 +211,7 @@ static struct {
     {20127, "US-ASCII"},
     {20127, "CSASCII"},
 
-     
+    /* !IsValidCodePage(819) */
     {1252, "CP819"},
     {1252, "IBM819"},
     {28591, "ISO-8859-1"},
@@ -263,7 +263,7 @@ static struct {
     {850, "IBM850"},
     {850, "CSPC850MULTILINGUAL"},
 
-     
+    /* !IsValidCodePage(862) */
     {862, "862"},
     {862, "CP862"},
     {862, "IBM862"},
@@ -274,21 +274,21 @@ static struct {
     {866, "IBM866"},
     {866, "CSIBM866"},
 
-     
+    /* !IsValidCodePage(154) */
     {154, "CP154"},
     {154, "CYRILLIC-ASIAN"},
     {154, "PT154"},
     {154, "PTCP154"},
     {154, "CSPTCP154"},
 
-     
+    /* !IsValidCodePage(1133) */
     {1133, "CP1133"},
     {1133, "IBM-CP1133"},
 
     {874, "CP874"},
     {874, "WINDOWS-874"},
 
-     
+    /* !IsValidCodePage(51932) */
     {51932, "CP51932"},
     {51932, "MS51932"},
     {51932, "WINDOWS-51932"},
@@ -345,7 +345,7 @@ static struct {
     {852, "IBM852"},
     {852, "CSPCP852"},
 
-     
+    /* !IsValidCodePage(853) */
     {853, "CP853"},
 
     {855, "855"},
@@ -358,7 +358,7 @@ static struct {
     {857, "IBM857"},
     {857, "CSIBM857"},
 
-     
+    /* !IsValidCodePage(858) */
     {858, "CP858"},
 
     {860, "860"},
@@ -392,196 +392,196 @@ static struct {
     {869, "IBM869"},
     {869, "CSIBM869"},
 
-     
+    /* !IsValidCodePage(1152) */
     {1125, "CP1125"},
 
-      
-                            
-                                                             
-       
-    {37, "IBM037"},  
-    {437, "IBM437"},  
-    {500, "IBM500"},  
-    {708, "ASMO-708"},  
-     
-     
-    {720, "DOS-720"},  
-    {737, "ibm737"},  
-    {775, "ibm775"},  
-    {850, "ibm850"},  
-    {852, "ibm852"},  
-    {855, "IBM855"},  
-    {857, "ibm857"},  
-    {858, "IBM00858"},  
-    {860, "IBM860"},  
-    {861, "ibm861"},  
-    {862, "DOS-862"},  
-    {863, "IBM863"},  
-    {864, "IBM864"},  
-    {865, "IBM865"},  
-    {866, "cp866"},  
-    {869, "ibm869"},  
-    {870, "IBM870"},  
-    {874, "windows-874"},  
-    {875, "cp875"},  
-    {932, "shift_jis"},  
-    {932, "shift-jis"},  
-    {936, "gb2312"},  
-    {949, "ks_c_5601-1987"},  
-    {950, "big5"},  
-    {1026, "IBM1026"},  
-    {1047, "IBM01047"},  
-    {1140, "IBM01140"},  
-    {1141, "IBM01141"},  
-    {1142, "IBM01142"},  
-    {1143, "IBM01143"},  
-    {1144, "IBM01144"},  
-    {1145, "IBM01145"},  
-    {1146, "IBM01146"},  
-    {1147, "IBM01147"},  
-    {1148, "IBM01148"},  
-    {1149, "IBM01149"},  
-    {1250, "windows-1250"},  
-    {1251, "windows-1251"},  
-    {1252, "windows-1252"},  
-    {1253, "windows-1253"},  
-    {1254, "windows-1254"},  
-    {1255, "windows-1255"},  
-    {1256, "windows-1256"},  
-    {1257, "windows-1257"},  
-    {1258, "windows-1258"},  
-    {1361, "Johab"},  
-    {10000, "macintosh"},  
-    {10001, "x-mac-japanese"},  
-    {10002, "x-mac-chinesetrad"},  
-    {10003, "x-mac-korean"},  
-    {10004, "x-mac-arabic"},  
-    {10005, "x-mac-hebrew"},  
-    {10006, "x-mac-greek"},  
-    {10007, "x-mac-cyrillic"},  
-    {10008, "x-mac-chinesesimp"},  
-    {10010, "x-mac-romanian"},  
-    {10017, "x-mac-ukrainian"},  
-    {10021, "x-mac-thai"},  
-    {10029, "x-mac-ce"},  
-    {10079, "x-mac-icelandic"},  
-    {10081, "x-mac-turkish"},  
-    {10082, "x-mac-croatian"},  
-    {20000, "x-Chinese_CNS"},  
-    {20001, "x-cp20001"},  
-    {20002, "x_Chinese-Eten"},  
-    {20003, "x-cp20003"},  
-    {20004, "x-cp20004"},  
-    {20005, "x-cp20005"},  
-    {20105, "x-IA5"},  
-    {20106, "x-IA5-German"},  
-    {20107, "x-IA5-Swedish"},  
-    {20108, "x-IA5-Norwegian"},  
-    {20127, "us-ascii"},  
-    {20261, "x-cp20261"},  
-    {20269, "x-cp20269"},  
-    {20273, "IBM273"},  
-    {20277, "IBM277"},  
-    {20278, "IBM278"},  
-    {20280, "IBM280"},  
-    {20284, "IBM284"},  
-    {20285, "IBM285"},  
-    {20290, "IBM290"},  
-    {20297, "IBM297"},  
-    {20420, "IBM420"},  
-    {20423, "IBM423"},  
-    {20424, "IBM424"},  
-    {20833, "x-EBCDIC-KoreanExtended"},  
-    {20838, "IBM-Thai"},  
-    {20866, "koi8-r"},  
-    {20871, "IBM871"},  
-    {20880, "IBM880"},  
-    {20905, "IBM905"},  
-    {20924, "IBM00924"},  
-    {20932, "EUC-JP"},  
-    {20936, "x-cp20936"},  
-    {20949, "x-cp20949"},  
-    {21025, "cp1025"},  
-     
-    {21866, "koi8-u"},  
-    {28591, "iso-8859-1"},  
-    {28591, "iso8859-1"},  
-    {28592, "iso-8859-2"},  
-    {28592, "iso8859-2"},  
-    {28593, "iso-8859-3"},  
-    {28593, "iso8859-3"},  
-    {28594, "iso-8859-4"},  
-    {28594, "iso8859-4"},  
-    {28595, "iso-8859-5"},  
-    {28595, "iso8859-5"},  
-    {28596, "iso-8859-6"},  
-    {28596, "iso8859-6"},  
-    {28597, "iso-8859-7"},  
-    {28597, "iso8859-7"},  
-    {28598, "iso-8859-8"},  
-    {28598, "iso8859-8"},  
-    {28599, "iso-8859-9"},  
-    {28599, "iso8859-9"},  
-    {28603, "iso-8859-13"},  
-    {28603, "iso8859-13"},  
-    {28605, "iso-8859-15"},  
-    {28605, "iso8859-15"},  
-    {29001, "x-Europa"},  
-    {38598, "iso-8859-8-i"},  
-    {38598, "iso8859-8-i"},  
-    {50220, "iso-2022-jp"},  
-    {50221, "csISO2022JP"},  
-    {50222, "iso-2022-jp"},  
-    {50225, "iso-2022-kr"},  
-    {50225, "iso2022-kr"},  
-    {50227, "x-cp50227"},  
-     
-     
-     
-     
-     
-     
-     
-     
-    {51932, "euc-jp"},  
-    {51936, "EUC-CN"},  
-    {51949, "euc-kr"},  
-     
-    {52936, "hz-gb-2312"},  
-    {54936, "GB18030"},  
-    {57002, "x-iscii-de"},  
-    {57003, "x-iscii-be"},  
-    {57004, "x-iscii-ta"},  
-    {57005, "x-iscii-te"},  
-    {57006, "x-iscii-as"},  
-    {57007, "x-iscii-or"},  
-    {57008, "x-iscii-ka"},  
-    {57009, "x-iscii-ma"},  
-    {57010, "x-iscii-gu"},  
-    {57011, "x-iscii-pa"},  
+    /*
+     * Code Page Identifiers
+     * http://msdn2.microsoft.com/en-us/library/ms776446.aspx
+     */
+    {37, "IBM037"}, /* IBM EBCDIC US-Canada */
+    {437, "IBM437"}, /* OEM United States */
+    {500, "IBM500"}, /* IBM EBCDIC International */
+    {708, "ASMO-708"}, /* Arabic (ASMO 708) */
+    /* 709 		Arabic (ASMO-449+, BCON V4) */
+    /* 710 		Arabic - Transparent Arabic */
+    {720, "DOS-720"}, /* Arabic (Transparent ASMO); Arabic (DOS) */
+    {737, "ibm737"}, /* OEM Greek (formerly 437G); Greek (DOS) */
+    {775, "ibm775"}, /* OEM Baltic; Baltic (DOS) */
+    {850, "ibm850"}, /* OEM Multilingual Latin 1; Western European (DOS) */
+    {852, "ibm852"}, /* OEM Latin 2; Central European (DOS) */
+    {855, "IBM855"}, /* OEM Cyrillic (primarily Russian) */
+    {857, "ibm857"}, /* OEM Turkish; Turkish (DOS) */
+    {858, "IBM00858"}, /* OEM Multilingual Latin 1 + Euro symbol */
+    {860, "IBM860"}, /* OEM Portuguese; Portuguese (DOS) */
+    {861, "ibm861"}, /* OEM Icelandic; Icelandic (DOS) */
+    {862, "DOS-862"}, /* OEM Hebrew; Hebrew (DOS) */
+    {863, "IBM863"}, /* OEM French Canadian; French Canadian (DOS) */
+    {864, "IBM864"}, /* OEM Arabic; Arabic (864) */
+    {865, "IBM865"}, /* OEM Nordic; Nordic (DOS) */
+    {866, "cp866"}, /* OEM Russian; Cyrillic (DOS) */
+    {869, "ibm869"}, /* OEM Modern Greek; Greek, Modern (DOS) */
+    {870, "IBM870"}, /* IBM EBCDIC Multilingual/ROECE (Latin 2); IBM EBCDIC Multilingual Latin 2 */
+    {874, "windows-874"}, /* ANSI/OEM Thai (same as 28605, ISO 8859-15); Thai (Windows) */
+    {875, "cp875"}, /* IBM EBCDIC Greek Modern */
+    {932, "shift_jis"}, /* ANSI/OEM Japanese; Japanese (Shift-JIS) */
+    {932, "shift-jis"}, /* alternative name for it */
+    {936, "gb2312"}, /* ANSI/OEM Simplified Chinese (PRC, Singapore); Chinese Simplified (GB2312) */
+    {949, "ks_c_5601-1987"}, /* ANSI/OEM Korean (Unified Hangul Code) */
+    {950, "big5"}, /* ANSI/OEM Traditional Chinese (Taiwan; Hong Kong SAR, PRC); Chinese Traditional (Big5) */
+    {1026, "IBM1026"}, /* IBM EBCDIC Turkish (Latin 5) */
+    {1047, "IBM01047"}, /* IBM EBCDIC Latin 1/Open System */
+    {1140, "IBM01140"}, /* IBM EBCDIC US-Canada (037 + Euro symbol); IBM EBCDIC (US-Canada-Euro) */
+    {1141, "IBM01141"}, /* IBM EBCDIC Germany (20273 + Euro symbol); IBM EBCDIC (Germany-Euro) */
+    {1142, "IBM01142"}, /* IBM EBCDIC Denmark-Norway (20277 + Euro symbol); IBM EBCDIC (Denmark-Norway-Euro) */
+    {1143, "IBM01143"}, /* IBM EBCDIC Finland-Sweden (20278 + Euro symbol); IBM EBCDIC (Finland-Sweden-Euro) */
+    {1144, "IBM01144"}, /* IBM EBCDIC Italy (20280 + Euro symbol); IBM EBCDIC (Italy-Euro) */
+    {1145, "IBM01145"}, /* IBM EBCDIC Latin America-Spain (20284 + Euro symbol); IBM EBCDIC (Spain-Euro) */
+    {1146, "IBM01146"}, /* IBM EBCDIC United Kingdom (20285 + Euro symbol); IBM EBCDIC (UK-Euro) */
+    {1147, "IBM01147"}, /* IBM EBCDIC France (20297 + Euro symbol); IBM EBCDIC (France-Euro) */
+    {1148, "IBM01148"}, /* IBM EBCDIC International (500 + Euro symbol); IBM EBCDIC (International-Euro) */
+    {1149, "IBM01149"}, /* IBM EBCDIC Icelandic (20871 + Euro symbol); IBM EBCDIC (Icelandic-Euro) */
+    {1250, "windows-1250"}, /* ANSI Central European; Central European (Windows) */
+    {1251, "windows-1251"}, /* ANSI Cyrillic; Cyrillic (Windows) */
+    {1252, "windows-1252"}, /* ANSI Latin 1; Western European (Windows) */
+    {1253, "windows-1253"}, /* ANSI Greek; Greek (Windows) */
+    {1254, "windows-1254"}, /* ANSI Turkish; Turkish (Windows) */
+    {1255, "windows-1255"}, /* ANSI Hebrew; Hebrew (Windows) */
+    {1256, "windows-1256"}, /* ANSI Arabic; Arabic (Windows) */
+    {1257, "windows-1257"}, /* ANSI Baltic; Baltic (Windows) */
+    {1258, "windows-1258"}, /* ANSI/OEM Vietnamese; Vietnamese (Windows) */
+    {1361, "Johab"}, /* Korean (Johab) */
+    {10000, "macintosh"}, /* MAC Roman; Western European (Mac) */
+    {10001, "x-mac-japanese"}, /* Japanese (Mac) */
+    {10002, "x-mac-chinesetrad"}, /* MAC Traditional Chinese (Big5); Chinese Traditional (Mac) */
+    {10003, "x-mac-korean"}, /* Korean (Mac) */
+    {10004, "x-mac-arabic"}, /* Arabic (Mac) */
+    {10005, "x-mac-hebrew"}, /* Hebrew (Mac) */
+    {10006, "x-mac-greek"}, /* Greek (Mac) */
+    {10007, "x-mac-cyrillic"}, /* Cyrillic (Mac) */
+    {10008, "x-mac-chinesesimp"}, /* MAC Simplified Chinese (GB 2312); Chinese Simplified (Mac) */
+    {10010, "x-mac-romanian"}, /* Romanian (Mac) */
+    {10017, "x-mac-ukrainian"}, /* Ukrainian (Mac) */
+    {10021, "x-mac-thai"}, /* Thai (Mac) */
+    {10029, "x-mac-ce"}, /* MAC Latin 2; Central European (Mac) */
+    {10079, "x-mac-icelandic"}, /* Icelandic (Mac) */
+    {10081, "x-mac-turkish"}, /* Turkish (Mac) */
+    {10082, "x-mac-croatian"}, /* Croatian (Mac) */
+    {20000, "x-Chinese_CNS"}, /* CNS Taiwan; Chinese Traditional (CNS) */
+    {20001, "x-cp20001"}, /* TCA Taiwan */
+    {20002, "x_Chinese-Eten"}, /* Eten Taiwan; Chinese Traditional (Eten) */
+    {20003, "x-cp20003"}, /* IBM5550 Taiwan */
+    {20004, "x-cp20004"}, /* TeleText Taiwan */
+    {20005, "x-cp20005"}, /* Wang Taiwan */
+    {20105, "x-IA5"}, /* IA5 (IRV International Alphabet No. 5, 7-bit); Western European (IA5) */
+    {20106, "x-IA5-German"}, /* IA5 German (7-bit) */
+    {20107, "x-IA5-Swedish"}, /* IA5 Swedish (7-bit) */
+    {20108, "x-IA5-Norwegian"}, /* IA5 Norwegian (7-bit) */
+    {20127, "us-ascii"}, /* US-ASCII (7-bit) */
+    {20261, "x-cp20261"}, /* T.61 */
+    {20269, "x-cp20269"}, /* ISO 6937 Non-Spacing Accent */
+    {20273, "IBM273"}, /* IBM EBCDIC Germany */
+    {20277, "IBM277"}, /* IBM EBCDIC Denmark-Norway */
+    {20278, "IBM278"}, /* IBM EBCDIC Finland-Sweden */
+    {20280, "IBM280"}, /* IBM EBCDIC Italy */
+    {20284, "IBM284"}, /* IBM EBCDIC Latin America-Spain */
+    {20285, "IBM285"}, /* IBM EBCDIC United Kingdom */
+    {20290, "IBM290"}, /* IBM EBCDIC Japanese Katakana Extended */
+    {20297, "IBM297"}, /* IBM EBCDIC France */
+    {20420, "IBM420"}, /* IBM EBCDIC Arabic */
+    {20423, "IBM423"}, /* IBM EBCDIC Greek */
+    {20424, "IBM424"}, /* IBM EBCDIC Hebrew */
+    {20833, "x-EBCDIC-KoreanExtended"}, /* IBM EBCDIC Korean Extended */
+    {20838, "IBM-Thai"}, /* IBM EBCDIC Thai */
+    {20866, "koi8-r"}, /* Russian (KOI8-R); Cyrillic (KOI8-R) */
+    {20871, "IBM871"}, /* IBM EBCDIC Icelandic */
+    {20880, "IBM880"}, /* IBM EBCDIC Cyrillic Russian */
+    {20905, "IBM905"}, /* IBM EBCDIC Turkish */
+    {20924, "IBM00924"}, /* IBM EBCDIC Latin 1/Open System (1047 + Euro symbol) */
+    {20932, "EUC-JP"}, /* Japanese (JIS 0208-1990 and 0121-1990) */
+    {20936, "x-cp20936"}, /* Simplified Chinese (GB2312); Chinese Simplified (GB2312-80) */
+    {20949, "x-cp20949"}, /* Korean Wansung */
+    {21025, "cp1025"}, /* IBM EBCDIC Cyrillic Serbian-Bulgarian */
+    /* 21027 		(deprecated) */
+    {21866, "koi8-u"}, /* Ukrainian (KOI8-U); Cyrillic (KOI8-U) */
+    {28591, "iso-8859-1"}, /* ISO 8859-1 Latin 1; Western European (ISO) */
+    {28591, "iso8859-1"}, /* ISO 8859-1 Latin 1; Western European (ISO) */
+    {28592, "iso-8859-2"}, /* ISO 8859-2 Central European; Central European (ISO) */
+    {28592, "iso8859-2"}, /* ISO 8859-2 Central European; Central European (ISO) */
+    {28593, "iso-8859-3"}, /* ISO 8859-3 Latin 3 */
+    {28593, "iso8859-3"}, /* ISO 8859-3 Latin 3 */
+    {28594, "iso-8859-4"}, /* ISO 8859-4 Baltic */
+    {28594, "iso8859-4"}, /* ISO 8859-4 Baltic */
+    {28595, "iso-8859-5"}, /* ISO 8859-5 Cyrillic */
+    {28595, "iso8859-5"}, /* ISO 8859-5 Cyrillic */
+    {28596, "iso-8859-6"}, /* ISO 8859-6 Arabic */
+    {28596, "iso8859-6"}, /* ISO 8859-6 Arabic */
+    {28597, "iso-8859-7"}, /* ISO 8859-7 Greek */
+    {28597, "iso8859-7"}, /* ISO 8859-7 Greek */
+    {28598, "iso-8859-8"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Visual) */
+    {28598, "iso8859-8"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Visual) */
+    {28599, "iso-8859-9"}, /* ISO 8859-9 Turkish */
+    {28599, "iso8859-9"}, /* ISO 8859-9 Turkish */
+    {28603, "iso-8859-13"}, /* ISO 8859-13 Estonian */
+    {28603, "iso8859-13"}, /* ISO 8859-13 Estonian */
+    {28605, "iso-8859-15"}, /* ISO 8859-15 Latin 9 */
+    {28605, "iso8859-15"}, /* ISO 8859-15 Latin 9 */
+    {29001, "x-Europa"}, /* Europa 3 */
+    {38598, "iso-8859-8-i"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Logical) */
+    {38598, "iso8859-8-i"}, /* ISO 8859-8 Hebrew; Hebrew (ISO-Logical) */
+    {50220, "iso-2022-jp"}, /* ISO 2022 Japanese with no halfwidth Katakana; Japanese (JIS) */
+    {50221, "csISO2022JP"}, /* ISO 2022 Japanese with halfwidth Katakana; Japanese (JIS-Allow 1 byte Kana) */
+    {50222, "iso-2022-jp"}, /* ISO 2022 Japanese JIS X 0201-1989; Japanese (JIS-Allow 1 byte Kana - SO/SI) */
+    {50225, "iso-2022-kr"}, /* ISO 2022 Korean */
+    {50225, "iso2022-kr"}, /* ISO 2022 Korean */
+    {50227, "x-cp50227"}, /* ISO 2022 Simplified Chinese; Chinese Simplified (ISO 2022) */
+    /* 50229 		ISO 2022 Traditional Chinese */
+    /* 50930 		EBCDIC Japanese (Katakana) Extended */
+    /* 50931 		EBCDIC US-Canada and Japanese */
+    /* 50933 		EBCDIC Korean Extended and Korean */
+    /* 50935 		EBCDIC Simplified Chinese Extended and Simplified Chinese */
+    /* 50936 		EBCDIC Simplified Chinese */
+    /* 50937 		EBCDIC US-Canada and Traditional Chinese */
+    /* 50939 		EBCDIC Japanese (Latin) Extended and Japanese */
+    {51932, "euc-jp"}, /* EUC Japanese */
+    {51936, "EUC-CN"}, /* EUC Simplified Chinese; Chinese Simplified (EUC) */
+    {51949, "euc-kr"}, /* EUC Korean */
+    /* 51950 		EUC Traditional Chinese */
+    {52936, "hz-gb-2312"}, /* HZ-GB2312 Simplified Chinese; Chinese Simplified (HZ) */
+    {54936, "GB18030"}, /* Windows XP and later: GB18030 Simplified Chinese (4 byte); Chinese Simplified (GB18030) */
+    {57002, "x-iscii-de"}, /* ISCII Devanagari */
+    {57003, "x-iscii-be"}, /* ISCII Bengali */
+    {57004, "x-iscii-ta"}, /* ISCII Tamil */
+    {57005, "x-iscii-te"}, /* ISCII Telugu */
+    {57006, "x-iscii-as"}, /* ISCII Assamese */
+    {57007, "x-iscii-or"}, /* ISCII Oriya */
+    {57008, "x-iscii-ka"}, /* ISCII Kannada */
+    {57009, "x-iscii-ma"}, /* ISCII Malayalam */
+    {57010, "x-iscii-gu"}, /* ISCII Gujarati */
+    {57011, "x-iscii-pa"}, /* ISCII Punjabi */
 
     {0, NULL}
 };
 
-  
-                                               
-                                                                    
-                                                          
-                                                
-                                                         
-                                                                    
-                                                          
-                                                      
-                                                                 
-                                                              
-                                                               
-                                                             
-  
-                                                          
-  
-                                                                    
-                     
-   
+/*
+ * SJIS SHIFTJIS table              CP932 table
+ * ---- --------------------------- --------------------------------
+ *   5C U+00A5 YEN SIGN             U+005C REVERSE SOLIDUS
+ *   7E U+203E OVERLINE             U+007E TILDE
+ * 815C U+2014 EM DASH              U+2015 HORIZONTAL BAR
+ * 815F U+005C REVERSE SOLIDUS      U+FF3C FULLWIDTH REVERSE SOLIDUS
+ * 8160 U+301C WAVE DASH            U+FF5E FULLWIDTH TILDE
+ * 8161 U+2016 DOUBLE VERTICAL LINE U+2225 PARALLEL TO
+ * 817C U+2212 MINUS SIGN           U+FF0D FULLWIDTH HYPHEN-MINUS
+ * 8191 U+00A2 CENT SIGN            U+FFE0 FULLWIDTH CENT SIGN
+ * 8192 U+00A3 POUND SIGN           U+FFE1 FULLWIDTH POUND SIGN
+ * 81CA U+00AC NOT SIGN             U+FFE2 FULLWIDTH NOT SIGN
+ *
+ * EUC-JP and ISO-2022-JP should be compatible with CP932.
+ *
+ * Kernel and MLang have different Unicode mapping table.  Make sure
+ * which API is used.
+ */
 static compat_t cp932_compat[] = {
     {0x00A5, 0x005C, COMPAT_OUT},
     {0x203E, 0x007E, COMPAT_OUT},
@@ -610,7 +610,7 @@ static compat_t cp20932_compat[] = {
 
 static compat_t *cp51932_compat = cp932_compat;
 
- 
+/* cp20932_compat for kernel.  cp932_compat for mlang. */
 static compat_t *cp5022x_compat = cp932_compat;
 
 typedef HRESULT (WINAPI *CONVERTINETSTRING)(
@@ -700,8 +700,8 @@ iconv_open(const char *tocode, const char *fromcode)
         return (iconv_t)cd;
 #endif
 
-                                                             
-                               
+    /* reset the errno to prevent reporting wrong error code.
+     * 0 for unsorted error. */
     errno = 0;
     if (win_iconv_open(cd, tocode, fromcode))
         return (iconv_t)cd;
@@ -757,7 +757,7 @@ static size_t
 win_iconv(iconv_t _cd, const char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
     rec_iconv_t *cd = (rec_iconv_t *)_cd;
-    ushort wbuf[MB_CHAR_MAX];  
+    ushort wbuf[MB_CHAR_MAX]; /* enough room for one character */
     int insize;
     int outsize;
     int wsize;
@@ -864,7 +864,7 @@ make_csconv(const char *_name, csconv_t *cv)
     if (name == NULL)
         return FALSE;
 
-     
+    /* check for option "enc_name//opt1//opt2" */
     while ((p = strrstr(name, "//")) != NULL)
     {
         if (_stricmp(p + 2, "nocompat") == 0)
@@ -931,7 +931,7 @@ make_csconv(const char *_name, csconv_t *cv)
     }
     else
     {
-         
+        /* not supported */
         free(name);
         errno = EINVAL;
         return FALSE;
@@ -964,11 +964,11 @@ name_to_codepage(const char *name)
     else if (strcmp(name, "wchar_t") == 0)
         return 1200;
     else if (_strnicmp(name, "cp", 2) == 0)
-        return atoi(name + 2);  
+        return atoi(name + 2); /* CP123 */
     else if ('0' <= name[0] && name[0] <= '9')
-        return atoi(name);      
+        return atoi(name);     /* 123 */
     else if (_strnicmp(name, "xx", 2) == 0)
-        return atoi(name + 2);  
+        return atoi(name + 2); /* XX123 for debug */
 
     for (i = 0; codepage_alias[i].name != NULL; ++i)
         if (_stricmp(name, codepage_alias[i].name) == 0)
@@ -976,9 +976,9 @@ name_to_codepage(const char *name)
     return -1;
 }
 
-  
-                                        
-   
+/*
+ * http://www.faqs.org/rfcs/rfc2781.html
+ */
 static uint
 utf16_to_ucs4(const ushort *wbuf)
 {
@@ -1005,16 +1005,16 @@ ucs4_to_utf16(uint wc, ushort *wbuf, int *wbufsize)
     }
 }
 
-  
-                                                                    
-                                                        
-                                                                  
-                                                                      
-                                                                     
-                                                                    
-                                                                     
-              
-   
+/*
+ * Check if codepage is one of those for which the dwFlags parameter
+ * to MultiByteToWideChar() must be zero. Return zero or
+ * MB_ERR_INVALID_CHARS.  The docs in Platform SDK for for Windows
+ * Server 2003 R2 claims that also codepage 65001 is one of these, but
+ * that doesn't seem to be the case. The MSDN docs for MSVS2008 leave
+ * out 65001 (UTF-8), and that indeed seems to be the case on XP, it
+ * works fine to pass MB_ERR_INVALID_CHARS in dwFlags when converting
+ * from UTF-8.
+ */
 static int
 mbtowc_flags(int codepage)
 {
@@ -1026,14 +1026,14 @@ mbtowc_flags(int codepage)
 	    codepage == 65000 || codepage == 42) ? 0 : MB_ERR_INVALID_CHARS;
 }
 
-  
-                                                                 
-                                                                
-                                                                      
-                                                                     
-                                                                      
-                                            
-   
+/*
+ * Check if codepage is one those for which the lpUsedDefaultChar
+ * parameter to WideCharToMultiByte() must be NULL.  The docs in
+ * Platform SDK for for Windows Server 2003 R2 claims that this is the
+ * list below, while the MSDN docs for MSVS2008 claim that it is only
+ * for 65000 (UTF-7) and 65001 (UTF-8). This time the earlier Platform
+ * SDK seems to be correct, at least for XP.
+ */
 static int
 must_use_null_useddefaultchar(int codepage)
 {
@@ -1089,15 +1089,15 @@ libiconv_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode)
     const char *e;
     f_iconv_open _iconv_open;
 
-      
-                                                                    
-       
+    /*
+     * always try to load dll, so that we can switch dll in runtime.
+     */
 
-     
+    /* XXX: getenv() can't get variable set by SetEnvironmentVariable() */
     p = getenv("WINICONV_LIBICONV_DLL");
     if (p == NULL)
         p = DEFAULT_LIBICONV_DLL;
-     
+    /* parse comma separated value */
     for ( ; *p != 0; p = (*e == ',') ? e + 1 : e)
     {
         e = strchr(p, ',');
@@ -1153,26 +1153,26 @@ libiconv_iconv_open(rec_iconv_t *cd, const char *tocode, const char *fromcode)
 failed:
     if (hlibiconv != NULL)
         FreeLibrary(hlibiconv);
-     
+    /* do not free hmsvcrt which is obtained by GetModuleHandle() */
     return FALSE;
 }
 
-  
-             
-                                                     
-                                                                 
-  
-                    
-                            
-                                
-                                
-   
+/*
+ * Reference:
+ * http://forums.belution.com/ja/vc/000/234/78s.shtml
+ * http://nienie.com/~masapico/api_ImageDirectoryEntryToData.html
+ *
+ * The formal way is
+ *   imagehlp.h or dbghelp.h
+ *   imagehlp.lib or dbghelp.lib
+ *   ImageDirectoryEntryToData()
+ */
 #define TO_DOS_HEADER(base) ((PIMAGE_DOS_HEADER)(base))
 #define TO_NT_HEADERS(base) ((PIMAGE_NT_HEADERS)((LPBYTE)(base) + TO_DOS_HEADER(base)->e_lfanew))
 static PVOID
 MyImageDirectoryEntryToData(LPVOID Base, BOOLEAN MappedAsImage, USHORT DirectoryEntry, PULONG Size)
 {
-     
+    /* TODO: MappedAsImage? */
     PIMAGE_DATA_DIRECTORY p;
     p = TO_NT_HEADERS(Base)->OptionalHeader.DataDirectory + DirectoryEntry;
     if (p->VirtualAddress == 0) {
@@ -1189,7 +1189,7 @@ find_imported_module_by_funcname(HMODULE hModule, const char *funcname)
     DWORD_PTR Base;
     ULONG Size;
     PIMAGE_IMPORT_DESCRIPTOR Imp;
-    PIMAGE_THUNK_DATA Name;          
+    PIMAGE_THUNK_DATA Name;         /* Import Name Table */
     PIMAGE_IMPORT_BY_NAME ImpName;
 
     Base = (DWORD_PTR)hModule;
@@ -1277,9 +1277,9 @@ utf8_mblen(csconv_t *cv, const uchar *buf, int bufsize)
 static int
 eucjp_mblen(csconv_t *cv, const uchar *buf, int bufsize)
 {
-    if (buf[0] < 0x80)  
+    if (buf[0] < 0x80) /* ASCII */
         return 1;
-    else if (buf[0] == 0x8E)  
+    else if (buf[0] == 0x8E) /* JIS X 0201 */
     {
         if (bufsize < 2)
             return seterror(EINVAL);
@@ -1287,7 +1287,7 @@ eucjp_mblen(csconv_t *cv, const uchar *buf, int bufsize)
             return seterror(EILSEQ);
         return 2;
     }
-    else if (buf[0] == 0x8F)  
+    else if (buf[0] == 0x8F) /* JIS X 0212 */
     {
         if (bufsize < 3)
             return seterror(EINVAL);
@@ -1296,7 +1296,7 @@ eucjp_mblen(csconv_t *cv, const uchar *buf, int bufsize)
             return seterror(EILSEQ);
         return 3;
     }
-    else  
+    else /* JIS X 0208 */
     {
         if (bufsize < 2)
             return seterror(EINVAL);
@@ -1350,19 +1350,19 @@ kernel_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
     }
     else if (usedDefaultChar)
         return seterror(EILSEQ);
-    else if (cv->mblen(cv, buf, len) != len)  
+    else if (cv->mblen(cv, buf, len) != len) /* validate result */
         return seterror(EILSEQ);
     return len;
 }
 
-  
-                                               
-                                                                
-                                          
-                                          
-                                           
-                                         
-   
+/*
+ * It seems that the mode (cv->mode) is fixnum.
+ * For example, when converting iso-2022-jp(cp50221) to unicode:
+ *      in ascii sequence: mode=0xC42C0000
+ *   in jisx0208 sequence: mode=0xC42C0001
+ * "C42C" is same for each convert session.
+ * It should be: ((codepage-1)<<16)|state
+ */
 static int
 mlang_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbufsize)
 {
@@ -1384,7 +1384,7 @@ mlang_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
 static int
 mlang_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 {
-    char tmpbuf[MB_CHAR_MAX];  
+    char tmpbuf[MB_CHAR_MAX]; /* enough room for one character */
     int tmpsize = MB_CHAR_MAX;
     int insize = wbufsize;
     HRESULT hr;
@@ -1406,15 +1406,15 @@ utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
 {
     int codepage = cv->codepage;
 
-     
+    /* swap endian: 1200 <-> 1201 */
     if (cv->mode & UNICODE_MODE_SWAPPED)
         codepage ^= 1;
 
     if (bufsize < 2)
         return seterror(EINVAL);
-    if (codepage == 1200)  
+    if (codepage == 1200) /* little endian */
         wbuf[0] = (buf[1] << 8) | buf[0];
-    else if (codepage == 1201)  
+    else if (codepage == 1201) /* big endian */
         wbuf[0] = (buf[0] << 8) | buf[1];
 
     if ((cv->flags & FLAG_USE_BOM) && !(cv->mode & UNICODE_MODE_BOM_DONE))
@@ -1439,9 +1439,9 @@ utf16_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
     {
         if (bufsize < 4)
             return seterror(EINVAL);
-        if (codepage == 1200)  
+        if (codepage == 1200) /* little endian */
             wbuf[1] = (buf[3] << 8) | buf[2];
-        else if (codepage == 1201)  
+        else if (codepage == 1201) /* big endian */
             wbuf[1] = (buf[2] << 8) | buf[3];
         if (!(0xDC00 <= wbuf[1] && wbuf[1] <= 0xDFFF))
             return seterror(EILSEQ);
@@ -1462,9 +1462,9 @@ utf16_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
         cv->mode |= UNICODE_MODE_BOM_DONE;
         if (bufsize < 2)
             return seterror(E2BIG);
-        if (cv->codepage == 1200)  
+        if (cv->codepage == 1200) /* little endian */
             memcpy(buf, "\xFF\xFE", 2);
-        else if (cv->codepage == 1201)  
+        else if (cv->codepage == 1201) /* big endian */
             memcpy(buf, "\xFE\xFF", 2);
 
         r = utf16_wctomb(cv, wbuf, wbufsize, buf + 2, bufsize - 2);
@@ -1475,12 +1475,12 @@ utf16_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 
     if (bufsize < 2)
         return seterror(E2BIG);
-    if (cv->codepage == 1200)  
+    if (cv->codepage == 1200) /* little endian */
     {
         buf[0] = (wbuf[0] & 0x00FF);
         buf[1] = (wbuf[0] & 0xFF00) >> 8;
     }
-    else if (cv->codepage == 1201)  
+    else if (cv->codepage == 1201) /* big endian */
     {
         buf[0] = (wbuf[0] & 0xFF00) >> 8;
         buf[1] = (wbuf[0] & 0x00FF);
@@ -1489,12 +1489,12 @@ utf16_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
     {
         if (bufsize < 4)
             return seterror(E2BIG);
-        if (cv->codepage == 1200)  
+        if (cv->codepage == 1200) /* little endian */
         {
             buf[2] = (wbuf[1] & 0x00FF);
             buf[3] = (wbuf[1] & 0xFF00) >> 8;
         }
-        else if (cv->codepage == 1201)  
+        else if (cv->codepage == 1201) /* big endian */
         {
             buf[2] = (wbuf[1] & 0xFF00) >> 8;
             buf[3] = (wbuf[1] & 0x00FF);
@@ -1510,15 +1510,15 @@ utf32_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int *wbu
     int codepage = cv->codepage;
     uint wc;
 
-     
+    /* swap endian: 12000 <-> 12001 */
     if (cv->mode & UNICODE_MODE_SWAPPED)
         codepage ^= 1;
 
     if (bufsize < 4)
         return seterror(EINVAL);
-    if (codepage == 12000)  
+    if (codepage == 12000) /* little endian */
         wc = (buf[3] << 24) | (buf[2] << 16) | (buf[1] << 8) | buf[0];
-    else if (codepage == 12001)  
+    else if (codepage == 12001) /* big endian */
         wc = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
 
     if ((cv->flags & FLAG_USE_BOM) && !(cv->mode & UNICODE_MODE_BOM_DONE))
@@ -1555,9 +1555,9 @@ utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
         cv->mode |= UNICODE_MODE_BOM_DONE;
         if (bufsize < 4)
             return seterror(E2BIG);
-        if (cv->codepage == 12000)  
+        if (cv->codepage == 12000) /* little endian */
             memcpy(buf, "\xFF\xFE\x00\x00", 4);
-        else if (cv->codepage == 12001)  
+        else if (cv->codepage == 12001) /* big endian */
             memcpy(buf, "\x00\x00\xFE\xFF", 4);
 
         r = utf32_wctomb(cv, wbuf, wbufsize, buf + 4, bufsize - 4);
@@ -1569,14 +1569,14 @@ utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
     if (bufsize < 4)
         return seterror(E2BIG);
     wc = utf16_to_ucs4(wbuf);
-    if (cv->codepage == 12000)  
+    if (cv->codepage == 12000) /* little endian */
     {
         buf[0] = wc & 0x000000FF;
         buf[1] = (wc & 0x0000FF00) >> 8;
         buf[2] = (wc & 0x00FF0000) >> 16;
         buf[3] = (wc & 0xFF000000) >> 24;
     }
-    else if (cv->codepage == 12001)  
+    else if (cv->codepage == 12001) /* big endian */
     {
         buf[0] = (wc & 0xFF000000) >> 24;
         buf[1] = (wc & 0x00FF0000) >> 16;
@@ -1586,18 +1586,18 @@ utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
     return 4;
 }
 
-  
-                                                                      
-                                                                        
-                      
-                                                                       
-                       
-  
-                                                                     
-                                                                      
-                                                                
-                     
-   
+/*
+ * 50220: ISO 2022 Japanese with no halfwidth Katakana; Japanese (JIS)
+ * 50221: ISO 2022 Japanese with halfwidth Katakana; Japanese (JIS-Allow
+ *        1 byte Kana)
+ * 50222: ISO 2022 Japanese JIS X 0201-1989; Japanese (JIS-Allow 1 byte
+ *        Kana - SO/SI)
+ *
+ * MultiByteToWideChar() and WideCharToMultiByte() behave differently
+ * depending on Windows version.  On XP, WideCharToMultiByte() doesn't
+ * terminate result sequence with ascii escape.  But Vista does.
+ * Use MLang instead.
+ */
 
 #define ISO2022_MODE(cs, shift) (((cs) << 8) | (shift))
 #define ISO2022_MODE_CS(mode) (((mode) >> 8) & 0xFF)
@@ -1606,9 +1606,9 @@ utf32_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsize)
 #define ISO2022_SI  0
 #define ISO2022_SO  1
 
- 
+/* shift in */
 static const char iso2022_SI_seq[] = "\x0F";
- 
+/* shift out */
 static const char iso2022_SO_seq[] = "\x0E";
 
 typedef struct iso2022_esc_t iso2022_esc_t;
@@ -1630,7 +1630,7 @@ static iso2022_esc_t iso2022jp_esc[] = {
     {"\x1B\x28\x42", 3, 1, ISO2022JP_CS_ASCII},
     {"\x1B\x28\x4A", 3, 1, ISO2022JP_CS_JISX0201_ROMAN},
     {"\x1B\x28\x49", 3, 1, ISO2022JP_CS_JISX0201_KANA},
-    {"\x1B\x24\x40", 3, 2, ISO2022JP_CS_JISX0208_1983},  
+    {"\x1B\x24\x40", 3, 2, ISO2022JP_CS_JISX0208_1983}, /* unify 1978 with 1983 */
     {"\x1B\x24\x42", 3, 2, ISO2022JP_CS_JISX0208_1983},
     {"\x1B\x24\x28\x44", 4, 2, ISO2022JP_CS_JISX0212},
     {NULL, 0, 0, 0}
@@ -1670,7 +1670,7 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
                 }
             }
         }
-         
+        /* not supported escape sequence */
         return seterror(EILSEQ);
     }
     else if (buf[0] == iso2022_SO_seq[0])
@@ -1689,7 +1689,7 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
     cs = ISO2022_MODE_CS(cv->mode);
     shift = ISO2022_MODE_SHIFT(cv->mode);
 
-     
+    /* reset the mode for informal sequence */
     if (buf[0] < 0x20)
     {
         cs = ISO2022JP_CS_ASCII;
@@ -1714,8 +1714,8 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
     if ((cv->codepage == 50220 || cv->codepage == 50221
                 || cv->codepage == 50222) && shift == ISO2022_SO)
     {
-                                                                    
-                    
+        /* XXX: shift-out cannot be used for mbtowc (both kernel and
+         * mlang) */
         esc_len = iesc[ISO2022JP_CS_JISX0201_KANA].esc_len;
         memcpy(tmp, iesc[ISO2022JP_CS_JISX0201_KANA].esc, esc_len);
         memcpy(tmp + esc_len, buf, len);
@@ -1727,13 +1727,13 @@ iso2022jp_mbtowc(csconv_t *cv, const uchar *buf, int bufsize, ushort *wbuf, int 
     if (hr != S_OK || insize != len + esc_len)
         return seterror(EILSEQ);
 
-     
-     
+    /* Check for conversion error.  Assuming defaultChar is 0x3F. */
+    /* ascii should be converted from ascii */
     if (wbuf[0] == buf[0]
             && cv->mode != ISO2022_MODE(ISO2022JP_CS_ASCII, ISO2022_SI))
         return seterror(EILSEQ);
 
-     
+    /* reset the mode for informal sequence */
     if (cv->mode != ISO2022_MODE(cs, shift))
         cv->mode = ISO2022_MODE(cs, shift);
 
@@ -1755,12 +1755,12 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
     int shift;
     int i;
 
-      
-                                                                    
-      
-                                                                        
-                                               
-       
+    /*
+     * MultiByte = [escape sequence] + character + [escape sequence]
+     *
+     * Whether trailing escape sequence is added depends on which API is
+     * used (kernel or MLang, and its version).
+     */
     hr = ConvertINetUnicodeToMultiByte(&dummy, cv->codepage,
             (const wchar_t *)wbuf, &wbufsize, tmp, &tmpsize);
     if (hr != S_OK || insize != wbufsize)
@@ -1785,7 +1785,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
             }
         }
         if (iesc[i].esc == NULL)
-             
+            /* not supported escape sequence */
             return seterror(EILSEQ);
     }
 
@@ -1798,8 +1798,8 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
 
     len = iesc[cs].len;
 
-     
-     
+    /* Check for converting error.  Assuming defaultChar is 0x3F. */
+    /* ascii should be converted from ascii */
     if (cs == ISO2022JP_CS_ASCII && !(wbuf[0] < 0x80))
         return seterror(EILSEQ);
     else if (tmpsize < esc_len + len)
@@ -1807,7 +1807,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
 
     if (cv->mode == ISO2022_MODE(cs, shift))
     {
-         
+        /* remove escape sequence */
         if (esc_len != 0)
             memmove(tmp, tmp + esc_len, len);
         esc_len = 0;
@@ -1822,7 +1822,7 @@ iso2022jp_wctomb(csconv_t *cv, ushort *wbuf, int wbufsize, uchar *buf, int bufsi
         }
         if (ISO2022_MODE_SHIFT(cv->mode) == ISO2022_SO)
         {
-             
+            /* shift-in before changing to other mode */
             memmove(tmp + 1, tmp, len + esc_len);
             memcpy(tmp, iso2022_SI_seq, 1);
             esc_len += 1;

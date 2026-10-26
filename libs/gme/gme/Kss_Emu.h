@@ -1,6 +1,6 @@
+// MSX computer KSS music file emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef KSS_EMU_H
 #define KSS_EMU_H
 
@@ -13,7 +13,7 @@
 class Kss_Emu : private Kss_Cpu, public Classic_Emu {
 	typedef Kss_Cpu cpu;
 public:
-
+	// KSS file header
 	enum { header_size = 0x10 };
 	struct header_t
 	{
@@ -43,7 +43,7 @@ public:
 	
 	struct composite_header_t : header_t, ext_header_t { };
 	
-
+	// Header for currently loaded file
 	composite_header_t const& header() const { return header_; }
 	
 	static gme_type_t static_type() { return gme_kss_type; }
@@ -67,7 +67,7 @@ private:
 	bool gain_updated;
 	void update_gain();
 	
-	unsigned scc_enabled;  
+	unsigned scc_enabled; // 0 or 0xC000
 	int bank_count;
 	void set_bank( int logical, int physical );
 	blargg_long bank_size() const { return (16 * 1024L) >> (header_.bank_mode >> 7 & 1); }
@@ -81,7 +81,7 @@ private:
 	void cpu_write( unsigned addr, int data );
 	friend void kss_cpu_write( class Kss_Cpu*, unsigned addr, int data );
 	
-
+	// large items
 	enum { mem_size = 0x10000 };
 	byte ram [mem_size + cpu_padding];
 	

@@ -4,7 +4,7 @@ end
 
 local function does_global_exist(key)
 	if #key == 1 and 'a' <= key and key <= 'z' then
-		return false  
+		return false --technically they do, but we'll pretend they don't for convenience sake
 	else
 		return _G[key] ~= nil
 	end
@@ -12,10 +12,10 @@ end
 
 local env
 local env_meta = {
-	_G=_G,        
-	__index=_G,   
+	_G=_G,       -- enable access to _G
+	__index=_G,  -- enable reading global variables without _G
 	__newindex=function(t,k,v)
-
+		-- pass assignments to nonexistent values onto their global variables if present; otherwise save them in env
 		if does_global_exist(k) then
 			_G[k] = v
 		else

@@ -13,16 +13,16 @@
 #include "lparser.h"
 
 
-  
-                                                                            
-                                                                 
-  
+/*
+** Marks the end of a patch list. It is an invalid value both as an absolute
+** address, and as a list link (would link an element to itself).
+*/
 #define NO_JUMP (-1)
 
 
-  
-                                             
-  
+/*
+** grep "ORDER OPR" if you change these enums
+*/
 typedef enum BinOpr {
   OPR_ADD, OPR_SUB, OPR_MUL, OPR_DIV, OPR_MOD, OPR_POW,
   OPR_CONCAT,

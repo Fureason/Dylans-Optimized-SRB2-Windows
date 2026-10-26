@@ -13,10 +13,10 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
+/// \file
+/// \brief exception handler
 
-
-
-
+//#define WIN32_LEAN_AND_MEAN
 #define RPC_NO_WINDOWS_H
 #include <windows.h>
 
@@ -28,9 +28,9 @@ BOOL IsBugTrapLoaded(void);
 
 #endif
 
-
-
-LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data );
+// called in the exception filter of the __try block, writes all useful debugging information
+// to a file, using only win32 functions in case the C runtime is in a bad state.
+LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data/*, LPCSTR Message, LPSTR lpCmdLine*/);
 
 extern LPTOP_LEVEL_EXCEPTION_FILTER prevExceptionFilter;
 
@@ -41,24 +41,24 @@ extern LPTOP_LEVEL_EXCEPTION_FILTER prevExceptionFilter;
 #ifndef TRYLEVEL_NONE
 
 #ifndef __MINGW64__
-#define NO_SEH_MINGW  
+#define NO_SEH_MINGW //Alam:?
 #endif
 #ifndef GetExceptionInformation
 void *__cdecl _exception_info(void);
 #define GetExceptionInformation (struct _EXCEPTION_POINTERS *)_exception_info
-#endif  
+#endif //GetExceptionInformation
 
-
+//Alam_GBC: use __try1(seh)
 #ifndef __try
 #define __try
-#endif  
+#endif //__try
 
-
-
+//#undef NO_SEH_MINGW //Alam: win_dbg's code not working with MINGW
+//Alam_GBC: use __except1
 #ifndef __except
 #define __except(x) if (0)
-#endif  
+#endif //__except
 
-#endif  
+#endif // !__TRYLEVEL_NONE
 
-#endif  
+#endif // __MINGW32__

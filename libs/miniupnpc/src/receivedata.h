@@ -1,4 +1,4 @@
- 
+/* $Id: receivedata.h,v 1.5 2018/04/06 10:53:15 nanard Exp $ */
 /* Project: miniupnp
  * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
  * Author: Thomas Bernard
@@ -10,9 +10,9 @@
 
 #include "miniupnpc_socketdef.h"
 
-                                        
-                                                                        
-                                                                      
+/* Reads data from the specified socket.
+ * Returns the number of bytes read if successful, zero if no bytes were
+ * read or if we timed out. Returns negative if there was an error. */
 int receivedata(SOCKET socket,
                 char * data, int length,
                 int timeout, unsigned int * scope_id);

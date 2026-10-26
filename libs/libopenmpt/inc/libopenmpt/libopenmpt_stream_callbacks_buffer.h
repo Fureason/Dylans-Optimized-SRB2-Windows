@@ -12,31 +12,31 @@
 
 #include "libopenmpt.h"
 
-                                   
+/* The use of this header requires:
 
-                                  
-                                                 
-                                                          
-     
-                            
-      
+#include <libopenmpt/libopenmpt.h>
+#if defined( LIBOPENMPT_STREAM_CALLBACKS_BUFFER )
+#include <libopenmpt/libopenmpt_stream_callbacks_buffer.h>
+#else
+#error "libopenmpt too old."
+#endif
 
-  
+*/
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-                            
-     
-   
+/*! \addtogroup libopenmpt_c
+ * @{
+ */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct openmpt_stream_buffer {
-	const void * file_data;  
+	const void * file_data; /* or prefix data IFF prefix_size < file_size */
 	int64_t file_size;
 	int64_t file_pos;
 	int64_t prefix_size;
@@ -58,7 +58,7 @@ static size_t openmpt_stream_buffer_read_func( void * stream, void * dst, size_t
 	valid_bytes = 0;
 	endpos = (uint64_t)endpos + (uint64_t)offset;
 	if ( ( offset > 0 ) && !( (uint64_t)endpos > (uint64_t)begpos ) ) {
-		 
+		/* integer wrapped */
 		return 0;
 	}
 	if ( bytes == 0 ) {
@@ -68,7 +68,7 @@ static size_t openmpt_stream_buffer_read_func( void * stream, void * dst, size_t
 		return 0;
 	}
 	if ( endpos > s->file_size ) {
-		 
+		/* clip to eof */
 		bytes = bytes - (size_t)( endpos - s->file_size );
 		endpos = endpos - ( endpos - s->file_size );
 	}
@@ -110,11 +110,11 @@ static int openmpt_stream_buffer_seek_func( void * stream, int64_t offset, int w
 				int64_t pos = s->file_pos;
 				pos = (uint64_t)pos + (uint64_t)offset;
 				if ( ( offset > 0 ) && !( (uint64_t)pos > (uint64_t)oldpos ) ) {
-					 
+					/* integer wrapped */
 					return -1;
 				}
 				if ( ( offset < 0 ) && !( (uint64_t)pos < (uint64_t)oldpos ) ) {
-					 
+					/* integer wrapped */
 					return -1;
 				}
 				s->file_pos = pos;
@@ -131,7 +131,7 @@ static int openmpt_stream_buffer_seek_func( void * stream, int64_t offset, int w
 				pos = s->file_size;
 				pos = (uint64_t)pos + (uint64_t)offset;
 				if ( ( offset < 0 ) && !( (uint64_t)pos < (uint64_t)oldpos ) ) {
-					 
+					/* integer wrapped */
 					return -1;
 				}
 				s->file_pos = pos;
@@ -166,17 +166,17 @@ static void openmpt_stream_buffer_init( openmpt_stream_buffer * buffer, const vo
 
 #define openmpt_stream_buffer_overflowed( buffer_ ) ( (buffer_)->overflow )
 
-                                                                
-  
-                                                                                                                                      
-  
-                                                                                                 
-                               
-                               
-                                      
-                                            
-                             
-   
+/*! \brief Provide openmpt_stream_callbacks for in-memoy buffers
+ *
+ * Fills openmpt_stream_callbacks suitable for passing an in-memory buffer as a stream parameter to functions doing file input/output.
+ *
+ * \remarks The stream argument must be passed as `(void*)(openmpt_stream_buffer*)stream_buffer`.
+ * \sa \ref libopenmpt_c_fileio
+ * \sa openmpt_stream_callbacks
+ * \sa openmpt_could_open_probability2
+ * \sa openmpt_probe_file_header_from_stream
+ * \sa openmpt_module_create2
+ */
 static openmpt_stream_callbacks openmpt_stream_get_buffer_callbacks(void) {
 	openmpt_stream_callbacks retval;
 	memset( &retval, 0, sizeof( openmpt_stream_callbacks ) );
@@ -190,9 +190,9 @@ static openmpt_stream_callbacks openmpt_stream_get_buffer_callbacks(void) {
 }
 #endif
 
-   
-     
-   
+/*!
+ * @}
+ */
 
-#endif  
+#endif /* LIBOPENMPT_STREAM_CALLBACKS_BUFFER_H */
 

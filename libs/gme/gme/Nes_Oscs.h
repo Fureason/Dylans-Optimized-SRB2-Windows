@@ -1,6 +1,6 @@
+// Private oscillators used by Nes_Apu
 
-
-
+// Nes_Snd_Emu 0.1.8
 #ifndef NES_OSCS_H
 #define NES_OSCS_H
 
@@ -14,9 +14,9 @@ struct Nes_Osc
 	unsigned char regs [4];
 	bool reg_written [4];
 	Blip_Buffer* output;
-	int length_counter; 
-	int delay;       
-	int last_amp;    
+	int length_counter;// length counter (0 if unused by oscillator)
+	int delay;      // delay until next (potential) transition
+	int last_amp;   // last amplitude oscillator was outputting
 	
 	void clock_length( int halt_mask );
 	int period() const {
@@ -47,7 +47,7 @@ struct Nes_Envelope : Nes_Osc
 	}
 };
 
-
+// Nes_Square
 struct Nes_Square : Nes_Envelope
 {
 	enum { negate_flag = 0x08 };
@@ -57,7 +57,7 @@ struct Nes_Square : Nes_Envelope
 	int sweep_delay;
 	
 	typedef Blip_Synth<blip_good_quality,1> Synth;
-	Synth const& synth;  
+	Synth const& synth; // shared between squares
 	
 	Nes_Square( Synth const* s ) : synth( *s ) { }
 	
@@ -71,7 +71,7 @@ struct Nes_Square : Nes_Envelope
 			nes_time_t timer_period );
 };
 
-
+// Nes_Triangle
 struct Nes_Triangle : Nes_Osc
 {
 	enum { phase_range = 16 };
@@ -91,7 +91,7 @@ struct Nes_Triangle : Nes_Osc
 			nes_time_t timer_period );
 };
 
-
+// Nes_Noise
 struct Nes_Noise : Nes_Envelope
 {
 	int noise;
@@ -104,12 +104,12 @@ struct Nes_Noise : Nes_Envelope
 	}
 };
 
-
+// Nes_Dmc
 struct Nes_Dmc : Nes_Osc
 {
-	int address;     
+	int address;    // address of next byte to read
 	int period;
-
+	//int length_counter; // bytes remaining to play (already defined in Nes_Osc)
 	int buf;
 	int bits_remain;
 	int bits;
@@ -126,7 +126,7 @@ struct Nes_Dmc : Nes_Osc
 	bool pal_mode;
 	bool nonlinear;
 	
-	int (*prg_reader)( void*, nes_addr_t );  
+	int (*prg_reader)( void*, nes_addr_t ); // needs to be initialized to prg read function
 	void* prg_reader_data;
 	
 	Nes_Apu* apu;

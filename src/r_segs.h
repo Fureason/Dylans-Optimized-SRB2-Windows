@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_segs.h
+/// \brief Refresh module, drawing LineSegs from BSP
 
 #ifndef __R_SEGS__
 #define __R_SEGS__

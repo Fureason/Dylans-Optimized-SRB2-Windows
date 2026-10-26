@@ -133,7 +133,7 @@ static SINT8 tempL[32];
 static SINT8 f[32];
 static SINT8 preS[48];
 
-
+//=======================================================================
 
 static void setKey(const SINT8 *key)
 {

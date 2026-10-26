@@ -13,14 +13,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 
 #include <time.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include "common.h"
 
-
+// ================================== GLOBALS =================================
 
 static const char *fatal_error_msg[NUM_FATAL_ERROR] =
 {
@@ -30,7 +30,7 @@ static const char *fatal_error_msg[NUM_FATAL_ERROR] =
 	"Error: write()",
 };
 
-
+// used by xxxPrintf() functions as temporary variable
 static char str[1024] ="";
 static va_list arglist;
 #ifdef _WIN32
@@ -40,11 +40,11 @@ static DWORD bytesWritten = 0;
 static CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
 #endif
 
+// ================================= FUNCTIONS ================================
 
-
-  
-                 
-   
+/*
+ * clearScreen():
+ */
 void clearScreen()
 {
 #ifdef _WIN32
@@ -53,9 +53,9 @@ void clearScreen()
 #endif
 }
 
-  
-                
-   
+/*
+ * fatalError():
+ */
 void fatalError(fatal_error_t num)
 {
 	clearScreen();
@@ -66,9 +66,9 @@ void fatalError(fatal_error_t num)
 }
 
 
-  
-               
-   
+/*
+ * dbgPrintf():
+ */
 #ifdef _WIN32
 void dbgPrintf(DWORDLONG col, const char *lpFmt, ...)
 #else
@@ -114,9 +114,9 @@ void dbgPrintf(const char *col, const char *lpFmt, ...)
 #endif
 }
 
-  
-              
-   
+/*
+ * conPrintf()
+ */
 #ifdef _WIN32
 void conPrintf(DWORDLONG col, const char *lpFmt, ...)
 #else
@@ -157,9 +157,9 @@ void conPrintf(const char *col, const char *lpFmt, ...)
 #endif
 }
 
-  
-               
-   
+/*
+ * logPrintf():
+ */
 void logPrintf(FILE *f, const char *lpFmt, ...)
 {
 	char *ct;
@@ -185,9 +185,9 @@ void logPrintf(FILE *f, const char *lpFmt, ...)
 #endif
 }
 
-  
-              
-   
+/*
+ * openFile():
+ */
 FILE *openFile(const char *filename)
 {
 	return fopen(filename, "a+t");

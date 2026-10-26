@@ -7,22 +7,22 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_mathlib.c
+/// \brief basic math library for Lua scripting
 
 #include "doomdef.h"
-
+//#include "fastcmp.h"
 #include "tables.h"
 #include "p_local.h"
-#include "doomstat.h"  
-#include "r_main.h"  
+#include "doomstat.h" // for ALL7EMERALDS
+#include "r_main.h" // for R_PointToDist2
 #include "m_easing.h"
 
 #include "lua_script.h"
 #include "lua_libs.h"
 
-
-
+// General math
+//////////////////
 
 static int lib_abs(lua_State *L)
 {
@@ -47,8 +47,8 @@ static int lib_max(lua_State *L)
 	return 1;
 }
 
-
-
+// Angle math
+////////////////
 
 static int lib_fixedangle(lua_State *L)
 {
@@ -82,8 +82,8 @@ static int lib_finecosine(lua_State *L)
 
 static int lib_finetangent(lua_State *L)
 {
-
-
+	// HACK: add ANGLE_90 to make tan() in Lua start at 0 like it should
+	// use & 4095 instead of & FINEMASK (8191), so it doesn't go out of the array's bounds
 	lua_pushfixed(L, FINETANGENT(((luaL_checkangle(L, 1)+ANGLE_90)>>ANGLETOFINESHIFT) & 4095));
 	return 1;
 }
@@ -100,8 +100,8 @@ static int lib_fixedacos(lua_State *L)
 	return 1;
 }
 
-
-
+// Fixed math
+////////////////
 
 static int lib_fixedmul(lua_State *L)
 {
@@ -125,7 +125,7 @@ static int lib_fixeddiv(lua_State *L)
 	return 1;
 }
 
-
+// TODO: 2.3: Delete
 static int lib_fixedrem(lua_State *L)
 {
 	LUA_Deprecated(L, "FixedRem(a, b)", "a % b");
@@ -172,9 +172,9 @@ static int lib_fixedround(lua_State *L)
 	return 1;
 }
 
-
-
-
+// Misc. math
+// (aka extra little funcs that don't quite fit in baselib)
+//////////////////////////////////////////////////////////////////
 
 static int lib_getsecspecial(lua_State *L)
 {
@@ -188,14 +188,14 @@ static int lib_all7emeralds(lua_State *L)
 	return 1;
 }
 
-
+// Returns both color and signpost shade numbers!
 static int lib_coloropposite(lua_State *L)
 {
 	UINT16 colornum = (UINT16)luaL_checkinteger(L, 1);
 	if (!colornum || colornum >= numskincolors)
 		return luaL_error(L, "skincolor %d out of range (1 - %d).", colornum, numskincolors-1);
-	lua_pushinteger(L, skincolors[colornum].invcolor);  
-	lua_pushinteger(L, skincolors[colornum].invshade);  
+	lua_pushinteger(L, skincolors[colornum].invcolor); // push color
+	lua_pushinteger(L, skincolors[colornum].invshade); // push sign shade index, 0-15
 	return 2;
 }
 
@@ -239,9 +239,9 @@ static luaL_Reg lib_math[] = {
 	{NULL, NULL}
 };
 
-
-
-
+//
+// Easing functions
+//
 
 #define EASINGFUNC(easetype) \
 { \

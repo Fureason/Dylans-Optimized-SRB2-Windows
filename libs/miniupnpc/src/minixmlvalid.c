@@ -1,17 +1,17 @@
- 
-                   
-                                                             
-                   
-                                            
-  
-                                  
+/* $Id: minixmlvalid.c,v 1.7 2015/07/15 12:41:15 nanard Exp $ */
+/* MiniUPnP Project
+ * http://miniupnp.tuxfamily.org/ or http://miniupnp.free.fr/
+ * minixmlvalid.c :
+ * validation program for the minixml parser
+ *
+ * (c) 2006-2011 Thomas Bernard */
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "minixml.h"
 
- 
+/* xml event structure */
 struct event {
 	enum { ELTSTART, ELTEND, ATT, CHARDATA } type;
 	const char * data;
@@ -23,8 +23,8 @@ struct eventlist {
 	struct event * events;
 };
 
-                            
-                                          
+/* compare 2 xml event lists
+ * return 0 if the two lists are equals */
 int evtlistcmp(struct eventlist * a, struct eventlist * b)
 {
 	int i;
@@ -32,7 +32,7 @@ int evtlistcmp(struct eventlist * a, struct eventlist * b)
 	if(a->n != b->n)
 	{
 		printf("event number not matching : %d != %d\n", a->n, b->n);
-		 
+		/*return 1;*/
 	}
 	for(i=0; i<a->n; i++)
 	{
@@ -51,7 +51,7 @@ int evtlistcmp(struct eventlist * a, struct eventlist * b)
 	return 0;
 }
 
- 
+/* Test data */
 static const char xmldata[] =
 "<xmlroot>\n"
 " <elt1 att1=\"attvalue1\" att2=\"attvalue2\">"
@@ -66,7 +66,7 @@ static const struct event evtref[] =
 {
 	{ELTSTART, "xmlroot", 7},
 	{ELTSTART, "elt1", 4},
-	 
+	/* attributes */
 	{CHARDATA, "character data", 14},
 	{ELTEND, "elt1", 4},
 	{ELTSTART, "elt1b", 5},
@@ -89,7 +89,7 @@ void startelt(void * data, const char * p, int l)
 	struct eventlist * evtlist = data;
 	struct event * evt;
 	evt = evtlist->events + evtlist->n;
-	 
+	/*printf("startelt : %.*s\n", l, p);*/
 	evt->type = ELTSTART;
 	evt->data = p;
 	evt->len = l;
@@ -101,7 +101,7 @@ void endelt(void * data, const char * p, int l)
 	struct eventlist * evtlist = data;
 	struct event * evt;
 	evt = evtlist->events + evtlist->n;
-	 
+	/*printf("endelt : %.*s\n", l, p);*/
 	evt->type = ELTEND;
 	evt->data = p;
 	evt->len = l;
@@ -113,7 +113,7 @@ void chardata(void * data, const char * p, int l)
 	struct eventlist * evtlist = data;
 	struct event * evt;
 	evt = evtlist->events + evtlist->n;
-	 
+	/*printf("chardata : '%.*s'\n", l, p);*/
 	evt->type = CHARDATA;
 	evt->data = p;
 	evt->len = l;
@@ -142,7 +142,7 @@ int testxmlparser(const char * xml, int size)
 	parser.datafunc = chardata;
 	parsexml(&parser);
 	printf("%d events\n", evtlist.n);
-	 
+	/* compare */
 	evtlistref.n = sizeof(evtref)/sizeof(struct event);
 	evtlistref.events = (struct event *)evtref;
 	r = evtlistcmp(&evtlistref, &evtlist);

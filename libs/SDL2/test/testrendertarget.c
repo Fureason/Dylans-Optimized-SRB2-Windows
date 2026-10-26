@@ -9,7 +9,7 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* Simple program:  Move N sprites around on the screen as fast as possible */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -38,7 +38,7 @@ DrawState *drawstates;
 int done;
 SDL_bool test_composite = SDL_FALSE;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -86,13 +86,13 @@ DrawComposite(DrawState *s)
     SDL_SetTextureBlendMode(target, SDL_BLENDMODE_BLEND);
     SDL_SetRenderTarget(s->renderer, target);
 
-                           
-                                                                                                           
-       
+    /* Draw the background.
+       This is solid black so when the sprite is copied to it, any per-pixel alpha will be blended through.
+     */
     SDL_SetRenderDrawColor(s->renderer, 0x00, 0x00, 0x00, 0x00);
     SDL_RenderFillRect(s->renderer, NULL);
 
-     
+    /* Scale and draw the sprite */
     s->sprite_rect.w += s->scale_direction;
     s->sprite_rect.h += s->scale_direction;
     if (s->scale_direction > 0) {
@@ -124,7 +124,7 @@ DrawComposite(DrawState *s)
     SDL_RenderCopy(s->renderer, target, NULL, NULL);
     SDL_DestroyTexture(target);
 
-     
+    /* Update the screen! */
     SDL_RenderPresent(s->renderer);
     return SDL_TRUE;
 }
@@ -144,10 +144,10 @@ Draw(DrawState *s)
     }
     SDL_SetRenderTarget(s->renderer, target);
 
-     
+    /* Draw the background */
     SDL_RenderCopy(s->renderer, s->background, NULL, NULL);
 
-     
+    /* Scale and draw the sprite */
     s->sprite_rect.w += s->scale_direction;
     s->sprite_rect.h += s->scale_direction;
     if (s->scale_direction > 0) {
@@ -168,7 +168,7 @@ Draw(DrawState *s)
     SDL_RenderCopy(s->renderer, target, NULL, NULL);
     SDL_DestroyTexture(target);
 
-     
+    /* Update the screen! */
     SDL_RenderPresent(s->renderer);
     return SDL_TRUE;
 }
@@ -178,7 +178,7 @@ void loop()
     int i;
     SDL_Event event;
 
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &done);
     }
@@ -209,10 +209,10 @@ int main(int argc, char *argv[])
     int frames;
     Uint32 then, now;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
         drawstate->scale_direction = 1;
     }
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         double fps = ((double)frames * 1000) / (now - then);
@@ -286,4 +286,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_translation.h
+/// \brief Translation table handling
 
 #ifndef __R_TRANSLATION__
 #define __R_TRANSLATION__
@@ -66,9 +66,9 @@ typedef struct
 	paletteremap_t *sources;
 	unsigned num_sources;
 
-
-
-
+	// A typical remap is 256 bytes long, and there is currently a maximum of 1182 skincolors, and 263 possible color cache entries.
+	// This would mean allocating (1182 * 256 * 263) bytes, which equals 79581696 bytes, or ~79mb of memory for every remap.
+	// So instead a few lists are allocated.
 	colorcache_t ***skincolor_remaps;
 } remaptable_t;
 

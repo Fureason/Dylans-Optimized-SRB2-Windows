@@ -55,7 +55,7 @@ endif(BUILD_STATIC)
 install(FILES iconv.h DESTINATION include)
 
 if(BUILD_TEST)
-
+    # tests:
     add_executable(win_iconv_test win_iconv_test.c)
     add_test(win_iconv_test win_iconv_test)
     if(WINCE)

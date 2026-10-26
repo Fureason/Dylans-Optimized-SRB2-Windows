@@ -11,9 +11,9 @@
 #include "lobject.h"
 
 
-  
-                                           
-  
+/*
+** Possible states of the Garbage Collector
+*/
 #define GCSpause	0
 #define GCSpropagate	1
 #define GCSsweepstring	2
@@ -21,9 +21,9 @@
 #define GCSfinalize	4
 
 
-  
-                          
-  
+/*
+** some userful bit tricks
+*/
 #define resetbits(x,m)	((x) &= cast(lu_byte, ~(m)))
 #define setbits(x,m)	((x) |= (m))
 #define testbits(x,m)	((x) & (m))
@@ -38,17 +38,17 @@
 
 
 
-  
-                                        
-                                   
-                                   
-                          
-                                           
-                                    
-                                      
-                                                    
-                                                         
-  
+/*
+** Layout for bit use in `marked' field:
+** bit 0 - object is white (type 0)
+** bit 1 - object is white (type 1)
+** bit 2 - object is black
+** bit 3 - for userdata: has been finalized
+** bit 3 - for tables: has weak keys
+** bit 4 - for tables: has weak values
+** bit 5 - object is fixed (should not be collected)
+** bit 6 - object is "super" fixed (only the main thread)
+*/
 
 
 #define WHITE0BIT	0

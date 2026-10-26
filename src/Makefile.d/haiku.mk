@@ -1,6 +1,6 @@
-
-
-
+#
+# Makefile options for Haiku
+#
 
 opts+=-DUNIXCOMMON -DLUA_USE_POSIX
 

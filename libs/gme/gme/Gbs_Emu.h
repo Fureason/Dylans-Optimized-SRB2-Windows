@@ -1,6 +1,6 @@
+// Nintendo Game Boy GBS music file emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef GBS_EMU_H
 #define GBS_EMU_H
 
@@ -11,11 +11,11 @@
 class Gbs_Emu : private Gb_Cpu, public Classic_Emu {
 	typedef Gb_Cpu cpu;
 public:
-
+	// Equalizer profiles for Game Boy Color speaker and headphones
 	static equalizer_t const handheld_eq;
 	static equalizer_t const headphones_eq;
 	
-
+	// GBS file header
 	enum { header_size = 112 };
 	struct header_t
 	{
@@ -34,15 +34,15 @@ public:
 		char copyright [32];
 	};
 	
-
+	// Header for currently loaded file
 	header_t const& header() const { return header_; }
 	
 	static gme_type_t static_type() { return gme_gbs_type; }
 	
 public:
-
+	// deprecated
 	using Music_Emu::load;
-	blargg_err_t load( header_t const& h, Data_Reader& in )  
+	blargg_err_t load( header_t const& h, Data_Reader& in ) // use Remaining_Reader
 			{ return load_remaining_( &h, sizeof h, in ); }
 
 public:
@@ -58,12 +58,12 @@ protected:
 	void update_eq( blip_eq_t const& );
 	void unload();
 private:
-
+	// rom
 	enum { bank_size = 0x4000 };
 	Rom_Data<bank_size> rom;
 	void set_bank( int );
 	
-
+	// timer
 	blip_time_t cpu_time;
 	blip_time_t play_period;
 	blip_time_t next_play;

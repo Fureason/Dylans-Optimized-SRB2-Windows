@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_vector.c
+/// \brief Basic vector functions
 
 #include "doomdef.h"
 

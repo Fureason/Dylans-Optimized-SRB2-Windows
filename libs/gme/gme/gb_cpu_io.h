@@ -33,12 +33,12 @@ void Gbs_Emu::cpu_write( gb_addr_t addr, int data )
 			else if ( (addr ^ 0xFF06) < 2 )
 				update_timer();
 			else if ( addr == joypad_addr )
-				ram [offset] = 0;  
+				ram [offset] = 0; // keep joypad return value 0
 			else
 				ram [offset] = 0xFF;
 
-
-
+			//if ( addr == 0xFFFF )
+			//  debug_printf( "Wrote interrupt mask\n" );
 		}
 	}
 	else if ( (addr ^ 0x2000) <= 0x2000 - 1 )

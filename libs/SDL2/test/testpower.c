@@ -9,7 +9,7 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* Simple test of power subsystem. */
 
 #include <stdio.h>
 #include "SDL.h"
@@ -60,7 +60,7 @@ report_power(void)
 
 int main(int argc, char *argv[])
 {
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_Init(0) == -1) {
@@ -74,4 +74,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* end of testpower.c ... */

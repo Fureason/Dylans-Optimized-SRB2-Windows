@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  net_command.c
+/// \brief Net command handling
 
 #include "net_command.h"
 #include "tic_command.h"
@@ -36,7 +36,7 @@ static textcmdbuf_t *textcmdbuf;
 static textcmdbuf_t *textcmdbuf2;
 textcmdtic_t *textcmds[TEXTCMD_HASH_SIZE] = {NULL};
 UINT8 localtextcmd[MAXTEXTCMD];
-UINT8 localtextcmd2[MAXTEXTCMD];  
+UINT8 localtextcmd2[MAXTEXTCMD]; // splitscreen
 static void (*listnetxcmd[MAXNETXCMD])(UINT8 **p, INT32 playernum);
 
 #define ADDON_NOTICE_SLOTS 8
@@ -64,7 +64,7 @@ void D_QueueAddonNotice(const char *actor, const char *filename)
 	const char *name = actor && actor[0] ? actor : "SERVER";
 	const char *base = filename ? filename : "add-on";
 
-
+	// Keep the message useful without filling the console with a full local path.
 	for (const char *scan = base; *scan; scan++)
 		if (*scan == '/' || *scan == '\\' || *scan == ':')
 			base = scan + 1;
@@ -88,11 +88,11 @@ static void D_TickAddonNotices(void)
 	}
 }
 
-                                                                        
-                                                                          
-                                                                             
-                                                                               
-                                                                 
+/* Lua commands are audited with their decoded name in lua_consolelib.c.
+ * Original engine commands use typed NetXCmd packets instead of replaying
+ * their console text on every peer, so audit the meaningful built-in actions
+ * at the common packet dispatch point. Routine movement/config/chat traffic is
+ * intentionally excluded to keep this useful and inexpensive. */
 static boolean CommandWatchNetXCmd(netxcmd_t id)
 {
 	switch (id)
@@ -152,7 +152,7 @@ void SendNetXCmd(netxcmd_t id, const void *param, size_t nparam)
 			return;
 		}
 
-
+		// for future reference: if (cv_debug) != debug disabled.
 		CONS_Alert(CONS_NOTICE, M_GetText("NetXCmd buffer full, delaying netcmd %d... (size: %d, needed: %s)\n"), id, localtextcmd[0], sizeu1(nparam));
 		if (buf == NULL)
 		{
@@ -182,7 +182,7 @@ void SendNetXCmd(netxcmd_t id, const void *param, size_t nparam)
 	WriteNetXCmd(localtextcmd, id, param, nparam);
 }
 
-
+// splitscreen player
 void SendNetXCmd2(netxcmd_t id, const void *param, size_t nparam)
 {
 	if (localtextcmd2[0]+2+nparam > MAXTEXTCMD)
@@ -195,7 +195,7 @@ void SendNetXCmd2(netxcmd_t id, const void *param, size_t nparam)
 			return;
 		}
 
-
+		// for future reference: if (cv_debug) != debug disabled.
 		CONS_Alert(CONS_NOTICE, M_GetText("NetXCmd buffer full, delaying netcmd %d... (size: %d, needed: %s)\n"), id, localtextcmd2[0], sizeu1(nparam));
 		if (buf == NULL)
 		{
@@ -227,11 +227,11 @@ void SendNetXCmd2(netxcmd_t id, const void *param, size_t nparam)
 
 UINT8 GetFreeXCmdSize(void)
 {
-
+	// -1 for the size and another -1 for the ID.
 	return (UINT8)(localtextcmd[0] - 2);
 }
 
-
+// Frees all textcmd memory for the specified tic
 void D_FreeTextcmd(tic_t tic)
 {
 	textcmdtic_t **tctprev = &textcmds[tic & (TEXTCMD_HASH_SIZE - 1)];
@@ -245,10 +245,10 @@ void D_FreeTextcmd(tic_t tic)
 
 	if (textcmdtic)
 	{
-
+		// Remove this tic from the list.
 		*tctprev = textcmdtic->next;
 
-
+		// Free all players.
 		for (INT32 i = 0; i < TEXTCMD_HASH_SIZE; i++)
 		{
 			textcmdplayer_t *textcmdplayer = textcmdtic->playercmds[i];
@@ -261,18 +261,18 @@ void D_FreeTextcmd(tic_t tic)
 			}
 		}
 
-
+		// Free this tic's own memory.
 		Z_Free(textcmdtic);
 	}
 }
 
-
+// Gets the buffer for the specified ticcmd, or NULL if there isn't one
 UINT8* D_GetExistingTextcmd(tic_t tic, INT32 playernum)
 {
 	textcmdtic_t *textcmdtic = textcmds[tic & (TEXTCMD_HASH_SIZE - 1)];
 	while (textcmdtic && textcmdtic->tic != tic) textcmdtic = textcmdtic->next;
 
-
+	// Do we have an entry for the tic? If so, look for player.
 	if (textcmdtic)
 	{
 		textcmdplayer_t *textcmdplayer = textcmdtic->playercmds[playernum & (TEXTCMD_HASH_SIZE - 1)];
@@ -284,21 +284,21 @@ UINT8* D_GetExistingTextcmd(tic_t tic, INT32 playernum)
 	return NULL;
 }
 
-
+// Gets the buffer for the specified ticcmd, creating one if necessary
 UINT8* D_GetTextcmd(tic_t tic, INT32 playernum)
 {
 	textcmdtic_t *textcmdtic = textcmds[tic & (TEXTCMD_HASH_SIZE - 1)];
 	textcmdtic_t **tctprev = &textcmds[tic & (TEXTCMD_HASH_SIZE - 1)];
 	textcmdplayer_t *textcmdplayer, **tcpprev;
 
-
+	// Look for the tic.
 	while (textcmdtic && textcmdtic->tic != tic)
 	{
 		tctprev = &textcmdtic->next;
 		textcmdtic = textcmdtic->next;
 	}
 
-
+	// If we don't have an entry for the tic, make it.
 	if (!textcmdtic)
 	{
 		textcmdtic = *tctprev = Z_Calloc(sizeof (textcmdtic_t), PU_STATIC, NULL);
@@ -308,14 +308,14 @@ UINT8* D_GetTextcmd(tic_t tic, INT32 playernum)
 	tcpprev = &textcmdtic->playercmds[playernum & (TEXTCMD_HASH_SIZE - 1)];
 	textcmdplayer = *tcpprev;
 
-
+	// Look for the player.
 	while (textcmdplayer && textcmdplayer->playernum != playernum)
 	{
 		tcpprev = &textcmdplayer->next;
 		textcmdplayer = textcmdplayer->next;
 	}
 
-
+	// If we don't have an entry for the player, make it.
 	if (!textcmdplayer)
 	{
 		textcmdplayer = *tcpprev = Z_Calloc(sizeof (textcmdplayer_t), PU_STATIC, NULL);
@@ -371,23 +371,23 @@ void ExtraDataTicker(void)
 
 	D_TickAddonNotices();
 
-
-
-
+	// If you are a client, you can safely forget the net commands for this tic
+	// If you are the server, you need to remember them until every client has been acknowledged,
+	// because if you need to resend a PT_SERVERTICS packet, you will need to put the commands in it
 	if (client)
 		D_FreeTextcmd(gametic);
 }
 
-
+// used at txtcmds received to check packetsize bound
 size_t TotalTextCmdPerTic(tic_t tic)
 {
-	size_t total = 1;  
+	size_t total = 1; // num of textcmds in the tic (ntextcmd byte)
 
 	for (INT32 i = 0; i < MAXPLAYERS; i++)
 	{
 		UINT8 *textcmd = D_GetExistingTextcmd(tic, i);
 		if ((!i || playeringame[i]) && textcmd)
-			total += 2 + textcmd[0];  
+			total += 2 + textcmd[0]; // "+2" for size and playernum
 	}
 
 	return total;
@@ -398,7 +398,7 @@ void PT_TextCmd(SINT8 node, INT32 netconsole)
 	if (client)
 		return;
 
-
+	// splitscreen special
 	if (netbuffer->packettype == PT_TEXTCMD2)
 		netconsole = netnodes[node].player2;
 
@@ -410,8 +410,8 @@ void PT_TextCmd(SINT8 node, INT32 netconsole)
 		tic_t tic = maketic;
 		UINT8 *textcmd;
 
-
-
+		// ignore if the textcmd has a reported size of zero
+		// this shouldn't be sent at all
 		if (!netbuffer->u.textcmd[0])
 		{
 			DEBFILE(va("GetPacket: Textcmd with size 0 detected! (node %u, player %d)\n",
@@ -420,8 +420,8 @@ void PT_TextCmd(SINT8 node, INT32 netconsole)
 			return;
 		}
 
-
-
+		// ignore if the textcmd size var is actually larger than it should be
+		// BASEPACKETSIZE + 1 (for size) + textcmd[0] should == datalength
 		if (netbuffer->u.textcmd[0] > (size_t)doomcom->datalength-BASEPACKETSIZE-1)
 		{
 			DEBFILE(va("GetPacket: Bad Textcmd packet size! (expected %d, actual %s, node %u, player %d)\n",
@@ -431,13 +431,13 @@ void PT_TextCmd(SINT8 node, INT32 netconsole)
 			return;
 		}
 
-
-
+		// check if tic that we are making isn't too large else we cannot send it :(
+		// doomcom->numslots+1 "+1" since doomcom->numslots can change within this time and sent time
 		j = software_MAXPACKETLENGTH
 			- (netbuffer->u.textcmd[0]+2+BASESERVERTICSSIZE
 			+ (doomcom->numslots+1)*sizeof(ticcmd_t));
 
-
+		// search a tic that have enougth space in the ticcmd
 		while ((textcmd = D_GetExistingTextcmd(tic, netconsole)),
 			(TotalTextCmdPerTic(tic) > j || netbuffer->u.textcmd[0] + (textcmd ? textcmd[0] : 0) > MAXTEXTCMD)
 			&& tic < firstticstosend + BACKUPTICS)
@@ -452,7 +452,7 @@ void PT_TextCmd(SINT8 node, INT32 netconsole)
 			return;
 		}
 
-
+		// Make sure we have a buffer
 		if (!textcmd) textcmd = D_GetTextcmd(tic, netconsole);
 
 		DEBFILE(va("textcmd put in tic %u at position %d (player %d) ftts %u mk %u\n",
@@ -490,10 +490,10 @@ void CL_CopyNetCommandsFromServerPacket(tic_t tic, UINT8 **buf)
 
 	for (UINT32 i = 0; i < numcmds; i++)
 	{
-		INT32 playernum = *(*buf)++;  
+		INT32 playernum = *(*buf)++; // playernum
 		size_t size = (*buf)[0]+1;
 
-		if (tic >= gametic)  
+		if (tic >= gametic) // Don't copy old net commands
 			M_Memcpy(D_GetTextcmd(tic, playernum), *buf, size);
 		*buf += size;
 	}
@@ -501,13 +501,13 @@ void CL_CopyNetCommandsFromServerPacket(tic_t tic, UINT8 **buf)
 
 void CL_SendNetCommands(void)
 {
-
+	// Send extra data if needed
 	if (localtextcmd[0])
 	{
 		netbuffer->packettype = PT_TEXTCMD;
 		M_Memcpy(netbuffer->u.textcmd,localtextcmd, localtextcmd[0]+1);
-
-		if (HSendPacket(servernode, true, 0, localtextcmd[0]+1))  
+		// All extra data have been sent
+		if (HSendPacket(servernode, true, 0, localtextcmd[0]+1)) // Send can fail...
 		{
 			localtextcmd[0] = 0;
 			if (textcmdbuf != NULL)
@@ -520,13 +520,13 @@ void CL_SendNetCommands(void)
 		}
 	}
 
-
+	// Send extra data if needed for player 2 (splitscreen)
 	if (localtextcmd2[0])
 	{
 		netbuffer->packettype = PT_TEXTCMD2;
 		M_Memcpy(netbuffer->u.textcmd, localtextcmd2, localtextcmd2[0]+1);
-
-		if (HSendPacket(servernode, true, 0, localtextcmd2[0]+1))  
+		// All extra data have been sent
+		if (HSendPacket(servernode, true, 0, localtextcmd2[0]+1)) // Send can fail...
 		{
 			localtextcmd2[0] = 0;
 			if (textcmdbuf2 != NULL)

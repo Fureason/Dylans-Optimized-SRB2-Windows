@@ -13,39 +13,39 @@
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
 
-
+# Program name.
 PRONAME = wadconv
-
+# Program version.
 PROVER	= 1.0.0
 
-
+# Program default options.
 CPPFLAGS	+= -DPRONAME="$(PRONAME)" -DPROVER="$(PROVER)"
 
-
+# Source files and directory.
 SRC	= wadconv.c
 
-
+# Required libraries.
 LIB	= -lwad
 
+#
+## Variables that shouldn't be edited unless
+## you know what you are doing start here.
+#
 
-
-
-
-
-
+# Makefile pretty text output variables.
 PRCC	= CC      
 PRINSTALL=INSTALL 
 PRCLEAN	= CLEAN   
 
-
+# Library name prefix.
 LIBPFX	= lib
 
-
+# Library installation directory.
 PREFIX	?= /usr/local
 LIBDIR	:= $(PREFIX)/lib
 INCLUDE := $(PREFIX)/include
 
-
+# Variables created during compilation.
 OBJ	= $(SRC:.c=.o)
 DEP	= $(PRONAME).d
 ifdef MINGW
@@ -54,7 +54,7 @@ else
 BIN	= $(PRONAME)
 endif
 
-
+# Compilation programs.
 ECHO	:= echo
 RM	:= rm -rf
 FIND	:= find
@@ -64,7 +64,7 @@ FOR	:= for
 SED	:= sed
 CC	:= $(CROSS_COMPILE)$(CC)
 
-
+# Shell programs.
 SHECHO	:= $(ECHO)
 SHFIND	:= $(FIND)
 SHGREP	:= $(GREP)
@@ -72,7 +72,7 @@ SHINSTALL:= $(INSTALL)
 SHSED	:= $(SED)
 SHCC	:= $(CC)
 
-
+# Quiet compiling programs during pretty text output.
 NULL	:= /dev/null 2>&1
 ECHO	:= @$(ECHO)
 ifndef V
@@ -87,19 +87,19 @@ SED	:= @$(SED)
 CC	:= @$(CC)
 endif
 
-
+# Compiler default flags.
 ifdef DEBUG
 CFLAGS	+= -g -O0 -Wall
 else
 CFLAGS	+= -O3
 endif
 
+# Linker flags.
+#LDFLAGS +=
 
-
-
-
-
-
+#
+## Makefile targets.
+#
 
 all: $(DEP) $(BIN)
 

@@ -100,22 +100,22 @@
 #define PROGNAME  "rpng2-x"
 #define LONGNAME  "Progressive PNG Viewer for X"
 #define VERSION   "2.04 of 15 June 2014"
-#define RESNAME   "rpng2"        
-#define RESCLASS  "Rpng"        
+#define RESNAME   "rpng2"       /* our X resource application name */
+#define RESCLASS  "Rpng"       /* our X resource class name */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include <setjmp.h>        
+#include <setjmp.h>       /* for jmpbuf declaration in readpng2.h */
 #include <time.h>
-#include <math.h>          
+#include <math.h>         /* only for PvdM background code */
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
-#include <X11/keysym.h>    
+#include <X11/keysym.h>   /* defines XK_* macros */
 
-#if _POSIX_C_SOURCE >= 199309L  
+#if _POSIX_C_SOURCE >= 199309L /* have nanosleep() */
 # undef usleep
 # define usleep(usec) {        \
    struct timespec ts;         \
@@ -124,7 +124,7 @@
    nanosleep(&ts, NULL); }
 #  endif
 
-#ifndef usleep  
+#ifndef usleep /* have neither nanosleep() nor usleep() */
 #  define usleep(x) sleep(((x)+499999)/1000000)
 #endif
 
@@ -132,7 +132,7 @@
 #  include <unistd.h>
 #endif
 
- 
+/* all for PvdM background code: */
 #ifndef PI
 #  define PI             3.141592653589793238
 #endif
@@ -142,29 +142,29 @@
 #define MIN(a,b)         (a<b?a:b)
 #define CLIP(a,min,max)  MAX(min,MIN((a),max))
 #define ABS(a)           ((a)<0?-(a):(a))
-#define CLIP8P(c)        MAX(0,(MIN((c),255)))    
+#define CLIP8P(c)        MAX(0,(MIN((c),255)))   /* 8-bit pos. integer (uch) */
 #define ROUNDF(f)        ((int)(f + 0.5))
 
 #define QUIT(e,k) ((e.type == ButtonPress && e.xbutton.button == Button1) ||  \
-                  (e.type == KeyPress &&      \
+                  (e.type == KeyPress &&   /*  v--- or 1 for shifted keys */  \
                   ((k = XLookupKeysym(&e.xkey, 0)) == XK_q || k == XK_Escape)))
 
-#define NO_24BIT_MASKS  
+#define NO_24BIT_MASKS /* undef case not fully written--only for redisplay() */
 
 #define rgb1_max   bg_freq
 #define rgb1_min   bg_gray
 #define rgb2_max   bg_bsat
 #define rgb2_min   bg_brot
 
-       
+/* #define DEBUG */     /* this enables the Trace() macros */
 
-#include "readpng2.h"    
+#include "readpng2.h"   /* typedefs, common macros, readpng2 prototypes */
 
 
-                                                                     
-                                                                        
-                                                             
-                             
+/* could just include png.h, but this macro is the only thing we need
+ * (name and typedefs changed to local versions); note that side effects
+ * only happen with alpha (which could easily be avoided with
+ * "ush acopy = (alpha);") */
 
 #define alpha_composite(composite, fg, alpha, bg) {               \
     ush temp = ((ush)(fg)*(ush)(alpha) +                          \
@@ -173,13 +173,13 @@
 }
 
 
-#define INBUFSIZE 4096                                                     
-                                                                         
-                                                                            
-                                                                           
-                                         
+#define INBUFSIZE 4096   /* with pseudo-timing on (1 sec delay/block), this
+                          *  block size corresponds roughly to a download
+                          *  speed 10% faster than theoretical 33.6K maximum
+                          *  (assuming 8 data bits, 1 stop bit and no other
+                          *  overhead) */
 
- 
+/* local prototypes */
 static void rpng2_x_init (void);
 static int  rpng2_x_create_window (void);
 static int  rpng2_x_load_bg_image (void);
@@ -208,7 +208,7 @@ static mainprog_info rpng2_info;
 static uch inbuf[INBUFSIZE];
 static int incount;
 
-static int pat = 6;         
+static int pat = 6;        /* must be less than num_bgpat */
 static int bg_image = 0;
 static int bgscale, bgscale_default = 16;
 static ulg bg_rowbytes;
@@ -221,72 +221,72 @@ ulg usleep_duration = 0L;
 static struct rgb_color {
     uch r, g, b;
 } rgb[] = {
-    {  0,   0,   0},     
-    {255, 255, 255},     
-    {173, 132,  57},     
-    { 64, 132,   0},     
-    {189, 117,   1},     
-    {253, 249,   1},     
-    {  0,   0, 255},     
-    {  0,   0, 120},     
-    {255,   0, 255},     
-    { 64,   0,  64},     
-    {255,   0,   0},     
-    { 64,   0,   0},     
-    {255, 127,   0},     
-    {192,  96,   0},     
-    { 24,  60,   0},     
-    { 85, 125, 200},     
-    {192, 192, 192}      
+    {  0,   0,   0},    /*  0:  black */
+    {255, 255, 255},    /*  1:  white */
+    {173, 132,  57},    /*  2:  tan */
+    { 64, 132,   0},    /*  3:  medium green */
+    {189, 117,   1},    /*  4:  gold */
+    {253, 249,   1},    /*  5:  yellow */
+    {  0,   0, 255},    /*  6:  blue */
+    {  0,   0, 120},    /*  7:  medium blue */
+    {255,   0, 255},    /*  8:  magenta */
+    { 64,   0,  64},    /*  9:  dark magenta */
+    {255,   0,   0},    /* 10:  red */
+    { 64,   0,   0},    /* 11:  dark red */
+    {255, 127,   0},    /* 12:  orange */
+    {192,  96,   0},    /* 13:  darker orange */
+    { 24,  60,   0},    /* 14:  dark green-yellow */
+    { 85, 125, 200},    /* 15:  ice blue */
+    {192, 192, 192}     /* 16:  Netscape/Mosaic gray */
 };
-                                                      
-                                                            
-   
+/* not used for now, but should be for error-checking:
+static int num_rgb = sizeof(rgb) / sizeof(struct rgb_color);
+ */
 
-  
-                                                                  
-                                                                   
-                                                                  
-                                                                   
-                   
+/*
+    This whole struct is a fairly cheesy way to keep the number of
+    command-line options to a minimum.  The radial-waves background
+    type is a particularly poor fit to the integer elements of the
+    struct...but a few macros and a little fixed-point math will do
+    wonders for ya.
 
-              
-                                      
-                                      
-                                                                     
-                                                          
-                                                         
-                                                      
-                                                        
-                                                              
-   
+    type bits:
+       F E D C B A 9 8 7 6 5 4 3 2 1 0
+                             | | | | |
+                             | | +-+-+-- 0 = sharp-edged checkerboard
+                             | |         1 = soft diamonds
+                             | |         2 = radial waves
+                             | |       3-7 = undefined
+                             | +-- gradient #2 inverted?
+                             +-- alternating columns inverted?
+ */
 static struct background_pattern {
     ush type;
-    int rgb1_max, rgb1_min;      
-    int rgb2_max, rgb2_min;      
+    int rgb1_max, rgb1_min;     /* or bg_freq, bg_gray */
+    int rgb2_max, rgb2_min;     /* or bg_bsat, bg_brot (both scaled by 10)*/
 } bg[] = {
-    {0,     1,1, 16,16},         
-    {0+8,   2,0,  1,15},         
-    {0+24,  2,0,  1,0},          
-    {0+8,   4,5,  0,2},          
-    {0+8,   4,5,  0,6},          
-    {0,     7,0,  8,9},          
-    {0+8,  13,0,  5,14},         
-    {0+8,  12,0, 10,11},         
-    {1,     7,0,  8,0},          
-    {1,    12,0, 11,0},          
-    {1,    10,0,  7,0},          
-    {1,     4,0,  5,0},          
-    {1,     3,0,  0,0},          
-    {2,    16, 100,  20,   0},   
-    {2,    18, 100,  10,   2},   
-    {2,    16, 256, 100, 250},   
-    {2, 10000, 256,  11,   0}    
+    {0,     1,1, 16,16},        /* checkered:  white vs. light gray (basic) */
+    {0+8,   2,0,  1,15},        /* checkered:  tan/black vs. white/ice blue */
+    {0+24,  2,0,  1,0},         /* checkered:  tan/black vs. white/black */
+    {0+8,   4,5,  0,2},         /* checkered:  gold/yellow vs. black/tan */
+    {0+8,   4,5,  0,6},         /* checkered:  gold/yellow vs. black/blue */
+    {0,     7,0,  8,9},         /* checkered:  deep blue/black vs. magenta */
+    {0+8,  13,0,  5,14},        /* checkered:  orange/black vs. yellow */
+    {0+8,  12,0, 10,11},        /* checkered:  orange/black vs. red */
+    {1,     7,0,  8,0},         /* diamonds:  deep blue/black vs. magenta */
+    {1,    12,0, 11,0},         /* diamonds:  orange vs. dark red */
+    {1,    10,0,  7,0},         /* diamonds:  red vs. medium blue */
+    {1,     4,0,  5,0},         /* diamonds:  gold vs. yellow */
+    {1,     3,0,  0,0},         /* diamonds:  medium green vs. black */
+    {2,    16, 100,  20,   0},  /* radial:  ~hard radial color-beams */
+    {2,    18, 100,  10,   2},  /* radial:  soft, curved radial color-beams */
+    {2,    16, 256, 100, 250},  /* radial:  very tight spiral */
+    {2, 10000, 256,  11,   0}   /* radial:  dipole-moire' (almost fractal) */
 };
 static int num_bgpat = sizeof(bg) / sizeof(struct background_pattern);
 
 
- 
+/* X-specific variables */
 static char *displayname;
 static XImage *ximage;
 static Display *display;
@@ -319,41 +319,41 @@ int main(int argc, char **argv)
     int have_bg = FALSE;
 #ifdef FEATURE_LOOP
     int loop = FALSE;
-    long loop_interval = -1;             
+    long loop_interval = -1;            /* seconds (100,000 max) */
 #endif
-    double LUT_exponent;                 
-    double CRT_exponent = 2.2;           
-    double default_display_exponent;     
+    double LUT_exponent;                /* just the lookup table */
+    double CRT_exponent = 2.2;          /* just the monitor */
+    double default_display_exponent;    /* whole display system */
     XEvent e;
     KeySym k;
 
 
-                                                                           
-                                                                           
-              
+    /* First initialize a few things, just to be sure--memset takes care of
+     * default background color (black), booleans (FALSE), pointers (NULL),
+     * etc. */
 
     displayname = (char *)NULL;
     filename = (char *)NULL;
     memset(&rpng2_info, 0, sizeof(mainprog_info));
 
 
-                                                                       
-                                                                    
-                                                                     
-                                                                       
-                                                                      
+    /* Set the default value for our display-system exponent, i.e., the
+     * product of the CRT exponent and the exponent corresponding to
+     * the frame-buffer's lookup table (LUT), if any.  This is not an
+     * exhaustive list of LUT values (e.g., OpenStep has a lot of weird
+     * ones), but it should cover 99% of the current possibilities. */
 
 #if defined(NeXT)
-     
+    /* third-party utilities can modify the default LUT exponent */
     LUT_exponent = 1.0 / 2.2;
-      
-                                                           
-                                        
-       
+    /*
+    if (some_next_function_that_returns_gamma(&next_gamma))
+        LUT_exponent = 1.0 / next_gamma;
+     */
 #elif defined(sgi)
     LUT_exponent = 1.0 / 1.7;
-                                                          
-                                                         
+    /* there doesn't seem to be any documented function to
+     * get the "gamma" value, so we do it the hard way */
     infile = fopen("/etc/config/system.glGammaVal", "r");
     if (infile) {
         double sgi_gamma;
@@ -366,22 +366,22 @@ int main(int argc, char **argv)
     }
 #elif defined(Macintosh)
     LUT_exponent = 1.8 / 2.61;
-      
-                                                         
-                                        
-       
+    /*
+    if (some_mac_function_that_returns_gamma(&mac_gamma))
+        LUT_exponent = mac_gamma / 2.61;
+     */
 #else
-    LUT_exponent = 1.0;    
+    LUT_exponent = 1.0;   /* assume no LUT:  most PCs */
 #endif
 
-     
+    /* the defaults above give 1.0, 1.3, 1.5 and 2.2, respectively: */
     default_display_exponent = LUT_exponent * CRT_exponent;
 
 
-                                                                             
-                                                                              
-                                                                          
-                                                  
+    /* If the user has set the SCREEN_GAMMA environment variable as suggested
+     * (somewhat imprecisely) in the libpng documentation, use that; otherwise
+     * use the default value we just calculated.  Either way, the user may
+     * override this via a command-line option. */
 
     if ((p = getenv("SCREEN_GAMMA")) != NULL)
         rpng2_info.display_exponent = atof(p);
@@ -389,7 +389,7 @@ int main(int argc, char **argv)
         rpng2_info.display_exponent = default_display_exponent;
 
 
-     
+    /* Now parse the command line for options and the PNG filename. */
 
     while (*++argv && !error) {
         if (!strncmp(*argv, "-display", 2)) {
@@ -449,17 +449,17 @@ int main(int argc, char **argv)
                 loop_interval = atol(*argv);
                 if (loop_interval < 0)
                     loop_interval = 2;
-                else if (loop_interval > 100000)    
+                else if (loop_interval > 100000)   /* bit more than one day */
                     loop_interval = 100000;
             }
 #endif
         } else {
             if (**argv != '-') {
                 filename = *argv;
-                if (argv[1])    
+                if (argv[1])   /* shouldn't be any more args after filename */
                     ++error;
             } else
-                ++error;    
+                ++error;   /* not expecting any other options */
         }
     }
 
@@ -467,7 +467,7 @@ int main(int argc, char **argv)
         ++error;
 
 
-     
+    /* print usage screen if any errors up to this point */
 
     if (error) {
         fprintf(stderr, "\n%s %s:  %s\n\n", PROGNAME, VERSION, appname);
@@ -560,7 +560,7 @@ int main(int argc, char **argv)
     }
 
 
-     
+    /* set the title-bar string, but make sure buffer doesn't overflow */
 
     alen = strlen(appname);
     flen = strlen(filename);
@@ -570,10 +570,10 @@ int main(int argc, char **argv)
         sprintf(titlebar, "%s:  %s", appname, filename);
 
 
-     
+    /* set some final rpng2_info variables before entering main data loop */
 
     if (have_bg) {
-        unsigned r, g, b;    
+        unsigned r, g, b;   /* this approach quiets compiler warnings */
 
         sscanf(bgstr+1, "%2x%2x%2x", &r, &g, &b);
         rpng2_info.bg_red   = (uch)r;
@@ -588,14 +588,14 @@ int main(int argc, char **argv)
     rpng2_info.mainprog_finish_display = rpng2_x_finish_display;
 
 
-                                                                             
-                                                                              
-                                                                             
-                                                                         
-                                                                            
-                                                                              
-                                                                               
-                
+    /* OK, this is the fun part:  call readpng2_decode_data() at the start of
+     * the loop to deal with our first buffer of data (read in above to verify
+     * that the file is a PNG image), then loop through the file and continue
+     * calling the same routine to handle each chunk of data.  It in turn
+     * passes the data to libpng, which will invoke one or more of our call-
+     * backs as decoded data become available.  We optionally call sleep() for
+     * one second per iteration to simulate downloading the image via an analog
+     * modem. */
 
     for (;;) {
         Trace((stderr, "about to call readpng2_decode_data()\n"))
@@ -614,8 +614,8 @@ int main(int argc, char **argv)
                 fprintf(stderr, PROGNAME ":  end of file reached "
                   "(unexpectedly) while reading PNG image file\n");
                 exit(3);
-            } else   {
-                 
+            } else /* if (error) */ {
+                /* will print error message below */
             }
             break;
         }
@@ -627,7 +627,7 @@ int main(int argc, char **argv)
     }
 
 
-     
+    /* clean up PNG stuff and report any decoding errors */
 
     fclose(infile);
     Trace((stderr, "about to call readpng2_cleanup()\n"))
@@ -647,35 +647,35 @@ int main(int argc, char **argv)
             int i, use_sleep;
             struct timeval now, then;
 
-             
+            /* get current time and add loop_interval to get target time */
             if (gettimeofday(&then, NULL) == 0) {
                 then.tv_sec += loop_interval;
                 use_sleep = FALSE;
             } else
                 use_sleep = TRUE;
 
-             
-             
+            /* do quick check for a quit event but don't wait for it */
+            /* GRR BUG:  should also check for Expose events and redraw... */
             if (XCheckMaskEvent(display, KeyPressMask | ButtonPressMask, &e))
                 if (QUIT(e,k))
                     break;
 
-             
+            /* generate next background image */
             if (++pat >= num_bgpat)
                 pat = 0;
             rpng2_x_reload_bg_image();
 
-             
+            /* wait for timeout, using whatever means are available */
             if (use_sleep || gettimeofday(&now, NULL) != 0) {
                 for (i = loop_interval;  i > 0;  --i) {
                     sleep(1);
-                     
+                    /* GRR BUG:  also need to check for Expose (and redraw!) */
                     if (XCheckMaskEvent(display, KeyPressMask | ButtonPressMask,
                         &e) && QUIT(e,k))
                         break;
                 }
             } else {
-                 
+                /* Y2038 BUG! */
                 if (now.tv_sec < then.tv_sec ||
                     (now.tv_sec == then.tv_sec && now.tv_usec < then.tv_usec))
                 {
@@ -683,41 +683,41 @@ int main(int argc, char **argv)
                     long seconds_to_go = then.tv_sec - now.tv_sec;
                     long usleep_usec;
 
-                                                                             
-                                                                          
-                                                                             
-                                                                            
-                                                                              
+                    /* basically chew up most of remaining loop-interval with
+                     *  calls to sleep(1) interleaved with checks for quit
+                     *  events, but also recalc time-to-go periodically; when
+                     *  done, clean up any remaining time with usleep() call
+                     *  (could also use SIGALRM, but signals are a pain...) */
                     while (seconds_to_go-- > 1) {
                         int seconds_done = 0;
 
                         for (i = seconds_to_go;  i > 0 && !quit;  --i) {
                             sleep(1);
-                             
+                            /* GRR BUG:  need to check for Expose and redraw */
                             if (XCheckMaskEvent(display, KeyPressMask |
                                 ButtonPressMask, &e) && QUIT(e,k))
                                 quit = TRUE;
                             if (++seconds_done > 1000)
-                                break;    
+                                break;   /* time to redo seconds_to_go meas. */
                         }
                         if (quit)
                             break;
 
-                                                                       
-                                                                           
+                        /* OK, more than 1000 seconds since last check:
+                         *  correct the time-to-go measurement for drift */
                         if (gettimeofday(&now, NULL) == 0) {
                             if (now.tv_sec >= then.tv_sec)
                                 break;
                             seconds_to_go = then.tv_sec - now.tv_sec;
                         } else
-                            ++seconds_to_go;   
+                            ++seconds_to_go;  /* restore what we subtracted */
                     }
                     if (quit)
-                        break;    
+                        break;   /* breaks outer do-loop, skips redisplay */
 
-                                                                           
-                                                                             
-                                                                               
+                    /* since difference between "now" and "then" is already
+                     *  eaten up to within a couple of seconds, don't need to
+                     *  worry about overflow--but might have overshot (neg.) */
                     if (gettimeofday(&now, NULL) == 0) {
                         usleep_usec = 1000000L*(then.tv_sec - now.tv_sec) +
                           then.tv_usec - now.tv_usec;
@@ -727,16 +727,16 @@ int main(int argc, char **argv)
                 }
             }
 
-                                                                            
-                                                                            
+            /* composite image against new background and display (note that
+             *  we do not take into account the time spent doing this...) */
             rpng2_x_redisplay_image (0, 0, rpng2_info.width, rpng2_info.height);
         }
 
-    } else  
+    } else /* FALL THROUGH and do the normal thing */
 
-#endif  
+#endif /* FEATURE_LOOP */
 
-     
+    /* wait for the user to tell us when to quit */
 
     if (rpng2_info.state >= kWindowInit) {
         Trace((stderr, "entering final wait-for-quit-event loop\n"))
@@ -754,12 +754,12 @@ int main(int argc, char **argv)
     }
 
 
-     
+    /* we're done:  clean up all image and X resources and go away */
 
     Trace((stderr, "about to call rpng2_x_cleanup()\n"))
     rpng2_x_cleanup();
 
-    (void)argc;  
+    (void)argc; /* Unused */
 
     return 0;
 }
@@ -768,9 +768,9 @@ int main(int argc, char **argv)
 
 
 
-                                                                           
-                                                                         
-                                                                              
+/* this function is called by readpng2_info_callback() in readpng2.c, which
+ * in turn is called by libpng after all of the pre-IDAT chunks have been
+ * read and processed--i.e., we now have enough info to finish initializing */
 
 static void rpng2_x_init(void)
 {
@@ -782,7 +782,7 @@ static void rpng2_x_init(void)
     Trace((stderr, "  width  = %ld\n", rpng2_info.width))
     Trace((stderr, "  height = %ld\n", rpng2_info.height))
 
-     
+    /* Guard against integer overflow */
     if (rpng2_info.height > ((size_t)(-1))/rpng2_info.rowbytes) {
         fprintf(stderr, PROGNAME ":  image_data buffer would be too large\n");
         readpng2_cleanup(&rpng2_info);
@@ -807,18 +807,18 @@ static void rpng2_x_init(void)
         rpng2_info.row_pointers[i] = rpng2_info.image_data + i*rowbytes;
 
 
-                                                                             
-                                                                        
-                 
+    /* do the basic X initialization stuff, make the window, and fill it with
+     * the user-specified, file-specified or default background color or
+     * pattern */
 
     if (rpng2_x_create_window()) {
 
-                                                                             
-                                                                              
-                                                                           
-                           
+        /* GRR TEMPORARY HACK:  this is fundamentally no different from cases
+         * above; libpng should call our error handler to longjmp() back to us
+         * when png_ptr goes away.  If we/it segfault instead, seems like a
+         * libpng bug... */
 
-         
+        /* we're here via libpng callback, so if window fails, clean and bail */
         readpng2_cleanup(&rpng2_info);
         rpng2_x_cleanup();
         exit(2);
@@ -869,13 +869,13 @@ static int rpng2_x_create_window(void)
         Trace((stderr, "default depth is %d:  checking other visuals\n",
           depth))
 
-         
+        /* 24-bit first */
         visual_info.screen = screen;
         visual_info.depth = 24;
         visual_list = XGetVisualInfo(display,
           VisualScreenMask | VisualDepthMask, &visual_info, &visuals_matched);
         if (visuals_matched == 0) {
- 
+/* GRR:  add 15-, 16- and 32-bit TrueColor visuals (also DirectColor?) */
             fprintf(stderr, "default screen depth %d not supported, and no"
               " 24-bit visuals found\n", depth);
             return 2;
@@ -884,11 +884,11 @@ static int rpng2_x_create_window(void)
           visuals_matched))
         visual = visual_list[0].visual;
         depth = visual_list[0].depth;
-  
-                                                     
-                                     
-                                               
-   
+/*
+        colormap_size = visual_list[0].colormap_size;
+        visual_class = visual->class;
+        visualID = XVisualIDFromVisual(visual);
+ */
         have_nondefault_visual = TRUE;
         need_colormap = TRUE;
     } else {
@@ -900,7 +900,7 @@ static int rpng2_x_create_window(void)
     GMask = visual->green_mask;
     BMask = visual->blue_mask;
 
- 
+/* GRR:  add/check 8-bit support */
     if (depth == 8 || need_colormap) {
         colormap = XCreateColormap(display, root, visual, AllocNone);
         if (!colormap) {
@@ -909,14 +909,14 @@ static int rpng2_x_create_window(void)
         }
         have_colormap = TRUE;
         if (depth == 8)
-            bg_image = FALSE;    
+            bg_image = FALSE;   /* gradient just wastes palette entries */
     }
     if (depth == 15 || depth == 16) {
-        RShift = 15 - rpng2_x_msb(RMask);     
+        RShift = 15 - rpng2_x_msb(RMask);    /* these are right-shifts */
         GShift = 15 - rpng2_x_msb(GMask);
         BShift = 15 - rpng2_x_msb(BMask);
     } else if (depth > 16) {
-        RShift = rpng2_x_msb(RMask) - 7;      
+        RShift = rpng2_x_msb(RMask) - 7;     /* these are left-shifts */
         GShift = rpng2_x_msb(GMask) - 7;
         BShift = rpng2_x_msb(BMask) - 7;
     }
@@ -925,9 +925,9 @@ static int rpng2_x_create_window(void)
         return 2;
     }
 
-                                                                             
-                               
-                                                                               
+/*---------------------------------------------------------------------------
+    Finally, create the window.
+  ---------------------------------------------------------------------------*/
 
     attr.backing_store = Always;
     attr.event_mask = ExposureMask | KeyPressMask | ButtonPressMask;
@@ -956,10 +956,10 @@ static int rpng2_x_create_window(void)
     if (!XStringListToTextProperty(&icon_name, 1, pIconName))
         pIconName = NULL;
 
-     
+    /* OK if either hints allocation fails; XSetWMProperties() allows NULLs */
 
     if ((size_hints = XAllocSizeHints()) != NULL) {
-         
+        /* window will not be resizable */
         size_hints->flags = PMinSize | PMaxSize;
         size_hints->min_width = size_hints->max_width = (int)rpng2_info.width;
         size_hints->min_height = size_hints->max_height =
@@ -969,8 +969,8 @@ static int rpng2_x_create_window(void)
     if ((wm_hints = XAllocWMHints()) != NULL) {
         wm_hints->initial_state = NormalState;
         wm_hints->input = True;
-      
-        wm_hints->flags = StateHint | InputHint    ;
+     /* wm_hints->icon_pixmap = icon_pixmap; */
+        wm_hints->flags = StateHint | InputHint  /* | IconPixmapHint */ ;
     }
 
     if ((class_hints = XAllocClassHint()) != NULL) {
@@ -981,7 +981,7 @@ static int rpng2_x_create_window(void)
     XSetWMProperties(display, window, pWindowName, pIconName, NULL, 0,
       size_hints, wm_hints, class_hints);
 
-     
+    /* various properties and hints no longer needed; free memory */
     if (pWindowName)
        XFree(pWindowName->value);
     if (pIconName)
@@ -998,9 +998,9 @@ static int rpng2_x_create_window(void)
     gc = XCreateGC(display, window, 0, &gcvalues);
     have_gc = TRUE;
 
-                                                                             
-                                                                         
-                                                                               
+/*---------------------------------------------------------------------------
+    Allocate memory for the X- and display-specific version of the image.
+  ---------------------------------------------------------------------------*/
 
     if (depth == 24 || depth == 32) {
         xdata = (uch *)malloc(4*rpng2_info.width*rpng2_info.height);
@@ -1008,7 +1008,7 @@ static int rpng2_x_create_window(void)
     } else if (depth == 16) {
         xdata = (uch *)malloc(2*rpng2_info.width*rpng2_info.height);
         pad = 16;
-    } else   {
+    } else /* depth == 8 */ {
         xdata = (uch *)malloc(rpng2_info.width*rpng2_info.height);
         pad = 8;
     }
@@ -1027,23 +1027,23 @@ static int rpng2_x_create_window(void)
         return 3;
     }
 
-                                                                           
-                                                                             
-                                                                             
-                                                                          
-                                                                          
-                                                                 
+    /* to avoid testing the byte order every pixel (or doubling the size of
+     * the drawing routine with a giant if-test), we arbitrarily set the byte
+     * order to MSBFirst and let Xlib worry about inverting things on little-
+     * endian machines (e.g., Linux/x86, old VAXen, etc.)--this is not the
+     * most efficient approach (the giant if-test would be better), but in
+     * the interest of clarity, we'll take the easy way out... */
 
     ximage->byte_order = MSBFirst;
 
-                                                                             
-                                                                         
-                                                                        
-                                
-                                                                               
+/*---------------------------------------------------------------------------
+    Fill window with the specified background color (default is black) or
+    faked "background image" (but latter is disabled if 8-bit; gradients
+    just waste palette entries).
+  ---------------------------------------------------------------------------*/
 
     if (bg_image)
-        rpng2_x_load_bg_image();     
+        rpng2_x_load_bg_image();    /* resets bg_image if fails */
 
     if (!bg_image) {
         if (depth == 24 || depth == 32) {
@@ -1054,9 +1054,9 @@ static int rpng2_x_create_window(void)
             bg_pixel = (((bg_red   << 8) >> RShift) & RMask) |
                        (((bg_green << 8) >> GShift) & GMask) |
                        (((bg_blue  << 8) >> BShift) & BMask);
-        } else   {
+        } else /* depth == 8 */ {
 
-             
+            /* GRR:  add 8-bit support */
 
         }
         XSetForeground(display, gc, bg_pixel);
@@ -1064,9 +1064,9 @@ static int rpng2_x_create_window(void)
           rpng2_info.height);
     }
 
-                                                                             
-                                                                         
-                                                                               
+/*---------------------------------------------------------------------------
+    Wait for first Expose event to do any drawing, then flush and return.
+  ---------------------------------------------------------------------------*/
 
     do
         XNextEvent(display, &e);
@@ -1076,7 +1076,7 @@ static int rpng2_x_create_window(void)
 
     return 0;
 
-}  
+} /* end function rpng2_x_create_window() */
 
 
 
@@ -1097,10 +1097,10 @@ static int rpng2_x_load_bg_image(void)
     ulg i, row;
     ulg pixel;
 
-                                                                             
-                                                                         
-                                                            
-                                                                               
+/*---------------------------------------------------------------------------
+    Allocate buffer for fake background image to be used with transparent
+    images; if this fails, revert to plain background color.
+  ---------------------------------------------------------------------------*/
 
     bg_rowbytes = 3 * rpng2_info.width;
     bg_data = (uch *)malloc(bg_rowbytes * rpng2_info.height);
@@ -1114,10 +1114,10 @@ static int rpng2_x_load_bg_image(void)
     bgscale = (pat == 0)? 8 : bgscale_default;
     yidx_max = bgscale - 1;
 
-                                                                             
-                                                                        
-                          
-                                                                               
+/*---------------------------------------------------------------------------
+    Vertical gradients (ramps) in NxN squares, alternating direction and
+    colors (N == bgscale).
+  ---------------------------------------------------------------------------*/
 
     if ((bg[pat].type & 0x07) == 0) {
         uch r1_min  = rgb[bg[pat].rgb1_min].r;
@@ -1157,7 +1157,7 @@ static int rpng2_x_load_bg_image(void)
                 even_odd = even_odd_vert ^ even_odd_horiz;
                 invert_column =
                   (even_odd_horiz && (bg[pat].type & 0x10));
-                if (even_odd == 0) {         
+                if (even_odd == 0) {        /* gradient #1 */
                     if (invert_column) {
                         *dest++ = r1_inv;
                         *dest++ = g1_inv;
@@ -1167,31 +1167,31 @@ static int rpng2_x_load_bg_image(void)
                         *dest++ = g1;
                         *dest++ = b1;
                     }
-                } else {                     
+                } else {                    /* gradient #2 */
                     if ((invert_column && invert_gradient2) ||
                         (!invert_column && !invert_gradient2))
                     {
-                        *dest++ = r2;        
-                        *dest++ = g2;        
+                        *dest++ = r2;       /* not inverted or */
+                        *dest++ = g2;       /*  doubly inverted */
                         *dest++ = b2;
                     } else {
                         *dest++ = r2_inv;
-                        *dest++ = g2_inv;    
+                        *dest++ = g2_inv;   /* singly inverted */
                         *dest++ = b2_inv;
                     }
                 }
             }
         }
 
-                                                                             
-                                                                          
-                
-                                                                               
+/*---------------------------------------------------------------------------
+    Soft gradient-diamonds with scale = bgscale.  Code contributed by Adam
+    M. Costello.
+  ---------------------------------------------------------------------------*/
 
     } else if ((bg[pat].type & 0x07) == 1) {
 
-        hmax = (bgscale-1)/2;    
-        max = 2*hmax;            
+        hmax = (bgscale-1)/2;   /* half the max weight of a color */
+        max = 2*hmax;           /* the max weight of a color */
 
         r1 = rgb[bg[pat].rgb1_max].r;
         g1 = rgb[bg[pat].rgb1_max].g;
@@ -1216,11 +1216,11 @@ static int rpng2_x_load_bg_image(void)
             }
         }
 
-                                                                             
-                                                                            
-                                                                           
-                                                                   
-                                                                               
+/*---------------------------------------------------------------------------
+    Radial "starburst" with azimuthal sinusoids; [eventually number of sinu-
+    soids will equal bgscale?].  This one is slow but very cool.  Code con-
+    tributed by Pieter S. van der Meulen (originally in Smalltalk).
+  ---------------------------------------------------------------------------*/
 
     } else if ((bg[pat].type & 0x07) == 2) {
         uch ch;
@@ -1236,13 +1236,13 @@ static int rpng2_x_load_bg_image(void)
         hh = (int)(rpng2_info.height / 2);
         hw = (int)(rpng2_info.width / 2);
 
-                                      
-                                                                           
-                                                                     
-                                                                    
-                                                                   
-                                                              
-           
+        /* variables for radial waves:
+         *   aoffset:  number of degrees to rotate hue [CURRENTLY NOT USED]
+         *   freq:  number of color beams originating from the center
+         *   grayspot:  size of the graying center area (anti-alias)
+         *   rotate:  rotation of the beams as a function of radius
+         *   saturate:  saturation of beams' shape azimuthally
+         */
         angle = CLIP(angle, 0.0, 360.0);
         grayspot = CLIP(bg[pat].bg_gray, 1, (hh + hw));
         freq = MAX((double)bg[pat].bg_freq, 0.0);
@@ -1299,9 +1299,9 @@ static int rpng2_x_load_bg_image(void)
         fflush(stderr);
     }
 
-                                                                             
-                                                                         
-                                                                               
+/*---------------------------------------------------------------------------
+    Blast background image to display buffer before beginning PNG decode.
+  ---------------------------------------------------------------------------*/
 
     if (depth == 24 || depth == 32) {
         ulg red, green, blue;
@@ -1310,7 +1310,7 @@ static int rpng2_x_load_bg_image(void)
         for (row = 0;  row < rpng2_info.height;  ++row) {
             src = bg_data + row*bg_rowbytes;
             dest = ximage->data + row*ximage_rowbytes;
-            if (bpp == 32) {     
+            if (bpp == 32) {    /* slightly optimized version */
                 for (i = rpng2_info.width;  i > 0;  --i) {
                     red   = *src++;
                     green = *src++;
@@ -1318,7 +1318,7 @@ static int rpng2_x_load_bg_image(void)
                     pixel = (red   << RShift) |
                             (green << GShift) |
                             (blue  << BShift);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     *dest++ = (char)((pixel >> 24) & 0xff);
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
@@ -1332,9 +1332,9 @@ static int rpng2_x_load_bg_image(void)
                     pixel = (red   << RShift) |
                             (green << GShift) |
                             (blue  << BShift);
-                     
-                     
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
+                    /* GRR BUG?  this assumes bpp == 24 & bits are packed low */
+                    /*           (probably need to use RShift, RMask, etc.) */
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
@@ -1355,15 +1355,15 @@ static int rpng2_x_load_bg_image(void)
                 pixel = ((red   >> RShift) & RMask) |
                         ((green >> GShift) & GMask) |
                         ((blue  >> BShift) & BMask);
-                 
+                /* recall that we set ximage->byte_order = MSBFirst above */
                 *dest++ = (char)((pixel >>  8) & 0xff);
                 *dest++ = (char)( pixel        & 0xff);
             }
         }
 
-    } else   {
+    } else /* depth == 8 */ {
 
-         
+        /* GRR:  add 8-bit support */
 
     }
 
@@ -1372,7 +1372,7 @@ static int rpng2_x_load_bg_image(void)
 
     return 0;
 
-}  
+} /* end function rpng2_x_load_bg_image() */
 
 
 
@@ -1391,11 +1391,11 @@ static void rpng2_x_display_row(ulg row)
     static int rows=0, prevpass=(-1);
     static ulg firstrow;
 
-                                                                             
-                                                                          
-                                                                          
-                                                
-                                                                               
+/*---------------------------------------------------------------------------
+    rows and firstrow simply track how many rows (and which ones) have not
+    yet been displayed; alternatively, we could call XPutImage() for every
+    row and not bother with the records-keeping.
+  ---------------------------------------------------------------------------*/
 
     Trace((stderr, "beginning rpng2_x_display_row()\n"))
 
@@ -1417,16 +1417,16 @@ static void rpng2_x_display_row(ulg row)
     }
 
     if (rows == 0)
-        firstrow = row;    
+        firstrow = row;   /* first row that is not yet displayed */
 
-    ++rows;    
+    ++rows;   /* count of rows received but not yet displayed */
 
-                                                                             
-                                                                          
-                                                                        
-                                                                          
-                                       
-                                                                               
+/*---------------------------------------------------------------------------
+    Aside from the use of the rpng2_info struct, the lack of an outer loop
+    (over rows) and moving the XPutImage() call outside the "if (depth)"
+    tests, this routine is identical to rpng_x_display_image() in the non-
+    progressive version of the program.
+  ---------------------------------------------------------------------------*/
 
     if (depth == 24 || depth == 32) {
         ulg red, green, blue;
@@ -1444,21 +1444,21 @@ static void rpng2_x_display_row(ulg row)
                 pixel = (red   << RShift) |
                         (green << GShift) |
                         (blue  << BShift);
-                 
+                /* recall that we set ximage->byte_order = MSBFirst above */
                 if (bpp == 32) {
                     *dest++ = (char)((pixel >> 24) & 0xff);
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
                 } else {
-                     
-                     
+                    /* GRR BUG?  this assumes bpp == 24 & bits are packed low */
+                    /*           (probably need to use RShift, RMask, etc.) */
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
                 }
             }
-        } else   {
+        } else /* if (rpng2_info.channels == 4) */ {
             for (i = rpng2_info.width;  i > 0;  --i) {
                 r = *src++;
                 g = *src++;
@@ -1478,9 +1478,9 @@ static void rpng2_x_display_row(ulg row)
                     green = bg_green;
                     blue  = bg_blue;
                 } else {
-                                                                        
-                                                                         
-                                        
+                    /* this macro (from png.h) composites the foreground
+                     * and background values and puts the result into the
+                     * first argument */
                     alpha_composite(red,   r, a, bg_red);
                     alpha_composite(green, g, a, bg_green);
                     alpha_composite(blue,  b, a, bg_blue);
@@ -1488,15 +1488,15 @@ static void rpng2_x_display_row(ulg row)
                 pixel = (red   << RShift) |
                         (green << GShift) |
                         (blue  << BShift);
-                 
+                /* recall that we set ximage->byte_order = MSBFirst above */
                 if (bpp == 32) {
                     *dest++ = (char)((pixel >> 24) & 0xff);
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
                 } else {
-                     
-                     
+                    /* GRR BUG?  this assumes bpp == 24 & bits are packed low */
+                    /*           (probably need to use RShift, RMask, etc.) */
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
@@ -1522,11 +1522,11 @@ static void rpng2_x_display_row(ulg row)
                 pixel = ((red   >> RShift) & RMask) |
                         ((green >> GShift) & GMask) |
                         ((blue  >> BShift) & BMask);
-                 
+                /* recall that we set ximage->byte_order = MSBFirst above */
                 *dest++ = (char)((pixel >>  8) & 0xff);
                 *dest++ = (char)( pixel        & 0xff);
             }
-        } else   {
+        } else /* if (rpng2_info.channels == 4) */ {
             for (i = rpng2_info.width;  i > 0;  --i) {
                 r = *src++;
                 g = *src++;
@@ -1546,9 +1546,9 @@ static void rpng2_x_display_row(ulg row)
                     green = ((ush)bg_green << 8);
                     blue  = ((ush)bg_blue  << 8);
                 } else {
-                                                                        
-                                                                          
-                                                                     
+                    /* this macro (from png.h) composites the foreground
+                     * and background values and puts the result back into
+                     * the first argument (== fg byte here:  safe) */
                     alpha_composite(r, r, a, bg_red);
                     alpha_composite(g, g, a, bg_green);
                     alpha_composite(b, b, a, bg_blue);
@@ -1559,26 +1559,26 @@ static void rpng2_x_display_row(ulg row)
                 pixel = ((red   >> RShift) & RMask) |
                         ((green >> GShift) & GMask) |
                         ((blue  >> BShift) & BMask);
-                 
+                /* recall that we set ximage->byte_order = MSBFirst above */
                 *dest++ = (char)((pixel >>  8) & 0xff);
                 *dest++ = (char)( pixel        & 0xff);
             }
         }
 
-    } else   {
+    } else /* depth == 8 */ {
 
-         
+        /* GRR:  add 8-bit support */
 
     }
 
 
-                                                                             
-                                                                         
-                                                                        
-                                                                           
-                                                                            
-                                                  
-                                                                               
+/*---------------------------------------------------------------------------
+    Display after every 16 rows or when on one of last two rows.  (Region
+    may include previously displayed lines due to interlacing--i.e., not
+    contiguous.  Also, second-to-last row is final one in interlaced images
+    with odd number of rows.)  For demos, flush (and delay) after every 16th
+    row so "sparse" passes don't go twice as fast.
+  ---------------------------------------------------------------------------*/
 
     if (demo_timing && (row - firstrow >= 16 || row >= rpng2_info.height-2)) {
         XPutImage(display, window, gc, ximage, 0, (int)firstrow, 0,
@@ -1604,9 +1604,9 @@ static void rpng2_x_finish_display(void)
 {
     Trace((stderr, "beginning rpng2_x_finish_display()\n"))
 
-                                                                          
-                                                                           
-                           
+    /* last row has already been displayed by rpng2_x_display_row(), so we
+     * have nothing to do here except set a flag and let the user know that
+     * the image is done */
 
     rpng2_info.state = kDone;
     printf(
@@ -1640,13 +1640,13 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
     Trace((stderr, "   (byte_order = %s)\n", ximage->byte_order == MSBFirst?
       "MSBFirst" : (ximage->byte_order == LSBFirst? "LSBFirst" : "unknown")))
 
-                                                                             
-                                                                           
-                                                                           
-                                                                            
-                                                                          
-                                                             
-                                                                               
+/*---------------------------------------------------------------------------
+    Aside from the use of the rpng2_info struct and of src2 (for background
+    image), this routine is identical to rpng_x_display_image() in the non-
+    progressive version of the program--for the simple reason that redisplay
+    of the image against a new background happens after the image is fully
+    decoded and therefore is, by definition, non-progressive.
+  ---------------------------------------------------------------------------*/
 
     if (depth == 24 || depth == 32) {
         ulg red, green, blue;
@@ -1666,15 +1666,15 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
                     pixel = (red   << RShift) |
                             (green << GShift) |
                             (blue  << BShift);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     if (bpp == 32) {
                         *dest++ = (char)((pixel >> 24) & 0xff);
                         *dest++ = (char)((pixel >> 16) & 0xff);
                         *dest++ = (char)((pixel >>  8) & 0xff);
                         *dest++ = (char)( pixel        & 0xff);
                     } else {
-                         
-                         
+                        /* this assumes bpp == 24 & bits are packed low */
+                        /* (probably need to use RShift, RMask, etc.) */
                         *dest++ = (char)((pixel >> 16) & 0xff);
                         *dest++ = (char)((pixel >>  8) & 0xff);
                         *dest++ = (char)( pixel        & 0xff);
@@ -1684,16 +1684,16 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
                     green = (GShift < 0)? green << (-GShift) : green >> GShift;
                     blue  = (BShift < 0)? blue  << (-BShift) : blue  >> BShift;
                     pixel = (red & RMask) | (green & GMask) | (blue & BMask);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     if (bpp == 32) {
                         *dest++ = (char)((pixel >> 24) & 0xff);
                         *dest++ = (char)((pixel >> 16) & 0xff);
                         *dest++ = (char)((pixel >>  8) & 0xff);
                         *dest++ = (char)( pixel        & 0xff);
                     } else {
-                         
-                         
-                         
+                        /* GRR BUG */
+                        /* this assumes bpp == 24 & bits are packed low */
+                        /* (probably need to use RShift/RMask/etc. here, too) */
                         *dest++ = (char)((pixel >> 16) & 0xff);
                         *dest++ = (char)((pixel >>  8) & 0xff);
                         *dest++ = (char)( pixel        & 0xff);
@@ -1701,7 +1701,7 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
 #endif
                 }
 
-            } else   {
+            } else /* if (rpng2_info.channels == 4) */ {
                 for (i = rpng2_info.width;  i > 0;  --i) {
                     r = *src++;
                     g = *src++;
@@ -1721,9 +1721,9 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
                         green = bg_green;
                         blue  = bg_blue;
                     } else {
-                                                                            
-                                                                             
-                                            
+                        /* this macro (from png.h) composites the foreground
+                         * and background values and puts the result into the
+                         * first argument */
                         alpha_composite(red,   r, a, bg_red);
                         alpha_composite(green, g, a, bg_green);
                         alpha_composite(blue,  b, a, bg_blue);
@@ -1732,15 +1732,15 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
                     pixel = (red   << RShift) |
                             (green << GShift) |
                             (blue  << BShift);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     if (bpp == 32) {
                         *dest++ = (char)((pixel >> 24) & 0xff);
                         *dest++ = (char)((pixel >> 16) & 0xff);
                         *dest++ = (char)((pixel >>  8) & 0xff);
                         *dest++ = (char)( pixel        & 0xff);
                     } else {
-                         
-                         
+                        /* this assumes bpp == 24 & bits are packed low */
+                        /* (probably need to use RShift, RMask, etc.) */
                         *dest++ = (char)((pixel >> 16) & 0xff);
                         *dest++ = (char)((pixel >>  8) & 0xff);
                         *dest++ = (char)( pixel        & 0xff);
@@ -1750,16 +1750,16 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
                     green = (GShift < 0)? green << (-GShift) : green >> GShift;
                     blue  = (BShift < 0)? blue  << (-BShift) : blue  >> BShift;
                     pixel = (red & RMask) | (green & GMask) | (blue & BMask);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     if (bpp == 32) {
                         *dest++ = (char)((pixel >> 24) & 0xff);
                         *dest++ = (char)((pixel >> 16) & 0xff);
                         *dest++ = (char)((pixel >>  8) & 0xff);
                         *dest++ = (char)( pixel        & 0xff);
                     } else {
-                         
-                         
-                         
+                        /* GRR BUG */
+                        /* this assumes bpp == 24 & bits are packed low */
+                        /* (probably need to use RShift/RMask/etc. here, too) */
                         *dest++ = (char)((pixel >> 16) & 0xff);
                         *dest++ = (char)((pixel >>  8) & 0xff);
                         *dest++ = (char)( pixel        & 0xff);
@@ -1767,7 +1767,7 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
 #endif
                 }
             }
-             
+            /* display after every 16 lines */
             if (((row+1) & 0xf) == 0) {
                 XPutImage(display, window, gc, ximage, 0, (int)lastrow, 0,
                   (int)lastrow, rpng2_info.width, 16);
@@ -1795,11 +1795,11 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
                     pixel = ((red   >> RShift) & RMask) |
                             ((green >> GShift) & GMask) |
                             ((blue  >> BShift) & BMask);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
                 }
-            } else   {
+            } else /* if (rpng2_info.channels == 4) */ {
                 for (i = rpng2_info.width;  i > 0;  --i) {
                     r = *src++;
                     g = *src++;
@@ -1819,9 +1819,9 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
                         green = ((ush)bg_green << 8);
                         blue  = ((ush)bg_blue  << 8);
                     } else {
-                                                                            
-                                                                              
-                                                                         
+                        /* this macro (from png.h) composites the foreground
+                         * and background values and puts the result back into
+                         * the first argument (== fg byte here:  safe) */
                         alpha_composite(r, r, a, bg_red);
                         alpha_composite(g, g, a, bg_green);
                         alpha_composite(b, b, a, bg_blue);
@@ -1832,12 +1832,12 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
                     pixel = ((red   >> RShift) & RMask) |
                             ((green >> GShift) & GMask) |
                             ((blue  >> BShift) & BMask);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
                 }
             }
-             
+            /* display after every 16 lines */
             if (((row+1) & 0xf) == 0) {
                 XPutImage(display, window, gc, ximage, 0, (int)lastrow, 0,
                   (int)lastrow, rpng2_info.width, 16);
@@ -1846,9 +1846,9 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
             }
         }
 
-    } else   {
+    } else /* depth == 8 */ {
 
-         
+        /* GRR:  add 8-bit support */
 
     }
 
@@ -1862,7 +1862,7 @@ static void rpng2_x_redisplay_image(ulg startcol, ulg startrow,
     (void)startcol;
     (void)width;
 
-}  
+} /* end function rpng2_x_redisplay_image() */
 
 
 
@@ -1886,10 +1886,10 @@ static void rpng2_x_reload_bg_image(void)
     bgscale = (pat == 0)? 8 : bgscale_default;
     yidx_max = bgscale - 1;
 
-                                                                             
-                                                                        
-                          
-                                                                               
+/*---------------------------------------------------------------------------
+    Vertical gradients (ramps) in NxN squares, alternating direction and
+    colors (N == bgscale).
+  ---------------------------------------------------------------------------*/
 
     if ((bg[pat].type & 0x07) == 0) {
         uch r1_min  = rgb[bg[pat].rgb1_min].r;
@@ -1929,7 +1929,7 @@ static void rpng2_x_reload_bg_image(void)
                 even_odd = even_odd_vert ^ even_odd_horiz;
                 invert_column =
                   (even_odd_horiz && (bg[pat].type & 0x10));
-                if (even_odd == 0) {         
+                if (even_odd == 0) {        /* gradient #1 */
                     if (invert_column) {
                         *dest++ = r1_inv;
                         *dest++ = g1_inv;
@@ -1939,31 +1939,31 @@ static void rpng2_x_reload_bg_image(void)
                         *dest++ = g1;
                         *dest++ = b1;
                     }
-                } else {                     
+                } else {                    /* gradient #2 */
                     if ((invert_column && invert_gradient2) ||
                         (!invert_column && !invert_gradient2))
                     {
-                        *dest++ = r2;        
-                        *dest++ = g2;        
+                        *dest++ = r2;       /* not inverted or */
+                        *dest++ = g2;       /*  doubly inverted */
                         *dest++ = b2;
                     } else {
                         *dest++ = r2_inv;
-                        *dest++ = g2_inv;    
+                        *dest++ = g2_inv;   /* singly inverted */
                         *dest++ = b2_inv;
                     }
                 }
             }
         }
 
-                                                                             
-                                                                          
-                
-                                                                               
+/*---------------------------------------------------------------------------
+    Soft gradient-diamonds with scale = bgscale.  Code contributed by Adam
+    M. Costello.
+  ---------------------------------------------------------------------------*/
 
     } else if ((bg[pat].type & 0x07) == 1) {
 
-        hmax = (bgscale-1)/2;    
-        max = 2*hmax;            
+        hmax = (bgscale-1)/2;   /* half the max weight of a color */
+        max = 2*hmax;           /* the max weight of a color */
 
         r1 = rgb[bg[pat].rgb1_max].r;
         g1 = rgb[bg[pat].rgb1_max].g;
@@ -1988,11 +1988,11 @@ static void rpng2_x_reload_bg_image(void)
             }
         }
 
-                                                                             
-                                                                            
-                                                                           
-                                                                   
-                                                                               
+/*---------------------------------------------------------------------------
+    Radial "starburst" with azimuthal sinusoids; [eventually number of sinu-
+    soids will equal bgscale?].  This one is slow but very cool.  Code con-
+    tributed by Pieter S. van der Meulen (originally in Smalltalk).
+  ---------------------------------------------------------------------------*/
 
     } else if ((bg[pat].type & 0x07) == 2) {
         uch ch;
@@ -2004,13 +2004,13 @@ static void rpng2_x_reload_bg_image(void)
         hh = (int)(rpng2_info.height / 2);
         hw = (int)(rpng2_info.width / 2);
 
-                                      
-                                                                           
-                                                                     
-                                                                    
-                                                                   
-                                                              
-           
+        /* variables for radial waves:
+         *   aoffset:  number of degrees to rotate hue [CURRENTLY NOT USED]
+         *   freq:  number of color beams originating from the center
+         *   grayspot:  size of the graying center area (anti-alias)
+         *   rotate:  rotation of the beams as a function of radius
+         *   saturate:  saturation of beams' shape azimuthally
+         */
         angle = CLIP(angle, 0.0, 360.0);
         grayspot = CLIP(bg[pat].bg_gray, 1, (hh + hw));
         freq = MAX((double)bg[pat].bg_freq, 0.0);
@@ -2065,7 +2065,7 @@ static void rpng2_x_reload_bg_image(void)
         }
     }
 
-}  
+} /* end function rpng2_x_reload_bg_image() */
 
 
 
@@ -2081,7 +2081,7 @@ static int is_number(char *p)
     return TRUE;
 }
 
-#endif  
+#endif /* FEATURE_LOOP */
 
 
 
@@ -2106,8 +2106,8 @@ static void rpng2_x_cleanup(void)
 
     if (ximage) {
         if (ximage->data) {
-            free(ximage->data);            
-            ximage->data = (char *)NULL;   
+            free(ximage->data);           /* we allocated it, so we free it */
+            ximage->data = (char *)NULL;  /*  instead of XDestroyImage() */
         }
         XDestroyImage(ximage);
         ximage = NULL;

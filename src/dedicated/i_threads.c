@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  i_threads.c
+/// \brief Multithreading abstraction
 
 #if defined (__unix__) || (!defined(__APPLE__) && defined (UNIXCOMMON))
 
@@ -27,7 +27,7 @@ struct thread_s
 	pthread_t thread;
 };
 
-
+// we use a linked list to avoid moving memory blocks when allocating new threads.
 static thread_t *thread_list;
 static pthread_mutex_t thread_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -52,7 +52,7 @@ void I_spawn_thread(const char *name, I_thread_fn entry, void *userdata)
 	{
 		if (thread->func == NULL)
 		{
-
+			// join with the exited thread to release it's resources.
 			pthread_join(thread->thread, NULL);
 			break;
 		}
@@ -98,7 +98,7 @@ void I_stop_threads(void)
 	thread_t *thread = thread_list;
 	while (thread != NULL)
 	{
-
+		// join with all threads here, since finished threads haven't been awaited yet.
 		pthread_join(thread->thread, NULL);
 		thread = thread->next;
 	}
@@ -112,7 +112,7 @@ void I_lock_mutex(I_mutex *anchor)
 		pthread_mutexattr_t attr;
 		pthread_mutexattr_init(&attr);
 
-
+		// SRB2 relies on lock recursion, so we need a mutex configured for that.
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 		*anchor = malloc(sizeof(pthread_mutex_t));
 		pthread_mutex_init(*anchor, &attr);
@@ -181,7 +181,7 @@ struct thread_s
 	DWORD thread_id;
 };
 
-
+// we use a linked list to avoid moving memory blocks when allocating new threads.
 static thread_t *thread_list;
 static CRITICAL_SECTION thread_lock;
 

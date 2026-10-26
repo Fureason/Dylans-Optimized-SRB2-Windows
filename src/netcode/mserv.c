@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  mserv.c
+/// \brief Commands used to communicate with the master server
 
 #if !defined (UNDER_CE)
 #include <time.h>
@@ -51,15 +51,15 @@ static I_cond  MSCond;
 
 #  define Lock_state()   I_lock_mutex  (&MSMutex)
 #  define Unlock_state() I_unlock_mutex (MSMutex)
-#else 
+#else/*HAVE_THREADS*/
 #  define Lock_state()
 #  define Unlock_state()
-#endif 
+#endif/*HAVE_THREADS*/
 
 static void Command_Listserv_f(void);
 static void Command_HostStatus_f(void);
 
-#endif 
+#endif/*MASTERSERVER*/
 
 static boolean ServerName_CanChange (const char*);
 
@@ -76,14 +76,14 @@ static CV_PossibleValue_t masterserver_update_rate_cons_t[] = {
 
 #define DEFAULT_IPV6_SETTING "Off"
 
-
-
-
+// Saved replacement for the -noipv6 startup workaround. IPv4 is the default
+// because broken/partial IPv6 routes commonly make master-server requests time
+// out. The command-line switch remains an unconditional compatibility override.
 consvar_t cv_ipv6 = CVAR_INIT ("ipv6", DEFAULT_IPV6_SETTING, CV_SAVE, CV_OnOff, NULL);
 
-
-
-
+// Apply the new default once to profiles made by older builds, whose saved
+// "ipv6 On" value would otherwise override DEFAULT_IPV6_SETTING forever.
+// After this marker is saved, the player's own On/Off choice is preserved.
 static consvar_t cv_ipv6_default_off_applied = CVAR_INIT (
 	"ipv6_default_off_applied", "Off", CV_SAVE, CV_OnOff, NULL);
 
@@ -125,15 +125,15 @@ I_mutex       ms_ServerList_mutex;
 
 UINT16 current_port = 0;
 
+// Room list is an external variable now.
+// Avoiding having to get info ten thousand times...
+msg_rooms_t room_list[NUM_LIST_ROOMS+1]; // +1 for easy test
 
-
-msg_rooms_t room_list[NUM_LIST_ROOMS+1];  
-
-                                                              
-   
-                                       
-                          
-    
+/** Adds variables and commands relating to the master server.
+  *
+  * \sa cv_masterserver, cv_servername,
+  *     Command_Listserv_f
+  */
 void AddMServCommands(void)
 {
 	CV_RegisterVar(&cv_masterserver);
@@ -148,7 +148,7 @@ void AddMServCommands(void)
 #ifdef MASTERSERVER
 	COM_AddCommand("listserv", Command_Listserv_f, 0);
 	COM_AddCommand("hoststatus", Command_HostStatus_f, COM_LUA);
-	COM_AddCommand("masterserver_update", Update_parameters, COM_LUA);  
+	COM_AddCommand("masterserver_update", Update_parameters, COM_LUA); // allows people to updates manually in case you were delisted by accident
 #endif
 }
 
@@ -170,7 +170,7 @@ msg_server_t *GetShortServersList(INT32 room, int id)
 {
 	msg_server_t *server_list;
 
-
+	// +1 for easy test
 	server_list = malloc(( NUM_LIST_SERVER + 1 ) * sizeof *server_list);
 
 	if (HMS_fetch_servers(server_list, room, id))
@@ -191,8 +191,8 @@ INT32 GetRoomsList(boolean hosting, int id)
 	{
 		boolean current = true;
 #ifdef HAVE_THREADS
-		                                                                        
-                                            
+		/* A failed HTTPS request must not open an error dialog after the player
+		 * already backed out of the room menu. */
 		I_lock_mutex(&ms_QueryId_mutex);
 		current = (id == ms_QueryId);
 		I_unlock_mutex(ms_QueryId_mutex);
@@ -211,9 +211,9 @@ char *GetMODVersion(int id)
 	int c;
 	boolean current_version;
 
-	                                                                      
-                                                                             
-                                                                            
+	/* A successful current-version response is valid for the rest of this
+	 * process. Rechecking every time the room menu opens needlessly doubles the
+	 * requests and makes a temporary master-server stall much more visible. */
 	if (checked_current_version)
 		return NULL;
 
@@ -246,7 +246,7 @@ char *GetMODVersion(int id)
 	}
 }
 
-
+// Console only version of the above (used before game init)
 void GetMODVersion_Console(void)
 {
 	char buffer[16];
@@ -256,8 +256,8 @@ void GetMODVersion_Console(void)
 }
 #endif
 
-                                                     
-    
+/** Gets a list of game servers. Called from console.
+  */
 static void Command_Listserv_f(void)
 {
 	CONS_Printf(M_GetText("Retrieving server list...\n"));
@@ -342,8 +342,8 @@ static void Host_status_thread(host_status_query_t *query)
 		return;
 	}
 
-	                                                                          
-                                        
+	/* This console diagnostic is not owned by a menu, so menu navigation must
+	 * not cancel it through ms_QueryId. */
 	if (!HMS_fetch_servers(list, query->room, -1))
 	{
 		CONS_Alert(CONS_WARNING,
@@ -477,7 +477,7 @@ Finish_update (void)
 	Lock_state();
 	{
 		registered = MSRegistered;
-		MSUpdateAgain = false; 
+		MSUpdateAgain = false;/* this will happen anyway */
 	}
 	Unlock_state();
 
@@ -588,15 +588,15 @@ Register_server_thread (int *id)
 
 	Lock_state();
 	{
-		 
+		/* wait for previous unlist to finish */
 		while (*id == MSId && MSRegistered)
 			I_hold_cond(&MSCond, MSMutex);
 
-		same = ( *id == MSId ); 
+		same = ( *id == MSId );/* it could have been a while */
 	}
 	Unlock_state();
 
-	if (same) 
+	if (same)/* it could have been a while */
 		Finish_registration();
 
 	free(id);
@@ -648,7 +648,7 @@ Change_masterserver_thread (char *api)
 
 	HMS_set_api(api);
 }
-#endif 
+#endif/*HAVE_THREADS*/
 
 void RegisterServer(void)
 {
@@ -663,7 +663,7 @@ void RegisterServer(void)
 #else
 	Finish_registration();
 #endif
-#endif 
+#endif/*MASTERSERVER*/
 }
 
 static void UpdateServer(void)
@@ -691,7 +691,7 @@ void UnregisterServer(void)
 #else
 	Finish_unlist();
 #endif
-#endif 
+#endif/*MASTERSERVER*/
 }
 
 static boolean
@@ -738,8 +738,8 @@ static void Flush_masterserver_notices(void)
 	}
 	Unlock_state();
 
-	                                                                            
-                                                        
+	/* Worker threads only update state. Printing here keeps the shared console,
+	 * renderer and flushed log file on the main thread. */
 	if (notices & MSNOTICE_REGISTERED)
 		CONS_Printf("Master server registration successful. Run hoststatus to verify public reachability.\n");
 	if (notices & MSNOTICE_UNLISTED)
@@ -768,7 +768,7 @@ Set_api (const char *api)
 #endif
 }
 
-#endif 
+#endif/*MASTERSERVER*/
 
 static boolean ServerName_CanChange(const char* newvalue)
 {
@@ -792,7 +792,7 @@ Update_parameters (void)
 		{
 			delayed = MSInProgress;
 
-			if (delayed) 
+			if (delayed)/* do another update after the current one */
 				MSUpdateAgain = true;
 			else
 				registered = MSRegistered;
@@ -802,7 +802,7 @@ Update_parameters (void)
 		if (! delayed && registered)
 			UpdateServer();
 	}
-#endif 
+#endif/*MASTERSERVER*/
 }
 
 static void RoomId_OnChange(void)
@@ -821,10 +821,10 @@ static void MasterServer_OnChange(void)
 #ifdef MASTERSERVER
 	UnregisterServer();
 
-	  
-                                           
-                                        
-   
+	/*
+	TODO: remove this for v2, it's just a hack
+	for those coming in with an old config.
+	*/
 	if (
 			! cv_masterserver.changed &&
 			strcmp(cv_masterserver.string, "ms.srb2.org:28900") == 0
@@ -843,5 +843,5 @@ static void MasterServer_OnChange(void)
 
 	if (Online())
 		RegisterServer();
-#endif 
+#endif/*MASTERSERVER*/
 }

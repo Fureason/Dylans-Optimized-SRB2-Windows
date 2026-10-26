@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Program to test querying of display info */
 
 #include "SDL.h"
 
@@ -34,10 +34,10 @@ int main(int argc, char *argv[])
     SDL_DisplayMode mode;
     int num_displays, dpy;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
@@ -92,5 +92,5 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */
 

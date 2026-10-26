@@ -7,9 +7,9 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  string.c
+/// \brief String functions that we need but are missing on some
+///        operating systems.
 
 #include <stddef.h>
 #include <string.h>
@@ -17,8 +17,8 @@
 
 #ifndef SRB2_HAVE_STRLCPY
 
-
-
+// Like the OpenBSD version, but it doesn't check for src not being a valid
+// C string.
 size_t strlcat(char *dst, const char *src, size_t siz)
 {
 	size_t dstlen, n = siz;
@@ -69,7 +69,7 @@ int endswith(const char *base, const char *tag)
 	return !memcmp(&base[base_length - tag_length], tag, tag_length);
 }
 
-
+// strtok version that only skips over one delimiter at a time
 char *xstrtok(char *line, const char *delims)
 {
 	static char *saveline = NULL;
@@ -78,15 +78,15 @@ char *xstrtok(char *line, const char *delims)
 	if(line != NULL)
 		saveline = line;
 
-
+	// see if we have reached the end of the line
 	if(saveline == NULL || *saveline == '\0')
 		return NULL;
 
-	p = saveline;  
+	p = saveline; // save start of this token
 
-	saveline += strcspn(saveline, delims);  
+	saveline += strcspn(saveline, delims); // get the number of non-delims characters, go past delimiter
 
-	if(*saveline != '\0')  
+	if(*saveline != '\0') // trash the delim if necessary
 		*saveline++ = '\0';
 
 	return p;

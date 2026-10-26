@@ -51,16 +51,16 @@ int main(int argc, char **argv)
     SDL_AudioSpec spec;
     int n;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(SDL_INIT_AUDIO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
     }
 
-     
+    /* Print available audio drivers */
     n = SDL_GetNumAudioDrivers();
     if (n == 0) {
         SDL_Log("No built-in audio drivers\n\n");

@@ -1,5 +1,5 @@
-
-
+# genchk.cmake.in
+# Generate .chk from .out with awk (generic), based upon the automake logic.
 
 # Copyright (C) 2016 Glenn Randers-Pehrson
 # Written by Roger Leigh, 2016
@@ -8,7 +8,7 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
+# Variables substituted from CMakeLists.txt
 set(SRCDIR "@CMAKE_CURRENT_SOURCE_DIR@")
 
 set(AWK "@AWK@")
@@ -21,7 +21,7 @@ get_filename_component(INPUTDIR "${INPUT}" PATH)
 get_filename_component(OUTPUTDIR "${OUTPUT}" PATH)
 
 if("${INPUTEXT}" STREQUAL ".out" AND "${OUTPUTEXT}" STREQUAL ".chk")
-
+  # Generate .chk from .out with awk (generic)
   file(REMOVE "${OUTPUT}" "${OUTPUTDIR}/${OUTPUTBASE}.new")
   execute_process(COMMAND "${AWK}" -f "${SRCDIR}/scripts/checksym.awk"
                           "${SRCDIR}/scripts/${INPUTBASE}.def"

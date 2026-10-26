@@ -10,45 +10,45 @@
 #ifndef LIBOPENMPT_CONFIG_H
 #define LIBOPENMPT_CONFIG_H
 
- 
+/*! \defgroup libopenmpt libopenmpt */
 
-                          
-    
-  
+/*! \addtogroup libopenmpt
+  @{
+*/
 
- 
+/* provoke warnings if already defined */
 #define LIBOPENMPT_API
 #undef LIBOPENMPT_API
 #define LIBOPENMPT_CXX_API
 #undef LIBOPENMPT_CXX_API
 
- 
+/*! \brief Defined if libopenmpt/libopenmpt_stream_callbacks_buffer.h exists. */
 #define LIBOPENMPT_STREAM_CALLBACKS_BUFFER
 
-                                                                         
-             
-           
-                                                 
-          
-                                       
-                                                                                                                                                                
-                                                           
-           
-             
-   
+/*! \brief Defined if libopenmpt/libopenmpt_stream_callbacks_fd.h exists.
+ * \since 0.3
+ * \remarks
+ *   Use the following to check for availability:
+ *   \code
+ *   #include <libopenmpt/libopenmpt.h>
+ *   #if defined(LIBOPENMPT_STREAM_CALLBACKS_FD) || ((OPENMPT_API_VERSION_MAJOR == 0) && ((OPENMPT_API_VERSION_MINOR == 2) || (OPENMPT_API_VERSION_MINOR == 1)))
+ *   #include <libopenmpt/libopenmpt_stream_callbacks_fd.h>
+ *   #endif
+ *   \endcode
+ */
 #define LIBOPENMPT_STREAM_CALLBACKS_FD
 
-                                                                           
-             
-           
-                                                 
-          
-                                       
-                                                                                                                                                                  
-                                                             
-           
-             
-   
+/*! \brief Defined if libopenmpt/libopenmpt_stream_callbacks_file.h exists.
+ * \since 0.3
+ * \remarks
+ *   Use the following to check for availability:
+ *   \code
+ *   #include <libopenmpt/libopenmpt.h>
+ *   #if defined(LIBOPENMPT_STREAM_CALLBACKS_FILE) || ((OPENMPT_API_VERSION_MAJOR == 0) && ((OPENMPT_API_VERSION_MINOR == 2) || (OPENMPT_API_VERSION_MINOR == 1)))
+ *   #include <libopenmpt/libopenmpt_stream_callbacks_file.h>
+ *   #endif
+ *   \endcode
+ */
 #define LIBOPENMPT_STREAM_CALLBACKS_FILE
 
 #if defined(__DOXYGEN__)
@@ -124,19 +124,19 @@
 
 #if defined(__EMSCRIPTEN__)
 
- 
+/* Only the C API is supported for emscripten. Disable the C++ API. */
 #undef LIBOPENMPT_CXX_API
 #define LIBOPENMPT_CXX_API LIBOPENMPT_API_HELPER_LOCAL 
 #endif
 
 #endif
 
-   
-    
-  
+/*!
+  @}
+*/
 
 
- 
+/* C */
 
 #if !defined(LIBOPENMPT_NO_DEPRECATE)
 #if defined(__clang__)
@@ -160,12 +160,12 @@ LIBOPENMPT_DEPRECATED static const int LIBOPENMPT_DEPRECATED_STRING_CONSTANT = 0
 #endif
 
 
- 
+/* C++ */
 
 #ifdef __cplusplus
 
 #ifndef LIBOPENMPT_ASSUME_CPLUSPLUS_DEPRECATED
- 
+/* handle known broken compilers here by defining LIBOPENMPT_ASSUME_CPLUSPLUS_DEPRECATED appropriately */
 #endif
 
 #if defined(LIBOPENMPT_ASSUME_CPLUSPLUS)
@@ -201,4 +201,4 @@ LIBOPENMPT_DEPRECATED static const int LIBOPENMPT_DEPRECATED_STRING_CONSTANT = 0
 
 #include "libopenmpt_version.h"
 
-#endif  
+#endif /* LIBOPENMPT_CONFIG_H */

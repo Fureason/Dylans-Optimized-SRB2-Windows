@@ -1,4 +1,4 @@
- 
+/* $Id: testminiwget.c,v 1.7 2018/01/16 01:01:05 nanard Exp $ */
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * Project : miniupnp
  * Author : Thomas Bernard
@@ -10,11 +10,11 @@
 #include <stdlib.h>
 #include "miniwget.h"
 
-   
-                                                             
-                                                             
-                                             
-   
+/**
+ * This program uses the miniwget / miniwget_getaddr function
+ * from miniwget.c in order to retrieve a web ressource using
+ * a GET HTTP method, and store it in a file.
+ */
 int main(int argc, char * * argv)
 {
 	void * data;

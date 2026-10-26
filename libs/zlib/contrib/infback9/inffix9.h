@@ -1,11 +1,11 @@
-                                                            
-                                               
-       
+    /* inffix9.h -- table for decoding deflate64 fixed codes
+     * Generated automatically by makefixed9().
+     */
 
-                                                               
-                                                              
-                                                              
-       
+    /* WARNING: this file should *not* be used by applications.
+       It is part of the implementation of this library and is
+       subject to change. Applications should only use zlib.h.
+     */
 
     static const code lenfix[512] = {
         {96,7,0},{0,8,80},{0,8,16},{132,8,115},{130,7,31},{0,8,112},

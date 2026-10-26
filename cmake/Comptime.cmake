@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 set(CMAKE_BINARY_DIR "${BINARY_DIR}")
 set(CMAKE_CURRENT_BINARY_DIR "${BINARY_DIR}")
 
-
+# Set up CMAKE path
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
 
 include(GitUtilities)
@@ -19,7 +19,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "")
 	set(CMAKE_BUILD_TYPE None)
 endif()
 
-
+# These build types enable optimizations of some kind by default.
 set(optimized_build_types "MINSIZEREL;RELEASE;RELWITHDEBINFO")
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)

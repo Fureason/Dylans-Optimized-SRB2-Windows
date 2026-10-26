@@ -19,11 +19,11 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-   
-                      
-  
-                                                            
-   
+/**
+ *  \file SDL_endian.h
+ *
+ *  Functions for reading and writing endian-specific values
+ */
 
 #ifndef SDL_endian_h_
 #define SDL_endian_h_
@@ -31,31 +31,31 @@
 #include "SDL_stdinc.h"
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1400)
-                                                                            
-                                                                                              
+/* As of Clang 11, '_m_prefetchw' is conflicting with the winnt.h's version,
+   so we define the needed '_m_prefetch' here as a pseudo-header, until the issue is fixed. */
 #ifdef __clang__
 #ifndef __PRFCHWINTRIN_H
 #define __PRFCHWINTRIN_H
 static __inline__ void __attribute__((__always_inline__, __nodebug__))
 _m_prefetch(void *__P)
 {
-  __builtin_prefetch(__P, 0, 3  );
+  __builtin_prefetch(__P, 0, 3 /* _MM_HINT_T0 */);
 }
-#endif  
-#endif  
+#endif /* __PRFCHWINTRIN_H */
+#endif /* __clang__ */
 
 #include <intrin.h>
 #endif
 
-   
-                                     
-   
- 
+/**
+ *  \name The two types of endianness
+ */
+/* @{ */
 #define SDL_LIL_ENDIAN  1234
 #define SDL_BIG_ENDIAN  4321
- 
+/* @} */
 
-#ifndef SDL_BYTEORDER            
+#ifndef SDL_BYTEORDER           /* Not defined in SDL_config.h? */
 #ifdef __linux__
 #include <endian.h>
 #define SDL_BYTEORDER  __BYTE_ORDER
@@ -65,7 +65,7 @@ _m_prefetch(void *__P)
 #elif defined(__FreeBSD__) || defined(__NetBSD__)
 #include <sys/endian.h>
 #define SDL_BYTEORDER  BYTE_ORDER
- 
+/* predefs from newer gcc and clang versions: */
 #elif defined(__ORDER_LITTLE_ENDIAN__) && defined(__ORDER_BIG_ENDIAN__) && defined(__BYTE_ORDER__)
 #if (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
 #define SDL_BYTEORDER   SDL_LIL_ENDIAN
@@ -73,7 +73,7 @@ _m_prefetch(void *__P)
 #define SDL_BYTEORDER   SDL_BIG_ENDIAN
 #else
 #error Unsupported endianness
-#endif  
+#endif /**/
 #else
 #if defined(__hppa__) || \
     defined(__m68k__) || defined(mc68000) || defined(_M_M68K) || \
@@ -84,11 +84,11 @@ _m_prefetch(void *__P)
 #else
 #define SDL_BYTEORDER   SDL_LIL_ENDIAN
 #endif
-#endif  
-#endif  
+#endif /* __linux__ */
+#endif /* !SDL_BYTEORDER */
 
-#ifndef SDL_FLOATWORDORDER            
- 
+#ifndef SDL_FLOATWORDORDER           /* Not defined in SDL_config.h? */
+/* predefs from newer gcc versions: */
 #if defined(__ORDER_LITTLE_ENDIAN__) && defined(__ORDER_BIG_ENDIAN__) && defined(__FLOAT_WORD_ORDER__)
 #if (__FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__)
 #define SDL_FLOATWORDORDER   SDL_LIL_ENDIAN
@@ -96,31 +96,31 @@ _m_prefetch(void *__P)
 #define SDL_FLOATWORDORDER   SDL_BIG_ENDIAN
 #else
 #error Unsupported endianness
-#endif  
+#endif /**/
 #elif defined(__MAVERICK__)
- 
+/* For Maverick, float words are always little-endian. */
 #define SDL_FLOATWORDORDER   SDL_LIL_ENDIAN
 #elif (defined(__arm__) || defined(__thumb__)) && !defined(__VFP_FP__) && !defined(__ARM_EABI__)
- 
+/* For FPA, float words are always big-endian. */
 #define SDL_FLOATWORDORDER   SDL_BIG_ENDIAN
 #else
- 
+/* By default, assume that floats words follow the memory system mode. */
 #define SDL_FLOATWORDORDER   SDL_BYTEORDER
-#endif  
-#endif  
+#endif /* __FLOAT_WORD_ORDER__ */
+#endif /* !SDL_FLOATWORDORDER */
 
 
 #include "begin_code.h"
- 
+/* Set up for C function definitions, even when using C++ */
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-   
-                      
-   
+/**
+ *  \file SDL_endian.h
+ */
 
- 
+/* various modern compilers may have builtin swap */
 #if defined(__GNUC__) || defined(__clang__)
 #   define HAS_BUILTIN_BSWAP16 (_SDL_HAS_BUILTIN(__builtin_bswap16)) || \
         (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))
@@ -129,7 +129,7 @@ extern "C" {
 #   define HAS_BUILTIN_BSWAP64 (_SDL_HAS_BUILTIN(__builtin_bswap64)) || \
         (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 
-     
+    /* this one is broken */
 #   define HAS_BROKEN_BSWAP (__GNUC__ == 2 && __GNUC_MINOR__ <= 95)
 #else
 #   define HAS_BUILTIN_BSWAP16 0
@@ -281,7 +281,7 @@ SDL_Swap64(Uint64 x)
 {
     Uint32 hi, lo;
 
-     
+    /* Separate into high and low 32-bit values and swap them */
     lo = SDL_static_cast(Uint32, x & 0xFFFFFFFF);
     x >>= 32;
     hi = SDL_static_cast(Uint32, x & 0xFFFFFFFF);
@@ -305,17 +305,17 @@ SDL_SwapFloat(float x)
     return swapper.f;
 }
 
- 
+/* remove extra macros */
 #undef HAS_BROKEN_BSWAP
 #undef HAS_BUILTIN_BSWAP16
 #undef HAS_BUILTIN_BSWAP32
 #undef HAS_BUILTIN_BSWAP64
 
-   
-                        
-                                                                         
-   
- 
+/**
+ *  \name Swap to native
+ *  Byteswap item from the specified endianness to the native endianness.
+ */
+/* @{ */
 #if SDL_BYTEORDER == SDL_LIL_ENDIAN
 #define SDL_SwapLE16(X)     (X)
 #define SDL_SwapLE32(X)     (X)
@@ -335,14 +335,14 @@ SDL_SwapFloat(float x)
 #define SDL_SwapBE64(X)     (X)
 #define SDL_SwapFloatBE(X)  (X)
 #endif
-  
+/* @} *//* Swap to native */
 
- 
+/* Ends C function definitions when using C++ */
 #ifdef __cplusplus
 }
 #endif
 #include "close_code.h"
 
-#endif  
+#endif /* SDL_endian_h_ */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

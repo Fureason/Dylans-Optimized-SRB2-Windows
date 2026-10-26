@@ -1,6 +1,6 @@
+// Private oscillators used by Gb_Apu
 
-
-
+// Gb_Snd_Emu 0.1.5
 #ifndef GB_OSCS_H
 #define GB_OSCS_H
 
@@ -12,10 +12,10 @@ struct Gb_Osc
 	enum { trigger = 0x80 };
 	enum { len_enabled_mask = 0x40 };
 	
-	Blip_Buffer* outputs [4];  
+	Blip_Buffer* outputs [4]; // NULL, right, left, center
 	Blip_Buffer* output;
 	int output_select;
-	BOOST::uint8_t* regs;  
+	BOOST::uint8_t* regs; // osc's 5 registers
 	
 	int delay;
 	int last_amp;

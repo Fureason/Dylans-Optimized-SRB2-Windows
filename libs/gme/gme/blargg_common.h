@@ -1,5 +1,5 @@
-
-
+// Sets up common environment for Shay Green's libraries.
+// To change configuration options, modify blargg_config.h, not this file.
 
 #ifndef BLARGG_COMMON_H
 #define BLARGG_COMMON_H
@@ -10,29 +10,29 @@
 #include <limits.h>
 
 #undef BLARGG_COMMON_H
-
+// allow blargg_config.h to #include blargg_common.h
 #include "blargg_config.h"
 #ifndef BLARGG_COMMON_H
 #define BLARGG_COMMON_H
 
-
+// BLARGG_RESTRICT: equivalent to restrict, where supported
 #if __GNUC__ >= 3 || _MSC_VER >= 1100
 	#define BLARGG_RESTRICT __restrict
 #else
 	#define BLARGG_RESTRICT
 #endif
 
-
+// STATIC_CAST(T,expr): Used in place of static_cast<T> (expr)
 #ifndef STATIC_CAST
 	#define STATIC_CAST(T,expr) ((T) (expr))
 #endif
 
-
+// blargg_err_t (0 on success, otherwise error string)
 #ifndef blargg_err_t
 	typedef const char* blargg_err_t;
 #endif
 
-
+// blargg_vector - very lightweight vector of POD types (no constructor/destructor)
 template<class T>
 class blargg_vector {
 	T* begin_;
@@ -55,13 +55,13 @@ public:
 	void clear() { void* p = begin_; begin_ = 0; size_ = 0; free( p ); }
 	T& operator [] ( size_t n ) const
 	{
-		assert( n <= size_ );  
+		assert( n <= size_ ); // <= to allow past-the-end value
 		return begin_ [n];
 	}
 };
 
 #ifndef BLARGG_DISABLE_NOTHROW
-
+	// throw spec mandatory in ISO C++ if operator new can return NULL
 	#if __cplusplus >= 199711 || __GNUC__ >= 3
 		#define BLARGG_THROWS( spec ) throw spec
 	#else
@@ -76,26 +76,26 @@ public:
 	#define BLARGG_NEW new (std::nothrow)
 #endif
 
-
+// BLARGG_4CHAR('a','b','c','d') = 'abcd' (four character integer constant)
 #define BLARGG_4CHAR( a, b, c, d ) \
 	((a&0xFF)*0x1000000L + (b&0xFF)*0x10000L + (c&0xFF)*0x100L + (d&0xFF))
 
-
+// BOOST_STATIC_ASSERT( expr ): Generates compile error if expr is 0.
 #ifndef BOOST_STATIC_ASSERT
 	#ifdef _MSC_VER
-
+		// MSVC6 (_MSC_VER < 1300) fails for use of __LINE__ when /Zl is specified
 		#define BOOST_STATIC_ASSERT( expr ) \
 			void blargg_failed_( int (*arg) [2 / (int) !!(expr) - 1] )
 	#else
-
-
+		// Some other compilers fail when declaring same function multiple times in class,
+		// so differentiate them by line
 		#define BOOST_STATIC_ASSERT( expr ) \
 			void blargg_failed_( int (*arg) [2 / !!(expr) - 1] [__LINE__] )
 	#endif
 #endif
 
-
-
+// BLARGG_COMPILER_HAS_BOOL: If 0, provides bool support for old compiler. If 1,
+// compiler is assumed to support bool. If undefined, availability is determined.
 #ifndef BLARGG_COMPILER_HAS_BOOL
 	#if defined (__MWERKS__)
 		#if !__option(bool)
@@ -106,19 +106,19 @@ public:
 			#define BLARGG_COMPILER_HAS_BOOL 0
 		#endif
 	#elif defined (__GNUC__)
-
+		// supports bool
 	#elif __cplusplus < 199711
 		#define BLARGG_COMPILER_HAS_BOOL 0
 	#endif
 #endif
 #if defined (BLARGG_COMPILER_HAS_BOOL) && !BLARGG_COMPILER_HAS_BOOL
-
+	// If you get errors here, modify your blargg_config.h file
 	typedef int bool;
 	const bool true  = 1;
 	const bool false = 0;
 #endif
 
-
+// blargg_long/blargg_ulong = at least 32 bits, int if it's big enough
 
 #if INT_MAX < 0x7FFFFFFF || LONG_MAX == 0x7FFFFFFF
 	typedef long blargg_long;
@@ -132,14 +132,14 @@ public:
 	typedef unsigned blargg_ulong;
 #endif
 
+// BOOST::int8_t etc.
 
-
-
+// HAVE_STDINT_H: If defined, use <stdint.h> for int8_t etc.
 #if defined (HAVE_STDINT_H)
 	#include <stdint.h>
 	#define BOOST
 
-
+// HAVE_INTTYPES_H: If defined, use <stdint.h> for int8_t etc.
 #elif defined (HAVE_INTTYPES_H)
 	#include <inttypes.h>
 	#define BOOST
@@ -151,7 +151,7 @@ public:
 			typedef signed char     int8_t;
 			typedef unsigned char   uint8_t;
 		#else
-
+			// No suitable 8-bit type available
 			typedef struct see_blargg_common_h int8_t;
 			typedef struct see_blargg_common_h uint8_t;
 		#endif
@@ -160,7 +160,7 @@ public:
 			typedef short           int16_t;
 			typedef unsigned short  uint16_t;
 		#else
-
+			// No suitable 16-bit type available
 			typedef struct see_blargg_common_h int16_t;
 			typedef struct see_blargg_common_h uint16_t;
 		#endif
@@ -172,7 +172,7 @@ public:
 			typedef int             int32_t;
 			typedef unsigned int    uint32_t;
 		#else
-
+			// No suitable 32-bit type available
 			typedef struct see_blargg_common_h int32_t;
 			typedef struct see_blargg_common_h uint32_t;
 		#endif
@@ -185,9 +185,9 @@ public:
 	#define BLARGG_DEPRECATED
 #endif
 
-
-
-
+// Use in place of "= 0;" for a pure virtual, since these cause calls to std C++ lib.
+// During development, BLARGG_PURE( x ) expands to = 0;
+// virtual int func() BLARGG_PURE( { return 0; } )
 #ifndef BLARGG_PURE
 	#define BLARGG_PURE( def ) def
 #endif

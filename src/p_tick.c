@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  p_tick.c
+/// \brief Archiving: SaveGame I/O, Thinker, Ticker
 
 #include "doomstat.h"
 #include "g_game.h"
@@ -22,31 +22,31 @@
 #include "lua_script.h"
 #include "lua_hook.h"
 #include "m_perfstats.h"
-#include "i_system.h"  
+#include "i_system.h" // I_GetPreciseTime
 #include "r_main.h"
 #include "r_fps.h"
-#include "i_video.h"  
+#include "i_video.h" // rendermode
 #include "netcode/net_command.h"
 #include "netcode/server_connection.h"
 
-
+// Object place
 #include "m_cheat.h"
 
 #ifdef PARANOIA
-#include "deh_tables.h"  
+#include "deh_tables.h" // MOBJTYPE_LIST
 #endif
 
 tic_t leveltime;
 
+//
+// THINKERS
+// All thinkers should be allocated by Z_Calloc
+// so they can be operated on uniformly.
+// The actual structures will vary in size,
+// but the first element must be thinker_t.
+//
 
-
-
-
-
-
-
-
-
+// The entries will behave like both the head and tail of the lists.
 thinker_t thlist[NUM_THINKERLISTS];
 
 void Command_Numthinkers_f(void)
@@ -70,8 +70,8 @@ void Command_Numthinkers_f(void)
 		CONS_Printf(M_GetText("numthinkers <#>: Count number of thinkers\n"));
 		CONS_Printf(
 			"\t1: P_MobjThinker\n"
-			                        
-                           
+			/*"\t2: P_RainThinker\n"
+			"\t3: P_SnowThinker\n"*/
 			"\t2: P_NullPrecipThinker\n"
 			"\t3: T_Friction\n"
 			"\t4: T_Pusher\n"
@@ -88,14 +88,14 @@ void Command_Numthinkers_f(void)
 			action = (actionf_p1)P_MobjThinker;
 			CONS_Printf(M_GetText("Number of %s: "), "P_MobjThinker");
 			break;
-		         
-                                      
-                                                             
-         
-         
-                                      
-                                                             
-           
+		/*case 2:
+			action = (actionf_p1)P_RainThinker;
+			CONS_Printf(M_GetText("Number of %s: "), "P_RainThinker");
+			break;
+		case 3:
+			action = (actionf_p1)P_SnowThinker;
+			CONS_Printf(M_GetText("Number of %s: "), "P_SnowThinker");
+			break;*/
 		case 2:
 			start = end = THINK_PRECIP;
 			action = (actionf_p1)P_NullPrecipThinker;
@@ -189,14 +189,14 @@ void Command_CountMobjs_f(void)
 				count++;
 		}
 
-		if (count > 0)  
+		if (count > 0) // Don't bother displaying if there are none of this type!
 			CONS_Printf(" * %d: %d\n", i, count);
 	}
 }
 
-
-
-
+//
+// P_InitThinkers
+//
 void P_InitThinkers(void)
 {
 	UINT8 i;
@@ -204,7 +204,7 @@ void P_InitThinkers(void)
 		thlist[i].prev = thlist[i].next = &thlist[i];
 }
 
-
+// Adds a new thinker at the end of the list.
 void P_AddThinker(const thinklistnum_t n, thinker_t *thinker)
 {
 #ifdef PARANOIA
@@ -216,7 +216,7 @@ void P_AddThinker(const thinklistnum_t n, thinker_t *thinker)
 	thinker->prev = thlist[n].prev;
 	thlist[n].prev = thinker;
 
-	thinker->references = 0;     
+	thinker->references = 0;    // killough 11/98: init reference counter to 0
 	thinker->cachable = n == THINK_MOBJ;
 
 #ifdef PARANOIA
@@ -240,7 +240,7 @@ static const char *MobjTypeName(const mobj_t *mobj)
 	if (type < 0 || type >= NUMMOBJTYPES || (type >= MT_FIRSTFREESLOT && !FREE_MOBJS[type - MT_FIRSTFREESLOT]))
 		return "<Invalid mobj type>";
 	else if (type >= MT_FIRSTFREESLOT)
-		return FREE_MOBJS[type - MT_FIRSTFREESLOT];  
+		return FREE_MOBJS[type - MT_FIRSTFREESLOT]; // This doesn't include "MT_"...
 	else
 		return MOBJTYPE_LIST[type];
 }
@@ -262,24 +262,24 @@ static const char *MobjThinkerName(const mobj_t *mobj)
 }
 #endif
 
-
-
-
-
-
+//
+// killough 11/98:
+//
+// Make currentthinker external, so that P_RemoveThinkerDelayed
+// can adjust currentthinker when thinkers self-remove.
 
 static thinker_t *currentthinker;
 
-
-
-
-
-
-
-
-
-
-
+//
+// P_RemoveThinkerDelayed()
+//
+// Called automatically as part of the thinker loop in P_RunThinkers(),
+// on nodes which are pending deletion.
+//
+// If this thinker has no more pointers referencing it indirectly,
+// remove it, and set currentthinker to one node preceeding it, so
+// that the next step in P_RunThinkers() will get its successor.
+//
 void P_RemoveThinkerDelayed(thinker_t *thinker)
 {
 	thinker_t *next;
@@ -289,14 +289,14 @@ void P_RemoveThinkerDelayed(thinker_t *thinker)
 #ifdef PARANOIA
 		if (thinker->debug_time > leveltime)
 		{
-			thinker->debug_time = leveltime + 2;  
+			thinker->debug_time = leveltime + 2; // do not print errors again
 		}
-
-
-
-
-
-
+		// Removed mobjs can be the target of another mobj. In
+		// that case, the other mobj will manage its reference
+		// to the removed mobj in P_MobjThinker. However, if
+		// the removed mobj is removed after the other object
+		// thinks, the reference management is delayed by one
+		// tic.
 		else if (thinker->debug_time < leveltime)
 		{
 			CONS_Printf(
@@ -306,24 +306,24 @@ void P_RemoveThinkerDelayed(thinker_t *thinker)
 					thinker->references
 			);
 
-			thinker->debug_time = leveltime + 2;  
+			thinker->debug_time = leveltime + 2; // do not print this error again
 		}
 #endif
 		return;
 	}
 
-	 
+	/* Remove from main thinker list */
 	next = thinker->next;
-	                                                         
-                                                                    
-                                                                       
-                                         
+	/* Note that currentthinker is guaranteed to point to us,
+	* and since we're freeing our memory, we had better change that. So
+	* point it to thinker->prev, so the iterator will correctly move on to
+	* thinker->prev->next = thinker->next */
 	(next->prev = currentthinker = thinker->prev)->next = next;
 
 	R_DestroyLevelInterpolators(thinker);
 	if (thinker->cachable)
 	{
-
+		// put cachable thinkers in the mobj cache, so we can avoid allocations
 		((mobj_t *)thinker)->hnext = mobjcache;
 		mobjcache = (mobj_t *)thinker;
 	}
@@ -333,18 +333,18 @@ void P_RemoveThinkerDelayed(thinker_t *thinker)
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
+//
+// P_RemoveThinker
+//
+// Deallocation is lazy -- it will not actually be freed
+// until its thinking turn comes up.
+//
+// killough 4/25/98:
+//
+// Instead of marking the function with -1 value cast to a function pointer,
+// set the function to P_RemoveThinkerDelayed(), so that later, it will be
+// removed automatically as part of the thinker process.
+//
 void P_RemoveThinker(thinker_t *thinker)
 {
 	LUA_InvalidateUserdata(thinker);
@@ -352,17 +352,17 @@ void P_RemoveThinker(thinker_t *thinker)
 	thinker->function.acp1 = (actionf_p1)P_RemoveThinkerDelayed;
 }
 
-  
-              
-  
-                                                                              
-                                                                         
-                                                                          
-                                                                             
-                                                                            
-                                                                       
-                                                      
-   
+/*
+ * P_SetTarget
+ *
+ * This function is used to keep track of pointer references to mobj thinkers.
+ * In Doom, objects such as lost souls could sometimes be removed despite
+ * their still being referenced. In Boom, 'target' mobj fields were tested
+ * during each gametic, and any objects pointed to by them would be prevented
+ * from being removed. But this was incomplete, and was slow (every mobj was
+ * checked during every gametic). Now, we keep a count of the number of
+ * references, and delay removal until the count is 0.
+ */
 
 mobj_t *P_SetTarget2(mobj_t **mop, mobj_t *targ
 #ifdef PARANOIA
@@ -370,7 +370,7 @@ mobj_t *P_SetTarget2(mobj_t **mop, mobj_t *targ
 #endif
 )
 {
-	if (*mop)  
+	if (*mop) // If there was a target already, decrease its refcount
 	{
 		(*mop)->thinker.references--;
 
@@ -392,7 +392,7 @@ mobj_t *P_SetTarget2(mobj_t **mop, mobj_t *targ
 #endif
 	}
 
-	if (targ != NULL)  
+	if (targ != NULL) // Set new target and if non-NULL, increase its counter
 	{
 		targ->thinker.references++;
 
@@ -406,28 +406,28 @@ mobj_t *P_SetTarget2(mobj_t **mop, mobj_t *targ
 	return targ;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//
+// P_RunThinkers
+//
+// killough 4/25/98:
+//
+// Fix deallocator to stop using "next" pointer after node has been freed
+// (a Doom bug).
+//
+// Process each thinker. For thinkers which are marked deleted, we must
+// load the "next" pointer prior to freeing the node. In Doom, the "next"
+// pointer was loaded AFTER the thinker was freed, which could have caused
+// crashes.
+//
+// But if we are not deleting the thinker, we should reload the "next"
+// pointer after calling the function, in case additional thinkers are
+// added at the end of the list.
+//
+// killough 11/98:
+//
+// Rewritten to delete nodes implicitly, by making currentthinker
+// external and using P_RemoveThinkerDelayed() implicitly.
+//
 static inline void P_RunThinkers(void)
 {
 	size_t i;
@@ -442,18 +442,18 @@ static inline void P_RunThinkers(void)
 #ifdef PARANOIA
 			I_Assert(currentthinker->function.acp1 != NULL);
 #endif
-			                                                                     
-                                                                        
-                                                
+			/* Nearly every entry in THINK_MOBJ uses P_MobjThinker. A direct call
+			 * avoids an indirect branch for every object while preserving custom
+			 * thinker functions and removal behavior. */
 			if (i == THINK_MOBJ
 			&& currentthinker->function.acp1 == (actionf_p1)P_MobjThinker)
 			{
 				mobj_t *mobj = (mobj_t *)currentthinker;
 
-				                                                                
-                                                                      
-                                                                        
-                                                 
+				/* Lua/SOC may apply MF_NOTHINK after an object has already been
+				 * linked into THINK_MOBJ. Avoid entering the full thinker in that
+				 * common dormant-object case while keeping the object linked so the
+				 * flag can safely be cleared again later. */
 				if (mobj->flags & MF_NOTHINK)
 					continue;
 
@@ -481,11 +481,11 @@ static inline void P_RunThinkers(void)
 
 }
 
-
-
-
-
-
+//
+// P_DoAutobalanceTeams()
+//
+// Determine if the teams are unbalanced, and if so, move a player to the other team.
+//
 static void P_DoAutobalanceTeams(void)
 {
 	changeteam_union NetPacket;
@@ -500,13 +500,13 @@ static void P_DoAutobalanceTeams(void)
 	memset(redarray, 0, sizeof(redarray));
 	memset(bluearray, 0, sizeof(bluearray));
 
-
-
+	// Only do it if we have enough room in the net buffer to send it.
+	// Otherwise, come back next time and try again.
 	if (sizeof(usvalue) > GetFreeXCmdSize())
 		return;
 
-
-
+	//We have to store the players in an array with the rest of their team.
+	//We can then pick a random player to be forced to change teams.
 	for (i = 0; i < MAXPLAYERS; i++)
 	{
 		if (playeringame[i] && players[i].ctfteam)
@@ -515,7 +515,7 @@ static void P_DoAutobalanceTeams(void)
 			{
 				if (!players[i].gotflag)
 				{
-					redarray[red] = i;  
+					redarray[red] = i; //store the player's node.
 					red++;
 				}
 				else
@@ -525,7 +525,7 @@ static void P_DoAutobalanceTeams(void)
 			{
 				if (!players[i].gotflag)
 				{
-					bluearray[blue] = i;  
+					bluearray[blue] = i; //store the player's node.
 					blue++;
 				}
 				else
@@ -550,7 +550,7 @@ static void P_DoAutobalanceTeams(void)
 			usvalue  = SHORT(NetPacket.value.l|NetPacket.value.b);
 			SendNetXCmd(XD_TEAMCHANGE, &usvalue, sizeof(usvalue));
 		}
-		else  
+		else //if (totalblue > totalred)
 		{
 			i = M_RandomKey(blue);
 			NetPacket.packet.newteam = 1;
@@ -564,20 +564,20 @@ static void P_DoAutobalanceTeams(void)
 	}
 }
 
-
-
-
-
-
-
+//
+// P_DoTeamscrambling()
+//
+// If a team scramble has been started, scramble one person from the
+// pre-made scramble array. Said array is created in TeamScramble_OnChange()
+//
 void P_DoTeamscrambling(void)
 {
 	changeteam_union NetPacket;
 	UINT16 usvalue;
 	NetPacket.value.l = NetPacket.value.b = 0;
 
-
-
+	// Only do it if we have enough room in the net buffer to send it.
+	// Otherwise, come back next time and try again.
 	if (sizeof(usvalue) > GetFreeXCmdSize())
 		return;
 
@@ -594,24 +594,24 @@ void P_DoTeamscrambling(void)
 			SendNetXCmd(XD_TEAMCHANGE, &usvalue, sizeof(usvalue));
 		}
 
-		scramblecount++;  
+		scramblecount++; //Increment, and get to the next player when we come back here next time.
 	}
 	else
 		CV_SetValue(&cv_teamscramble, 0);
 }
 
 
-
-
-
-
-
+//
+// P_DoSpecialStageStuff()
+//
+// For old-style (non-NiGHTS) special stages
+//
 static inline void P_DoSpecialStageStuff(void)
 {
 	boolean stillalive = false;
 	INT32 i;
 
-
+	// Can't drown in a special stage
 	for (i = 0; i < MAXPLAYERS; i++)
 	{
 		if (!playeringame[i] || players[i].spectator)
@@ -620,14 +620,14 @@ static inline void P_DoSpecialStageStuff(void)
 		players[i].powers[pw_underwater] = players[i].powers[pw_spacetime] = 0;
 	}
 
-
-
+	//if (sstimer < 15*TICRATE+6 && sstimer > 7 && (mapheaderinfo[gamemap-1]->levelflags & LF_SPEEDMUSIC))
+		//S_SpeedMusic(1.4f);
 
 	if (sstimer && !objectplacing)
 	{
 		UINT16 countspheres = 0;
-
-
+		// Count up the rings of all the players and see if
+		// they've collected the required amount.
 		for (i = 0; i < MAXPLAYERS; i++)
 			if (playeringame[i])
 			{
@@ -637,7 +637,7 @@ static inline void P_DoSpecialStageStuff(void)
 				if (!oldnightstime)
 					continue;
 
-
+				// If in water, deplete timer 6x as fast.
 				if (players[i].mo->eflags & (MFE_TOUCHWATER|MFE_UNDERWATER) && !(players[i].powers[pw_shield] & ((players[i].mo->eflags & MFE_TOUCHLAVA) ? SH_PROTECTFIRE : SH_PROTECTWATER)))
 					players[i].nightstime -= 5;
 				if (--players[i].nightstime > 6)
@@ -647,7 +647,7 @@ static inline void P_DoSpecialStageStuff(void)
 						if (mapheaderinfo[gamemap-1]->levelflags & LF_MIXNIGHTSCOUNTDOWN)
 						{
 							S_FadeMusic(0, 10*MUSICRATE);
-							S_StartSound(NULL, sfx_timeup);  
+							S_StartSound(NULL, sfx_timeup); // that creepy "out of time" music from NiGHTS.
 						}
 						else
 							S_ChangeMusicInternal("_drown", false);
@@ -668,7 +668,7 @@ static inline void P_DoSpecialStageStuff(void)
 		{
 			if (countspheres >= ssspheres)
 			{
-
+				// Halt all the players
 				for (i = 0; i < MAXPLAYERS; i++)
 					if (playeringame[i] && !players[i].exiting)
 					{
@@ -689,20 +689,20 @@ static inline void P_DoTagStuff(void)
 {
 	INT32 i;
 
-
+	// tell the netgame who the initial IT person is.
 	if (leveltime == TICRATE)
 	{
 		for (i = 0; i < MAXPLAYERS; i++)
 		{
 			if (players[i].pflags & PF_TAGIT)
 			{
-				CONS_Printf(M_GetText("%s is now IT!\n"), player_names[i]);  
+				CONS_Printf(M_GetText("%s is now IT!\n"), player_names[i]); // Tell everyone who is it!
 				break;
 			}
 		}
 	}
 
-
+	//increment survivor scores
 	if (leveltime % TICRATE == 0 && leveltime > (hidetime * TICRATE))
 	{
 		INT32 participants = 0;
@@ -717,7 +717,7 @@ static inline void P_DoTagStuff(void)
 		{
 			if (playeringame[i] && !players[i].spectator && players[i].playerstate == PST_LIVE
 			&& !(players[i].pflags & (PF_TAGIT|PF_GAMETYPEOVER)))
-
+				//points given is the number of participating players divided by two.
 				P_AddPlayerScore(&players[i], participants/2);
 		}
 	}
@@ -725,33 +725,33 @@ static inline void P_DoTagStuff(void)
 
 static inline void P_DoCTFStuff(void)
 {
-
-	if (leveltime % (TICRATE * 5) == 0)  
+	// Automatic team balance for CTF and team match
+	if (leveltime % (TICRATE * 5) == 0) //only check once per five seconds for the sake of CPU conservation.
 	{
-
-
+		// Do not attempt to autobalance and scramble teams at the same time.
+		// Only the server should execute this. No verified admins, please.
 		if ((cv_autobalance.value && !cv_teamscramble.value) && cv_allowteamchange.value && server)
 			P_DoAutobalanceTeams();
 	}
 
-
+	// Team scramble code for team match and CTF.
 	if ((leveltime % (TICRATE/7)) == 0)
 	{
-
-
+		// If we run out of time in the level, the beauty is that
+		// the Y_Ticker() team scramble code will pick it up.
 		if (cv_teamscramble.value && server)
 			P_DoTeamscrambling();
 	}
 }
 
-
-
-
+//
+// P_Ticker
+//
 void P_Ticker(boolean run)
 {
 	INT32 i;
 
-
+	// Increment jointime even if paused
 	for (i = 0; i < MAXPLAYERS; i++)
 		if (playeringame[i])
 			players[i].jointime++;
@@ -771,7 +771,7 @@ void P_Ticker(boolean run)
 		}
 	}
 
-
+	// Check for pause or menu up in single player
 	if (paused || P_AutoPause())
 	{
 		S_SetStackAdjustmentStart();
@@ -817,8 +817,8 @@ void P_Ticker(boolean run)
 		PS_STOP_TIMING(ps_playerthink_time);
 	}
 
-
-	if (!demoplayback)  
+	// Keep track of how long they've been playing!
+	if (!demoplayback) // Don't increment if a demo is playing.
 	{
 		clientGamedata->totalplaytime++;
 		serverGamedata->totalplaytime++;
@@ -828,7 +828,7 @@ void P_Ticker(boolean run)
 		P_DoSpecialStageStuff();
 
 	if (runemeraldmanager)
-		P_EmeraldManager();  
+		P_EmeraldManager(); // Power stone mode
 
 	if (run)
 	{
@@ -836,7 +836,7 @@ void P_Ticker(boolean run)
 		P_RunThinkers();
 		PS_STOP_TIMING(ps_thinkertime);
 
-
+		// Run any "after all the other thinkers" stuff
 		for (i = 0; i < MAXPLAYERS; i++)
 			if (playeringame[i] && players[i].mo && !P_MobjWasRemoved(players[i].mo))
 				P_PlayerAfterThink(&players[i]);
@@ -846,14 +846,14 @@ void P_Ticker(boolean run)
 		PS_STOP_TIMING(ps_lua_thinkframe_time);
 	}
 
-
+	// Run shield positioning
 	P_RunShields();
 	P_RunOverlays();
 
 	P_UpdateSpecials();
 	P_RespawnSpecials();
 
-
+	// Lightning, rain sounds, etc.
 	P_PrecipitationEffects();
 
 	if (run)
@@ -901,7 +901,7 @@ void P_Ticker(boolean run)
 			G_WriteMetalTic(players[consoleplayer].mo);
 		if (demorecording)
 			G_WriteGhostTic(players[consoleplayer].mo);
-		if (demoplayback)  
+		if (demoplayback) // Use Ghost data for consistency checks.
 			G_ConsGhostTic();
 		if (modeattacking)
 			G_GhostTicker();
@@ -916,9 +916,9 @@ void P_Ticker(boolean run)
 		R_UpdateLevelInterpolators();
 		R_UpdateViewInterpolation();
 
-
-
-
+		// Hack: ensure newview is assigned every tic.
+		// Ensures view interpolation is T-1 to T in poor network conditions
+		// We need a better way to assign view state decoupled from game logic
 		if (rendermode != render_none)
 		{
 			player_t *player1 = &players[displayplayer];
@@ -949,10 +949,10 @@ void P_Ticker(boolean run)
 
 	P_MapEnd();
 
-
+//	Z_CheckMemCleanup();
 }
 
-
+// Abbreviated ticker for pre-loading, calls thinkers and assorted things
 void P_PreTicker(INT32 frames)
 {
 	INT32 i,framecnt;
@@ -974,12 +974,12 @@ void P_PreTicker(INT32 frames)
 		for (i = 0; i < MAXPLAYERS; i++)
 			if (playeringame[i] && players[i].mo && !P_MobjWasRemoved(players[i].mo))
 			{
-
-
-
+				// stupid fucking cmd hack
+				// if it isn't for this, players can move in preticker time
+				// (and disrupt demo recording and other things !!)
 				memcpy(&temptic, &players[i].cmd, sizeof(ticcmd_t));
 				memset(&players[i].cmd, 0, sizeof(ticcmd_t));
-
+				// correct angle on spawn...
 				players[i].angleturn += temptic.angleturn - players[i].oldrelangleturn;
 				players[i].oldrelangleturn = temptic.angleturn;
 				players[i].cmd.angleturn = players[i].angleturn;
@@ -991,14 +991,14 @@ void P_PreTicker(INT32 frames)
 
 		P_RunThinkers();
 
-
+		// Run any "after all the other thinkers" stuff
 		for (i = 0; i < MAXPLAYERS; i++)
 			if (playeringame[i] && players[i].mo && !P_MobjWasRemoved(players[i].mo))
 				P_PlayerAfterThink(&players[i]);
 
 		LUA_HookThinkFrame();
 
-
+		// Run shield positioning
 		P_RunShields();
 		P_RunOverlays();
 

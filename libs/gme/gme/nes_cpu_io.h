@@ -31,7 +31,7 @@ int Nsf_Emu::cpu_read( nes_addr_t addr )
 			return namco->read_data();
 	#endif
 	
-	result = addr >> 8;  
+	result = addr >> 8; // simulate open bus
 	
 	if ( addr != 0x2002 )
 		debug_printf( "Read unmapped $%.4X\n", (unsigned) addr );

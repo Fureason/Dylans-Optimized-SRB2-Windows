@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_mobjlib.c
+/// \brief mobj/thing library for Lua scripting
 
 #include "doomdef.h"
 #include "fastcmp.h"
@@ -21,8 +21,8 @@
 
 #include "lua_script.h"
 #include "lua_libs.h"
-#include "lua_hud.h"  
-#include "lua_hook.h"  
+#include "lua_hud.h" // hud_running errors
+#include "lua_hook.h" // hook_cmd_running errors
 
 enum mobj_e {
 	mobj_valid = 0,
@@ -35,7 +35,7 @@ enum mobj_e {
 	mobj_pitch,
 	mobj_roll,
 	mobj_spriteroll,
-	mobj_rollangle,  
+	mobj_rollangle, // backwards compat
 	mobj_sprite,
 	mobj_frame,
 	mobj_sprite2,
@@ -117,7 +117,7 @@ static const char *const mobj_opt[] = {
 	"pitch",
 	"roll",
 	"spriteroll",
-	"rollangle",  
+	"rollangle", // backwards compat
 	"sprite",
 	"frame",
 	"sprite2",
@@ -192,6 +192,28 @@ static const char *const mobj_opt[] = {
 
 static int mobj_fields_ref = LUA_NOREF;
 
+/* Correct the known field layout used by this seven-tic fullbright ghost.
+ * This is visual-only client compatibility. */
+static boolean mobj_is_adventure_hyper_flight_ghost(const mobj_t *mo)
+{
+	mobj_t *source;
+	const skin_t *skin;
+
+	if (!mo || mo->type != MT_GHOST || mo->fuse != 7
+	|| !(mo->renderflags & RF_FULLBRIGHT))
+		return false;
+
+	source = mo->target;
+	if (!source || P_MobjWasRemoved(source))
+		return false;
+
+	skin = (const skin_t *)(mo->skin ? mo->skin : source->skin);
+	if (!skin || !fastcmp(skin->name, "adventuresonic"))
+		return false;
+
+	return true;
+}
+
 static int mobj_get(lua_State *L)
 {
 	mobj_t *mo = *((mobj_t **)luaL_checkudata(L, 1, META_MOBJ));
@@ -227,9 +249,9 @@ static int mobj_get(lua_State *L)
 		LUA_PushUserdata(L, mo->snext, META_MOBJ);
 		break;
 	case mobj_sprev:
-
-
-
+		// sprev is actually the previous mobj's snext pointer,
+		// or the subsector->sector->thing_list if there is no previous mobj,
+		// i.e. it will always ultimately point to THIS mobj -- so that's actually not useful to Lua and won't be included.
 		return UNIMPLEMENTED;
 	case mobj_angle:
 		lua_pushangle(L, mo->angle);
@@ -241,7 +263,7 @@ static int mobj_get(lua_State *L)
 		lua_pushangle(L, mo->roll);
 		break;
 	case mobj_spriteroll:
-	case mobj_rollangle:  
+	case mobj_rollangle: // backwards compat
 		lua_pushangle(L, mo->spriteroll);
 		break;
 	case mobj_sprite:
@@ -276,7 +298,7 @@ static int mobj_get(lua_State *L)
 		break;
 	case mobj_dontdrawforviewmobj:
 		if (mo->dontdrawforviewmobj && P_MobjWasRemoved(mo->dontdrawforviewmobj))
-		{  
+		{ // don't put invalid mobj back into Lua.
 			P_SetTarget(&mo->dontdrawforviewmobj, NULL);
 			return 0;
 		}
@@ -320,7 +342,7 @@ static int mobj_get(lua_State *L)
 	case mobj_tics:
 		lua_pushinteger(L, mo->tics);
 		break;
-	case mobj_state:  
+	case mobj_state: // state number, not struct
 		lua_pushinteger(L, mo->state-states);
 		break;
 	case mobj_flags:
@@ -335,7 +357,7 @@ static int mobj_get(lua_State *L)
 	case mobj_renderflags:
 		lua_pushinteger(L, mo->renderflags);
 		break;
-	case mobj_skin:  
+	case mobj_skin: // skin name or nil, not struct
 		if (!mo->skin)
 			return 0;
 		lua_pushstring(L, ((skin_t *)mo->skin)->name);
@@ -367,11 +389,11 @@ static int mobj_get(lua_State *L)
 		else
 			return 0;
 	case mobj_bprev:
-
+		// bprev -- same deal as sprev above, but for the blockmap.
 		return UNIMPLEMENTED;
 	case mobj_hnext:
 		if (mo->hnext && P_MobjWasRemoved(mo->hnext))
-		{  
+		{ // don't put invalid mobj back into Lua.
 			P_SetTarget(&mo->hnext, NULL);
 			return 0;
 		}
@@ -379,7 +401,7 @@ static int mobj_get(lua_State *L)
 		break;
 	case mobj_hprev:
 		if (mo->hprev && P_MobjWasRemoved(mo->hprev))
-		{  
+		{ // don't put invalid mobj back into Lua.
 			P_SetTarget(&mo->hprev, NULL);
 			return 0;
 		}
@@ -402,7 +424,7 @@ static int mobj_get(lua_State *L)
 		break;
 	case mobj_target:
 		if (mo->target && P_MobjWasRemoved(mo->target))
-		{  
+		{ // don't put invalid mobj back into Lua.
 			P_SetTarget(&mo->target, NULL);
 			return 0;
 		}
@@ -425,7 +447,7 @@ static int mobj_get(lua_State *L)
 		break;
 	case mobj_tracer:
 		if (mo->tracer && P_MobjWasRemoved(mo->tracer))
-		{  
+		{ // don't put invalid mobj back into Lua.
 			P_SetTarget(&mo->tracer, NULL);
 			return 0;
 		}
@@ -447,8 +469,8 @@ static int mobj_get(lua_State *L)
 		lua_pushfixed(L, mo->waterbottom);
 		break;
 	case mobj_mobjnum:
-
-
+		// mobjnum is a networking thing generated for $$$.sav
+		// and therefore shouldn't be used by Lua.
 		return UNIMPLEMENTED;
 	case mobj_scale:
 		lua_pushfixed(L, mo->scale);
@@ -486,18 +508,18 @@ static int mobj_get(lua_State *L)
 	case mobj_dispoffset:
 		lua_pushinteger(L, mo->dispoffset);
 		break;
-	default:  
+	default: // extra custom variables in Lua memory
 		lua_getfield(L, LUA_REGISTRYINDEX, LREG_EXTVARS);
 		I_Assert(lua_istable(L, -1));
 		lua_pushlightuserdata(L, mo);
 		lua_rawget(L, -2);
-		if (!lua_istable(L, -1)) {  
+		if (!lua_istable(L, -1)) { // no extra values table
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no extvars table or field named '%s'; returning nil.\n"), "mobj_t", lua_tostring(L, 2));
 			return 0;
 		}
-		lua_pushvalue(L, 2);  
+		lua_pushvalue(L, 2); // field name
 		lua_gettable(L, -2);
-		if (lua_isnil(L, -1))  
+		if (lua_isnil(L, -1)) // no value for this field
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no field named '%s'; returning nil.\n"), "mobj_t", lua_tostring(L, 2));
 		break;
 	}
@@ -532,7 +554,7 @@ static int mobj_set(lua_State *L)
 		return NOSETPOS;
 	case mobj_z:
 	{
-
+		// z doesn't cross sector bounds so it's okay.
 		mobj_t *ptmthing = tmthing;
 		mo->z = luaL_checkfixed(L, 3);
 		P_CheckPosition(mo, mo->x, mo->y);
@@ -559,7 +581,7 @@ static int mobj_set(lua_State *L)
 		mo->roll = luaL_checkangle(L, 3);
 		break;
 	case mobj_spriteroll:
-	case mobj_rollangle:  
+	case mobj_rollangle: // backwards compat
 		mo->spriteroll = luaL_checkangle(L, 3);
 		break;
 	case mobj_sprite:
@@ -575,17 +597,38 @@ static int mobj_set(lua_State *L)
 		mo->anim_duration = (UINT16)luaL_checkinteger(L, 3);
 		break;
 	case mobj_spritexscale:
-		mo->spritexscale = luaL_checkfixed(L, 3);
+	{
+		const fixed_t requestedxscale = luaL_checkfixed(L, 3);
+		if (mobj_is_adventure_hyper_flight_ghost(mo)
+		&& requestedxscale == mo->target->spriteyscale)
+			mo->spritexscale = mo->target->spritexscale;
+		else
+			mo->spritexscale = requestedxscale;
 		break;
+	}
 	case mobj_spriteyscale:
-		mo->spriteyscale = luaL_checkfixed(L, 3);
+	{
+		const fixed_t requestedyscale = luaL_checkfixed(L, 3);
+		if (mobj_is_adventure_hyper_flight_ghost(mo)
+		&& requestedyscale == mo->target->spriteyoffset)
+			mo->spriteyscale = mo->target->spriteyscale;
+		else
+			mo->spriteyscale = requestedyscale;
 		break;
+	}
 	case mobj_spritexoffset:
 		mo->spritexoffset = luaL_checkfixed(L, 3);
 		break;
 	case mobj_spriteyoffset:
-		mo->spriteyoffset = luaL_checkfixed(L, 3);
+	{
+		const fixed_t requestedyoffset = luaL_checkfixed(L, 3);
+		if (mobj_is_adventure_hyper_flight_ghost(mo)
+		&& requestedyoffset == mo->target->spritexscale)
+			mo->spriteyoffset = mo->target->spriteyoffset;
+		else
+			mo->spriteyoffset = requestedyoffset;
 		break;
+	}
 	case mobj_floorspriteslope:
 		return NOSET;
 	case mobj_drawonlyforplayer:
@@ -662,10 +705,10 @@ static int mobj_set(lua_State *L)
 	case mobj_tics:
 		mo->tics = luaL_checkinteger(L, 3);
 		break;
-	case mobj_state:  
+	case mobj_state: // set state by enum
 		P_SetMobjState(mo, luaL_checkinteger(L, 3));
 		break;
-	case mobj_flags:  
+	case mobj_flags: // special handling for MF_NOBLOCKMAP and MF_NOSECTOR
 	{
 		UINT32 flags = luaL_checkinteger(L, 3);
 		if ((flags & (MF_NOBLOCKMAP|MF_NOSECTOR)) != (mo->flags & (MF_NOBLOCKMAP|MF_NOSECTOR)))
@@ -693,12 +736,12 @@ static int mobj_set(lua_State *L)
 	case mobj_renderflags:
 		mo->renderflags = (UINT32)luaL_checkinteger(L, 3);
 		break;
-	case mobj_skin:  
+	case mobj_skin: // set skin by name
 	{
 		INT32 i;
-		char skin[SKINNAMESIZE+1];  
+		char skin[SKINNAMESIZE+1]; // all skin names are limited to this length
 		strlcpy(skin, luaL_checkstring(L, 3), sizeof skin);
-		strlwr(skin);  
+		strlwr(skin); // all skin names are lowercase
 		for (i = 0; i < numskins; i++)
 			if (fastcmp(skins[i]->name, skin))
 			{
@@ -770,7 +813,7 @@ static int mobj_set(lua_State *L)
 			P_SetTarget(&mo->hprev, hprev);
 		}
 		break;
-	case mobj_type:  
+	case mobj_type: // yeah sure, we'll let you change the mobj's type.
 	{
 		mobjtype_t newtype = luaL_checkinteger(L, 3);
 		if (newtype >= NUMMOBJTYPES)
@@ -897,16 +940,16 @@ static int mobj_set(lua_State *L)
 		lua_pushlightuserdata(L, mo);
 		lua_rawget(L, -2);
 		if (lua_isnil(L, -1)) {
-
+			// This index doesn't have a table for extra values yet, let's make one.
 			lua_pop(L, 1);
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no field named '%s'; adding it as Lua data.\n"), "mobj_t", lua_tostring(L, 2));
 			lua_newtable(L);
 			lua_pushlightuserdata(L, mo);
-			lua_pushvalue(L, -2);  
-			lua_rawset(L, -4);  
+			lua_pushvalue(L, -2); // ext value table
+			lua_rawset(L, -4); // LREG_EXTVARS table
 		}
-		lua_pushvalue(L, 2);  
-		lua_pushvalue(L, 3);  
+		lua_pushvalue(L, 2); // key
+		lua_pushvalue(L, 3); // value to store
 		lua_settable(L, -3);
 		lua_pop(L, 2);
 		break;
@@ -919,7 +962,7 @@ static int mobj_set(lua_State *L)
 #undef NOSETPOS
 #undef NOFIELD
 
-
+// args, i -> args[i]
 static int thingargs_get(lua_State *L)
 {
 	INT32 *args = *((INT32**)luaL_checkudata(L, 1, META_THINGARGS));
@@ -930,14 +973,14 @@ static int thingargs_get(lua_State *L)
 	return 1;
 }
 
-
+// #args -> NUMMAPTHINGARGS
 static int thingargs_len(lua_State* L)
 {
 	lua_pushinteger(L, NUMMAPTHINGARGS);
 	return 1;
 }
 
-
+// stringargs, i -> stringargs[i]
 static int thingstringargs_get(lua_State *L)
 {
 	char **stringargs = *((char***)luaL_checkudata(L, 1, META_THINGSTRINGARGS));
@@ -948,7 +991,7 @@ static int thingstringargs_get(lua_State *L)
 	return 1;
 }
 
-
+// #stringargs -> NUMMAPTHINGSTRINGARGS
 static int thingstringargs_len(lua_State *L)
 {
 	lua_pushinteger(L, NUMMAPTHINGSTRINGARGS);
@@ -1176,7 +1219,7 @@ static int lib_iterateMapthings(lua_State *L)
 	if (lua_gettop(L) < 2)
 		return luaL_error(L, "Don't call mapthings.iterate() directly, use it as 'for mapthing in mapthings.iterate do <block> end'.");
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (size_t)(*((mapthing_t **)luaL_checkudata(L, 1, META_MAPTHING)) - mapthings) + 1;
 	if (i < nummapthings)

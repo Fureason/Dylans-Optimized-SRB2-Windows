@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Sap_Emu.h"
 
@@ -40,9 +40,9 @@ Sap_Emu::Sap_Emu()
 
 Sap_Emu::~Sap_Emu() { }
 
+// Track info
 
-
-
+// Returns 16 or greater if not hex
 inline int from_hex_char( int h )
 {
 	h -= 0x30;
@@ -125,7 +125,7 @@ static blargg_err_t parse_info( byte const* in, long size, Sap_Emu::info_t* out 
 		
 		if ( tag_len <= 0 )
 		{
-
+			// skip line
 		}
 		else if ( !strncmp( "INIT", tag, tag_len ) )
 		{
@@ -239,7 +239,7 @@ static gme_type_t_ const gme_sap_type_ = { "Atari XL", 0, &new_sap_emu, &new_sap
 gme_type_t const gme_sap_type = &gme_sap_type_;
 
 
-
+// Setup
 
 blargg_err_t Sap_Emu::load_mem_( byte const* in, long size )
 {
@@ -276,7 +276,7 @@ void Sap_Emu::set_voice( int i, Blip_Buffer* center, Blip_Buffer* left, Blip_Buf
 		apu.osc_output( i, (info.stereo ? left : center) );
 }
 
-
+// Emulation
 
 void Sap_Emu::set_tempo_( double t )
 {
@@ -287,12 +287,12 @@ inline sap_time_t Sap_Emu::play_period() const { return info.fastplay * scanline
 
 void Sap_Emu::cpu_jsr( sap_addr_t addr )
 {
-	check( r.sp >= 0xFE );  
+	check( r.sp >= 0xFE ); // catch anything trying to leave data on stack
 	r.pc = addr;
 	int high_byte = (idle_addr - 1) >> 8;
 	if ( r.sp == 0xFE && mem.ram [0x1FF] == high_byte )
-		r.sp = 0xFF;  
-	mem.ram [0x100 + r.sp--] = high_byte;  
+		r.sp = 0xFF; // pop extra byte off
+	mem.ram [0x100 + r.sp--] = high_byte; // some routines use RTI to return
 	mem.ram [0x100 + r.sp--] = high_byte;
 	mem.ram [0x100 + r.sp--] = (idle_addr - 1) & 0xFF;
 }
@@ -336,7 +336,7 @@ blargg_err_t Sap_Emu::start_track_( int track )
 	{
 		unsigned start = get_le16( in );
 		unsigned end   = get_le16( in + 2 );
-
+		//debug_printf( "Block $%04X-$%04X\n", start, end );
 		in += 4;
 		if ( end < start )
 		{
@@ -359,7 +359,7 @@ blargg_err_t Sap_Emu::start_track_( int track )
 	apu.reset( &apu_impl );
 	apu2.reset( &apu_impl );
 	cpu::reset( mem.ram );
-	time_mask = 0;  
+	time_mask = 0; // disables sound during init
 	call_init( track );
 	time_mask = -1;
 	
@@ -368,9 +368,9 @@ blargg_err_t Sap_Emu::start_track_( int track )
 	return 0;
 }
 
+// Emulation
 
-
-
+// see sap_cpu_io.h for read/write functions
 
 void Sap_Emu::cpu_write_( sap_addr_t addr, int data )
 {

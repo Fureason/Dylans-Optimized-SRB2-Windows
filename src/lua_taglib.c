@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_taglib.c
+/// \brief tag list iterator for Lua scripting
 
 #include "doomdef.h"
 #include "taglist.h"
@@ -178,7 +178,7 @@ static taglist_t * valid_taglist(lua_State *L, int idx, boolean getting)
 		if (getting && has_valid_field(L))
 			lua_pushboolean(L, 0);
 		else
-			LUA_ErrInvalid(L, "taglist"); 
+			LUA_ErrInvalid(L, "taglist");/* doesn't actually return */
 		return NULL;
 	}
 	else
@@ -206,7 +206,7 @@ static int taglist_get(lua_State *L)
 {
 	const taglist_t *list = valid_taglist(L, 1, true);
 
-	if (list == NULL) 
+	if (list == NULL)/* valid check */
 		return 1;
 
 	if (lua_isnumber(L, 2))
@@ -257,8 +257,8 @@ static int taglist_iterator(lua_State *L)
 	if (i <= list->count)
 	{
 		lua_pushnumber(L, list->tags[i - 1]);
-		                                                   
-                                            
+		/* watch me exploit an upvalue as a control because
+			I want to use the control as the value */
 		lua_pushnumber(L, i);
 		lua_replace(L, lua_upvalueindex(1));
 		return 1;
@@ -292,7 +292,7 @@ static int taglist_shares(lua_State *L)
 	return 1;
 }
 
- 
+/* only sector tags are mutable... */
 
 #ifdef MUTABLE_TAGS
 static size_t sector_of_taglist(taglist_t *list)
@@ -339,7 +339,7 @@ static int taglist_remove(lua_State *L)
 						(--list->count) * sizeof (mtag_t), PU_LEVEL, NULL);
 				Taggroup_Remove(tags_sectors, tag, sector_of_taglist(list));
 			}
-			else 
+			else/* reset to default tag */
 				Tag_SectorFSet(sector_of_taglist(list), 0);
 			break;
 		}
@@ -347,7 +347,7 @@ static int taglist_remove(lua_State *L)
 
 	return this_taglist(L);
 }
-#endif 
+#endif/*MUTABLE_TAGS*/
 
 void LUA_InsertTaggroupIterator
 (		lua_State *L,

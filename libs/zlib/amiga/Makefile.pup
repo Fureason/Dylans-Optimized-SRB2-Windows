@@ -48,7 +48,7 @@ tgz:
 	cd ..; tar cfz zlib/zlib.tgz zlib/README zlib/ChangeLog zlib/Makefile \
 	  zlib/Make????.??? zlib/Makefile.?? zlib/descrip.mms zlib/*.[ch]
 
-
+# DO NOT DELETE THIS LINE -- make depend depends on it.
 
 adler32.o: zlib.h zconf.h
 compress.o: zlib.h zconf.h

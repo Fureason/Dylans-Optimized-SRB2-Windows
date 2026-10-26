@@ -13,7 +13,7 @@
 #include "hw_model.h"
 #include "../doomtype.h"
 
-
+// Load the Model
 model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat);
 
 #endif

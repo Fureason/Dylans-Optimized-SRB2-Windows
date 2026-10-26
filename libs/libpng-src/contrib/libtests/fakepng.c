@@ -8,7 +8,7 @@
  */
 
 #include <stdio.h>
-#include <zlib.h>  
+#include <zlib.h> /* for crc32 */
 
 void
 put_uLong(uLong val)
@@ -24,7 +24,7 @@ put_chunk(const unsigned char *chunk, uInt length)
 {
    uLong crc;
 
-   put_uLong(length-4);  
+   put_uLong(length-4); /* Exclude the tag */
 
    fwrite(chunk, length, 1, stdout);
 
@@ -39,19 +39,19 @@ const unsigned char signature[] =
 
 const unsigned char IHDR[] =
 {
-   73, 72, 68, 82,  
-   0, 0, 0, 1,  
-   0, 0, 0, 1,  
-   1,  
-   0,  
-   0,  
-   0,  
-   0   
+   73, 72, 68, 82, /* IHDR */
+   0, 0, 0, 1, /* width */
+   0, 0, 0, 1, /* height */
+   1, /* bit depth */
+   0, /* color type: greyscale */
+   0, /* compression method */
+   0, /* filter method */
+   0  /* interlace method: none */
 };
 
 const unsigned char unknown[] =
 {
-   'u', 'n', 'K', 'n'  
+   'u', 'n', 'K', 'n' /* "unKn" - private safe to copy */
 };
 
 int

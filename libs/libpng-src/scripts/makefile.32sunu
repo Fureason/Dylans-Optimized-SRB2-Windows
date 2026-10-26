@@ -8,17 +8,17 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
+# Library name:
 LIBNAME=libpng16
 PNGMAJ = 16
 
-
+# Shared library names:
 LIBSO=$(LIBNAME).so
 LIBSOMAJ=$(LIBNAME).so.$(PNGMAJ)
 LIBSOREL=$(LIBSOMAJ).$(RELEASE)
 OLDSO=libpng.so
 
-
+# Utilities:
 CC=cc
 AR_RC=ar rc
 MKDIR_P=mkdir -p
@@ -29,24 +29,24 @@ RM_F=/bin/rm -f
 SUN_CC_FLAGS=-fast -xtarget=ultra
 SUN_LD_FLAGS=-fast -xtarget=ultra
 
-
+# where make install puts libpng.a, libpng16.so and libpng16/png.h
 prefix=/a
 exec_prefix=$(prefix)
 
-
-
-
-
-
+# Where the zlib library and include files are located
+# Changing these to ../zlib poses a security risk.  If you want
+# to have zlib in an adjacent directory, specify the full path instead of "..".
+#ZLIBLIB=../zlib
+#ZLIBINC=../zlib
 
 ZLIBLIB=/usr/lib
 ZLIBINC=/usr/include
 
 WARNMORE=-Wwrite-strings -Wpointer-arith -Wshadow \
 	-Wmissing-declarations -Wtraditional -Wcast-align \
-	-Wstrict-prototypes -Wmissing-prototypes  
-CPPFLAGS=-I$(ZLIBINC)  
-CFLAGS=$(SUN_CC_FLAGS)  
+	-Wstrict-prototypes -Wmissing-prototypes #-Wconversion
+CPPFLAGS=-I$(ZLIBINC) # -DPNG_DEBUG=5
+CFLAGS=$(SUN_CC_FLAGS) # $(WARNMORE) -g
 LDFLAGS=$(SUN_LD_FLAGS) -L$(ZLIBLIB) -R$(ZLIBLIB) libpng.a -lz -lm
 
 INCPATH=$(prefix)/include
@@ -54,14 +54,14 @@ LIBPATH=$(exec_prefix)/lib
 MANPATH=$(prefix)/man
 BINPATH=$(exec_prefix)/bin
 
-
-
-
-
-
-
-
-
+# override DESTDIR= on the make install command line to easily support
+# installing into a temporary location.  Example:
+#
+#    make install DESTDIR=/tmp/build/libpng
+#
+# If you're going to install into a temporary location
+# via DESTDIR, $(DESTDIR)$(prefix) must already exist before
+# you execute make install.
 DESTDIR=
 
 DB=$(DESTDIR)$(BINPATH)

@@ -1,4 +1,4 @@
-
+# Git utilities
 
 if(__GitUtilities)
 	return()
@@ -24,12 +24,12 @@ endmacro()
 function(git_current_branch variable)
 	_git_command(symbolic-ref -q --short HEAD)
 
-
+	# If a detached head, a ref could still be resolved.
 	if("${output}" STREQUAL "")
 		_git_command(describe --all --exact-match)
 
-
-
+		# Get the ref, in the form heads/master or
+		# remotes/origin/master so isolate the final part.
 		string(REGEX REPLACE ".*/" "" output "${output}")
 	endif()
 

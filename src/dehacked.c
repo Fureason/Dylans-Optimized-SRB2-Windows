@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  dehacked.c
+/// \brief Load dehacked file and change tables and text
 
 #include "doomdef.h"
 #include "m_cond.h"
@@ -31,10 +31,10 @@ FUNCPRINTF void deh_warning(const char *first, ...)
 	char *buf = Z_Malloc(1000, PU_STATIC, NULL);
 
 	va_start(argptr, first);
-	vsnprintf(buf, 1000, first, argptr);  
+	vsnprintf(buf, 1000, first, argptr); // sizeof only returned 4 here. it didn't like that pointer.
 	va_end(argptr);
 
-	if(dbg_line == -1)  
+	if(dbg_line == -1) // Not in a SOC, line number unknown.
 		CONS_Alert(CONS_WARNING, "%s\n", buf);
 	else
 		CONS_Alert(CONS_WARNING, "Line %u: %s\n", dbg_line, buf);
@@ -46,7 +46,7 @@ FUNCPRINTF void deh_warning(const char *first, ...)
 
 void deh_strlcpy(char *dst, const char *src, size_t size, const char *warntext)
 {
-	size_t len = strlen(src)+1;  
+	size_t len = strlen(src)+1; // Used to determine if truncation has been done
 	if (len > size)
 		deh_warning("%s exceeds max length of %s", warntext, sizeu1(size-1));
 	strlcpy(dst, src, size);
@@ -55,7 +55,7 @@ void deh_strlcpy(char *dst, const char *src, size_t size, const char *warntext)
 ATTRINLINE static FUNCINLINE char myfget_color(MYFILE *f)
 {
 	char c = *f->curpos++;
-	if (c == '^')  
+	if (c == '^') // oh, nevermind then.
 		return '^';
 
 	if (c >= '0' && c <= '9')
@@ -66,13 +66,13 @@ ATTRINLINE static FUNCINLINE char myfget_color(MYFILE *f)
 	if (c >= 'a' && c <= 'f')
 		return 0x80+10+(c-'a');
 
-	return 0x80;  
+	return 0x80; // Unhandled -- default to no color
 }
 
 ATTRINLINE static FUNCINLINE char myfget_hex(MYFILE *f)
 {
 	char c = *f->curpos++, endchr = 0;
-	if (c == '\\')  
+	if (c == '\\') // oh, nevermind then.
 		return '\\';
 
 	if (c >= '0' && c <= '9')
@@ -81,7 +81,7 @@ ATTRINLINE static FUNCINLINE char myfget_hex(MYFILE *f)
 		endchr += ((c-'A') + 10) << 4;
 	else if (c >= 'a' && c <= 'f')
 		endchr += ((c-'a') + 10) << 4;
-	else  
+	else // invalid. stop and return a question mark.
 		return '?';
 
 	c = *f->curpos++;
@@ -91,7 +91,7 @@ ATTRINLINE static FUNCINLINE char myfget_hex(MYFILE *f)
 		endchr += ((c-'A') + 10);
 	else if (c >= 'a' && c <= 'f')
 		endchr += ((c-'a') + 10);
-	else  
+	else // invalid. stop and return a question mark.
 		return '?';
 
 	return endchr;
@@ -102,7 +102,7 @@ char *myfgets(char *buf, size_t bufsize, MYFILE *f)
 	size_t i = 0;
 	if (myfeof(f))
 		return NULL;
-
+	// we need one byte for a null terminated string
 	bufsize--;
 	while (i < bufsize && !myfeof(f))
 	{
@@ -127,7 +127,7 @@ char *myhashfgets(char *buf, size_t bufsize, MYFILE *f)
 	size_t i = 0;
 	if (myfeof(f))
 		return NULL;
-
+	// we need one byte for a null terminated string
 	bufsize--;
 	while (i < bufsize && !myfeof(f))
 	{
@@ -138,24 +138,24 @@ char *myhashfgets(char *buf, size_t bufsize, MYFILE *f)
 			buf[i++] = myfget_hex(f);
 		else if (c != '\r')
 			buf[i++] = c;
-		if (c == '\n')  
+		if (c == '\n') // Ensure debug line is right...
 			dbg_line++;
 		if (c == '#')
 		{
-			if (i > 0)  
-				i--;  
+			if (i > 0) // don't let i wrap past 0
+				i--; // don't include hash char in string
 			break;
 		}
 	}
-	if (buf[i] != '#')  
+	if (buf[i] != '#') // don't include hash char in string
 		i++;
 	buf[i] = '\0';
 
 	return buf;
 }
 
-
-
+// Used when you do something invalid like read a bad item number
+// to prevent extra unnecessary errors
 static void ignorelines(MYFILE *f)
 {
 	char *s = Z_Malloc(MAXLINELEN, PU_STATIC, NULL);
@@ -202,8 +202,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 
 	gamedataadded = titlechanged = introchanged = bootmapchanged = false;
 
-
-	dbg_line = -1;  
+	// it doesn't test the version of SRB2 and version of dehacked file
+	dbg_line = -1; // start at -1 so the first line is 0.
 	while (!myfeof(f))
 	{
 		myfgets(s, MAXLINELEN, f);
@@ -303,8 +303,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 			{
 				if (fastcmp(word, "THING") || fastcmp(word, "MOBJ") || fastcmp(word, "OBJECT"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_mobjtype(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_mobjtype(word2); // find a thing by name
 					if (i < NUMMOBJTYPES && i > 0)
 						readthing(f, i);
 					else
@@ -315,8 +315,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "SKINCOLOR") || fastcmp(word, "COLOR"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_skincolor(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_skincolor(word2); // find a skincolor by name
 					if (i && i < numskincolors)
 						readskincolor(f, i);
 					else
@@ -327,8 +327,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "SPRITE2"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_sprite2(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_sprite2(word2); // find a sprite by name
 					if (i < (INT32)free_spr2 && i >= (INT32)SPR2_FIRSTFREESLOT)
 						readsprite2(f, i);
 					else
@@ -340,7 +340,7 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 #ifdef HWRENDER
 				else if (fastcmp(word, "LIGHT"))
 				{
-
+					// TODO: Read lights by name
 					if (i > 0 && i < NUMLIGHTS)
 						readlight(f, i);
 					else
@@ -352,8 +352,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 #endif
 				else if (fastcmp(word, "SPRITE") || fastcmp(word, "SPRITEINFO"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_sprite(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_sprite(word2); // find a sprite by name
 					if (i < NUMSPRITES && i > 0)
 						readspriteinfo(f, i, false);
 					else
@@ -364,8 +364,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "SPRITE2INFO"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_sprite2(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_sprite2(word2); // find a sprite by name
 					if (i < NUMPLAYERSPRITES && i >= 0)
 						readspriteinfo(f, i, true);
 					else
@@ -376,10 +376,10 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "LEVEL"))
 				{
+					// Support using the actual map name,
+					// i.e., Level AB, Level FZ, etc.
 
-
-
-
+					// Convert to map number
 					if (word2[0] >= 'A' && word2[0] <= 'Z')
 						i = M_MapNumber(word2[0], word2[1]);
 
@@ -393,9 +393,9 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "GAMETYPE"))
 				{
-
-
-
+					// Get the gametype name from textline
+					// instead of word2, so that gametype names
+					// aren't allcaps
 					INT32 c;
 					for (c = 0; c < MAXLINELEN; c++)
 					{
@@ -406,7 +406,7 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 							char *gtname = (textline+c+1);
 							if (gtname)
 							{
-
+								// remove funny characters
 								INT32 j;
 								for (j = 0; j < (MAXLINELEN - c); j++)
 								{
@@ -443,8 +443,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "FRAME") || fastcmp(word, "STATE"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_state(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_state(word2); // find a state by name
 					if (i < NUMSTATES && i >= 0)
 						readframe(f, i);
 					else
@@ -455,8 +455,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "SOUND"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_sfx(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_sfx(word2); // find a sound by name
 					if (i < NUMSFX && i > 0)
 						readsound(f, i);
 					else
@@ -467,8 +467,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "HUDITEM"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_huditem(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_huditem(word2); // find a huditem by name
 					if (i >= 0 && i < NUMHUDITEMS)
 						readhuditem(f, i);
 					else
@@ -479,13 +479,13 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 				}
 				else if (fastcmp(word, "MENU"))
 				{
-					if (i == 0 && word2[0] != '0')  
-						i = get_menutype(word2);  
+					if (i == 0 && word2[0] != '0') // If word2 isn't a number
+						i = get_menutype(word2); // find a huditem by name
 					if (i >= 1 && i < NUMMENUTYPES)
 						readmenu(f, i);
 					else
 					{
-
+						// zero-based, but let's start at 1
 						deh_warning("Menu number %d out of range (1 - %d)", i, NUMMENUTYPES-1);
 						ignorelines(f);
 					}
@@ -544,10 +544,10 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 						);
 					}
 				}
-
-
-
-
+				// Clear all data in certain locations (mostly for unlocks)
+				// Unless you REALLY want to piss people off,
+				// define a custom gamedata /before/ doing this!!
+				// (then again, modifiedgame will prevent game data saving anyway)
 				else if (fastcmp(word, "CLEAR"))
 				{
 					boolean clearall = (fastcmp(word2, "ALL"));
@@ -584,7 +584,7 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 		}
 		else
 			deh_warning("No word in this line: %s", s);
-	}  
+	} // end while
 
 	if (gamedataadded)
 		G_LoadGameData(clientGamedata);
@@ -606,7 +606,7 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 		{
 			menuactive = false;
 			I_UpdateMouseGrab();
-			COM_BufAddText("exitgame");  
+			COM_BufAddText("exitgame"); // Command_ExitGame_f() but delayed
 		}
 	}
 
@@ -621,8 +621,8 @@ static void DEH_LoadDehackedFile(MYFILE *f, boolean mainfile)
 	Z_Free(s);
 }
 
-
-
+// read dehacked lump in a wad (there is special trick for for deh
+// file that are converted to wad in w_wad.c)
 void DEH_LoadDehackedLumpPwad(UINT16 wad, UINT16 lump, boolean mainfile)
 {
 	MYFILE f;

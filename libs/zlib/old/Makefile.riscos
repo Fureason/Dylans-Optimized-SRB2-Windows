@@ -1,8 +1,8 @@
+# Project:   zlib_1_03
+# Patched for zlib 1.1.2 rw@shadow.org.uk 19980430
+# test works out-of-the-box, installs `somewhere' on demand
 
-
-
-
-
+# Toolflags:
 CCflags = -c -depend !Depend -IC: -g -throwback  -DRISCOS  -fah
 C++flags = -c -depend !Depend -IC: -throwback
 Linkflags = -aif -c++ -o $@
@@ -11,10 +11,10 @@ CMHGflags =
 LibFileflags = -c -l -o $@
 Squeezeflags = -o $@
 
-
+# change the line below to where _you_ want the library installed.
 libdest = lib:zlib
 
-
+# Final targets:
 @.lib:   @.o.adler32 @.o.compress @.o.crc32 @.o.deflate @.o.gzio \
         @.o.infblock @.o.infcodes @.o.inffast @.o.inflate @.o.inftrees @.o.infutil @.o.trees \
         @.o.uncompr @.o.zutil

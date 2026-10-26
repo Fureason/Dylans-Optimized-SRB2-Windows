@@ -12,12 +12,12 @@
 #ifndef MINWRPNGCONF_H
 #define MINWRPNGCONF_H
 
- 
+/* To include pngusr.h set -DPNG_USER_CONFIG in CPPFLAGS */
 
-                                                             
-                                                       
-   
+/* List options to turn off features of the build that do not
+ * affect the API (so are not recorded in pnglibconf.h)
+ */
 
 #define PNG_ALIGN_TYPE PNG_ALIGN_NONE
 
-#endif  
+#endif /* MINWRPNGCONF_H */

@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  i_time.c
+/// \brief Timing for the system layer.
 
 #include "i_time.h"
 
@@ -39,8 +39,8 @@ void I_InitializeTime(void)
 {
 	CV_RegisterVar(&cv_timescale);
 
-
-
+	// I_StartupTimer is preserved for potential subsystems that need to setup
+	// timing information for I_GetPreciseTime and sleeping
 	I_StartupTimer();
 
 	g_time.time = 0;
@@ -59,7 +59,7 @@ void I_UpdateTime(fixed_t timescale)
 	double elapsedseconds;
 	tic_t realtics;
 
-
+	// get real tics
 	ticratescaled = (double)TICRATE * FIXED_TO_FLOAT(timescale);
 
 	enterprecise = I_GetPreciseTime();
@@ -74,7 +74,7 @@ void I_UpdateTime(fixed_t timescale)
 	oldentertics = entertic;
 	oldenterprecise = enterprecise;
 
-
+	// Update global time state
 	g_time.time += realtics;
 	{
 		double fractional, integral;

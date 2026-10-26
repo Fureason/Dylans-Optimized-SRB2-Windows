@@ -8,29 +8,29 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_portal.h
+/// \brief Software renderer portal struct, functions, linked list extern.
 
 #ifndef __R_PORTAL__
 #define __R_PORTAL__
 
 #include "r_data.h"
 #include "r_textures.h"
-#include "r_plane.h"  
+#include "r_plane.h" // visplanes
 
-                                               
-   
+/** Portal structure for the software renderer.
+ */
 typedef struct portal_s
 {
 	struct portal_s *next;
 
-
+	// Viewport.
 	fixed_t viewx;
 	fixed_t viewy;
 	fixed_t viewz;
 	angle_t viewangle;
 
-
+	// For horizon portals
 	boolean is_horizon;
 	sector_t *horizon_sector;
 
@@ -38,15 +38,15 @@ typedef struct portal_s
 
 	mobj_t *viewmobj;
 
-	UINT8 pass;			 
-	INT32 clipline;		 
+	UINT8 pass;			/**< Keeps track of the portal's recursion depth. */
+	INT32 clipline;		/**< Optional clipline for line-based portals. */
 
-
-	INT32 start;		 
-	INT32 end;			 
-	INT16 *ceilingclip;  
-	INT16 *floorclip;	 
-	fixed_t *frontscale; 
+	// Clipping information.
+	INT32 start;		/**< First horizontal pixel coordinate to draw at. */
+	INT32 end;			/**< One past the last horizontal pixel coordinate to draw at. */
+	INT16 *ceilingclip; /**< Temporary screen top clipping array. */
+	INT16 *floorclip;	/**< Temporary screen bottom clipping array. */
+	fixed_t *frontscale;/**< Temporary screen bottom clipping array. */
 } portal_t;
 
 extern portal_t* portal_base;

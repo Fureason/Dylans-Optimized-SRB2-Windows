@@ -20,9 +20,9 @@
 #define _POSIX_SOURCE 1
 #define _ISOC99_SOURCE 1
 
-                                                                        
-                              
-   
+/* Obtain a copy of the code to be tested (plus other things), disabling
+ * stuff that is not required.
+ */
 #include <math.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -69,17 +69,17 @@ void png_fixed_warning(png_const_structrp png_ptr, png_const_charp msg)
 
 #include "../../png.c"
 
- 
+/* Validate ASCII to fp routines. */
 static int verbose = 0;
 
 int validation_ascii_to_fp(int count, int argc, char **argv)
 {
    int    showall = 0;
-   double max_error=2;       
-   double max_error_abs=17;  
+   double max_error=2;      /* As a percentage error-in-last-digit/.5 */
+   double max_error_abs=17; /* Used when precision is DBL_DIG */
    double max = 0;
    double max_abs = 0;
-   double test = 0;  
+   double test = 0; /* Important to test this. */
    int    precision = 5;
    int    nonfinite = 0;
    int    finite = 0;
@@ -120,14 +120,14 @@ int validation_ascii_to_fp(int count, int argc, char **argv)
       if (verbose)
          fprintf(stderr, "%.*g %d\n", DBL_DIG, test, precision);
 
-       
+      /* Check for overflow in the buffer by setting a marker. */
       memset(buffer, 71, sizeof buffer);
 
       png_ascii_from_fp(0, buffer, precision+10, test, precision);
 
-                                                                  
-                                          
-         
+      /* Allow for a three digit exponent, this stuff will fail if
+       * the exponent is bigger than this!
+       */
       if (buffer[precision+7] != 71)
       {
          fprintf(stderr, "%g[%d] -> '%s'[%lu] buffer overflow\n", test,
@@ -135,14 +135,14 @@ int validation_ascii_to_fp(int count, int argc, char **argv)
          failed = 1;
       }
 
-                                                                   
-                             
-         
+      /* Following are used for the number parser below and must be
+       * initialized to zero.
+       */
       state = 0;
       index = 0;
       if (!isfinite(test))
       {
-          
+         /* Expect 'inf' */
          if (test >= 0 && strcmp(buffer, "inf") ||
              test <  0 && strcmp(buffer, "-inf"))
          {
@@ -184,19 +184,19 @@ int validation_ascii_to_fp(int count, int argc, char **argv)
       }
       else
       {
-          
+         /* Check the result against the original. */
          double out = atof(buffer);
          double change = fabs((out - test)/test);
          double allow = .5/pow(10,
             (precision >= DBL_DIG) ? DBL_DIG-1 : precision-1);
 
-                                                                       
-                                                                   
-                                                                       
-                                                                      
-                                                                        
-                                                                  
-            
+         /* NOTE: if you hit this error case are you compiling with gcc
+          * and -O0?  Try -O2 - the errors can accumulate if the FP
+          * code above is not optimized and may drift outside the .5 in
+          * DBL_DIG allowed.  In any case a small number of errors may
+          * occur (very small ones - 1 or 2%) because of rounding in the
+          * calculations, either in the conversion API or in atof.
+          */
          if (change >= allow && (isfinite(out) ||
              fabs(test/DBL_MAX) <= 1-allow))
          {
@@ -232,27 +232,27 @@ int validation_ascii_to_fp(int count, int argc, char **argv)
          ++ok;
 
 skip:
-       
+      /* Generate a new number and precision. */
       precision = rand();
       if (precision & 1) test = -test;
       precision >>= 1;
 
-       
+      /* Generate random numbers. */
       if (test == 0 || !isfinite(test))
          test = precision+1;
       else
       {
-          
+         /* Derive the exponent from the previous rand() value. */
          int exponent = precision % (DBL_MAX_EXP - DBL_MIN_EXP) + DBL_MIN_EXP;
          int tmp;
          test = frexp(test * rand(), &tmp);
          test = ldexp(test, exponent);
-         precision >>= 8;  
+         precision >>= 8; /* arbitrary */
       }
 
-                                                                    
-                                                           
-         
+      /* This limits the precision to 32 digits, enough for standard
+       * IEEE implementations which have at most 15 digits.
+       */
       precision = (precision & 0x1f) + 1;
    }
    while (--count);
@@ -265,58 +265,58 @@ skip:
    return 0;
 }
 
-                                                                            
-                 
-  
-                                                               
-  
-                                                       
-   
+/* Observe that valid FP numbers have the forms listed in the PNG extensions
+ * specification:
+ *
+ * [+,-]{integer,integer.fraction,.fraction}[{e,E}[+,-]integer]
+ *
+ * Test each of these in turn, including invalid cases.
+ */
 typedef enum checkfp_state
 {
    start, fraction, exponent, states
 } checkfp_state;
 
- 
+/* The characters (other than digits) that characterize the states: */
 static const char none[] = "";
 static const char hexdigits[16] = "0123456789ABCDEF";
 
 static const struct
 {
-   const char *start;  
-   const char *end;    
-   const char *tests;  
+   const char *start; /* Characters valid at the start */
+   const char *end;   /* Valid characters that end the state */
+   const char *tests; /* Characters to test after 2 digits seen */
 }
 state_characters[states] =
 {
-     { "+-.", ".eE", "+-.e*0369" },
-     { none, "eE",  "+-.E#0147" },
-     { "+-", none,  "+-.eE^0258" }
+   /* start:    */ { "+-.", ".eE", "+-.e*0369" },
+   /* fraction: */ { none, "eE",  "+-.E#0147" },
+   /* exponent: */ { "+-", none,  "+-.eE^0258" }
 };
 
 typedef struct
 {
-   char number[1024];   
-   int  limit;          
-   int  verbose;        
-   int  ctimes;         
-   int  cmillions;      
-   int  cinvalid;       
-   int  cnoaccept;      
+   char number[1024];  /* Buffer for number being tested */
+   int  limit;         /* Command line limit */
+   int  verbose;       /* Shadows global variable */
+   int  ctimes;        /* Number of numbers tested */
+   int  cmillions;     /* Count of millions of numbers */
+   int  cinvalid;      /* Invalid strings checked */
+   int  cnoaccept;     /* Characters not accepted */
 }
 checkfp_command;
 
 typedef struct
 {
-   int           cnumber;           
-   checkfp_state check_state;       
-   int           at_start;          
-   int           cdigits_in_state;  
-   int           limit;             
-   int           state;             
-   int           is_negative;       
-   int           is_zero;           
-   int           number_was_valid;  
+   int           cnumber;          /* Index into number string */
+   checkfp_state check_state;      /* Current number state */
+   int           at_start;         /* At start (first character) of state */
+   int           cdigits_in_state; /* Digits seen in that state */
+   int           limit;            /* Limit on same for checking all chars */
+   int           state;            /* Current parser state */
+   int           is_negative;      /* Number is negative */
+   int           is_zero;          /* Number is (still) zero */
+   int           number_was_valid; /* Previous character validity */
 }
 checkfp_control;
 
@@ -327,8 +327,8 @@ static int check_some_characters(checkfp_command *co, checkfp_control c,
 
 static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
 {
-                                                                           
-      
+   /* Test this character (ch) to ensure the parser does the correct thing.
+    */
    size_t index = 0;
    const char test = (char)ch;
    int number_is_valid = png_check_fp_number(&test, 1, &c.state, &index);
@@ -368,7 +368,7 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
    if (!character_accepted)
       ++(co->cnoaccept);
 
-    
+   /* This should never fail (it's a serious bug if it does): */
    if (index != 0 && index != 1)
    {
       fprintf(stderr, "%s: read beyond end of string (%lu)\n", co->number,
@@ -376,9 +376,9 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
       return 0;
    }
 
-                                                                        
-                                       
-      
+   /* Validate the new state, note that the PNG_FP_IS_ macros all return
+    * false unless the number is valid.
+    */
    if (PNG_FP_IS_NEGATIVE(c.state) !=
       (number_is_valid && !c.is_zero && c.is_negative))
    {
@@ -399,7 +399,7 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
       return 0;
    }
 
-    
+   /* Testing a digit */
    if (isdigit(ch))
    {
       if (!character_accepted)
@@ -419,10 +419,10 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
       c.at_start = 0;
       c.number_was_valid = 1;
 
-                                                                       
-                                                                              
-                     
-         
+      /* Continue testing characters in this state.  Either test all of
+       * them or, if we have already seen one digit in this state, just test a
+       * limited set.
+       */
       if (c.cdigits_in_state < 1)
          return check_all_characters(co, c);
 
@@ -431,7 +431,7 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
             state_characters[c.check_state].tests);
    }
 
-    
+   /* A non-digit; is it allowed here? */
    else if (((ch == '+' || ch == '-') && c.check_state != fraction &&
                c.at_start) ||
             (ch == '.' && c.check_state == start) ||
@@ -444,7 +444,7 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
          return 0;
       }
 
-       
+      /* The number remains valid after start of fraction but nowhere else. */
       if (number_is_valid && (c.check_state != start || ch != '.'))
       {
          fprintf(stderr, "%s: saw a non-digit (%c) but number valid\n",
@@ -454,10 +454,10 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
 
       c.number_was_valid = number_is_valid;
 
-                                                                             
-                                                                              
-                          
-         
+      /* Check for a state change.  When changing to 'fraction' if the number
+       * is valid at this point set the at_start to false to allow an exponent
+       * 'e' to come next.
+       */
       if (c.check_state == start && ch == '.')
       {
          c.check_state = fraction;
@@ -476,7 +476,7 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
          return check_all_characters(co, c);
       }
 
-       
+      /* Else it was a sign, and the state doesn't change. */
       else
       {
          if (ch != '-' && ch != '+')
@@ -490,7 +490,7 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
       }
    }
 
-    
+   /* Testing an invalid character */
    else
    {
       if (character_accepted)
@@ -508,12 +508,12 @@ static int check_one_character(checkfp_command *co, checkfp_control c, int ch)
          return 0;
       }
 
-                                                                              
-                            
-         
+      /* Do nothing - the parser has stuck; return success and keep going with
+       * the next character.
+       */
    }
 
-    
+   /* Successful return (the caller will try the next character.) */
    return 1;
 }
 
@@ -545,7 +545,7 @@ static int check_some_characters(checkfp_command *co, checkfp_control c,
                return 0;
       }
 
-       
+      /* At the end check all the characters. */
       else
          return check_all_characters(co, c);
    }
@@ -621,7 +621,7 @@ int validation_muldiv(int count, int argc, char **argv)
          return 1;
       }
 
-    
+   /* Find out about the random number generator. */
    randbuffer = RAND_MAX;
    while (randbuffer != 0) ++randbits, randbuffer >>= 1;
    printf("Using random number generator that makes %d bits\n", randbits);
@@ -633,17 +633,17 @@ int validation_muldiv(int count, int argc, char **argv)
    do
    {
       png_fixed_point result;
-                                                                       
-                                                                    
-                                     
-         
+      /* NOTE: your mileage may vary, a type is required below that can
+       * hold 64 bits or more, if floating point is used a 64-bit or
+       * better mantissa is required.
+       */
       long long int fp, fpround;
       unsigned long hi, lo;
       int ok;
 
-                                                                     
-                                           
-         
+      /* Check the values, png_64bit_product can only handle positive
+       * numbers, so correct for that here.
+       */
       {
          long u1, u2;
          int n = 0;
@@ -652,7 +652,7 @@ int validation_muldiv(int count, int argc, char **argv)
          png_64bit_product(u1, u2, &hi, &lo);
          if (n)
          {
-             
+            /* -x = ~x+1 */
             lo = ((~lo) + 1) & 0xffffffff;
             hi = ~hi;
             if (lo == 0) ++hi;
@@ -670,7 +670,7 @@ int validation_muldiv(int count, int argc, char **argv)
 
       if (div != 0)
       {
-          
+         /* Round - this is C round to zero. */
          if ((fp < 0) != (div < 0))
            fp -= div/2;
          else
@@ -678,13 +678,13 @@ int validation_muldiv(int count, int argc, char **argv)
 
          fp /= div;
          fpround = fp;
-          
+         /* Assume 2's complement here: */
          ok = fpround <= PNG_UINT_31_MAX &&
               fpround >= -1-(long long int)PNG_UINT_31_MAX;
          if (!ok) ++overflow;
       }
       else
-        ok = 0, ++overflow, fpround = fp ;
+        ok = 0, ++overflow, fpround = fp/*misleading*/;
 
       if (verbose)
          fprintf(stderr, "TEST %d * %d / %d -> %lld (%s)\n", a, times, div,
@@ -710,10 +710,10 @@ int validation_muldiv(int count, int argc, char **argv)
       else
          ++passed;
 
-                                                                            
-                        
-         
-       
+      /* Generate three new values, this uses rand() and rand() only returns
+       * up to RAND_MAX.
+       */
+      /* CRUDE */
       a += times;
       times += div;
       div = randbuffer;
@@ -726,14 +726,14 @@ int validation_muldiv(int count, int argc, char **argv)
    return 0;
 }
 
-                                                                                
-              
-   
+/* When FP is on this just becomes a speed test - compile without FP to get real
+ * validation.
+ */
 #ifdef PNG_FLOATING_ARITHMETIC_SUPPORTED
-#define LN2 .000010576586617430806112933839  
-#define L2INV 94548.46219969910586572651     
+#define LN2 .000010576586617430806112933839 /* log(2)/65536 */
+#define L2INV 94548.46219969910586572651    /* 65536/log(2) */
 
- 
+/* For speed testing, need the internal functions too: */
 static png_uint_32 png_log8bit(unsigned x)
 {
    if (x > 0)
@@ -764,7 +764,7 @@ static png_uint_16 png_exp16bit(png_uint_32 log)
 {
    return (png_uint_16)floor(.5 + exp(log * -LN2) * 65535);
 }
-#endif  
+#endif /* FLOATING_ARITHMETIC */
 
 int validation_gamma(int argc, char **argv)
 {
@@ -772,7 +772,7 @@ int validation_gamma(int argc, char **argv)
    double maxerr;
    int i, silent=0, onlygamma=0;
 
-    
+   /* Silence the output with -s, just test the gamma functions with -g: */
    while (--argc > 0)
       if (strcmp(*++argv, "-s") == 0)
          silent = 1;
@@ -786,7 +786,7 @@ int validation_gamma(int argc, char **argv)
 
    if (!onlygamma)
    {
-       
+      /* First validate the log functions: */
       maxerr = 0;
       for (i=0; i<256; ++i)
       {
@@ -819,7 +819,7 @@ int validation_gamma(int argc, char **argv)
          if (i == 0 && png_log16bit(i) != 0xffffffff ||
              i != 0 && png_log16bit(i) != floor(correct+.5))
          {
-            if (error > .68)  
+            if (error > .68) /* By experiment error is less than .68 */
             {
                fprintf(stderr, "16-bit log error: %d: got %u, expected %f"
                   " error: %f\n", i, png_log16bit(i), correct, error);
@@ -830,7 +830,7 @@ int validation_gamma(int argc, char **argv)
       if (!silent)
          printf("maximum 16-bit log error = %f\n", maxerr);
 
-       
+      /* Now exponentiations. */
       maxerr = 0;
       for (i=0; i<=0xfffff; ++i)
       {
@@ -839,7 +839,7 @@ int validation_gamma(int argc, char **argv)
 
          if (fabs(error) > maxerr)
             maxerr = fabs(error);
-         if (fabs(error) > 1883)  
+         if (fabs(error) > 1883) /* By experiment. */
          {
             fprintf(stderr, "32-bit exp error: %d: got %u, expected %f"
                   " error: %f\n", i, png_exp(i), correct, error);
@@ -857,7 +857,7 @@ int validation_gamma(int argc, char **argv)
 
          if (fabs(error) > maxerr)
             maxerr = fabs(error);
-         if (fabs(error) > .50002)  
+         if (fabs(error) > .50002) /* By experiment */
          {
             fprintf(stderr, "8-bit exp error: %d: got %u, expected %f"
                   " error: %f\n", i, png_exp8bit(i), correct, error);
@@ -875,7 +875,7 @@ int validation_gamma(int argc, char **argv)
 
          if (fabs(error) > maxerr)
             maxerr = fabs(error);
-         if (fabs(error) > .524)  
+         if (fabs(error) > .524) /* By experiment */
          {
             fprintf(stderr, "16-bit exp error: %d: got %u, expected %f"
                   " error: %f\n", i, png_exp16bit(i), correct, error);
@@ -884,9 +884,9 @@ int validation_gamma(int argc, char **argv)
 
       if (!silent)
          printf("maximum 16-bit exp error = %f\n", maxerr);
-   }  
+   } /* !onlygamma */
 
-    
+   /* Test the overall gamma correction. */
    for (i=0; i<9; ++i)
    {
       unsigned j;
@@ -938,18 +938,18 @@ int validation_gamma(int argc, char **argv)
    return 0;
 }
 
- 
-                                                                     
-                                                                    
-  
-                                                       
-                          
-                                               
-   
+/**************************** VALIDATION TESTS ********************************/
+/* Various validation routines are included herein, they require some
+ * definition for png_warning and png_error, seetings of VALIDATION:
+ *
+ * 1: validates the ASCII to floating point conversions
+ * 2: validates png_muldiv
+ * 3: accuracy test of fixed point gamma tables
+ */
 
-                                                                     
-             
-   
+/* The following COUNT (10^8) takes about 1 hour on a 1GHz Pentium IV
+ * processor.
+ */
 #define COUNT 1000000000
 
 int main(int argc, char **argv)
@@ -988,7 +988,7 @@ int main(int argc, char **argv)
          return validation_gamma(argc-1, argv+1);
    }
 
-    
+   /* Bad argument: */
    fprintf(stderr,
       "usage: tarith [-v] [-c count] {ascii,muldiv,gamma} [args]\n");
    fprintf(stderr, " arguments: ascii [-a (all results)] [-e error%%]\n");

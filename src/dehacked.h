@@ -7,13 +7,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  dehacked.h
+/// \brief Dehacked files.
 
 #ifndef __DEHACKED_H__
 #define __DEHACKED_H__
 
-#include "m_fixed.h"  
+#include "m_fixed.h" // for get_number
 
 typedef enum
 {
@@ -45,13 +45,13 @@ extern boolean bootmapchanged;
 extern const char *luaactions[MAX_ACTION_RECURSION];
 extern UINT8 luaactionstack;
 
-
+// If the dehacked patch does not match this version, we throw a warning
 #define PATCHVERSION 220
 
 #define MAXLINELEN 1024
 
-
-
+// the code was first write for a file
+// converted to use memory with this functions
 typedef struct
 {
 	char *data;

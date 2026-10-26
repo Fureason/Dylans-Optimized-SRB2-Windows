@@ -13,8 +13,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file
+/// \brief Support to show ENDOOM text
 
 #ifndef __ENDTXT__
 #define __ENDTXT__

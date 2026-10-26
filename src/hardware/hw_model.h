@@ -28,13 +28,13 @@ typedef struct
 	float ambient[4], diffuse[4], specular[4], emissive[4];
 	float shininess;
 	boolean spheremap;
-
-
+//	Texture::texture_t *texture;
+//	Texture::texture_t *lightmap;
 } material_t;
 
 typedef struct
 {
-	material_t *material;  
+	material_t *material; // Pointer to the allocated 'materials' list in model_t
 	float *vertices;
 	float *normals;
 	float *tangents;
@@ -52,17 +52,17 @@ typedef struct
 	unsigned int vboID;
 } tinyframe_t;
 
-
+// Equivalent to MD3's many 'surfaces'
 typedef struct mesh_s
 {
 	int numVertices;
 	int numTriangles;
 
 	float *uvs;
-
-
-
-
+	// if uv adjustment is needed, uvs is changed to point to adjusted ones and
+	// this one retains the originals
+	// note: this member has been added with the assumption that models are never freed.
+	// (UnloadModel is called by nobody at the time of writing.)
 	float *originaluvs;
 	float *lightuvs;
 
@@ -71,10 +71,10 @@ typedef struct mesh_s
 	tinyframe_t *tinyframes;
 	unsigned short *indices;
 
-	                                                                          
-                                                                            
-                                                                              
-                                
+	/* Shared CPU interpolation cache. Many identical map objects use the same
+	 * model/frame pair and interpolation fraction in one rendered frame; doing
+	 * the full vertex lerp again for every instance needlessly scales model cost
+	 * with player/object count. */
 	void *lerpVertices;
 	void *lerpNormals;
 	INT32 lerpFrame;
@@ -86,7 +86,7 @@ typedef struct mesh_s
 typedef struct tag_s
 {
 	char name[64];
-
+//	matrix_t transform;
 } tag_t;
 
 #define MODEL_INTERPOLATION_FLAG "+i"
@@ -114,12 +114,12 @@ typedef struct model_s
 	modelspr2frames_t *spr2frames;
 	modelspr2frames_t *superspr2frames;
 
-
-
+	// the max_s and max_t values that the uvs are currently adjusted to
+	// (if a sprite is used as a texture)
 	float max_s;
 	float max_t;
-
-
+	// These are the values that the uvs in the VBO have been adjusted to.
+	// If they are not same as max_s and max_t, then the VBO won't be used.
 	float vbo_max_s;
 	float vbo_max_t;
 } model_t;

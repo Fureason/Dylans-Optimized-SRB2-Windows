@@ -1,12 +1,12 @@
-
-
-
-
-
-
-
-
-
+# $Id: Makefile.mingw,v 1.35 2022/10/16 05:28:15 nanard Exp $
+# Miniupnp project.
+# http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
+# (c) 2005-2020 Thomas Bernard
+# This Makefile is made for MinGW
+#
+# To cross compile on a *nix machine :
+# make -f Makefile.mingw DLLWRAP=mingw32-dllwrap CC=mingw32-gcc AR=mingw32-ar WINDRES=mingw32-windres
+#
 SRCDIR = src
 INCDIR = include
 
@@ -30,7 +30,7 @@ CPPFLAGS += -DNDEBUG -D_WIN32_WINNT=0x501
 CPPFLAGS += -Iinclude
 CPPFLAGS += -I.
 
-
+# -liphlpapi is needed for GetBestRoute() and GetIpAddrTable()
 LDLIBS = -lws2_32 -liphlpapi
 
 PYTHON=\utils\python25\python
@@ -56,7 +56,7 @@ endif
 DISTFILE:=$(shell echo "miniupnpc-bin-win32-`cat VERSION`-$(COMMITREF).zip")
 
 LIBDIR ?= lib
-
+# install directories
 ifeq ($(strip $(PREFIX)),)
 INSTALLPREFIX ?= /usr
 else
@@ -106,16 +106,16 @@ dll-%.o:	$(SRCDIR)/%.c
 %-shared.o:	$(SRCDIR)/%.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-
+# --enable-stdcall-fixup
 %-static.exe:	%.o libminiupnpc.a
 	$(CC) -static -o $@ $^ $(LDLIBS)
 
 %-shared.exe:	%-shared.o miniupnpc.lib
 	$(CC) -o $@ $^ $(LDLIBS)
 
-
-
-
+# To make miniupnpcstrings.h from miniupnpcstrings.h.in we either
+# use a custom executable (if running make under windows) or use
+# sed (if cross compiling from another platform).
 ifeq ($(OS),Windows_NT)
 wingenminiupnpcstrings.exe:	wingenminiupnpcstrings.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^

@@ -7,9 +7,9 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  p_polyobj.h
+/// \brief Movable segs like in Hexen, but more flexible
+///        due to application of dynamic binary space partitioning theory.
 
 #ifndef POLYOBJ_H__
 #define POLYOBJ_H__
@@ -18,11 +18,11 @@
 #include "p_mobj.h"
 #include "r_defs.h"
 
+//
+// Defines
+//
 
-
-
-
-
+// haleyjd: use zdoom-compatible doomednums
 
 #define POLYOBJ_ANCHOR_DOOMEDNUM     760
 #define POLYOBJ_SPAWN_DOOMEDNUM      761
@@ -31,23 +31,23 @@
 
 typedef enum
 {
-	POF_CLIPLINES         = 0x1,        
-	POF_CLIPPLANES        = 0x2,        
-	POF_SOLID             = 0x3,        
-	POF_TESTHEIGHT        = 0x4,        
-	POF_RENDERSIDES       = 0x8,        
-	POF_RENDERTOP         = 0x10,       
-	POF_RENDERBOTTOM      = 0x20,       
-	POF_RENDERPLANES      = 0x30,       
-	POF_RENDERALL         = 0x38,       
-	POF_INVERT            = 0x40,       
-	POF_INVERTPLANES      = 0x80,       
-	POF_INVERTPLANESONLY  = 0x100,      
-	POF_PUSHABLESTOP      = 0x200,      
-	POF_LDEXEC            = 0x400,      
-	POF_ONESIDE           = 0x800,      
-	POF_NOSPECIALS        = 0x1000,     
-	POF_SPLAT             = 0x2000,     
+	POF_CLIPLINES         = 0x1,       ///< Test against lines for collision
+	POF_CLIPPLANES        = 0x2,       ///< Test against tops and bottoms for collision
+	POF_SOLID             = 0x3,       ///< Clips things.
+	POF_TESTHEIGHT        = 0x4,       ///< Test line collision with heights
+	POF_RENDERSIDES       = 0x8,       ///< Renders the sides.
+	POF_RENDERTOP         = 0x10,      ///< Renders the top.
+	POF_RENDERBOTTOM      = 0x20,      ///< Renders the bottom.
+	POF_RENDERPLANES      = 0x30,      ///< Renders top and bottom.
+	POF_RENDERALL         = 0x38,      ///< Renders everything.
+	POF_INVERT            = 0x40,      ///< Inverts collision (like a cage).
+	POF_INVERTPLANES      = 0x80,      ///< Render inside planes.
+	POF_INVERTPLANESONLY  = 0x100,     ///< Only render inside planes.
+	POF_PUSHABLESTOP      = 0x200,     ///< Pushables will stop movement.
+	POF_LDEXEC            = 0x400,     ///< This PO triggers a linedef executor.
+	POF_ONESIDE           = 0x800,     ///< Only use the first side of the linedef.
+	POF_NOSPECIALS        = 0x1000,    ///< Don't apply sector specials.
+	POF_SPLAT             = 0x2000,    ///< Use splat flat renderer (treat cyan pixels as invisible).
 } polyobjflags_e;
 
 typedef enum
@@ -59,157 +59,157 @@ typedef enum
 	TMPF_EXECUTOR        = 1<<4,
 	TMPF_CRUSH           = 1<<5,
 	TMPF_SPLAT           = 1<<6,
-
+	//TMPF_DONTCLIPPLANES  = 1<<7,
 } textmappolyobjectflags_t;
 
-
-
-
+//
+// Polyobject Structure
+//
 
 typedef struct polyobj_s
 {
-	mdllistitem_t link;  
+	mdllistitem_t link; // for subsector links; must be first
 
-	INT32 id;     
-	INT32 first;  
-	INT32 next;   
+	INT32 id;    // numeric id
+	INT32 first; // for hashing: index of first polyobject in this hash chain
+	INT32 next;  // for hashing: next polyobject in this hash chain
 
-	INT32 parent;  
+	INT32 parent; // numeric id of parent polyobject
 
-	size_t segCount;         
-	size_t numSegsAlloc;     
-	struct seg_s **segs;  
+	size_t segCount;        // number of segs in polyobject
+	size_t numSegsAlloc;    // number of segs allocated
+	struct seg_s **segs; // the segs, a reallocating array.
 
-	size_t numVertices;             
-	size_t numVerticesAlloc;        
-	vertex_t *origVerts;  
-	vertex_t *tmpVerts;   
-	vertex_t **vertices;  
+	size_t numVertices;            // number of vertices (generally == segCount)
+	size_t numVerticesAlloc;       // number of vertices allocated
+	vertex_t *origVerts; // original positions relative to spawn spot
+	vertex_t *tmpVerts;  // temporary vertex backups for rotation
+	vertex_t **vertices; // vertices this polyobject must move
 
-	size_t numLines;           
-	size_t numLinesAlloc;      
-	struct line_s **lines;  
+	size_t numLines;          // number of linedefs (generally <= segCount)
+	size_t numLinesAlloc;     // number of linedefs allocated
+	struct line_s **lines; // linedefs this polyobject must move
 
-	degenmobj_t spawnSpot;  
-	vertex_t    centerPt;   
-	fixed_t zdist;          
-	angle_t angle;          
-	UINT8 attached;          
+	degenmobj_t spawnSpot; // location of spawn spot
+	vertex_t    centerPt;  // center point
+	fixed_t zdist;         // viewz distance for sorting
+	angle_t angle;         // for rotation
+	UINT8 attached;         // if true, is attached to a subsector
 
-	fixed_t blockbox[4];  
-	UINT8 linked;          
-	size_t validcount;    
-	INT32 damage;         
-	fixed_t thrust;       
-	INT32 flags;          
+	fixed_t blockbox[4]; // bounding box for clipping
+	UINT8 linked;         // is linked to blockmap
+	size_t validcount;   // for clipping: prevents multiple checks
+	INT32 damage;        // damage to inflict on stuck things
+	fixed_t thrust;      // amount of thrust to put on blocking objects
+	INT32 flags;         // Flags for this polyobject
 
-	thinker_t *thinker;   
+	thinker_t *thinker;  // pointer to a thinker affecting this polyobj
 
-	UINT8 isBad;          
-	INT32 translucency;  
-	INT16 triggertag;    
+	UINT8 isBad;         // a bad polyobject: should not be rendered/manipulated
+	INT32 translucency; // index to translucency tables
+	INT16 triggertag;   // Tag of linedef executor to trigger on touch
 
-	struct visplane_s *visplane;  
+	struct visplane_s *visplane; // polyobject's visplane, for ease of putting into the list later
 
-
-	INT32 spawnflags;  
-	INT32 spawntrans;  
+	// these are saved for netgames, so do not let Lua touch these!
+	INT32 spawnflags; // Flags the polyobject originally spawned with
+	INT32 spawntrans; // Translucency the polyobject originally spawned with
 } polyobj_t;
 
-
-
-
+//
+// Polyobject Blockmap Link Structure
+//
 
 typedef struct polymaplink_s
 {
-	mdllistitem_t link;  
-	polyobj_t *po;       
+	mdllistitem_t link; // for blockmap links
+	polyobj_t *po;      // pointer to polyobject
 } polymaplink_t;
 
-
-
-
+//
+// Polyobject Special Thinkers
+//
 
 typedef struct polyrotate_s
 {
-	thinker_t thinker;  
+	thinker_t thinker; // must be first
 
-	INT32 polyObjNum;     
-	INT32 speed;          
-	INT32 distance;       
-	UINT8 turnobjs;       
+	INT32 polyObjNum;    // numeric id of polyobject (avoid C pointers here)
+	INT32 speed;         // speed of movement per frame
+	INT32 distance;      // distance to move
+	UINT8 turnobjs;      // turn objects? PTF_ flags
 } polyrotate_t;
 
 typedef struct polymove_s
 {
-	thinker_t thinker;   
+	thinker_t thinker;  // must be first
 
-	INT32 polyObjNum;    
-	INT32 speed;         
-	fixed_t momx;        
-	fixed_t momy;        
-	INT32 distance;      
-	UINT32 angle;        
+	INT32 polyObjNum;   // numeric id of polyobject
+	INT32 speed;        // resultant velocity
+	fixed_t momx;       // x component of speed along angle
+	fixed_t momy;       // y component of speed along angle
+	INT32 distance;     // total distance to move
+	UINT32 angle;       // angle along which to move
 } polymove_t;
 
-
+// PolyObject waypoint movement return behavior
 typedef enum
 {
-	PWR_STOP,      
-	PWR_WRAP,      
-	PWR_COMEBACK,  
+	PWR_STOP,     // Stop after reaching last waypoint
+	PWR_WRAP,     // Wrap back to first waypoint
+	PWR_COMEBACK, // Repeat sequence in reverse
 } polywaypointreturn_e;
 
 typedef struct polywaypoint_s
 {
-	thinker_t thinker;  
+	thinker_t thinker; // must be first
 
-	INT32 polyObjNum;       
-	INT32 speed;            
-	INT32 sequence;         
-	INT32 pointnum;         
-	INT32 direction;        
-	UINT8 returnbehavior;   
-	UINT8 continuous;       
-	UINT8 stophere;         
+	INT32 polyObjNum;      // numeric id of polyobject
+	INT32 speed;           // resultant velocity
+	INT32 sequence;        // waypoint sequence #
+	INT32 pointnum;        // waypoint #
+	INT32 direction;       // 1 for normal, -1 for backwards
+	UINT8 returnbehavior;  // behavior after reaching the last waypoint
+	UINT8 continuous;      // continuously move - used with PWR_WRAP or PWR_COMEBACK
+	UINT8 stophere;        // Will stop after it reaches the next waypoint
 } polywaypoint_t;
 
 typedef struct polyslidedoor_s
 {
-	thinker_t thinker;       
+	thinker_t thinker;      // must be first
 
-	INT32 polyObjNum;          
-	INT32 delay;               
-	INT32 delayCount;          
-	INT32 initSpeed;           
-	INT32 speed;               
-	INT32 initDistance;        
-	INT32 distance;            
-	UINT32 initAngle;          
-	UINT32 angle;              
-	UINT32 revAngle;           
-	fixed_t momx;              
-	fixed_t momy;              
-	UINT8 closing;              
+	INT32 polyObjNum;         // numeric id of affected polyobject
+	INT32 delay;              // delay time
+	INT32 delayCount;         // delay counter
+	INT32 initSpeed;          // initial speed
+	INT32 speed;              // speed of motion
+	INT32 initDistance;       // initial distance to travel
+	INT32 distance;           // current distance to travel
+	UINT32 initAngle;         // intial angle
+	UINT32 angle;             // angle of motion
+	UINT32 revAngle;          // reversed angle to avoid roundoff error
+	fixed_t momx;             // x component of speed along angle
+	fixed_t momy;             // y component of speed along angle
+	UINT8 closing;             // if true, is closing
 } polyslidedoor_t;
 
 typedef struct polyswingdoor_s
 {
-	thinker_t thinker;  
+	thinker_t thinker; // must be first
 
-	INT32 polyObjNum;     
-	INT32 delay;          
-	INT32 delayCount;     
-	INT32 initSpeed;      
-	INT32 speed;          
-	INT32 initDistance;   
-	INT32 distance;       
-	UINT8 closing;         
+	INT32 polyObjNum;    // numeric id of affected polyobject
+	INT32 delay;         // delay time
+	INT32 delayCount;    // delay counter
+	INT32 initSpeed;     // initial speed
+	INT32 speed;         // speed of rotation
+	INT32 initDistance;  // initial distance to travel
+	INT32 distance;      // current distance to travel
+	UINT8 closing;        // if true, is closing
 } polyswingdoor_t;
 
 typedef struct polydisplace_s
 {
-	thinker_t thinker;  
+	thinker_t thinker; // must be first
 
 	INT32 polyObjNum;
 	struct sector_s *controlSector;
@@ -220,7 +220,7 @@ typedef struct polydisplace_s
 
 typedef struct polyrotdisplace_s
 {
-	thinker_t thinker;  
+	thinker_t thinker; // must be first
 
 	INT32 polyObjNum;
 	struct sector_s *controlSector;
@@ -231,7 +231,7 @@ typedef struct polyrotdisplace_s
 
 typedef struct polyfade_s
 {
-	thinker_t thinker;  
+	thinker_t thinker; // must be first
 
 	INT32 polyObjNum;
 	INT32 sourcevalue;
@@ -243,9 +243,9 @@ typedef struct polyfade_s
 	INT32 timer;
 } polyfade_t;
 
-
-
-
+//
+// Line Activation Data Structures
+//
 
 typedef enum
 {
@@ -257,41 +257,41 @@ typedef enum
 
 typedef enum
 {
-	PTF_PLAYERS = 1,     
-	PTF_OTHERS = 1<<1,  
+	PTF_PLAYERS = 1,    // Turn players with movement
+	PTF_OTHERS = 1<<1, // Turn other mobjs with movement
 } polyturnflags_e;
 
 typedef struct polyrotdata_s
 {
-	INT32 polyObjNum;    
-	INT32 direction;     
-	INT32 speed;         
-	INT32 distance;      
-	UINT8 flags;         
+	INT32 polyObjNum;   // numeric id of polyobject to affect
+	INT32 direction;    // direction of rotation
+	INT32 speed;        // angular speed
+	INT32 distance;     // distance to move
+	UINT8 flags;        // TMPR_ flags
 } polyrotdata_t;
 
 typedef struct polymovedata_s
 {
-	INT32 polyObjNum;    
-	fixed_t distance;    
-	fixed_t speed;       
-	angle_t angle;       
-	UINT8 overRide;      
+	INT32 polyObjNum;   // numeric id of polyobject to affect
+	fixed_t distance;   // distance to move
+	fixed_t speed;      // linear speed
+	angle_t angle;      // angle of movement
+	UINT8 overRide;     // if true, will override any action on the object
 } polymovedata_t;
 
 typedef enum
 {
-	PWF_REVERSE = 1,     
-	PWF_LOOP    = 1<<1,  
+	PWF_REVERSE = 1,    // Move through waypoints in reverse order
+	PWF_LOOP    = 1<<1, // Loop movement (used with PWR_WRAP or PWR_COMEBACK)
 } polywaypointflags_e;
 
 typedef struct polywaypointdata_s
 {
-	INT32 polyObjNum;      
-	INT32 sequence;        
-	fixed_t speed;         
-	UINT8 returnbehavior;  
-	UINT8 flags;           
+	INT32 polyObjNum;     // numeric id of polyobject to affect
+	INT32 sequence;       // waypoint sequence #
+	fixed_t speed;        // linear speed
+	UINT8 returnbehavior; // behavior after reaching the last waypoint
+	UINT8 flags;          // PWF_ flags
 } polywaypointdata_t;
 
 typedef enum
@@ -308,7 +308,7 @@ typedef enum
 	TMPT_INTANGIBLE = 2,
 } textmappolytangibility_t;
 
-
+// polyobject door types
 typedef enum
 {
 	POLY_DOOR_SLIDE,
@@ -317,12 +317,12 @@ typedef enum
 
 typedef struct polydoordata_s
 {
-	INT32 polyObjNum;      
-	INT32 doorType;        
-	INT32 speed;           
-	angle_t angle;         
-	INT32 distance;        
-	INT32 delay;           
+	INT32 polyObjNum;     // numeric id of polyobject to affect
+	INT32 doorType;       // polyobj door type
+	INT32 speed;          // linear or angular speed
+	angle_t angle;        // for slide door only, angle of motion
+	INT32 distance;       // distance to move
+	INT32 delay;          // delay time after opening
 } polydoordata_t;
 
 typedef struct polydisplacedata_s
@@ -368,9 +368,9 @@ typedef struct polyfadedata_s
 	INT32 speed;
 } polyfadedata_t;
 
-
-
-
+//
+// Functions
+//
 
 boolean Polyobj_moveXY(polyobj_t *po, fixed_t x, fixed_t y, boolean checkmobjs);
 boolean Polyobj_rotate(polyobj_t *po, angle_t delta, boolean turnplayers, boolean turnothers, boolean checkmobjs);
@@ -382,7 +382,7 @@ boolean P_MobjTouchingPolyobj(polyobj_t *po, mobj_t *mo);
 boolean P_MobjInsidePolyobj(polyobj_t *po, mobj_t *mo);
 boolean P_BBoxInsidePolyobj(polyobj_t *po, fixed_t *bbox);
 
-
+// thinkers (needed in p_saveg.c)
 void T_PolyObjRotate(polyrotate_t *);
 void T_PolyObjMove  (polymove_t *);
 void T_PolyObjWaypoint (polywaypoint_t *);
@@ -403,14 +403,14 @@ boolean EV_DoPolyObjFlag(polyflagdata_t *);
 boolean EV_DoPolyObjFade(polyfadedata_t *);
 
 
-
-
-
+//
+// External Variables
+//
 
 extern polyobj_t *PolyObjects;
 extern INT32 numPolyObjects;
-extern polymaplink_t **polyblocklinks;  
+extern polymaplink_t **polyblocklinks; // polyobject blockmap
 
 #endif
 
-
+// EOF

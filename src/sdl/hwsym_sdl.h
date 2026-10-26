@@ -13,8 +13,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file
+/// \brief Tool for dynamic referencing of hardware rendering/3D sound functions
 
 void *hwSym(const char *funcName,void *handle);
 

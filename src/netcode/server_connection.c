@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  server_connection.c
+/// \brief Server-side part of connection handling
 
 #include "server_connection.h"
 #include "i_net.h"
@@ -26,16 +26,16 @@
 #include "../command.h"
 #include "../doomstat.h"
 
-
-
+// Minimum timeout for sending the savegame
+// The actual timeout will be longer depending on the savegame length
 tic_t jointimeout = (10*TICRATE);
 
-
-
+// Incremented by cv_joindelay when a client joins, decremented each tic.
+// If higher than cv_joindelay * 2 (3 joins in a short timespan), joins are temporarily disabled.
 tic_t joindelay = 0;
 
-
-
+// Minimum timeout for sending the savegame
+// The actual timeout will be longer depending on the savegame length
 char playeraddress[MAXPLAYERS][64];
 
 consvar_t cv_showjoinaddress = CVAR_INIT ("showjoinaddress", "Off", CV_SAVE|CV_NETVAR, CV_OnOff, NULL);
@@ -51,16 +51,19 @@ consvar_t cv_joindelay = CVAR_INIT ("joindelay", "10", CV_SAVE|CV_NETVAR, joinde
 static CV_PossibleValue_t rejointimeout_cons_t[] = {{1, "MIN"}, {60 * FRACUNIT, "MAX"}, {0, "Off"}, {0, NULL}};
 consvar_t cv_rejointimeout = CVAR_INIT ("rejointimeout", "2", CV_SAVE|CV_NETVAR|CV_FLOAT, rejointimeout_cons_t, NULL);
 
-                                                                          
-                                                                               
-                                                                          
-                                                                          
-                                                                         
-                                    
+/* A joining client normally receives XD_ADDPLAYER through the regular tic
+ * stream and immediately answers with XD_NAMEANDCOLOR.  If that one mapping is
+ * missed, the connection can otherwise look alive while the client has no
+ * usable local player (the classic blue body/green icon/no-chat symptom).
+ * These counters let the stock 2.2.15 messages repair that state without
+ * changing the network protocol. */
 static tic_t assignmentreplaytime[MAXNETNODES];
 static tic_t playerconfigrepairnext[MAXPLAYERS];
 static UINT8 playerconfigrepairattempts[MAXPLAYERS];
 static boolean playerconfigrepairfailed[MAXPLAYERS];
+
+#define PLAYERCONFIG_REPAIR_DELAY (2*TICRATE)
+#define PLAYERCONFIG_REPAIR_ATTEMPTS 5
 
 static INT32 FindRejoinerNum(SINT8 node)
 {
@@ -68,20 +71,20 @@ static INT32 FindRejoinerNum(SINT8 node)
 	const char *nodeaddress;
 	const char *strippednodeaddress;
 
-
+	// Make sure there is no dead dress before proceeding to the stripping
 	if (!I_GetNodeAddress)
 		return -1;
 	nodeaddress = I_GetNodeAddress(node);
 	if (!nodeaddress)
 		return -1;
 
-
+	// Strip the address of its port
 	strcpy(addressbuffer, nodeaddress);
 	strippednodeaddress = I_NetSplitAddress(addressbuffer, NULL);
 	if (!strnicmp(strippednodeaddress, "::ffff:", 7))
 		strippednodeaddress += 7;
 
-
+	// Check if any player matches the stripped address
 	for (INT32 i = 0; i < MAXPLAYERS; i++)
 	{
 		if (playeringame[i] && playeraddress[i][0] && playernode[i] == UINT8_MAX)
@@ -137,11 +140,11 @@ static void SV_SendServerInfo(INT32 node, tic_t servertime)
 	netbuffer->u.serverinfo.subversion = SUBVERSION;
 	strncpy(netbuffer->u.serverinfo.application, SRB2APPLICATION,
 			sizeof netbuffer->u.serverinfo.application);
-
+	// return back the time value so client can compute their ping
 	netbuffer->u.serverinfo.time = (tic_t)LONG(servertime);
 	netbuffer->u.serverinfo.leveltime = (tic_t)LONG(leveltime);
 
-
+	// Exclude bots from both counts
 	netbuffer->u.serverinfo.numberofplayer = (UINT8)D_NumNodes(dedicated);
 	netbuffer->u.serverinfo.maxplayer = (UINT8)(cv_maxplayers.value - D_NumBots());
 
@@ -175,7 +178,7 @@ static void SV_SendServerInfo(INT32 node, tic_t servertime)
 			read++;
 		}
 		*writ = '\0';
-
+		//strncpy(netbuffer->u.serverinfo.maptitle, (char *)mapheaderinfo[gamemap-1]->lvlttl, 33);
 	}
 	else
 		strncpy(netbuffer->u.serverinfo.maptitle, "UNKNOWN", 32);
@@ -189,9 +192,9 @@ static void SV_SendServerInfo(INT32 node, tic_t servertime)
 		netbuffer->u.serverinfo.actnum = mapheaderinfo[gamemap-1]->actnum;
 
 	const char *httpurl = cv_httpsource.string;
-	                                                                         
-                                                                       
-                      
+	/* The packet field includes its terminator.  strlcpy both documents that
+	 * limit and avoids the old MAX_MIRROR_LENGTH + 1 snprintf size at the
+	 * exact boundary. */
 	strlcpy(netbuffer->u.serverinfo.httpsource, httpurl,
 		sizeof netbuffer->u.serverinfo.httpsource);
 
@@ -208,7 +211,7 @@ static void SV_SendPlayerInfo(INT32 node)
 	{
 		if (playernode[i] == UINT8_MAX || !netnodes[playernode[i]].ingame)
 		{
-			netbuffer->u.playerinfo[i].num = 255;  
+			netbuffer->u.playerinfo[i].num = 255; // This slot is empty.
 			continue;
 		}
 
@@ -218,8 +221,8 @@ static void SV_SendPlayerInfo(INT32 node)
 
 		netbuffer->u.playerinfo[i].name[MAXPLAYERNAME] = '\0';
 
-
-
+		//fetch IP address
+		//No, don't do that, you fuckface.
 		memset(netbuffer->u.playerinfo[i].address, 0, 4);
 
 		if (G_GametypeHasTeams())
@@ -240,13 +243,13 @@ static void SV_SendPlayerInfo(INT32 node)
 		netbuffer->u.playerinfo[i].score = LONG(players[i].score);
 		netbuffer->u.playerinfo[i].timeinserver = SHORT((UINT16)(players[i].jointime / TICRATE));
 		netbuffer->u.playerinfo[i].skin = (UINT8)(players[i].skin
-#ifdef DEVELOP  
+#ifdef DEVELOP // it's safe to do this only because PLAYERINFO isn't read by the game itself
 		% 3
 #endif
 		);
 
-
-		netbuffer->u.playerinfo[i].data = 0;  
+		// Extra data
+		netbuffer->u.playerinfo[i].data = 0; //players[i].skincolor;
 
 		if (players[i].pflags & PF_TAGIT)
 			netbuffer->u.playerinfo[i].data |= 0x20;
@@ -261,12 +264,12 @@ static void SV_SendPlayerInfo(INT32 node)
 	HSendPacket(node, false, 0, sizeof(plrinfo_pak) * MAXPLAYERS);
 }
 
-                               
-   
-                               
-                                                    
-   
-    
+/** Sends a PT_SERVERCFG packet
+  *
+  * \param node The destination
+  * \return True if the packet was successfully sent
+  *
+  */
 static boolean SV_SendServerConfig(INT32 node)
 {
 	boolean waspacketsent;
@@ -315,14 +318,14 @@ static boolean SV_SendServerConfig(INT32 node)
 	return waspacketsent;
 }
 
-
+// Adds a node to the game (player will follow at map change or at savegame....)
 static inline void SV_AddNode(INT32 node)
 {
 	netnodes[node].tic = gametic;
 	netnodes[node].supposedtic = gametic;
 	assignmentreplaytime[node] = 0;
-
-
+	// little hack because the server connects to itself and puts
+	// nodeingame when connected not here
 	if (node)
 		netnodes[node].ingame = true;
 }
@@ -341,9 +344,9 @@ static void SV_QueuePlayerAssignment(SINT8 node, INT32 playernum,
 	SendNetXCmd(XD_ADDPLAYER, &buf, p - buf);
 }
 
-                                                                              
-                                                                            
-                            
+/* Replay an existing assignment at most once every two seconds.  XD_ADDPLAYER
+ * already exists in vanilla 2.2.15, so both stock and optimized clients can
+ * consume this recovery. */
 static boolean SV_ReplayPlayerAssignments(SINT8 node)
 {
 	tic_t now;
@@ -388,8 +391,8 @@ static void SV_AddPlayer(SINT8 node, const char *name)
 	newplayernum = FindRejoinerNum(node);
 	if (newplayernum == -1)
 	{
-
-
+		// search for a free playernum
+		// we can't use playeringame since it is not updated here
 		for (newplayernum = dedicated ? 1 : 0; newplayernum < MAXPLAYERS; newplayernum++)
 		{
 			if (playeringame[newplayernum])
@@ -402,8 +405,8 @@ static void SV_AddPlayer(SINT8 node, const char *name)
 		}
 	}
 
-
-
+	// should never happen since we check the playernum
+	// before accepting the join
 	I_Assert(newplayernum < MAXPLAYERS);
 
 	playernode[newplayernum] = (UINT8)node;
@@ -448,9 +451,9 @@ void SV_JoinStateTicker(void)
 			continue;
 		}
 
-		                                                                     
-                                                                      
-                                                                         
+		/* Color zero is deliberately inaccessible to network players.  It is
+		 * therefore a reliable sign that the player's initial configuration
+		 * never completed, rather than a cosmetic choice made by an add-on. */
 		if (players[i].skincolor != SKINCOLOR_NONE
 		&& players[i].skincolor < numskincolors)
 		{
@@ -467,13 +470,13 @@ void SV_JoinStateTicker(void)
 			continue;
 		}
 
-		 
+		/* Give slow downloads and the normal config round trip plenty of time. */
 		if (players[i].jointime < 5*TICRATE)
 			continue;
 		if (playerconfigrepairnext[i] && now < playerconfigrepairnext[i])
 			continue;
 
-		if (playerconfigrepairattempts[i] < 2)
+		if (playerconfigrepairattempts[i] < PLAYERCONFIG_REPAIR_ATTEMPTS)
 		{
 			if (!playerconfigrepairattempts[i])
 				D_WriteJoinStateReport("server-missing-player-config", i,
@@ -482,11 +485,12 @@ void SV_JoinStateTicker(void)
 			if (SV_ReplayPlayerAssignments((SINT8)node))
 			{
 				playerconfigrepairattempts[i]++;
-				playerconfigrepairnext[i] = now + 3*TICRATE;
+				playerconfigrepairnext[i] = now + PLAYERCONFIG_REPAIR_DELAY;
 				CONS_Alert(CONS_WARNING,
-					"Repairing incomplete join state for %s (player %d, attempt %u/2).\n",
+					"Repairing incomplete join state for %s (player %d, attempt %u/%u).\n",
 					player_names[i], i,
-					(unsigned)playerconfigrepairattempts[i]);
+					(unsigned)playerconfigrepairattempts[i],
+					(unsigned)PLAYERCONFIG_REPAIR_ATTEMPTS);
 			}
 			else
 				playerconfigrepairnext[i] = now + TICRATE;
@@ -521,7 +525,7 @@ GetRefuseMessage (SINT8 node, INT32 rejoinernum)
 
 	boolean rejoining = (rejoinernum != -1);
 
-	if (!node) 
+	if (!node)/* server connecting to itself */
 		return NULL;
 
 	if (
@@ -529,7 +533,7 @@ GetRefuseMessage (SINT8 node, INT32 rejoinernum)
 			strncmp(cc->application, SRB2APPLICATION,
 				sizeof cc->application)
 	){
-		return 
+		return/* this is probably client's fault */
 			"Incompatible.";
 	}
 	else if (bannednode && bannednode[node])
@@ -586,11 +590,11 @@ GetRefuseMessage (SINT8 node, INT32 rejoinernum)
 	return NULL;
 }
 
-                                                  
-   
-                                 
-   
-    
+/** Called when a PT_CLIENTJOIN packet is received
+  *
+  * \param node The packet sender
+  *
+  */
 void PT_ClientJoin(SINT8 node)
 {
 	char names[MAXSPLITSCREENPLAYERS][MAXPLAYERNAME + 1];
@@ -600,21 +604,21 @@ void PT_ClientJoin(SINT8 node)
 	if (client)
 		return;
 
-
-
-
-
-
-
+	// A client keeps sending PT_CLIENTJOIN until PT_SERVERCFG reaches it.  The
+	// stock server used to silently discard those retries after marking the
+	// node in-game, which could leave the client on "Requesting to join..."
+	// indefinitely when the first configuration packet was delayed or missed.
+	// PT_ServerCFG is only acted on while the client is waiting for it, so
+	// resending it is idempotent for clients that already completed the join.
 	if (netnodes[node].ingame)
 	{
 		const boolean hasplayerslot = (netnodes[node].player >= 0
 			|| netnodes[node].player2 >= 0);
 
-		                                                                       
-                                                                            
-                                                                       
-                                               
+		/* A previous attempt that marked the node in-game but never assigned a
+		 * player cannot be repaired by resending PT_SERVERCFG: there is no player
+		 * for the client to become. Fully discard that half-join so the next
+		 * one-second client retry starts cleanly. */
 		if (!hasplayerslot)
 		{
 			DEBFILE(va("discarding half-connected joining node %d\n", node));
@@ -623,10 +627,10 @@ void PT_ClientJoin(SINT8 node)
 			return;
 		}
 
-		                                                                          
-                                                                         
-                                                                           
-                                
+		/* The first reliable config retransmits itself until acknowledged. Do not
+		 * queue another copy for every application-level join retry; duplicate
+		 * configs could fill the sender window and delay the very handshake they
+		 * were intended to rescue. */
 		if (Net_HasPendingReliablePacket(node, PT_SERVERCFG))
 		{
 			DEBFILE(va("server config still pending for joining node %d\n", node));
@@ -634,8 +638,8 @@ void PT_ClientJoin(SINT8 node)
 		else if (SV_SendServerConfig(node))
 		{
 			DEBFILE(va("resent server config to joining node %d\n", node));
-			                                                               
-                                                                        
+			/* A connected optimized client uses the same join request as a
+			 * protocol-compatible request to replay a missing player mapping. */
 			if (SV_ReplayPlayerAssignments(node))
 				DEBFILE(va("replayed player assignment for joining node %d\n", node));
 		}
@@ -652,9 +656,9 @@ void PT_ClientJoin(SINT8 node)
 		strlcpy(names[i], netbuffer->u.clientcfg.names[i], MAXPLAYERNAME + 1);
 
 	rejoinernum = FindRejoinerNum(node);
-	                                                                       
-                                                                         
-                                                                            
+	/* A reconnect can return through a differently formatted address (most
+	 * often after IPv4/IPv6 fallback). Reclaim an exact-name timed-out body
+	 * instead of creating Boba/Bob/Bo duplicate players and default Sonics. */
 	if (rejoinernum == -1 && numplayers == 1)
 		rejoinernum = FindRejoinerNumByName(names[0]);
 
@@ -678,10 +682,10 @@ void PT_ClientJoin(SINT8 node)
 
 	if (!SV_SendServerConfig(node))
 	{
-
-
-
-
+		// Running out of reliable-packet slots is temporary.  Leave the network
+		// address open and roll back only the game-node state; the client's next
+		// join request will retry cleanly.  Sending a refusal after ResetNode used
+		// to produce the misleading "SOCK_Send ... (No address)" error.
 		ResetNode(node);
 		DEBFILE(va("server config busy for node %d; waiting for join retry\n", node));
 		return;
@@ -690,11 +694,11 @@ void PT_ClientJoin(SINT8 node)
 
 	if (gamestate == GS_LEVEL || gamestate == GS_INTERMISSION)
 	{
-		SV_SendSaveGame(node, false);  
+		SV_SendSaveGame(node, false); // send a complete game state
 		DEBFILE("send savegame\n");
 	}
 
-
+	// Splitscreen can allow 2 players in one node
 	for (INT32 i = 0; i < numplayers; i++)
 		SV_AddPlayer(node, names[i]);
 
@@ -721,7 +725,7 @@ void PT_TellFilesNeeded(SINT8 node)
 
 		HSendPacket(node, false, 0, p - ((UINT8 *)&netbuffer->u));
 	}
-	else  
+	else // Shouldn't get this if you aren't the server...?
 		Net_CloseConnection(node);
 }
 
@@ -730,7 +734,7 @@ void PT_AskInfo(SINT8 node)
 	if (server && serverrunning)
 	{
 		SV_SendServerInfo(node, (tic_t)LONG(netbuffer->u.askinfo.time));
-		SV_SendPlayerInfo(node);  
+		SV_SendPlayerInfo(node); // Send extra info
 	}
 	Net_CloseConnection(node);
 }

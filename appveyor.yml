@@ -4,7 +4,7 @@ os: MinGW
 environment:
  CC: i686-w64-mingw32-gcc
  WINDRES: windres
-
+ # c:\mingw-w64 i686 has gcc 6.3.0, so use c:\msys64 7.3.0 instead
  MINGW_SDK: c:\msys64\mingw32
  CFLAGS: -Wno-implicit-fallthrough
  UPX_ZIP: upx391w
@@ -13,28 +13,28 @@ environment:
  CCACHE_URL: http://alam.srb2.org/ccache.exe
  CCACHE_COMPRESS: true
  CCACHE_DIR: C:\Users\appveyor\.ccache
-
-
-
-
-
-
+ ##############################
+ # DEPLOYER VARIABLES
+ # DPL_ENABLED=1 builds installers for branch names starting with `deployer`.
+ # DPL_TAG_ENABLED=1 will also build installers for release tags. DPL_ENABLED=1 must also be set.
+ # Set these in the Appveyor project settings
+ ##############################
  DPL_ENABLED: 0
  DPL_TAG_ENABLED: 0
  DPL_INSTALLER_NAME: SRB2-v220
-
-
-
+ # Asset handling is barebones vs. Travis Deployer. We operate on 7z only.
+ # Include the README files and the OpenGL batch in the main and patch archives.
+ # The x86/x64 archives contain the DLL binaries.
  ASSET_ARCHIVE_PATH: https://github.com/mazmazz/SRB2/releases/download/SRB2_assets_220/SRB2-v220-assets.7z
  ASSET_ARCHIVE_PATCH_PATH: https://github.com/mazmazz/SRB2/releases/download/SRB2_assets_220/SRB2-v220-patch-assets.7z
  ASSET_ARCHIVE_X86_PATH: https://github.com/mazmazz/SRB2/releases/download/SRB2_assets_220/SRB2-v220-x86-assets.7z
  ASSET_ARCHIVE_X64_PATH: https://github.com/mazmazz/SRB2/releases/download/SRB2_assets_220/SRB2-v220-x64-assets.7z
  ASSET_ARCHIVE_OPTIONAL_PATH: https://github.com/mazmazz/SRB2/releases/download/SRB2_assets_220/SRB2-v220-optional-assets.7z
-
+ # This is overridden to 1 for release tag builds
  ASSET_FILES_OPTIONAL_GET: 0
-
+ # For patches, also include the X86/X64 DLLs.
  PACKAGE_PATCH_DLL_GET: 0
-
+ # Delete all asset downloads so they can be redownloaded
  ASSET_CLEAN: 0
 
 cache:
@@ -64,7 +64,7 @@ before_build:
 - if defined [%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%] ( set "COMMIT=%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%" ) else ( set "COMMIT=%APPVEYOR_REPO_COMMIT%" )
 - cmd: git rev-parse --short %COMMIT%>%TMP%/gitshort.txt
 - cmd: set /P GITSHORT=<%TMP%/gitshort.txt
-
+# for pull requests, take the owner's name only, if this isn't the same repo of course
 - set "REPO=%APPVEYOR_REPO_BRANCH%"
 - if not [%APPVEYOR_PULL_REQUEST_HEAD_REPO_NAME%] == [] ( if not [%APPVEYOR_PULL_REQUEST_HEAD_REPO_NAME%] == [%APPVEYOR_REPO_NAME%] (  for /f "delims=/" %%a in ("%APPVEYOR_PULL_REQUEST_HEAD_REPO_NAME%") do set "REPO=%%a-%APPVEYOR_PULL_REQUEST_HEAD_REPO_BRANCH%" ) )
 - set "SRB2_MFLAGS=-C src NOECHOFILENAMES=1 CCACHE=1 EXENAME=srb2win-%REPO%-%GITSHORT%.exe"
@@ -79,33 +79,33 @@ after_build:
 - set BUILDSARCHIVE=%REPO%-%CONFIGURATION%.7z
 - cmd: 7z a %BUILD_ARCHIVE% bin -xr!.gitignore
 - appveyor PushArtifact %BUILD_ARCHIVE%
-
-
-
-
-
+#- cmd: copy %BUILD_ARCHIVE% %BUILDSARCHIVE%
+#- appveyor PushArtifact %BUILDSARCHIVE%
+##############################
+# DEPLOYER SCRIPT
+##############################
 - if [%DPL_ENABLED%] == [1] ( call "deployer\appveyor\deployer.bat" )
 
 test: off
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#deploy:
+#  - provider: FTP
+#    protocol: ftps
+#    host:
+#      secure: NsLJEPIBvmwCOj8Tg8RoRQ==
+#    username:
+#      secure: ejxi5mvk7oLYu7QtbYojajEPigMy0mokaKhuEVuDZcA=
+#    password:
+#      secure: Hbn6Uy3lT0YZ88yFJ3aW4w==
+#    folder: appveyor
+#    application:
+#    active_mode: false
+#    on:
+#      branch: master
+#      appveyor_repo_tag: true
 
 
 on_finish:
-
-
-
+#- cmd: echo xfreerdp /u:appveyor /cert-ignore +clipboard /v:<ip>:<port>
+#- ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+# vim: et ts=1

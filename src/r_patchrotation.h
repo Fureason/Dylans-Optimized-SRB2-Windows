@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_patchrotation.h
+/// \brief Patch rotation.
 
 #include "r_patch.h"
 #include "r_picformats.h"

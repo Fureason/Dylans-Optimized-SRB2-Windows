@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Program to test hotplugging of audio devices */
 
 #include "SDL_config.h"
 
@@ -29,13 +29,13 @@
 #include "testutils.h"
 
 static SDL_AudioSpec spec;
-static Uint8 *sound = NULL;  
-static Uint32 soundlen = 0;  
+static Uint8 *sound = NULL; /* Pointer to wave data */
+static Uint32 soundlen = 0; /* Length of wave data */
 
 static int posindex = 0;
 static Uint32 positions[64];
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -50,11 +50,11 @@ fillerup(void *_pos, Uint8 *stream, int len)
     Uint8 *waveptr;
     int waveleft;
 
-     
+    /* Set up the pointers */
     waveptr = sound + pos;
     waveleft = soundlen - pos;
 
-     
+    /* Go! */
     while (waveleft <= len) {
         SDL_memcpy(stream, waveptr, waveleft);
         stream += waveleft;
@@ -138,16 +138,16 @@ int main(int argc, char *argv[])
     int i;
     char *filename = NULL;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
     }
 
-     
+    /* Some targets (Mac CoreAudio) need an event queue for audio hotplug, so make and immediately hide a window. */
     SDL_MinimizeWindow(SDL_CreateWindow("testaudiohotplug", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, 0));
 
     filename = GetResourceFilename(argc > 1 ? argv[1] : NULL, "sample.wav");
@@ -157,14 +157,14 @@ int main(int argc, char *argv[])
         quit(1);
     }
 
-     
+    /* Load the wave file into memory */
     if (SDL_LoadWAV(filename, &spec, &sound, &soundlen) == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load %s: %s\n", filename, SDL_GetError());
         quit(1);
     }
 
 #if HAVE_SIGNAL_H
-     
+    /* Set the signals */
 #ifdef SIGHUP
     (void)signal(SIGHUP, poked);
 #endif
@@ -173,9 +173,9 @@ int main(int argc, char *argv[])
     (void)signal(SIGQUIT, poked);
 #endif
     (void)signal(SIGTERM, poked);
-#endif  
+#endif /* HAVE_SIGNAL_H */
 
-     
+    /* Show the list of available drivers */
     SDL_Log("Available audio drivers:");
     for (i = 0; i < SDL_GetNumAudioDrivers(); ++i) {
         SDL_Log("%i: %s", i, SDL_GetAudioDriver(i));
@@ -193,8 +193,8 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
-     
+    /* Clean up on signal */
+    /* Quit audio first, then free WAV. This prevents access violations in the audio threads. */
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
     SDL_FreeWAV(sound);
     SDL_free(filename);
@@ -202,4 +202,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

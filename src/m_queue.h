@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_queue.h
+/// \brief General queue code
 
 #ifndef M_QUEUE_H
 #define M_QUEUE_H
@@ -33,4 +33,4 @@ void M_QueueFree(mqueue_t *queue);
 
 #endif
 
-
+// EOF

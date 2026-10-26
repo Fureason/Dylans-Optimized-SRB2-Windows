@@ -1,4 +1,4 @@
- 
+/* makepng.c */
 #define _ISOC99_SOURCE
 /* Copyright: */
 #define COPYRIGHT "\251 2013,2015 John Cunningham Bowler"
@@ -123,7 +123,7 @@
 #define IMAGE_LICENSING "Dedicated to the public domain per Creative Commons "\
     "license \"CC0 1.0\"; https://creativecommons.org/publicdomain/zero/1.0/"
 
-#include <stddef.h>  
+#include <stddef.h> /* for offsetof */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -137,9 +137,9 @@
 #  include <config.h>
 #endif
 
-                                                                              
-                                 
-   
+/* Define the following to use this test against your installed libpng, rather
+ * than the one being built here:
+ */
 #ifdef PNG_FREESTANDING_TESTS
 #  include <png.h>
 #else
@@ -148,9 +148,9 @@
 
 #include <zlib.h>
 
-                                                                            
-               
-   
+/* Work round for GCC complaints about casting a (double) function result to
+ * an unsigned:
+ */
 static unsigned int
 flooru(double d)
 {
@@ -165,9 +165,9 @@ floorb(double d)
    return (png_byte)d;
 }
 
-                                                                                
-                     
-   
+/* This structure is used for inserting extra chunks (the --insert argument, not
+ * documented above.)
+ */
 typedef struct chunk_insert
 {
    struct chunk_insert *next;
@@ -216,7 +216,7 @@ image_size_of_type(int color_type, int bit_depth, unsigned int *colors,
 
       if (small)
       {
-         if (pixel_depth <= 8)  
+         if (pixel_depth <= 8) /* there will be one row */
             return 1 << pixel_depth;
 
          else
@@ -249,15 +249,15 @@ static int
 generate_palette(png_colorp palette, png_bytep trans, int bit_depth,
    png_const_bytep gamma_table, unsigned int *colors)
 {
-     
-                                                                
-                                       
-                             
-                              
-                                  
-                                                  
-                                                   
-      
+   /*
+    * 1-bit: entry 0 is transparent-red, entry 1 is opaque-white
+    * 2-bit: entry 0: transparent-green
+    *        entry 1: 40%-red
+    *        entry 2: 80%-blue
+    *        entry 3: opaque-white
+    * 4-bit: the 16 combinations of the 2-bit case
+    * 8-bit: the 256 combinations of the 4-bit case
+    */
    switch (colors[0])
    {
       default:
@@ -295,7 +295,7 @@ generate_palette(png_colorp palette, png_bytep trans, int bit_depth,
 
          else
          {
-            unsigned int size = 1U << (bit_depth/2);  
+            unsigned int size = 1U << (bit_depth/2); /* 2, 4 or 16 */
             unsigned int x, y;
             volatile unsigned int ip = 0;
 
@@ -303,19 +303,19 @@ generate_palette(png_colorp palette, png_bytep trans, int bit_depth,
             {
                ip = x + (size * y);
 
-                                                                               
-                  
+               /* size is at most 16, so the scaled value below fits in 16 bits
+                */
 #              define interp(pos, c1, c2) ((pos * c1) + ((size-pos) * c2))
 #              define xyinterp(x, y, c1, c2, c3, c4) (((size * size / 2) +\
                   (interp(x, c1, c2) * y + (size-y) * interp(x, c3, c4))) /\
                   (size*size))
 
                set_color(palette+ip, trans+ip,
-                   
+                  /* color:    green, red,blue,white */
                   xyinterp(x, y,   0, 255,   0, 255),
                   xyinterp(x, y, 255,   0,   0, 255),
                   xyinterp(x, y,   0,   0, 255, 255),
-                   
+                  /* alpha:        0, 102, 204, 255) */
                   xyinterp(x, y,   0, 102, 204, 255),
                   gamma_table);
             }
@@ -331,7 +331,7 @@ set_value(png_bytep row, size_t rowbytes, png_uint_32 x, unsigned int bit_depth,
 {
    unsigned int mask = (1U << bit_depth)-1;
 
-   x *= bit_depth;   
+   x *= bit_depth;  /* Maximum x is 4*1024, maximum bit_depth is 16 */
 
    if (value <= mask)
    {
@@ -346,7 +346,7 @@ set_value(png_bytep row, size_t rowbytes, png_uint_32 x, unsigned int bit_depth,
             case 1:
             case 2:
             case 4:
-                
+               /* Don't gamma correct - values get smashed */
                {
                   unsigned int shift = (8 - bit_depth) - (x & 0x7U);
 
@@ -386,42 +386,42 @@ set_value(png_bytep row, size_t rowbytes, png_uint_32 x, unsigned int bit_depth,
    }
 }
 
-static int  
+static int /* filter mask for row */
 generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
    int bit_depth, png_const_bytep gamma_table, double conv,
    unsigned int *colors, int small)
 {
-   int filters = 0;  
+   int filters = 0; /* file *MASK*, 0 means the default, not NONE */
    png_uint_32 size_max =
       image_size_of_type(color_type, bit_depth, colors, small)-1;
-   png_uint_32 depth_max = (1U << bit_depth)-1;  
+   png_uint_32 depth_max = (1U << bit_depth)-1; /* up to 65536 */
 
    if (colors[0] == 0) if (small)
    {
       unsigned int pixel_depth = pixel_depth_of_type(color_type, bit_depth);
 
-                                                                               
-                                                                    
-                                               
-         
+      /* For pixel depths less than 16 generate a single row containing all the
+       * possible pixel values.  For 16 generate all 65536 byte pair
+       * combinations in a 256x256 pixel array.
+       */
       switch (pixel_depth)
       {
          case 1:
             assert(y == 0 && rowbytes == 1 && size_max == 1);
-            row[0] = 0x6CU;  
+            row[0] = 0x6CU; /* binary: 01101100, only top 2 bits used */
             filters = PNG_FILTER_NONE;
             break;
 
          case 2:
             assert(y == 0 && rowbytes == 1 && size_max == 3);
-            row[0] = 0x1BU;  
+            row[0] = 0x1BU; /* binary 00011011, all bits used */
             filters = PNG_FILTER_NONE;
             break;
 
          case 4:
             assert(y == 0 && rowbytes == 8 && size_max == 15);
             row[0] = 0x01U;
-            row[1] = 0x23U;  
+            row[1] = 0x23U; /* SUB gives 0x22U for all following bytes */
             row[2] = 0x45U;
             row[3] = 0x67U;
             row[4] = 0x89U;
@@ -432,11 +432,11 @@ generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
             break;
 
          case 8:
-                                                                            
-                                                                             
-                                                                                
-                                                                     
-               
+            /* The row will have all the pixel values in order starting with
+             * '1', the SUB filter will change every byte into '1' (including
+             * the last, which generates pixel value '0').  Since the SUB filter
+             * has value 1 this should result in maximum compression.
+             */
             assert(y == 0 && rowbytes == 256 && size_max == 255);
             for (;;)
             {
@@ -449,33 +449,33 @@ generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
             break;
 
          case 16:
-                                                                              
-                                                                              
-                                                                              
-                                                                              
-                   
-              
-                                                               
-              
-                                                    
-              
-                                                                                
-              
-                                        
-              
-                                                                
-              
-                                                 
-              
-                                                                 
-              
-                                        
-              
-                                                                         
-              
-                                                                    
-                                                                    
-               
+            /* Rows are generated such that each row has a constant difference
+             * between the first and second byte of each pixel and so that the
+             * difference increases by 1 at each row.  The rows start with the
+             * first byte value of 0 and the value increases to 255 across the
+             * row.
+             *
+             * The difference starts at 1, so the first row is:
+             *
+             *     0 1 1 2 2 3 3 4 ... 254 255 255 0
+             *
+             * This means that running the SUB filter on the first row produces:
+             *
+             *   [SUB==1] 0 1 0 1 0 1...
+             *
+             * Then the difference is 2 on the next row, giving:
+             *
+             *    0 2 1 3 2 4 3 5 ... 254 0 255 1
+             *
+             * When the UP filter is run on this libpng produces:
+             *
+             *   [UP ==2] 0 1 0 1 0 1...
+             *
+             * And so on for all the remain rows to the final two * rows:
+             *
+             *    row 254: 0 255 1 0 2 1 3 2 4 3 ... 254 253 255 254
+             *    row 255: 0   0 1 1 2 2 3 3 4 4 ... 254 254 255 255
+             */
             assert(rowbytes == 512 && size_max == 255);
             for (;;)
             {
@@ -485,9 +485,9 @@ generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
                   break;
                --size_max;
             }
-                                                                               
-                                                     
-               
+            /* The first row must include PNG_FILTER_UP so that libpng knows we
+             * need to keep it for the following row:
+             */
             filters = (y == 0 ? PNG_FILTER_SUB+PNG_FILTER_UP : PNG_FILTER_UP);
             break;
 
@@ -495,14 +495,14 @@ generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
          case 32:
          case 48:
          case 64:
-                                                                                
-                                                                              
-                                                                          
-                                                                                
-                                                                    
-               
+            /* The rows are filled by an alogorithm similar to the above, in the
+             * first row pixel bytes are all equal, increasing from 0 by 1 for
+             * each pixel.  In the second row the bytes within a pixel are
+             * incremented 1,3,5,7,... from the previous row byte.  Using an odd
+             * number ensures all the possible byte values are used.
+             */
             assert(size_max == 255 && rowbytes == 256*(pixel_depth>>3));
-            pixel_depth >>= 3;  
+            pixel_depth >>= 3; /* now in bytes */
             while (rowbytes > 0)
             {
                const size_t pixel_index = --rowbytes/pixel_depth;
@@ -523,15 +523,15 @@ generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
             break;
 
          default:
-            assert(0 );
+            assert(0/*NOT REACHED*/);
       }
    }
 
    else switch (channels_of_type(color_type))
    {
-                                                                                
-                                                                
-      
+   /* 1 channel: a square image with a diamond, the least luminous colors are on
+    *    the edge of the image, the most luminous in the center.
+    */
       case 1:
          {
             png_uint_32 x;
@@ -541,18 +541,18 @@ generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
             {
                png_uint_32 luma = base - abs(2*x-size_max);
 
-                                                                   
-                              
-                  
+               /* 'luma' is now in the range 0..2*size_max, we need
+                * 0..depth_max
+                */
                luma = (luma*depth_max + size_max) / (2*size_max);
                set_value(row, rowbytes, x, bit_depth, luma, gamma_table, conv);
             }
          }
          break;
 
-                                                                               
-                                                                   
-      
+   /* 2 channels: the color channel increases in luminosity from top to bottom,
+    *    the alpha channel increases in opacity from left to right.
+    */
       case 2:
          {
             png_uint_32 alpha = (depth_max * y * 2 + size_max) / (2 * size_max);
@@ -569,74 +569,74 @@ generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
          }
          break;
 
-                                                                             
-                                  
-      
+   /* 3 channels: linear combinations of, from the top-left corner clockwise,
+    *    black, green, white, red.
+    */
       case 3:
          {
-                                                                               
-                                                           
-                                                                        
-                                                                         
-               
+            /* x0: the black->red scale (the value of the red component) at the
+             *     start of the row (blue and green are 0).
+             * x1: the green->white scale (the value of the red and blue
+             *     components at the end of the row; green is depth_max).
+             */
             png_uint_32 Y = (depth_max * y * 2 + size_max) / (2 * size_max);
             png_uint_32 x;
 
-                                                         
-              
-                                                  
-                                           
-                                                 
-                                           
-               
+            /* Interpolate x/depth_max from start to end:
+             *
+             *        start end         difference
+             * red:     Y    Y            0
+             * green:   0   depth_max   depth_max
+             * blue:    0    Y            Y
+             */
             for (x=0; x<=size_max; ++x)
             {
-               set_value(row, rowbytes, 3*x+0, bit_depth,   Y,
+               set_value(row, rowbytes, 3*x+0, bit_depth, /* red */ Y,
                      gamma_table, conv);
-               set_value(row, rowbytes, 3*x+1, bit_depth,  
+               set_value(row, rowbytes, 3*x+1, bit_depth, /* green */
                   (depth_max * x * 2 + size_max) / (2 * size_max),
                   gamma_table, conv);
-               set_value(row, rowbytes, 3*x+2, bit_depth,  
+               set_value(row, rowbytes, 3*x+2, bit_depth, /* blue */
                   (Y * x * 2 + size_max) / (2 * size_max),
                   gamma_table, conv);
             }
          }
          break;
 
-                                                                             
-                                       
-      
+   /* 4 channels: linear combinations of, from the top-left corner clockwise,
+    *    transparent, red, green, blue.
+    */
       case 4:
          {
-                                                                               
-                                                                             
-                                                                       
-                                                                           
-                              
-               
+            /* x0: the transparent->blue scale (the value of the blue and alpha
+             *     components) at the start of the row (red and green are 0).
+             * x1: the red->green scale (the value of the red and green
+             *     components at the end of the row; blue is 0 and alpha is
+             *     depth_max).
+             */
             png_uint_32 Y = (depth_max * y * 2 + size_max) / (2 * size_max);
             png_uint_32 x;
 
-                                                         
-              
-                                                   
-                                                   
-                                               
-                                               
-                                                   
-               
+            /* Interpolate x/depth_max from start to end:
+             *
+             *        start    end       difference
+             * red:     0   depth_max-Y depth_max-Y
+             * green:   0       Y             Y
+             * blue:    Y       0            -Y
+             * alpha:   Y    depth_max  depth_max-Y
+             */
             for (x=0; x<=size_max; ++x)
             {
-               set_value(row, rowbytes, 4*x+0, bit_depth,  
+               set_value(row, rowbytes, 4*x+0, bit_depth, /* red */
                   ((depth_max-Y) * x * 2 + size_max) / (2 * size_max),
                   gamma_table, conv);
-               set_value(row, rowbytes, 4*x+1, bit_depth,  
+               set_value(row, rowbytes, 4*x+1, bit_depth, /* green */
                   (Y * x * 2 + size_max) / (2 * size_max),
                   gamma_table, conv);
-               set_value(row, rowbytes, 4*x+2, bit_depth,  
+               set_value(row, rowbytes, 4*x+2, bit_depth, /* blue */
                   Y - (Y * x * 2 + size_max) / (2 * size_max),
                   gamma_table, conv);
-               set_value(row, rowbytes, 4*x+3, bit_depth,  
+               set_value(row, rowbytes, 4*x+3, bit_depth, /* alpha */
                   Y + ((depth_max-Y) * x * 2 + size_max) / (2 * size_max),
                   gamma_table, conv);
             }
@@ -650,9 +650,9 @@ generate_row(png_bytep row, size_t rowbytes, unsigned int y, int color_type,
 
    else if (color_type & PNG_COLOR_MASK_PALETTE)
    {
-                                                                               
-               
-         
+      /* Palette with fixed color: the image rows are all 0 and the image width
+       * is 16.
+       */
       memset(row, 0, rowbytes);
    }
 
@@ -766,7 +766,7 @@ makepng_error(png_structp png_ptr, png_const_charp message)
    png_longjmp(png_ptr, 1);
 }
 
-static int  
+static int /* 0 on success, else an error code */
 write_png(const char **name, FILE *fp, int color_type, int bit_depth,
    volatile png_fixed_point gamma, chunk_insert * volatile insert,
    unsigned int filters, unsigned int *colors, int small, int tRNS)
@@ -794,8 +794,8 @@ write_png(const char **name, FILE *fp, int color_type, int bit_depth,
       return 1;
    }
 
-    
-   png_set_benign_errors(png_ptr, 1 );
+   /* Allow benign errors so that we can write PNGs with errors */
+   png_set_benign_errors(png_ptr, 1/*allowed*/);
 
    /* Max out the text compression level in an attempt to make the license
     * small.   If --small then do the same for the IDAT.
@@ -815,13 +815,13 @@ write_png(const char **name, FILE *fp, int color_type, int bit_depth,
       unsigned int size =
          image_size_of_type(color_type, bit_depth, colors, small);
       unsigned int ysize;
-      png_fixed_point real_gamma = 45455;  
+      png_fixed_point real_gamma = 45455; /* For sRGB */
       png_byte gamma_table[256];
       double conv;
 
-                                                                                
-                                                             
-         
+      /* Normally images are square, but with 'small' we want to simply generate
+       * all the pixel values, or all that we reasonably can:
+       */
       if (small)
       {
          unsigned int pixel_depth =
@@ -843,9 +843,9 @@ write_png(const char **name, FILE *fp, int color_type, int bit_depth,
       else
          ysize = size;
 
-                                                                         
-                                     
-         
+      /* This function uses the libpng values used on read to carry extra
+       * information about the gamma:
+       */
       if (gamma == PNG_GAMMA_MAC_18)
          gamma = 65909;
 
@@ -866,9 +866,9 @@ write_png(const char **name, FILE *fp, int color_type, int bit_depth,
 
          else
          {
-                                                                      
-                                                                     
-               
+            /* Convert 'i' from sRGB (45455) to real_gamma, this makes
+             * the images look the same regardless of the gAMA chunk.
+             */
             conv = real_gamma;
             conv /= 45455;
 
@@ -896,9 +896,9 @@ write_png(const char **name, FILE *fp, int color_type, int bit_depth,
 
          if (tRNS)
             png_set_tRNS(png_ptr, info_ptr, trans, npalette-1,
-               NULL );
+               NULL/*transparent color*/);
 
-          
+         /* Reset gamma_table to prevent the image rows being changed */
          for (npalette=0; npalette<256; ++npalette)
             gamma_table[npalette] = (png_byte)npalette;
       }
@@ -910,45 +910,45 @@ write_png(const char **name, FILE *fp, int color_type, int bit_depth,
          col.red = col.green = col.blue = col.gray =
             0x0101U & ((1U<<bit_depth)-1U);
          col.index = 0U;
-         png_set_tRNS(png_ptr, info_ptr, NULL , 1U, &col);
+         png_set_tRNS(png_ptr, info_ptr, NULL/*trans*/, 1U, &col);
       }
 
       if (gamma == PNG_DEFAULT_sRGB)
          png_set_sRGB(png_ptr, info_ptr, PNG_sRGB_INTENT_ABSOLUTE);
 
-      else if (gamma > 0)  
+      else if (gamma > 0) /* Else don't set color space information */
       {
          png_set_gAMA_fixed(png_ptr, info_ptr, real_gamma);
 
-          
+         /* Just use the sRGB values here. */
          png_set_cHRM_fixed(png_ptr, info_ptr,
-             
-              31270, 32900,
-              64000, 33000,
-              30000, 60000,
-              15000,  6000
+            /* color      x       y */
+            /* white */ 31270, 32900,
+            /* red   */ 64000, 33000,
+            /* green */ 30000, 60000,
+            /* blue  */ 15000,  6000
          );
       }
 
-       
+      /* Insert extra information. */
       while (insert != NULL)
       {
          insert->insert(png_ptr, info_ptr, insert->nparams, insert->parameters);
          insert = insert->next;
       }
 
-       
+      /* Write the file header. */
       png_write_info(png_ptr, info_ptr);
 
-       
+      /* Restrict the filters */
       png_set_filter(png_ptr, PNG_FILTER_TYPE_BASE, filters);
 
       {
 #        ifdef PNG_WRITE_INTERLACING_SUPPORTED
             int passes = png_set_interlace_handling(png_ptr);
-#        else  
+#        else /* !WRITE_INTERLACING */
             int passes = 1;
-#        endif  
+#        endif /* !WRITE_INTERLACING */
          int pass;
          size_t rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 
@@ -976,7 +976,7 @@ write_png(const char **name, FILE *fp, int color_type, int bit_depth,
       }
    }
 
-    
+   /* Finish writing the file. */
    png_write_end(png_ptr, info_ptr);
 
    {
@@ -1037,9 +1037,9 @@ load_file(png_const_charp name, png_bytepp result)
 
                if (total > 0)
                {
-                                                                              
-                                                   
-                     
+                  /* Round up to a multiple of 4 here to allow an iCCP profile
+                   * to be padded to a 4x boundary.
+                   */
                   png_bytep data = malloc((total+3)&~3);
 
                   if (data != NULL)
@@ -1098,17 +1098,17 @@ static size_t
 load_fake(png_charp param, png_bytepp profile)
 {
    char *endptr = NULL;
-   uint64_t size = strtoull(param, &endptr, 0 );
+   uint64_t size = strtoull(param, &endptr, 0/*base*/);
 
-    
+   /* The 'fake' format is <number>*[string] */
    if (endptr != NULL && *endptr == '*')
    {
       size_t len = strlen(++endptr);
       size_t result = (size_t)size;
 
-      if (len == 0) len = 1;  
+      if (len == 0) len = 1; /* capture the terminating '\0' */
 
-       
+      /* Now repeat that string to fill 'size' bytes. */
       if (result == size && (*profile = malloc(result)) != NULL)
       {
          png_bytep out = *profile;
@@ -1165,7 +1165,7 @@ insert_iCCP(png_structp png_ptr, png_infop info_ptr, int nparams,
       case '<':
          {
             size_t filelen = load_file(params[1]+1, &profile);
-            if (filelen > 0xfffffffc)  
+            if (filelen > 0xfffffffc) /* Maximum profile length */
             {
                fprintf(stderr, "%s: file too long (%lu) for an ICC profile\n",
                   params[1]+1, (unsigned long)filelen);
@@ -1181,9 +1181,9 @@ insert_iCCP(png_structp png_ptr, png_infop info_ptr, int nparams,
          {
             size_t fake_len = load_fake(params[1], &profile);
 
-            if (fake_len > 0)  
+            if (fake_len > 0) /* else a simple parameter */
             {
-               if (fake_len > 0xffffffff)  
+               if (fake_len > 0xffffffff) /* Maximum profile length */
                {
                   fprintf(stderr,
                      "%s: fake data too long (%lu) for an ICC profile\n",
@@ -1191,7 +1191,7 @@ insert_iCCP(png_structp png_ptr, png_infop info_ptr, int nparams,
                   exit(1);
                }
                proflen = (png_uint_32)(fake_len & ~3U);
-                
+               /* Always fix up the profile length. */
                png_save_uint_32(profile, proflen);
                break;
             }
@@ -1211,9 +1211,9 @@ insert_iCCP(png_structp png_ptr, png_infop info_ptr, int nparams,
          "makepng: --insert iCCP %s: profile length made a multiple of 4\n",
          params[1]);
 
-                                                                                
-                                 
-         
+      /* load_file allocates extra space for this padding, the ICC spec requires
+       * padding with zero bytes.
+       */
       while (proflen & 3)
          profile[proflen++] = 0;
    }
@@ -1246,11 +1246,11 @@ insert_iCCP(png_structp png_ptr, png_infop info_ptr, int nparams,
 static void
 clear_text(png_text *text, png_charp keyword)
 {
-   text->compression = -1;  
+   text->compression = -1; /* none */
    text->key = keyword;
    text->text = NULL;
-   text->text_length = 0;  
-   text->itxt_length = 0;  
+   text->text_length = 0; /* libpng calculates this */
+   text->itxt_length = 0; /* libpng calculates this */
    text->lang = NULL;
    text->lang_key = NULL;
 }
@@ -1276,7 +1276,7 @@ set_text(png_structp png_ptr, png_infop info_ptr, png_textp text,
             png_bytep data = NULL;
             size_t fake_len = load_fake(param, &data);
 
-            if (fake_len > 0)  
+            if (fake_len > 0) /* else a simple parameter */
             {
                text->text_length = fake_len;
                text->text = (png_charp)data;
@@ -1314,7 +1314,7 @@ insert_zTXt(png_structp png_ptr, png_infop info_ptr, int nparams,
 
    check_param_count(nparams, 2);
    clear_text(&text, params[0]);
-   text.compression = 0;  
+   text.compression = 0; /* deflate */
    set_text(png_ptr, info_ptr, &text, params[1]);
 }
 
@@ -1326,9 +1326,9 @@ insert_iTXt(png_structp png_ptr, png_infop info_ptr, int nparams,
 
    check_param_count(nparams, 4);
    clear_text(&text, params[0]);
-   text.compression = 2;  
-   text.lang = params[1]; 
-   text.lang_key = params[2];  
+   text.compression = 2; /* iTXt + deflate */
+   text.lang = params[1];/* language tag */
+   text.lang_key = params[2]; /* translated keyword */
    set_text(png_ptr, info_ptr, &text, params[3]);
 }
 
@@ -1339,14 +1339,14 @@ insert_hIST(png_structp png_ptr, png_infop info_ptr, int nparams,
    int i;
    png_uint_16 freq[256];
 
-                                                                               
-                                                    
-      
+   /* libpng takes the count from the PLTE count; we don't check it here but we
+    * do set the array to 0 for unspecified entries.
+    */
    memset(freq, 0, sizeof freq);
    for (i=0; i<nparams; ++i)
    {
       char *endptr = NULL;
-      unsigned long int l = strtoul(params[i], &endptr, 0 );
+      unsigned long int l = strtoul(params[i], &endptr, 0/*base*/);
 
       if (params[i][0] && *endptr == 0 && l <= 65535)
          freq[i] = (png_uint_16)l;
@@ -1365,7 +1365,7 @@ static png_byte
 bval(png_const_structrp png_ptr, png_charp param, unsigned int maxval)
 {
    char *endptr = NULL;
-   unsigned long int l = strtoul(param, &endptr, 0 );
+   unsigned long int l = strtoul(param, &endptr, 0/*base*/);
 
    if (param[0] && *endptr == 0 && l <= maxval)
       return (png_byte)l;
@@ -1423,17 +1423,17 @@ static int
 find_parameters(png_const_charp what, png_charp param, png_charp *list,
    int nparams)
 {
-                                                                           
-                                                                   
-      
+   /* Parameters are separated by '\n' or ':' characters, up to nparams are
+    * accepted (more is an error) and the number found is returned.
+    */
    int i;
    for (i=0; *param && i<nparams; ++i)
    {
       list[i] = param;
       while (*++param) if (*param == '\n' || *param == ':')
       {
-         *param++ = 0;  
-         break;         
+         *param++ = 0; /* Terminate last parameter */
+         break;        /* And start a new one. */
       }
    }
 
@@ -1443,8 +1443,8 @@ find_parameters(png_const_charp what, png_charp param, png_charp *list,
       exit(1);
    }
 
-   list[i] = NULL;  
-   return i;  
+   list[i] = NULL; /* terminates list */
+   return i; /* number of parameters filled in */
 }
 
 static void
@@ -1488,7 +1488,7 @@ find_insert(png_const_charp what, png_charp param)
    png_charp parameter_list[1024];
    int i, nparams;
 
-    
+   /* Assemble the chunk name */
    for (i=0; i<4; ++i)
    {
       char ch = what[i];
@@ -1506,45 +1506,45 @@ find_insert(png_const_charp what, png_charp param)
       exit(1);
    }
 
-    
+   /* Assemble the parameter list. */
    nparams = find_parameters(what, param, parameter_list, 1024);
 
 #  define CHUNK(a,b,c,d) (((a)<<24)+((b)<<16)+((c)<<8)+(d))
 
    switch (chunk)
    {
-      case CHUNK(105,67,67,80):   
+      case CHUNK(105,67,67,80):  /* iCCP */
          if (nparams == 2)
             return make_insert(what, insert_iCCP, nparams, parameter_list);
          break;
 
-      case CHUNK(116,69,88,116):  
+      case CHUNK(116,69,88,116): /* tEXt */
          if (nparams == 2)
             return make_insert(what, insert_tEXt, nparams, parameter_list);
          break;
 
-      case CHUNK(122,84,88,116):  
+      case CHUNK(122,84,88,116): /* zTXt */
          if (nparams == 2)
             return make_insert(what, insert_zTXt, nparams, parameter_list);
          break;
 
-      case CHUNK(105,84,88,116):  
+      case CHUNK(105,84,88,116): /* iTXt */
          if (nparams == 4)
             return make_insert(what, insert_iTXt, nparams, parameter_list);
          break;
 
-      case CHUNK(104,73,83,84):   
+      case CHUNK(104,73,83,84):  /* hIST */
          if (nparams <= 256)
             return make_insert(what, insert_hIST, nparams, parameter_list);
          break;
 
-      case CHUNK(115,66,73,84):  
+      case CHUNK(115,66,73,84): /* sBIT */
          if (nparams <= 4)
             return make_insert(what, insert_sBIT, nparams, parameter_list);
          break;
 
 #if 0
-      case CHUNK(115,80,76,84):   
+      case CHUNK(115,80,76,84):  /* sPLT */
          return make_insert(what, insert_sPLT, nparams, parameter_list);
 #endif
 
@@ -1558,15 +1558,15 @@ find_insert(png_const_charp what, png_charp param)
    return NULL;
 }
 
-                                                                             
-                                              
-   
+/* This is necessary because libpng expects writeable strings for things like
+ * text chunks (maybe this should be fixed...)
+ */
 static png_charp
 strstash(png_const_charp foo)
 {
-                                                                             
-             
-      
+   /* The program indicates a memory allocation error by crashing, this is by
+    * design.
+    */
    if (foo != NULL)
    {
       png_charp bar = malloc(strlen(foo)+1);
@@ -1632,10 +1632,10 @@ add_iTXt(const char *key, const char *language, const char *language_key,
    return make_insert(what, insert_iTXt, 4, parameter_list);
 }
 
-                                                                              
-                                                                               
-                
-   
+/* This is a not-very-good parser for a sequence of numbers (including 0).  It
+ * doesn't accept some apparently valid things, but it accepts all the sensible
+ * combinations.
+ */
 static void
 parse_color(char *arg, unsigned int *colors)
 {
@@ -1659,10 +1659,10 @@ parse_color(char *arg, unsigned int *colors)
          exit(1);
       }
 
-      if (*ep) ++ep;  
+      if (*ep) ++ep; /* skip a separator */
       arg = ep;
 
-      colors[++ncolors] = (unsigned int)ul;  
+      colors[++ncolors] = (unsigned int)ul; /* checked above */
    }
 
    if (*arg)
@@ -1679,13 +1679,13 @@ main(int argc, char **argv)
 {
    FILE *fp = stdout;
    const char *file_name = NULL;
-   int color_type = 8;  
-   int bit_depth = 32;  
-   int small = 0;  
-   int tRNS = 0;  
+   int color_type = 8; /* invalid */
+   int bit_depth = 32; /* invalid */
+   int small = 0; /* make full size images */
+   int tRNS = 0; /* don't output a tRNS chunk */
    unsigned int colors[5];
    unsigned int filters = PNG_ALL_FILTERS;
-   png_fixed_point gamma = 0;  
+   png_fixed_point gamma = 0; /* not set */
    chunk_insert *head_insert = NULL;
    chunk_insert **insert_ptr = &head_insert;
 
@@ -1828,7 +1828,7 @@ main(int argc, char **argv)
          continue;
       }
 
-      if (argc == 1)  
+      if (argc == 1) /* It's the file name */
       {
          fp = fopen(arg, "wb");
          if (fp == NULL)
@@ -1843,7 +1843,7 @@ main(int argc, char **argv)
 
       fprintf(stderr, "makepng: %s: unknown argument\n", arg);
       exit(1);
-   }  
+   } /* argument while loop */
 
    if (color_type == 8 || bit_depth == 32)
    {
@@ -1854,7 +1854,7 @@ main(int argc, char **argv)
       exit(1);
    }
 
-    
+   /* Check the colors */
    {
       unsigned int lim = (color_type == PNG_COLOR_TYPE_PALETTE ? 255U :
          (1U<<bit_depth)-1);
@@ -1869,24 +1869,24 @@ main(int argc, char **argv)
          }
    }
 
-                                                                                
-                     
-      
+   /* small and colors are incomparible (will probably crash if both are used at
+    * the same time!)
+    */
    if (small && colors[0] != 0)
    {
       fprintf(stderr, "makepng: --color --small: only one at a time!\n");
       exit(1);
    }
 
-                                                                           
-                       
-      
-   if (filters == PNG_ALL_FILTERS && !small )
+   /* Restrict the filters for more speed to those we know are used for the
+    * generated images.
+    */
+   if (filters == PNG_ALL_FILTERS && !small/*small provides defaults*/)
    {
       if ((color_type & PNG_COLOR_MASK_PALETTE) != 0 || bit_depth < 8)
          filters = PNG_FILTER_NONE;
 
-      else if (color_type & PNG_COLOR_MASK_COLOR)  
+      else if (color_type & PNG_COLOR_MASK_COLOR) /* rgb */
       {
          if (bit_depth == 8)
             filters &= ~(PNG_FILTER_NONE | PNG_FILTER_AVG);
@@ -1895,7 +1895,7 @@ main(int argc, char **argv)
             filters = PNG_FILTER_SUB | PNG_FILTER_PAETH;
       }
 
-      else  
+      else /* gray 8 or 16-bit */
          filters &= ~PNG_FILTER_NONE;
    }
 
@@ -1903,12 +1903,12 @@ main(int argc, char **argv)
    {
       static png_const_charp copyright[] =
       {
-         COPYRIGHT,  
+         COPYRIGHT, /* ISO-Latin-1 */
          NULL
       };
       static png_const_charp licensing[] =
       {
-         IMAGE_LICENSING,  
+         IMAGE_LICENSING, /* UTF-8 */
          NULL
       };
 

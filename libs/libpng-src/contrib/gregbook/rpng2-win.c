@@ -93,15 +93,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <setjmp.h>     
+#include <setjmp.h>    /* for jmpbuf declaration in readpng2.h */
 #include <time.h>
-#include <math.h>       
+#include <math.h>      /* only for PvdM background code */
 #include <windows.h>
 #ifdef __CYGWIN__
-                                                           
-                                                         
-                          
-   
+/* getch replacement. Turns out, we don't really need this,
+ * but leave it here if we ever enable any of the uses of
+ * _getch in the main code
+ */
 #include <unistd.h>
 #include <termio.h>
 #include <sys/ioctl.h>
@@ -122,10 +122,10 @@ int repl_getch( void )
 }
 #define _getch repl_getch
 #else
-#include <conio.h>      
+#include <conio.h>     /* only for _getch() */
 #endif
 
- 
+/* all for PvdM background code: */
 #ifndef PI
 #  define PI             3.141592653589793238
 #endif
@@ -135,7 +135,7 @@ int repl_getch( void )
 #define MIN(a,b)         (a<b?a:b)
 #define CLIP(a,min,max)  MAX(min,MIN((a),max))
 #define ABS(a)           ((a)<0?-(a):(a))
-#define CLIP8P(c)        MAX(0,(MIN((c),255)))    
+#define CLIP8P(c)        MAX(0,(MIN((c),255)))   /* 8-bit pos. integer (uch) */
 #define ROUNDF(f)        ((int)(f + 0.5))
 
 #define rgb1_max   bg_freq
@@ -143,15 +143,15 @@ int repl_getch( void )
 #define rgb2_max   bg_bsat
 #define rgb2_min   bg_brot
 
-       
+/* #define DEBUG */     /* this enables the Trace() macros */
 
-#include "readpng2.h"    
+#include "readpng2.h"   /* typedefs, common macros, readpng2 prototypes */
 
 
-                                                                     
-                                                                        
-                                                             
-                             
+/* could just include png.h, but this macro is the only thing we need
+ * (name and typedefs changed to local versions); note that side effects
+ * only happen with alpha (which could easily be avoided with
+ * "ush acopy = (alpha);") */
 
 #define alpha_composite(composite, fg, alpha, bg) {               \
     ush temp = ((ush)(fg)*(ush)(alpha) +                          \
@@ -160,13 +160,13 @@ int repl_getch( void )
 }
 
 
-#define INBUFSIZE 4096                                                     
-                                                                         
-                                                                            
-                                                                           
-                                         
+#define INBUFSIZE 4096   /* with pseudo-timing on (1 sec delay/block), this
+                          *  block size corresponds roughly to a download
+                          *  speed 10% faster than theoretical 33.6K maximum
+                          *  (assuming 8 data bits, 1 stop bit and no other
+                          *  overhead) */
 
- 
+/* local prototypes */
 static void       rpng2_win_init(void);
 static int        rpng2_win_create_window(void);
 static int        rpng2_win_load_bg_image(void);
@@ -187,7 +187,7 @@ static mainprog_info rpng2_info;
 static uch inbuf[INBUFSIZE];
 static int incount;
 
-static int pat = 6;          
+static int pat = 6;         /* must be less than num_bgpat */
 static int bg_image = 0;
 static int bgscale = 16;
 static ulg bg_rowbytes;
@@ -196,70 +196,70 @@ static uch *bg_data;
 static struct rgb_color {
     uch r, g, b;
 } rgb[] = {
-    {  0,   0,   0},     
-    {255, 255, 255},     
-    {173, 132,  57},     
-    { 64, 132,   0},     
-    {189, 117,   1},     
-    {253, 249,   1},     
-    {  0,   0, 255},     
-    {  0,   0, 120},     
-    {255,   0, 255},     
-    { 64,   0,  64},     
-    {255,   0,   0},     
-    { 64,   0,   0},     
-    {255, 127,   0},     
-    {192,  96,   0},     
-    { 24,  60,   0},     
-    { 85, 125, 200}      
+    {  0,   0,   0},    /*  0:  black */
+    {255, 255, 255},    /*  1:  white */
+    {173, 132,  57},    /*  2:  tan */
+    { 64, 132,   0},    /*  3:  medium green */
+    {189, 117,   1},    /*  4:  gold */
+    {253, 249,   1},    /*  5:  yellow */
+    {  0,   0, 255},    /*  6:  blue */
+    {  0,   0, 120},    /*  7:  medium blue */
+    {255,   0, 255},    /*  8:  magenta */
+    { 64,   0,  64},    /*  9:  dark magenta */
+    {255,   0,   0},    /* 10:  red */
+    { 64,   0,   0},    /* 11:  dark red */
+    {255, 127,   0},    /* 12:  orange */
+    {192,  96,   0},    /* 13:  darker orange */
+    { 24,  60,   0},    /* 14:  dark green-yellow */
+    { 85, 125, 200}     /* 15:  ice blue */
 };
-                                                      
-                                                            
-   
+/* not used for now, but should be for error-checking:
+static int num_rgb = sizeof(rgb) / sizeof(struct rgb_color);
+ */
 
-  
-                                                                  
-                                                                   
-                                                                  
-                                                                   
-                   
+/*
+    This whole struct is a fairly cheesy way to keep the number of
+    command-line options to a minimum.  The radial-waves background
+    type is a particularly poor fit to the integer elements of the
+    struct...but a few macros and a little fixed-point math will do
+    wonders for ya.
 
-              
-                                      
-                                      
-                                                                     
-                                                          
-                                                         
-                                                      
-                                                        
-                                                              
-   
+    type bits:
+       F E D C B A 9 8 7 6 5 4 3 2 1 0
+                             | | | | |
+                             | | +-+-+-- 0 = sharp-edged checkerboard
+                             | |         1 = soft diamonds
+                             | |         2 = radial waves
+                             | |       3-7 = undefined
+                             | +-- gradient #2 inverted?
+                             +-- alternating columns inverted?
+ */
 static struct background_pattern {
     ush type;
-    int rgb1_max, rgb1_min;      
-    int rgb2_max, rgb2_min;      
+    int rgb1_max, rgb1_min;     /* or bg_freq, bg_gray */
+    int rgb2_max, rgb2_min;     /* or bg_bsat, bg_brot (both scaled by 10)*/
 } bg[] = {
-    {0+8,   2,0,  1,15},         
-    {0+24,  2,0,  1,0},          
-    {0+8,   4,5,  0,2},          
-    {0+8,   4,5,  0,6},          
-    {0,     7,0,  8,9},          
-    {0+8,  13,0,  5,14},         
-    {0+8,  12,0, 10,11},         
-    {1,     7,0,  8,0},          
-    {1,    12,0, 11,0},          
-    {1,    10,0,  7,0},          
-    {1,     4,0,  5,0},          
-    {1,     3,0,  0,0},          
-    {2,    16, 100,  20,   0},   
-    {2,    18, 100,  10,   2},   
-    {2,    16, 256, 100, 250},   
-    {2, 10000, 256,  11,   0}    
+    {0+8,   2,0,  1,15},        /* checkered:  tan/black vs. white/ice blue */
+    {0+24,  2,0,  1,0},         /* checkered:  tan/black vs. white/black */
+    {0+8,   4,5,  0,2},         /* checkered:  gold/yellow vs. black/tan */
+    {0+8,   4,5,  0,6},         /* checkered:  gold/yellow vs. black/blue */
+    {0,     7,0,  8,9},         /* checkered:  deep blue/black vs. magenta */
+    {0+8,  13,0,  5,14},        /* checkered:  orange/black vs. yellow */
+    {0+8,  12,0, 10,11},        /* checkered:  orange/black vs. red */
+    {1,     7,0,  8,0},         /* diamonds:  deep blue/black vs. magenta */
+    {1,    12,0, 11,0},         /* diamonds:  orange vs. dark red */
+    {1,    10,0,  7,0},         /* diamonds:  red vs. medium blue */
+    {1,     4,0,  5,0},         /* diamonds:  gold vs. yellow */
+    {1,     3,0,  0,0},         /* diamonds:  medium green vs. black */
+    {2,    16, 100,  20,   0},  /* radial:  ~hard radial color-beams */
+    {2,    18, 100,  10,   2},  /* radial:  soft, curved radial color-beams */
+    {2,    16, 256, 100, 250},  /* radial:  very tight spiral */
+    {2, 10000, 256,  11,   0}   /* radial:  dipole-moire' (almost fractal) */
 };
 static int num_bgpat = sizeof(bg) / sizeof(struct background_pattern);
 
 
- 
+/* Windows-specific global variables (could go in struct, but messy...) */
 static ulg wimage_rowbytes;
 static uch *dib;
 static uch *wimage_data;
@@ -274,7 +274,7 @@ static int global_showmode;
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
 {
-    char *args[1024];                  
+    char *args[1024];                 /* arbitrary limit, but should suffice */
     char **argv = args;
     char *p, *q, *bgstr = NULL;
     int argc = 0;
@@ -282,15 +282,15 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
     int error = 0;
     int timing = FALSE;
     int have_bg = FALSE;
-    double LUT_exponent;               
-    double CRT_exponent = 2.2;         
-    double default_display_exponent;   
+    double LUT_exponent;              /* just the lookup table */
+    double CRT_exponent = 2.2;        /* just the monitor */
+    double default_display_exponent;  /* whole display system */
     MSG msg;
 
 
-                                                                           
-                                                                           
-              
+    /* First initialize a few things, just to be sure--memset takes care of
+     * default background color (black), booleans (FALSE), pointers (NULL),
+     * etc. */
 
     global_hInst = hInst;
     global_showmode = showmode;
@@ -298,34 +298,34 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
     memset(&rpng2_info, 0, sizeof(mainprog_info));
 
 #ifndef __CYGWIN__
-                                                                          
-                                                                        
-                                                                               
-                      
+    /* Next reenable console output, which normally goes to the bit bucket
+     * for windowed apps.  Closing the console window will terminate the
+     * app.  Thanks to David.Geldreich at realviz.com for supplying the magical
+     * incantation. */
 
     AllocConsole();
     freopen("CONOUT$", "a", stderr);
     freopen("CONOUT$", "a", stdout);
 #endif
 
-                                                                       
-                                                                    
-                                                                     
-                                                                       
-                                                                        
-                                                                         
+    /* Set the default value for our display-system exponent, i.e., the
+     * product of the CRT exponent and the exponent corresponding to
+     * the frame-buffer's lookup table (LUT), if any.  This is not an
+     * exhaustive list of LUT values (e.g., OpenStep has a lot of weird
+     * ones), but it should cover 99% of the current possibilities.  And
+     * yes, these ifdefs are completely wasted in a Windows program... */
 
 #if defined(NeXT)
-     
+    /* third-party utilities can modify the default LUT exponent */
     LUT_exponent = 1.0 / 2.2;
-      
-                                                           
-                                        
-       
+    /*
+    if (some_next_function_that_returns_gamma(&next_gamma))
+        LUT_exponent = 1.0 / next_gamma;
+     */
 #elif defined(sgi)
     LUT_exponent = 1.0 / 1.7;
-                                                          
-                                                         
+    /* there doesn't seem to be any documented function to
+     * get the "gamma" value, so we do it the hard way */
     infile = fopen("/etc/config/system.glGammaVal", "r");
     if (infile) {
         double sgi_gamma;
@@ -338,22 +338,22 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
     }
 #elif defined(Macintosh)
     LUT_exponent = 1.8 / 2.61;
-      
-                                                         
-                                        
-       
+    /*
+    if (some_mac_function_that_returns_gamma(&mac_gamma))
+        LUT_exponent = mac_gamma / 2.61;
+     */
 #else
-    LUT_exponent = 1.0;    
+    LUT_exponent = 1.0;   /* assume no LUT:  most PCs */
 #endif
 
-     
+    /* the defaults above give 1.0, 1.3, 1.5 and 2.2, respectively: */
     default_display_exponent = LUT_exponent * CRT_exponent;
 
 
-                                                                             
-                                                                              
-                                                                          
-                                                  
+    /* If the user has set the SCREEN_GAMMA environment variable as suggested
+     * (somewhat imprecisely) in the libpng documentation, use that; otherwise
+     * use the default value we just calculated.  Either way, the user may
+     * override this via a command-line option. */
 
     if ((p = getenv("SCREEN_GAMMA")) != NULL)
         rpng2_info.display_exponent = atof(p);
@@ -361,9 +361,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
         rpng2_info.display_exponent = default_display_exponent;
 
 
-                                                                             
-                                                                          
-                                       
+    /* Windows really hates command lines, so we have to set up our own argv.
+     * Note that we do NOT bother with quoted arguments here, so don't use
+     * filenames with spaces in 'em! */
 
     argv[argc++] = PROGNAME;
     p = cmd;
@@ -371,22 +371,22 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
         if (*p == ' ')
             while (*++p == ' ')
                 ;
-         
+        /* now p points at the first non-space after some spaces */
         if (*p == '\0')
-            break;     
+            break;    /* nothing after the spaces:  done */
         argv[argc++] = q = p;
         while (*q && *q != ' ')
             ++q;
-         
+        /* now q points at a space or the end of the string */
         if (*q == '\0')
-            break;     
-        *q = '\0';     
+            break;    /* last argv already terminated; quit */
+        *q = '\0';    /* change space to terminator */
         p = q + 1;
     }
-    argv[argc] = NULL;    
+    argv[argc] = NULL;   /* terminate the argv array itself */
 
 
-     
+    /* Now parse the command line for options and the PNG filename. */
 
     while (*++argv && !error) {
         if (!strncmp(*argv, "-gamma", 2)) {
@@ -426,10 +426,10 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
         } else {
             if (**argv != '-') {
                 filename = *argv;
-                if (argv[1])    
+                if (argv[1])   /* shouldn't be any more args after filename */
                     ++error;
             } else
-                ++error;    
+                ++error;   /* not expecting any other options */
         }
     }
 
@@ -437,7 +437,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
         ++error;
 
 
-     
+    /* print usage screen if any errors up to this point */
 
     if (error) {
 #ifndef __CYGWIN__
@@ -536,7 +536,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
     }
 
 
-     
+    /* set the title-bar string, but make sure buffer doesn't overflow */
 
     alen = strlen(appname);
     flen = strlen(filename);
@@ -546,10 +546,10 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
         sprintf(titlebar, "%s:  %s", appname, filename);
 
 
-     
+    /* set some final rpng2_info variables before entering main data loop */
 
     if (have_bg) {
-        unsigned r, g, b;    
+        unsigned r, g, b;   /* this approach quiets compiler warnings */
 
         sscanf(bgstr+1, "%2x%2x%2x", &r, &g, &b);
         rpng2_info.bg_red   = (uch)r;
@@ -564,14 +564,14 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
     rpng2_info.mainprog_finish_display = rpng2_win_finish_display;
 
 
-                                                                             
-                                                                              
-                                                                             
-                                                                         
-                                                                            
-                                                                              
-                                                                               
-                
+    /* OK, this is the fun part:  call readpng2_decode_data() at the start of
+     * the loop to deal with our first buffer of data (read in above to verify
+     * that the file is a PNG image), then loop through the file and continue
+     * calling the same routine to handle each chunk of data.  It in turn
+     * passes the data to libpng, which will invoke one or more of our call-
+     * backs as decoded data become available.  We optionally call Sleep() for
+     * one second per iteration to simulate downloading the image via an analog
+     * modem. */
 
     for (;;) {
         Trace((stderr, "about to call readpng2_decode_data()\n"))
@@ -590,8 +590,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
                 fprintf(stderr, PROGNAME ":  end of file reached "
                   "(unexpectedly) while reading PNG image file\n");
                 exit(3);
-            } else   {
-                 
+            } else /* if (error) */ {
+                /* will print error message below */
             }
             break;
         }
@@ -603,7 +603,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
     }
 
 
-     
+    /* clean up PNG stuff and report any decoding errors */
 
     fclose(infile);
     Trace((stderr, "about to call readpng2_cleanup()\n"))
@@ -615,7 +615,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
     }
 
 
-     
+    /* wait for the user to tell us when to quit */
 
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
@@ -623,7 +623,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
     }
 
 
-     
+    /* we're done:  clean up all image and Windows resources and go away */
 
     Trace((stderr, "about to call rpng2_win_cleanup()\n"))
     rpng2_win_cleanup();
@@ -635,9 +635,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR cmd, int showmode)
 
 
 
-                                                                           
-                                                                         
-                                                                              
+/* this function is called by readpng2_info_callback() in readpng2.c, which
+ * in turn is called by libpng after all of the pre-IDAT chunks have been
+ * read and processed--i.e., we now have enough info to finish initializing */
 
 static void rpng2_win_init()
 {
@@ -649,7 +649,7 @@ static void rpng2_win_init()
     Trace((stderr, "  width  = %ld\n", rpng2_info.width))
     Trace((stderr, "  height = %ld\n", rpng2_info.height))
 
-     
+    /* Guard against integer overflow */
     if (rpng2_info.height > ((size_t)(-1))/rowbytes) {
         fprintf(stderr, PROGNAME ":  image_data buffer would be too large\n",
         readpng2_cleanup(&rpng2_info);
@@ -673,10 +673,10 @@ static void rpng2_win_init()
     for (i = 0;  i < rpng2_info.height;  ++i)
         rpng2_info.row_pointers[i] = rpng2_info.image_data + i*rowbytes;
 
-                                                                             
-                                                                           
-                                                                        
-                                                                               
+/*---------------------------------------------------------------------------
+    Do the basic Windows initialization stuff, make the window, and fill it
+    with the user-specified, file-specified or default background color.
+  ---------------------------------------------------------------------------*/
 
     if (rpng2_win_create_window()) {
         readpng2_cleanup(&rpng2_info);
@@ -702,25 +702,25 @@ static int rpng2_win_create_window()
     RECT rect;
 
 
-                                                                             
-                                                                           
-                                      
-                                                                               
+/*---------------------------------------------------------------------------
+    Allocate memory for the display-specific version of the image (round up
+    to multiple of 4 for Windows DIB).
+  ---------------------------------------------------------------------------*/
 
     wimage_rowbytes = ((3*rpng2_info.width + 3L) >> 2) << 2;
 
     if (!(dib = (uch *)malloc(sizeof(BITMAPINFOHEADER) +
                               wimage_rowbytes*rpng2_info.height)))
     {
-        return 4;    
+        return 4;   /* fail */
     }
 
-                                                                             
-                                                                           
-                                                                            
-                                                                           
-                                                                
-                                                                               
+/*---------------------------------------------------------------------------
+    Initialize the DIB.  Negative height means to use top-down BMP ordering
+    (must be uncompressed, but that's what we want).  Bit count of 1, 4 or 8
+    implies a colormap of RGBX quads, but 24-bit BMPs just use B,G,R values
+    directly => wimage_data begins immediately after BMP header.
+  ---------------------------------------------------------------------------*/
 
     memset(dib, 0, sizeof(BITMAPINFOHEADER));
     bmih = (BITMAPINFOHEADER *)dib;
@@ -732,13 +732,13 @@ static int rpng2_win_create_window()
     bmih->biCompression = 0;
     wimage_data = dib + sizeof(BITMAPINFOHEADER);
 
-                                                                             
-                                                                           
-                                                                            
-                                             
-                                                                               
+/*---------------------------------------------------------------------------
+    Fill window with the specified background color (default is black), but
+    defer loading faked "background image" until window is displayed (may be
+    slow to compute).  Data are in BGR order.
+  ---------------------------------------------------------------------------*/
 
-    if (bg_image) {    
+    if (bg_image) {   /* just fill with black for now */
         memset(wimage_data, 0, wimage_rowbytes*rpng2_info.height);
     } else {
         for (j = 0;  j < rpng2_info.height;  ++j) {
@@ -751,9 +751,9 @@ static int rpng2_win_create_window()
         }
     }
 
-                                                                             
-                              
-                                                                               
+/*---------------------------------------------------------------------------
+    Set the window parameters.
+  ---------------------------------------------------------------------------*/
 
     memset(&wndclass, 0, sizeof(wndclass));
 
@@ -770,9 +770,9 @@ static int rpng2_win_create_window()
 
     RegisterClassEx(&wndclass);
 
-                                                                             
-                               
-                                                                               
+/*---------------------------------------------------------------------------
+    Finally, create the window.
+  ---------------------------------------------------------------------------*/
 
     extra_width  = 2*(GetSystemMetrics(SM_CXBORDER) +
                       GetSystemMetrics(SM_CXDLGFRAME));
@@ -787,10 +787,10 @@ static int rpng2_win_create_window()
     ShowWindow(global_hwnd, global_showmode);
     UpdateWindow(global_hwnd);
 
-                                                                             
-                                                                         
-                                                    
-                                                                               
+/*---------------------------------------------------------------------------
+    Now compute the background image and display it.  If it fails (memory
+    allocation), revert to a plain background color.
+  ---------------------------------------------------------------------------*/
 
     if (bg_image) {
         static const char *msg = "Computing background image...";
@@ -803,11 +803,11 @@ static int rpng2_win_create_window()
         y = (rpng2_info.height - tm.tmHeight)/2;
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, GetSysColor(COLOR_HIGHLIGHTTEXT));
-         
+        /* this can still begin out of bounds even if x is positive (???): */
         TextOut(hdc, ((x < 0)? 0 : x), ((y < 0)? 0 : y), msg, len);
         ReleaseDC(global_hwnd, hdc);
 
-        rpng2_win_load_bg_image();    
+        rpng2_win_load_bg_image();   /* resets bg_image if fails */
     }
 
     if (!bg_image) {
@@ -823,14 +823,14 @@ static int rpng2_win_create_window()
 
     rect.left = 0L;
     rect.top = 0L;
-    rect.right = (LONG)rpng2_info.width;        
-    rect.bottom = (LONG)rpng2_info.height;      
+    rect.right = (LONG)rpng2_info.width;       /* possibly off by one? */
+    rect.bottom = (LONG)rpng2_info.height;     /* possibly off by one? */
     InvalidateRect(global_hwnd, &rect, FALSE);
-    UpdateWindow(global_hwnd);                  
+    UpdateWindow(global_hwnd);                 /* similar to XFlush() */
 
     return 0;
 
-}  
+} /* end function rpng2_win_create_window() */
 
 
 
@@ -848,10 +848,10 @@ static int rpng2_win_load_bg_image()
     int invert_column;
     ulg i, row;
 
-                                                                             
-                                                                         
-                                                            
-                                                                               
+/*---------------------------------------------------------------------------
+    Allocate buffer for fake background image to be used with transparent
+    images; if this fails, revert to plain background color.
+  ---------------------------------------------------------------------------*/
 
     bg_rowbytes = 3 * rpng2_info.width;
     bg_data = (uch *)malloc(bg_rowbytes * rpng2_info.height);
@@ -862,10 +862,10 @@ static int rpng2_win_load_bg_image()
         return 1;
     }
 
-                                                                             
-                                                                        
-                          
-                                                                               
+/*---------------------------------------------------------------------------
+    Vertical gradients (ramps) in NxN squares, alternating direction and
+    colors (N == bgscale).
+  ---------------------------------------------------------------------------*/
 
     if ((bg[pat].type & 0x07) == 0) {
         uch r1_min  = rgb[bg[pat].rgb1_min].r;
@@ -905,7 +905,7 @@ static int rpng2_win_load_bg_image()
                 even_odd = even_odd_vert ^ even_odd_horiz;
                 invert_column =
                   (even_odd_horiz && (bg[pat].type & 0x10));
-                if (even_odd == 0) {          
+                if (even_odd == 0) {         /* gradient #1 */
                     if (invert_column) {
                         *dest++ = r1_inv;
                         *dest++ = g1_inv;
@@ -915,31 +915,31 @@ static int rpng2_win_load_bg_image()
                         *dest++ = g1;
                         *dest++ = b1;
                     }
-                } else {                      
+                } else {                     /* gradient #2 */
                     if ((invert_column && invert_gradient2) ||
                         (!invert_column && !invert_gradient2))
                     {
-                        *dest++ = r2;         
-                        *dest++ = g2;         
+                        *dest++ = r2;        /* not inverted or */
+                        *dest++ = g2;        /*  doubly inverted */
                         *dest++ = b2;
                     } else {
                         *dest++ = r2_inv;
-                        *dest++ = g2_inv;     
+                        *dest++ = g2_inv;    /* singly inverted */
                         *dest++ = b2_inv;
                     }
                 }
             }
         }
 
-                                                                             
-                                                                          
-                
-                                                                               
+/*---------------------------------------------------------------------------
+    Soft gradient-diamonds with scale = bgscale.  Code contributed by Adam
+    M. Costello.
+  ---------------------------------------------------------------------------*/
 
     } else if ((bg[pat].type & 0x07) == 1) {
 
-        hmax = (bgscale-1)/2;    
-        max = 2*hmax;            
+        hmax = (bgscale-1)/2;   /* half the max weight of a color */
+        max = 2*hmax;           /* the max weight of a color */
 
         r1 = rgb[bg[pat].rgb1_max].r;
         g1 = rgb[bg[pat].rgb1_max].g;
@@ -964,11 +964,11 @@ static int rpng2_win_load_bg_image()
             }
         }
 
-                                                                             
-                                                                            
-                                                                           
-                                                                   
-                                                                               
+/*---------------------------------------------------------------------------
+    Radial "starburst" with azimuthal sinusoids; [eventually number of sinu-
+    soids will equal bgscale?].  This one is slow but very cool.  Code con-
+    tributed by Pieter S. van der Meulen (originally in Smalltalk).
+  ---------------------------------------------------------------------------*/
 
     } else if ((bg[pat].type & 0x07) == 2) {
         uch ch;
@@ -984,13 +984,13 @@ static int rpng2_win_load_bg_image()
         hh = rpng2_info.height / 2;
         hw = rpng2_info.width / 2;
 
-                                      
-                                                                           
-                                                                     
-                                                                    
-                                                                   
-                                                              
-           
+        /* variables for radial waves:
+         *   aoffset:  number of degrees to rotate hue [CURRENTLY NOT USED]
+         *   freq:  number of color beams originating from the center
+         *   grayspot:  size of the graying center area (anti-alias)
+         *   rotate:  rotation of the beams as a function of radius
+         *   saturate:  saturation of beams' shape azimuthally
+         */
         angle = CLIP(angle, 0.0, 360.0);
         grayspot = CLIP(bg[pat].bg_gray, 1, (hh + hw));
         freq = MAX((double)bg[pat].bg_freq, 0.0);
@@ -1047,10 +1047,10 @@ static int rpng2_win_load_bg_image()
         fflush(stderr);
     }
 
-                                                                             
-                                                                         
-                                                                      
-                                                                               
+/*---------------------------------------------------------------------------
+    Blast background image to display buffer before beginning PNG decode;
+    calling function will handle invalidation and UpdateWindow() call.
+  ---------------------------------------------------------------------------*/
 
     for (row = 0;  row < rpng2_info.height;  ++row) {
         src = bg_data + row*bg_rowbytes;
@@ -1060,14 +1060,14 @@ static int rpng2_win_load_bg_image()
             g1 = *src++;
             b1 = *src++;
             *dest++ = b1;
-            *dest++ = g1;    
+            *dest++ = g1;   /* note reverse order */
             *dest++ = r1;
         }
     }
 
     return 0;
 
-}  
+} /* end function rpng2_win_load_bg_image() */
 
 
 
@@ -1084,24 +1084,24 @@ static void rpng2_win_display_row(ulg row)
     static int rows=0;
     static ulg firstrow;
 
-                                                                             
-                                                                          
-                                                                         
-                                                      
-                                                                               
+/*---------------------------------------------------------------------------
+    rows and firstrow simply track how many rows (and which ones) have not
+    yet been displayed; alternatively, we could call InvalidateRect() for
+    every row and not bother with the records-keeping.
+  ---------------------------------------------------------------------------*/
 
     Trace((stderr, "beginning rpng2_win_display_row()\n"))
 
     if (rows == 0)
-        firstrow = row;    
+        firstrow = row;   /* first row not yet displayed */
 
-    ++rows;    
+    ++rows;   /* count of rows received but not yet displayed */
 
-                                                                             
-                                                                        
-                                                                           
-                                                  
-                                                                               
+/*---------------------------------------------------------------------------
+    Aside from the use of the rpng2_info struct and the lack of an outer
+    loop (over rows), this routine is identical to rpng_win_display_image()
+    in the non-progressive version of the program.
+  ---------------------------------------------------------------------------*/
 
     src = rpng2_info.image_data + row*rpng2_info.rowbytes;
     if (bg_image)
@@ -1114,10 +1114,10 @@ static void rpng2_win_display_row(ulg row)
             g = *src++;
             b = *src++;
             *dest++ = b;
-            *dest++ = g;    
+            *dest++ = g;   /* note reverse order */
             *dest++ = r;
         }
-    } else   {
+    } else /* if (rpng2_info.channels == 4) */ {
         for (i = rpng2_info.width;  i > 0;  --i) {
             r = *src++;
             g = *src++;
@@ -1137,10 +1137,10 @@ static void rpng2_win_display_row(ulg row)
                 *dest++ = bg_green;
                 *dest++ = bg_red;
             } else {
-                                                                
-                                                                
-                                                               
-                                                          
+                /* this macro (copied from png.h) composites the
+                 * foreground and background values and puts the
+                 * result into the first argument; there are no
+                 * side effects with the first argument */
                 alpha_composite(*dest++, b, a, bg_blue);
                 alpha_composite(*dest++, g, a, bg_green);
                 alpha_composite(*dest++, r, a, bg_red);
@@ -1148,24 +1148,24 @@ static void rpng2_win_display_row(ulg row)
         }
     }
 
-                                                                             
-                                                                         
-                                                                         
-                                                                               
+/*---------------------------------------------------------------------------
+    Display after every 16 rows or when on last row.  (Region may include
+    previously displayed lines due to interlacing--i.e., not contiguous.)
+  ---------------------------------------------------------------------------*/
 
     if ((rows & 0xf) == 0 || row == rpng2_info.height-1) {
         RECT rect;
 
         rect.left = 0L;
         rect.top = (LONG)firstrow;
-        rect.right = (LONG)rpng2_info.width;        
-        rect.bottom = (LONG)row + 1L;               
+        rect.right = (LONG)rpng2_info.width;       /* possibly off by one? */
+        rect.bottom = (LONG)row + 1L;              /* possibly off by one? */
         InvalidateRect(global_hwnd, &rect, FALSE);
-        UpdateWindow(global_hwnd);                  
+        UpdateWindow(global_hwnd);                 /* similar to XFlush() */
         rows = 0;
     }
 
-}  
+} /* end function rpng2_win_display_row() */
 
 
 
@@ -1175,9 +1175,9 @@ static void rpng2_win_finish_display()
 {
     Trace((stderr, "beginning rpng2_win_finish_display()\n"))
 
-                                                                         
-                                                                         
-                                
+    /* last row has already been displayed by rpng2_win_display_row(), so
+     * we have nothing to do here except set a flag and let the user know
+     * that the image is done */
 
     rpng2_info.state = kDone;
     printf(
@@ -1229,7 +1229,7 @@ LRESULT CALLBACK rpng2_win_wndproc(HWND hwnd, UINT iMsg, WPARAM wP, LPARAM lP)
 
     switch (iMsg) {
         case WM_CREATE:
-             
+            /* one-time processing here, if any */
             return 0;
 
         case WM_PAINT:
@@ -1241,17 +1241,17 @@ LRESULT CALLBACK rpng2_win_wndproc(HWND hwnd, UINT iMsg, WPARAM wP, LPARAM lP)
             EndPaint(hwnd, &ps);
             return 0;
 
-         
+        /* wait for the user to tell us when to quit */
         case WM_CHAR:
-            switch (wP) {        
+            switch (wP) {       /* only need one, so ignore repeat count */
                 case 'q':
                 case 'Q':
-                case 0x1B:       
+                case 0x1B:      /* Esc key */
                     PostQuitMessage(0);
             }
             return 0;
 
-        case WM_LBUTTONDOWN:     
+        case WM_LBUTTONDOWN:    /* another way of quitting */
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;

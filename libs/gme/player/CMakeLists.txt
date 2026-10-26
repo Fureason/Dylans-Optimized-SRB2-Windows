@@ -16,7 +16,7 @@ if(SDL_FOUND)
     add_executable(gme_player ${player_SRCS})
     target_link_libraries(gme_player ${SDL_LIBRARY} gme)
 
-
+    # Is not to be installed though
 else()
     message("SDL library not found, disabling player demo build")
 endif()

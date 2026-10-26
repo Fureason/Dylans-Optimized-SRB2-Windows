@@ -25,81 +25,81 @@ define('ATOM', 'Atom');
 
 require_once (MAGPIE_DIR . 'rss_utils.inc');
 
-   
-                                                                               
- 
-                                                                            
- 
-  
+/**
+* Hybrid parser, and object, takes RSS as a string and returns a simple object.
+*
+* see: rss_fetch.inc for a simpler interface with integrated caching support
+*
+*/
 class MagpieRSS {
     var $parser;
     
-    var $current_item   = array();   
-    var $items          = array();   
-    var $channel        = array();   
+    var $current_item   = array();  // item currently being parsed
+    var $items          = array();  // collection of parsed items
+    var $channel        = array();  // hash of channel fields
     var $textinput      = array();
     var $image          = array();
     var $feed_type;
     var $feed_version;
-    var $encoding       = '';        
+    var $encoding       = '';       // output encoding of parsed rss
     
-    var $_source_encoding = '';      
+    var $_source_encoding = '';     // only set if we have to parse xml prolog
     
     var $ERROR = "";
     var $WARNING = "";
     
-
+    // define some constants
     
     var $_CONTENT_CONSTRUCTS = array('content', 'summary', 'info', 'title', 'tagline', 'copyright');
     var $_KNOWN_ENCODINGS    = array('UTF-8', 'US-ASCII', 'ISO-8859-1');
 
-
-    var $stack              = array();  
+    // parser variables, useless if you're not a parser, treat as private
+    var $stack              = array(); // parser stack
     var $inchannel          = false;
     var $initem             = false;
-    var $incontent          = false;  
+    var $incontent          = false; // if in Atom <content mode="xml"> field 
     var $intextinput        = false;
     var $inimage            = false;
     var $current_field      = '';
     var $current_namespace  = false;
     
 
-       
-                                                                          
-         
-                                                                              
-      
-                                                                              
-                                                                           
-                              
-      
-                                                                   
-      
-      
-                                                                                
-                                                                                   
-                                                
-      
-                                                                                 
-                                                 
-                                     
-                                                                                      
-                                                                                    
-                                            
-                                        
-                                         
-                                                                               
-                                                                        
-      
-       
+    /**
+     *  Set up XML parser, parse source, and return populated RSS object..
+     *   
+     *  @param string $source           string containing the RSS to be parsed
+     *
+     *  NOTE:  Probably a good idea to leave the encoding options alone unless
+     *         you know what you're doing as PHP's character set support is
+     *         a little weird.
+     *
+     *  NOTE:  A lot of this is unnecessary but harmless with PHP5 
+     *
+     *
+     *  @param string $output_encoding  output the parsed RSS in this character 
+     *                                  set defaults to ISO-8859-1 as this is PHP's
+     *                                  default.
+     *
+     *                                  NOTE: might be changed to UTF-8 in future
+     *                                  versions.
+     *                               
+     *  @param string $input_encoding   the character set of the incoming RSS source. 
+     *                                  Leave blank and Magpie will try to figure it
+     *                                  out.
+     *                                  
+     *                                   
+     *  @param bool   $detect_encoding  if false Magpie won't attempt to detect
+     *                                  source encoding. (caveat emptor)
+     *
+     */
     function MagpieRSS ($source, $output_encoding='ISO-8859-1', 
                         $input_encoding=null, $detect_encoding=true) 
     {   
-
-
+        # if PHP xml isn't compiled in, die
+        #
         if (!function_exists('xml_parser_create')) {
             $this->error( "Failed to load PHP's XML Extension. " . 
-                          "http: 
+                          "http://www.php.net/manual/en/ref.xml.php",
                            E_USER_ERROR );
         }
         
@@ -116,6 +116,9 @@ class MagpieRSS {
         
         $this->parser = $parser;
         
+        # pass in parser, and a reference to this object
+        # setup handlers
+        #
         xml_set_object( $this->parser, $this );
         xml_set_element_handler($this->parser, 
                 'feed_start_element', 'feed_end_element' );
@@ -145,7 +148,7 @@ class MagpieRSS {
         $el = $element = strtolower($element);
         $attrs = array_change_key_case($attrs, CASE_LOWER);
         
-
+        // check for a namespace, and split if found
         $ns = false;
         if ( strpos( $element, ':' ) ) {
             list($ns, $el) = split( ':', $element, 2); 
@@ -154,8 +157,9 @@ class MagpieRSS {
             $this->current_namespace = $ns;
         }
             
-
-
+        # if feed type isn't set, then this is first element of feed
+        # identify feed from root element
+        #
         if (!isset($this->feed_type) ) {
             if ( $el == 'rdf' ) {
                 $this->feed_type = RSS;
@@ -185,8 +189,8 @@ class MagpieRSS {
             }
         }
         
-
-
+        // if we're in the default namespace of an RSS feed,
+        //  record textinput or image fields
         elseif ( 
             $this->feed_type == RSS and 
             $this->current_namespace == '' and 
@@ -203,10 +207,10 @@ class MagpieRSS {
             $this->inimage = true;
         }
         
-
+        # handle atom content constructs
         elseif ( $this->feed_type == ATOM and in_array($el, $this->_CONTENT_CONSTRUCTS) )
         {
-
+            // avoid clashing w/ RSS mod_content
             if ($el == 'content' ) {
                 $el = 'atom_content';
             }
@@ -216,10 +220,10 @@ class MagpieRSS {
             
         }
         
-
+        // if inside an Atom content construct (e.g. content or summary) field treat tags as text
         elseif ($this->feed_type == ATOM and $this->incontent ) 
         {
-
+            // if tags are inlined, then flatten
             $attrs_str = join(' ', 
                     array_map('map_attrs', 
                     array_keys($attrs), 
@@ -230,10 +234,10 @@ class MagpieRSS {
             array_unshift( $this->stack, $el );
         }
         
-
-
-
-
+        // Atom support many links per containging element.
+        // Magpie treats link elements of type rel='alternate'
+        // as being equivalent to RSS's simple link element.
+        //
         elseif ($this->feed_type == ATOM and $el == 'link' ) 
         {
             if ( isset($attrs['rel']) and $attrs['rel'] == 'alternate' ) 
@@ -246,7 +250,7 @@ class MagpieRSS {
             
             $this->append($link_el, $attrs['href']);
         }
-
+        // set stack[0] to current element
         else {
             array_unshift($this->stack, $el);
         }
@@ -292,8 +296,8 @@ class MagpieRSS {
             $this->inchannel = false;
         }
         elseif ($this->feed_type == ATOM and $this->incontent  ) {
-
-
+            // balance tags properly
+            // note:  i don't think this is actually neccessary
             if ( $this->stack[0] == $el ) 
             {
                 $this->append_content("</$el>");
@@ -329,7 +333,7 @@ class MagpieRSS {
         }
     }
     
-
+    // smart append - field and namespace aware
     function append($el, $text) {
         if (!$el) {
             return;
@@ -375,7 +379,7 @@ class MagpieRSS {
     }
     
     function normalize () {
-
+        // if atom populate rss fields
         if ( $this->is_atom() ) {
             $this->channel['description'] = $this->channel['tagline'];
             for ( $i = 0; $i < count($this->items); $i++) {
@@ -442,10 +446,10 @@ class MagpieRSS {
         }
     }
 
-       
-                                                       
-     
-      
+    /**
+    * return XML parser, and possibly re-encoded source
+    *
+    */
     function create_parser($source, $out_enc, $in_enc, $detect) {
         if ( substr(phpversion(),0,1) == 5) {
             $parser = $this->php5_create_parser($in_enc, $detect);
@@ -461,17 +465,17 @@ class MagpieRSS {
         return array($parser, $source);
     }
     
-       
-                                          
-     
-                                                         
-                                                 
-     
-                       
-     
-      
+    /**
+    * Instantiate an XML parser under PHP5
+    *
+    * PHP5 will do a fine job of detecting input encoding
+    * if passed an empty string as the encoding. 
+    *
+    * All hail libxml2!
+    *
+    */
     function php5_create_parser($in_enc, $detect) {
-
+        // by default php5 does a fine job of detecting input encodings
         if(!$detect && $in_enc) {
             return xml_parser_create($in_enc);
         }
@@ -480,21 +484,21 @@ class MagpieRSS {
         }
     }
     
-       
-                                         
-     
-                                                          
-                                                           
-                                                             
-                                                             
-                                                           
-                                                              
-                            
-     
-                                                        
-                                                                                                                           
-     
-      
+    /**
+    * Instaniate an XML parser under PHP4
+    *
+    * Unfortunately PHP4's support for character encodings
+    * and especially XML and character encodings sucks.  As
+    * long as the documents you parse only contain characters
+    * from the ISO-8859-1 character set (a superset of ASCII,
+    * and a subset of UTF-8) you're fine.  However once you
+    * step out of that comfy little world things get mad, bad,
+    * and dangerous to know.
+    *
+    * The following code is based on SJM's work with FoF
+    * @see http://minutillo.com/steve/weblog/2004/6/17/php-xml-and-character-encodings-a-tale-of-sadness-rage-and-data-loss
+    *
+    */
     function php4_create_parser($source, $in_enc, $detect) {
         if ( !$detect ) {
             return array(xml_parser_create($in_enc), $source);
@@ -514,11 +518,11 @@ class MagpieRSS {
             return array(xml_parser_create($in_enc), $source);
         }
         
-
+        // the dectected encoding is not one of the simple encodings PHP knows
         
-
-
-
+        // attempt to use the iconv extension to
+        // cast the XML to a known encoding
+        // @see http://php.net/iconv
        
         if (function_exists('iconv'))  {
             $encoded_source = iconv($in_enc,'UTF-8', $source);
@@ -527,8 +531,8 @@ class MagpieRSS {
             }
         }
         
-
-
+        // iconv didn't work, try mb_convert_encoding
+        // @see http://php.net/mbstring
         if(function_exists('mb_convert_encoding')) {
             $encoded_source = mb_convert_encoding($source, 'UTF-8', $in_enc );
             if ($encoded_source) {
@@ -536,7 +540,7 @@ class MagpieRSS {
             }
         }
         
-
+        // else 
         $this->error("Feed is in an unsupported character encoding. ($in_enc) " .
                      "You may see strange artifacts, and mangled characters.",
                      E_USER_NOTICE);
@@ -555,7 +559,7 @@ class MagpieRSS {
     }
 
     function error ($errormsg, $lvl=E_USER_WARNING) {
-
+        // append PHP's error message if track_errors enabled
         if ( $php_errormsg ) { 
             $errormsg .= " ($php_errormsg)";
         }
@@ -575,7 +579,7 @@ class MagpieRSS {
     }
     
     
-}  
+} // end class RSS
 
 function map_attrs($k, $v) {
     return "$k=\"$v\"";

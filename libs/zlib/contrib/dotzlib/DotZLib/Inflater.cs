@@ -12,9 +12,9 @@ using System.Runtime.InteropServices;
 namespace DotZLib
 {
 
-
-
-
+    /// <summary>
+    /// Implements a data decompressor, using the inflate algorithm in the ZLib dll
+    /// </summary>
     public class Inflater : CodecBase
 	{
         #region Dll imports
@@ -31,9 +31,9 @@ namespace DotZLib
         private static extern int inflateEnd(ref ZStream sz);
         #endregion
 
-
-
-
+        /// <summary>
+        /// Constructs an new instance of the <c>Inflater</c>
+        /// </summary>
         public Inflater() : base()
 		{
             int retval = inflateInit_(ref _ztream, Info.Version, Marshal.SizeOf(_ztream));
@@ -44,13 +44,13 @@ namespace DotZLib
         }
 
 
-
-
-
-
-
-
-
+        /// <summary>
+        /// Adds more data to the codec to be processed.
+        /// </summary>
+        /// <param name="data">Byte array containing the data to be added to the codec</param>
+        /// <param name="offset">The index of the first byte to add from <c>data</c></param>
+        /// <param name="count">The number of bytes to add</param>
+        /// <remarks>Adding data may, or may not, raise the <c>DataAvailable</c> event</remarks>
         public override void Add(byte[] data, int offset, int count)
         {
             if (data == null) throw new ArgumentNullException();
@@ -78,9 +78,9 @@ namespace DotZLib
         }
 
 
-
-
-
+        /// <summary>
+        /// Finishes up any pending data that needs to be processed and handled.
+        /// </summary>
         public override void Finish()
         {
             int err;
@@ -95,9 +95,9 @@ namespace DotZLib
             resetOutput();
         }
 
-
-
-
+        /// <summary>
+        /// Closes the internal zlib inflate stream
+        /// </summary>
         protected override void CleanUp() { inflateEnd(ref _ztream); }
 
 

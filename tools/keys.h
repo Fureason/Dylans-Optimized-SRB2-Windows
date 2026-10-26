@@ -1,13 +1,13 @@
 
+//  KEYS.H - header file.
+//
+//  Codes des touches tel que renvoy‚s par getch(), +256 si ‚tendus.
+//
+//  Author:  Denis F.
+//  Date:    June 16 1997.
+//
 
-
-
-
-
-
-
-
-
+// codes des touches (getch()) ajout‚ de 256 s'il s'agit d'un code ‚tendu.
 
 #define KEY_BACKSPACE 8
 #define KEY_TAB       9

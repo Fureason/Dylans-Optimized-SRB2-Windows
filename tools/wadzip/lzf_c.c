@@ -40,28 +40,28 @@
 
 #define HSIZE (1 << (HLOG))
 
-  
-                                             
-                                                      
-                                                           
-              
-   
+/*
+ * don't play with this unless you benchmark!
+ * decompression is not dependent on the hash function
+ * the hashing function might seem strange, just believe me
+ * it works ;)
+ */
 #ifndef FRST
 # define FRST(p) (((p[0]) << 8) | p[1])
 # define NEXT(v,p) (((v) << 8) | p[2])
 # define IDX(h) ((((h ^ (h << 5)) >> (3*8 - HLOG)) - h*5) & (HSIZE - 1))
 #endif
-  
-                                                                      
-                                              
-                                                                   
-  
-                                                  
-                                 
-   
+/*
+ * IDX works because it is very similar to a multiplicative hash, e.g.
+ * ((h * 57321 >> (3*8 - HLOG)) & (HSIZE - 1))
+ * the latter is also quite fast on newer CPUs, and sligthly better
+ *
+ * the next one is also quite good, albeit slow ;)
+ * (int)(cos(h & 0xffffff) * 1e6)
+ */
 
 #if 0
- 
+/* original lzv-like hash function, much worse and thus slower */
 # define FRST(p) (p[0] << 5) ^ p[1]
 # define NEXT(v,p) ((v) << 5) ^ p[2]
 # define IDX(h) ((h) & (HSIZE - 1))
@@ -71,14 +71,14 @@
 #define        MAX_OFF        (1 << 13)
 #define        MAX_REF        ((1 <<  8) + (1 << 3))
 
-  
-                    
-  
-                              
-                                
-                                           
-  
-   
+/*
+ * compressed format
+ *
+ * 000LLLLL <L+1>    ; literal
+ * LLLooooo oooooooo ; backref L
+ * 111ooooo LLLLLLLL oooooooo ; backref L+7
+ *
+ */
 
 unsigned int
 lzf_compress (const void *const in_data, unsigned int in_len,
@@ -121,7 +121,7 @@ lzf_compress (const void *const in_data, unsigned int in_len,
 
           if (1
 #if INIT_HTAB && !USE_MEMCPY
-              && ref < ip  
+              && ref < ip /* the next test will actually take care of this, but this is faster */
 #endif
               && (off = ip - ref - 1) < MAX_OFF
               && ip + 4 < in_end
@@ -136,7 +136,7 @@ lzf_compress (const void *const in_data, unsigned int in_len,
 #endif
             )
             {
-               
+              /* match found at *ref++ */
               unsigned int len = 2;
               unsigned int maxlen = in_end - ip - len;
               maxlen = maxlen > MAX_REF ? MAX_REF : maxlen;
@@ -203,7 +203,7 @@ lzf_compress (const void *const in_data, unsigned int in_len,
       else if (ip == in_end)
         break;
 
-       
+      /* one more literal byte we must copy */
       lit++;
       ip++;
 

@@ -13,7 +13,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 
 #ifndef _COMMON_H_
 #define _COMMON_H_
@@ -70,7 +70,7 @@ typedef long ssize_t;
 #endif
 #endif
 
-
+// ================================ DEFINITIONS ===============================
 
 
 #ifdef _WIN32
@@ -80,7 +80,7 @@ typedef long ssize_t;
 #include <winbase.h>
 #include <wincon.h>
 #endif
-#define DEFCOL     0xD0E0F0C0  
+#define DEFCOL     0xD0E0F0C0 // codes couleurs ANSI
 #define BLACK      0
 #define RED        FOREGROUND_RED
 #define GREEN      FOREGROUND_GREEN
@@ -100,7 +100,7 @@ typedef long ssize_t;
 
 #else
 
-#define DEFCOL     "\033[0m"    
+#define DEFCOL     "\033[0m"   // codes couleurs ANSI
 #define BLACK      "\033[0;30m"
 #define RED        "\033[0;31m"
 #define GREEN      "\033[0;32m"
@@ -129,7 +129,7 @@ typedef enum
 	NUM_FATAL_ERROR
 } fatal_error_t;
 
-
+// ================================== PROTOS ==================================
 
 void clearScreen();
 void fatalError(fatal_error_t);
@@ -144,8 +144,8 @@ void conPrintf(const char *col, const char *lpFmt, ...);
 FILE *openFile(const char *filename);
 const char *pCrypt(const char *pw, const char *salt);
 
-
+// ================================== STRINGS =================================
 void strrand(char *s, const int len);
 
-
+// ================================== EXTERNS =================================
 #endif

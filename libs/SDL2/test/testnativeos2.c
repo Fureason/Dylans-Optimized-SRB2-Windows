@@ -34,7 +34,7 @@ static void *CreateWindowNative(int w, int h)
 
     WinRegisterClass(0, WIN_CLIENT_CLASS, WinDefWindowProc,
                      CS_SIZEREDRAW | CS_MOVENOTIFY,
-                     sizeof(ULONG));  
+                     sizeof(ULONG)); /* We should have minimum 4 bytes. */
 
     hwndFrame = WinCreateStdWindow(HWND_DESKTOP, 0, &ulFrameFlags,
                                    WIN_CLIENT_CLASS, "SDL Test", 0, 0, 1, &hwnd);
@@ -45,8 +45,8 @@ static void *CreateWindowNative(int w, int h)
     WinSetWindowPos(hwndFrame, HWND_TOP, 0, 0, w, h,
                     SWP_ZORDER | SWP_ACTIVATE | SWP_SIZE | SWP_SHOW);
 
-    return (void *)hwndFrame;                                          
-                                                                        
+    return (void *)hwndFrame;   /* We may return client or frame window
+                                   handle for SDL_CreateWindowFrom(). */
 }
 
 static void DestroyWindowNative(void *window)
@@ -54,4 +54,4 @@ static void DestroyWindowNative(void *window)
     WinDestroyWindow((HWND) window);
 }
 
-#endif  
+#endif /* TEST_NATIVE_OS2 */

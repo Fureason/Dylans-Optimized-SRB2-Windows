@@ -10,9 +10,9 @@
   freely.
 */
 
-                                                                       
-           
-  
+/* Test program to check the resolution of the SDL timer on the current
+   platform
+*/
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
     Uint32 start32, now32;
     Uint64 start, now;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_Init(SDL_INIT_TIMER) < 0) {
@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-     
+    /* Verify SDL_GetTicks* acts monotonically increasing, and not erratic. */
     SDL_Log("Sanity-checking GetTicks\n");
     for (i = 0; i < 1000; ++i) {
         start64 = SDL_GetTicks64();
@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Start the timer */
     desired = 0;
     if (argv[1]) {
         desired = SDL_atoi(argv[1]);
@@ -84,20 +84,20 @@ int main(int argc, char *argv[])
     }
     t1 = SDL_AddTimer(desired, ticktock, NULL);
 
-     
+    /* Wait 10 seconds */
     SDL_Log("Waiting 10 seconds\n");
     SDL_Delay(10 * 1000);
 
-     
+    /* Stop the timer */
     SDL_RemoveTimer(t1);
 
-     
+    /* Print the results */
     if (ticks) {
         SDL_Log("Timer resolution: desired = %d ms, actual = %f ms\n",
                 desired, (double)(10 * 1000) / ticks);
     }
 
-     
+    /* Test multiple timers */
     SDL_Log("Testing multiple timers...\n");
     t1 = SDL_AddTimer(100, callback, (void *)1);
     if (!t1) {
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create timer 3: %s\n", SDL_GetError());
     }
 
-     
+    /* Wait 10 seconds */
     SDL_Log("Waiting 10 seconds\n");
     SDL_Delay(10 * 1000);
 
@@ -145,4 +145,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

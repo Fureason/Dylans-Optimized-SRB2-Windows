@@ -1,5 +1,5 @@
-
-
+# Enable CCache
+# (Set USE_CCACHE=ON to use, CCACHE_OPTIONS for options)
 if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL Windows)
 	option(USE_CCACHE "Enable ccache support" OFF)
 

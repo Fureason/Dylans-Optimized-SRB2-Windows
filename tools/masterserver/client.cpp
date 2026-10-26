@@ -13,20 +13,20 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 
 #include <time.h>
 #include <string.h>
 #include "ipcs.h"
 #include "common.h"
 
-
+//=============================================================================
 
 static CClientSocket client_socket;
-
+//static msg_t msg;
 FILE *logfile;
 
-
+//=============================================================================
 
 static msg_t *getData(int argc, char *argv[])
 {
@@ -39,7 +39,7 @@ static msg_t *getData(int argc, char *argv[])
 	strcpy(info->header.buffer, getpass("Enter password: "));
 #endif
 
-
+	// default values if one of the param is not entered
 	strcpy(info->ip,       "88.86.106.169");
 	strcpy(info->port,     "5029");
 	strcpy(info->name,     "Cueball's Dedicated Server");
@@ -49,7 +49,7 @@ static msg_t *getData(int argc, char *argv[])
 
 	for (int i = 0; i < argc; i++)
 	{
-
+		// first: extra parameters (must be after all -param)
 		if (!strcasecmp(argv[i], "get"))
 		{
 			msg.type = GET_SERVER_MSG;
@@ -74,7 +74,7 @@ static msg_t *getData(int argc, char *argv[])
 		if (i >= argc-1)
 			continue;
 
-
+		// second: parameter requiring extra parameters
 		if (strcasecmp(argv[i], "-ip") == 0)
 			strcpy(info->ip, argv[i+1]);
 		else if (strcasecmp(argv[i], "-port") == 0)

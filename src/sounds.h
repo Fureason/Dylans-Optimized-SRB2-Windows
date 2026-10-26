@@ -8,27 +8,27 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  sounds.h
+/// \brief Sound and music info
 
 #ifndef __SOUNDS__
 #define __SOUNDS__
 
-
+// Customisable sounds for Skins
 typedef enum
 {
 	SKSSPIN,
 	SKSPUTPUT,
 	SKSPUDPUD,
-	SKSPLPAN1,  
+	SKSPLPAN1, // Ouchies
 	SKSPLPAN2,
 	SKSPLPAN3,
 	SKSPLPAN4,
-	SKSPLDET1,  
+	SKSPLDET1, // Deaths
 	SKSPLDET2,
 	SKSPLDET3,
 	SKSPLDET4,
-	SKSPLVCT1,  
+	SKSPLVCT1, // Victories
 	SKSPLVCT2,
 	SKSPLVCT3,
 	SKSPLVCT4,
@@ -41,67 +41,67 @@ typedef enum
 	NUMSKINSOUNDS
 } skinsound_t;
 
-
-#define NUMSFXFREESLOTS 1600  
+// free sfx for S_AddSoundFx()
+#define NUMSFXFREESLOTS 1600 // Matches SOC Editor.
 #define NUMSKINSFXSLOTS (128*NUMSKINSOUNDS)
 
-
-
-
+//
+// SoundFX struct.
+//
 typedef struct sfxinfo_struct sfxinfo_t;
 
 struct sfxinfo_struct
 {
-
+	// up to 6-character name
 	const char *name;
 
-
+	// Sfx singularity (only one at a time)
 	boolean singularity;
 
-
+	// Sfx priority
 	INT32 priority;
 
-
+	// pitch if a link
 	INT32 pitch;
 
-
+	// volume if a link
 	INT32 volume;
 
-
+	// sound data
 	void *data;
 
-
+	// length of sound data
 	size_t length;
 
-
-
+	// sound that can be remapped for a skin, indexes skins[].skinsounds
+	// 0 up to (NUMSKINSOUNDS-1), -1 = not skin specifc
 	INT32 skinsound;
 
-
-
-
+	// this is checked every second to see if sound
+	// can be thrown out (if 0, then decrement, if -1,
+	// then throw out, if > 0, then it is in use)
 	INT32 usefulness;
 
-
+	// lump number of sfx
 	lumpnum_t lumpnum;
 
-
+	// closed caption info/wiki table bait
 	char caption[32];
 };
 
-
+// the complete set of sound effects
 extern sfxinfo_t S_sfx[];
 
+//
+// Identifiers for all sfx in game.
+//
 
-
-
-
-
+// List of sounds (don't modify this comment!)
 typedef enum
 {
 	sfx_None,
 
-
+	// Skin Sounds
 	sfx_altdi1,
 	sfx_altdi2,
 	sfx_altdi3,
@@ -124,7 +124,7 @@ typedef enum
 	sfx_zoom,
 	sfx_skid,
 
-
+	// Ambience/background objects/etc
 	sfx_ambint,
 
 	sfx_alarm,
@@ -201,7 +201,7 @@ typedef enum
 	sfx_rumbam,
 	sfx_rumble,
 
-
+	// Game objects, etc
 	sfx_appear,
 	sfx_bkpoof,
 	sfx_bnce1,
@@ -210,7 +210,7 @@ typedef enum
 	sfx_cgot,
 	sfx_cybdth,
 	sfx_deton,
-	sfx_ding,  
+	sfx_ding, // old sfx_appear sound
 	sfx_dmpain,
 	sfx_drown,
 	sfx_fizzle,
@@ -274,7 +274,7 @@ typedef enum
 	sfx_shattr,
 	sfx_antiri,
 
-
+	// Menu, interface
 	sfx_chchng,
 	sfx_dwnind,
 	sfx_emfind,
@@ -290,16 +290,16 @@ typedef enum
 	sfx_notadd,
 	sfx_addfil,
 
-
+	// NiGHTS
 	sfx_ideya,
-	sfx_xideya,  
+	sfx_xideya, // Xmas
 	sfx_nbmper,
-	sfx_nxbump,  
+	sfx_nxbump, // Xmas
 	sfx_ncchip,
 	sfx_ncitem,
-	sfx_nxitem,  
+	sfx_nxitem, // Xmas
 	sfx_ngdone,
-	sfx_nxdone,  
+	sfx_nxdone, // Xmas
 	sfx_drill1,
 	sfx_drill2,
 	sfx_ncspec,
@@ -314,13 +314,13 @@ typedef enum
 	sfx_ngjump,
 	sfx_peww,
 
-
+	// Halloween
 	sfx_lntsit,
 	sfx_lntdie,
 	sfx_pumpkn,
 	sfx_ghosty,
 
-
+	// Mario
 	sfx_koopfr,
 	sfx_mario1,
 	sfx_mario2,
@@ -334,7 +334,7 @@ typedef enum
 	sfx_marioa,
 	sfx_thwomp,
 
-
+	// Black Eggman
 	sfx_bebomb,
 	sfx_bechrg,
 	sfx_becrsh,
@@ -362,12 +362,12 @@ typedef enum
 	sfx_bexpld,
 	sfx_bgxpld,
 
+	// Cy-Brak-Demon
+	sfx_beelec, // Electric barrier ambience
+	sfx_brakrl, // Rocket launcher
+	sfx_brakrx, // Rocket explodes
 
-	sfx_beelec,  
-	sfx_brakrl,  
-	sfx_brakrx,  
-
-
+	// S1 sounds
 	sfx_s1a0,
 	sfx_s1a1,
 	sfx_s1a2,
@@ -417,7 +417,7 @@ typedef enum
 	sfx_s1ce,
 	sfx_s1cf,
 
-
+	// S2 sounds
 	sfx_s220,
 	sfx_s221,
 	sfx_s222,
@@ -484,7 +484,7 @@ typedef enum
 	sfx_s25f,
 	sfx_s260,
 
-
+	// S3&K sounds
 	sfx_s3k2b,
 	sfx_s3k33,
 	sfx_s3k34,
@@ -703,13 +703,13 @@ typedef enum
 	sfx_s3kdbs,
 	sfx_s3kdbl,
 
-
+	// 3DB sounds
 	sfx_3db06,
 	sfx_3db09,
 	sfx_3db14,
 	sfx_3db16,
 
-
+	// SCD sounds
 	sfx_cdfm00,
 	sfx_cdfm01,
 	sfx_cdfm02,
@@ -801,7 +801,7 @@ typedef enum
 	sfx_cdpcm8,
 	sfx_cdpcm9,
 
-
+	// KC sounds
 	sfx_kc2a,
 	sfx_kc2b,
 	sfx_kc2c,
@@ -871,13 +871,13 @@ typedef enum
 	sfx_kc6d,
 	sfx_kc6e,
 
-
+	// free slots for S_AddSoundFx() at run-time --------------------
 	sfx_freeslot0,
-
-
-
+	//
+	// ... 1600 free sounds here ...
+	//
 	sfx_lastfreeslot = sfx_freeslot0 + NUMSFXFREESLOTS-1,
-
+	// end of freeslots ---------------------------------------------
 
 	sfx_skinsoundslot0,
 	sfx_lastskinsoundslot = sfx_skinsoundslot0 + NUMSKINSFXSLOTS-1,
@@ -887,7 +887,7 @@ typedef enum
 
 void S_InitRuntimeSounds(void);
 sfxenum_t S_AddSoundFx(const char *name, boolean singular, INT32 flags, boolean skinsound);
-extern sfxenum_t sfxfree;  
+extern sfxenum_t sfxfree; // sound test and slotting
 void S_RemoveSoundFx(sfxenum_t id);
 
 #endif

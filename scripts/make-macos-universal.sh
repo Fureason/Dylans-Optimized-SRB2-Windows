@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-
-
+# Makes a fused macOS Universal app bundle in the arm64 release preset dir
+# Only works if in master branch or in source tarball
 
 set -e
 

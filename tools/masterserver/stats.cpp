@@ -13,21 +13,21 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 
 #ifdef __GNUC__
 #include <unistd.h>
 #endif
-#include <string.h>       
+#include <string.h>      // strcat(),...
 #include "common.h"
 #include "ipcs.h"
 #include "stats.h"
 
+//=============================================================================
 
-
-  
-                 
-  
+/*
+** CServerStats()
+*/
 CServerStats::CServerStats()
 {
 	uptime = time(NULL);
@@ -49,50 +49,50 @@ CServerStats::CServerStats()
 	snprintf(version, sizeof version, "%s %s", __DATE__, __TIME__);
 }
 
-  
-                  
-  
+/*
+** ~CServerStats()
+*/
 CServerStats::~CServerStats()
 {
 }
 
-  
-              
-  
+/*
+** getUptime()
+*/
 const char *CServerStats::getUptime()
 {
 	char *res = ctime(&uptime);
-	res[strlen(res)-1] = '\0';  
+	res[strlen(res)-1] = '\0'; // remove the '\n' at the end
 	return res;
 }
 
-  
-             
-  
+/*
+** getHours()
+*/
 int CServerStats::getHours()
 {
 	return (int)(((time(NULL) - uptime)/(60*60))%24);
 }
 
-  
-            
-  
+/*
+** getDays()
+*/
 int CServerStats::getDays()
 {
 	return (int)((time(NULL) - uptime)/(60*60*24));
 }
 
-  
-            
-  
+/*
+** getMotd()
+*/
 const char *CServerStats::getMotd()
 {
 	return motd;
 }
 
-  
-                   
-  
+/*
+** getLastServers()
+*/
 const char *CServerStats::getLastServers()
 {
 	static char res[170*NUMLASTSERVERS];
@@ -105,7 +105,7 @@ const char *CServerStats::getLastServers()
 		char *ct;
 
 		ct = ctime(&last_time[i]);
-		ct[strlen(ct)-1] = '\0';  
+		ct[strlen(ct)-1] = '\0'; // replace \n with a \0
 		snprintf(str, sizeof str,
 			"Address: %15s   Name: %-31s   v%-7s   (%s %s)\n000043210000",
 			last_server[i].ip, last_server[i].name, last_server[i].version, ct, tzname[0]);
@@ -115,25 +115,25 @@ const char *CServerStats::getLastServers()
 	return res;
 }
 
-  
-               
-  
+/*
+** getVersion()
+*/
 const char *CServerStats::getVersion()
 {
 	return version;
 }
 
-  
-            
-  
+/*
+** putMotd()
+*/
 void CServerStats::putMotd(char *motd)
 {
 	strcpy(this->motd, motd);
 }
 
-  
-                   
-  
+/*
+** putLastServer():
+*/
 void CServerStats::putLastServer(msg_server_t *server)
 {
 	for (int i = NUMLASTSERVERS-1; i > 0; i--)

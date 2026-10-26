@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_polyobjlib.c
+/// \brief polyobject library for Lua scripting
 
 #include "doomdef.h"
 #include "fastcmp.h"
@@ -16,13 +16,13 @@
 #include "p_polyobj.h"
 #include "lua_script.h"
 #include "lua_libs.h"
-#include "lua_hud.h"  
+#include "lua_hud.h" // hud_running errors
 
 #define NOHUD if (hud_running)\
 return luaL_error(L, "HUD rendering code should not call this function!");
 
 enum polyobj_e {
-
+	// properties
 	polyobj_valid = 0,
 	polyobj_id,
 	polyobj_parent,
@@ -35,16 +35,16 @@ enum polyobj_e {
 	polyobj_flags,
 	polyobj_translucency,
 	polyobj_triggertag,
-
+	// special functions - utility
 	polyobj_pointInside,
 	polyobj_mobjTouching,
 	polyobj_mobjInside,
-
+	// special functions - manipulation
 	polyobj_moveXY,
 	polyobj_rotate
 };
 static const char *const polyobj_opt[] = {
-
+	// properties
 	"valid",
 	"id",
 	"parent",
@@ -57,26 +57,26 @@ static const char *const polyobj_opt[] = {
 	"flags",
 	"translucency",
 	"triggertag",
-
+	// special functions - utility
 	"pointInside",
 	"mobjTouching",
 	"mobjInside",
-
+	// special functions - manipulation
 	"moveXY",
 	"rotate",
 	NULL};
 
 static const char *const valid_opt[] ={"valid",NULL};
 
+////////////////////////
+// polyobj.vertices[] //
+////////////////////////
 
-
-
-
-
-
-
-
-
+// polyobj.vertices, i -> polyobj.vertices[i]
+// polyobj.vertices.valid, for validity checking
+//
+// see sectorlines_get in lua_maplib.c
+//
 static int polyobjvertices_get(lua_State *L)
 {
 	vertex_t ***polyverts = *((vertex_t ****)luaL_checkudata(L, 1, META_POLYOBJVERTICES));
@@ -99,7 +99,7 @@ static int polyobjvertices_get(lua_State *L)
 		}
 	}
 
-	numofverts = *(size_t *)FIELDFROM (polyobj_t, polyverts, vertices, numVertices);
+	numofverts = *(size_t *)FIELDFROM (polyobj_t, polyverts, vertices,/* -> */numVertices);
 
 	if (!numofverts)
 		return luaL_error(L, "no vertices found!");
@@ -111,7 +111,7 @@ static int polyobjvertices_get(lua_State *L)
 	return 1;
 }
 
-
+// #(polyobj.vertices) -> polyobj.numVertices
 static int polyobjvertices_num(lua_State *L)
 {
 	vertex_t ***polyverts = *((vertex_t ****)luaL_checkudata(L, 1, META_POLYOBJVERTICES));
@@ -120,20 +120,20 @@ static int polyobjvertices_num(lua_State *L)
 	if (!polyverts || !(*polyverts))
 		return luaL_error(L, "accessed polyobj_t.vertices doesn't exist anymore.");
 
-	numofverts = *(size_t *)FIELDFROM (polyobj_t, polyverts, vertices, numVertices);
+	numofverts = *(size_t *)FIELDFROM (polyobj_t, polyverts, vertices,/* -> */numVertices);
 	lua_pushinteger(L, numofverts);
 	return 1;
 }
 
+/////////////////////
+// polyobj.lines[] //
+/////////////////////
 
-
-
-
-
-
-
-
-
+// polyobj.lines, i -> polyobj.lines[i]
+// polyobj.lines.valid, for validity checking
+//
+// see sectorlines_get in lua_maplib.c
+//
 static int polyobjlines_get(lua_State *L)
 {
 	line_t ***polylines = *((line_t ****)luaL_checkudata(L, 1, META_POLYOBJLINES));
@@ -156,7 +156,7 @@ static int polyobjlines_get(lua_State *L)
 		}
 	}
 
-	numoflines = *(size_t *)FIELDFROM (polyobj_t, polylines, lines, numLines);
+	numoflines = *(size_t *)FIELDFROM (polyobj_t, polylines, lines,/* -> */numLines);
 
 	if (!numoflines)
 		return luaL_error(L, "no lines found!");
@@ -168,7 +168,7 @@ static int polyobjlines_get(lua_State *L)
 	return 1;
 }
 
-
+// #(polyobj.lines) -> polyobj.numLines
 static int polyobjlines_num(lua_State *L)
 {
 	line_t ***polylines = *((line_t ****)luaL_checkudata(L, 1, META_POLYOBJLINES));
@@ -177,16 +177,16 @@ static int polyobjlines_num(lua_State *L)
 	if (!polylines || !(*polylines))
 		return luaL_error(L, "accessed polyobj_t.lines doesn't exist anymore.");
 
-	numoflines = *(size_t *)FIELDFROM (polyobj_t, polylines, lines, numLines);
+	numoflines = *(size_t *)FIELDFROM (polyobj_t, polylines, lines,/* -> */numLines);
 	lua_pushinteger(L, numoflines);
 	return 1;
 }
 
+/////////////////////////////////
+// polyobj_t function wrappers //
+/////////////////////////////////
 
-
-
-
-
+// special functions - utility
 static int lib_polyobj_PointInside(lua_State *L)
 {
 	polyobj_t *po = *((polyobj_t **)luaL_checkudata(L, 1, META_POLYOBJ));
@@ -225,7 +225,7 @@ static int lib_polyobj_MobjInside(lua_State *L)
 	return 1;
 }
 
-
+// special functions - manipulation
 static int lib_polyobj_moveXY(lua_State *L)
 {
 	polyobj_t *po = *((polyobj_t **)luaL_checkudata(L, 1, META_POLYOBJ));
@@ -255,9 +255,9 @@ static int lib_polyobj_rotate(lua_State *L)
 	return 1;
 }
 
-
-
-
+///////////////
+// polyobj_t //
+///////////////
 
 static int polyobj_get(lua_State *L)
 {
@@ -274,7 +274,7 @@ static int polyobj_get(lua_State *L)
 
 	switch (field)
 	{
-
+	// properties
 	case polyobj_valid:
 		lua_pushboolean(L, true);
 		break;
@@ -284,13 +284,13 @@ static int polyobj_get(lua_State *L)
 	case polyobj_parent:
 		lua_pushinteger(L, polyobj->parent);
 		break;
-	case polyobj_vertices:  
-		LUA_PushUserdata(L, &polyobj->vertices, META_POLYOBJVERTICES);  
+	case polyobj_vertices: // vertices
+		LUA_PushUserdata(L, &polyobj->vertices, META_POLYOBJVERTICES); // push the address of the "vertices" member in the struct, to allow our hacks to work
 		break;
-	case polyobj_lines:  
-		LUA_PushUserdata(L, &polyobj->lines, META_POLYOBJLINES);  
+	case polyobj_lines: // lines
+		LUA_PushUserdata(L, &polyobj->lines, META_POLYOBJLINES); // push the address of the "lines" member in the struct, to allow our hacks to work
 		break;
-	case polyobj_sector:  
+	case polyobj_sector: // shortcut that exists only in Lua!
 		LUA_PushUserdata(L, polyobj->lines[0]->backsector, META_SECTOR);
 		break;
 	case polyobj_angle:
@@ -311,7 +311,7 @@ static int polyobj_get(lua_State *L)
 	case polyobj_triggertag:
 		lua_pushinteger(L, polyobj->triggertag);
 		break;
-
+	// special functions - utility
 	case polyobj_pointInside:
 		lua_pushcfunction(L, lib_polyobj_PointInside);
 		break;
@@ -321,7 +321,7 @@ static int polyobj_get(lua_State *L)
 	case polyobj_mobjInside:
 		lua_pushcfunction(L, lib_polyobj_MobjInside);
 		break;
-
+	// special functions - manipulation
 	case polyobj_moveXY:
 		lua_pushcfunction(L, lib_polyobj_moveXY);
 		break;
@@ -372,21 +372,21 @@ static int polyobj_num(lua_State *L)
 	return 1;
 }
 
-
-
-
+///////////////////
+// PolyObjects[] //
+///////////////////
 
 static int lib_iteratePolyObjects(lua_State *L)
 {
 	INT32 i = -1;
 	if (lua_gettop(L) < 2)
 	{
-
+		//return luaL_error(L, "Don't call PolyObjects.iterate() directly, use it as 'for polyobj in PolyObjects.iterate do <block> end'.");
 		lua_pushcfunction(L, lib_iteratePolyObjects);
 		return 1;
 	}
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (INT32)(*((polyobj_t **)luaL_checkudata(L, 1, META_POLYOBJ)) - PolyObjects);
 	for (i++; i < numPolyObjects; i++)
@@ -402,7 +402,7 @@ static int lib_PolyObject_getfornum(lua_State *L)
 	INT32 id = (INT32)luaL_checkinteger(L, 1);
 
 	if (!numPolyObjects)
-		return 0;  
+		return 0; // if there's no PolyObjects then bail out here
 
 	LUA_PushUserdata(L, Polyobj_GetForNum(id), META_POLYOBJ);
 	return 1;
@@ -413,7 +413,7 @@ static int lib_getPolyObject(lua_State *L)
 	const char *field;
 	INT32 i;
 
-
+	// find PolyObject by number
 	if (lua_type(L, 2) == LUA_TNUMBER)
 	{
 		i = luaL_checkinteger(L, 2);
@@ -424,14 +424,14 @@ static int lib_getPolyObject(lua_State *L)
 	}
 
 	field = luaL_checkstring(L, 2);
-
+	// special function iterate
 	if (fastcmp(field,"iterate"))
 	{
 		lua_pushcfunction(L, lib_iteratePolyObjects);
 		return 1;
 	}
-
-	else if (fastcmp(field,"GetForNum"))  
+	// find PolyObject by ID
+	else if (fastcmp(field,"GetForNum")) // name could probably be better
 	{
 		lua_pushcfunction(L, lib_PolyObject_getfornum);
 		return 1;

@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw_main.h
+/// \brief 3D render mode functions
 
 #ifndef __HWR_MAIN_H__
 #define __HWR_MAIN_H__
@@ -22,7 +22,7 @@
 
 #include "../m_perfstats.h"
 
-
+// Startup & Shutdown the hardware mode renderer
 void HWR_Startup(void);
 void HWR_Switch(void);
 void HWR_Shutdown(void);
@@ -46,7 +46,7 @@ void HWR_CreatePlanePolygons(INT32 bspnum);
 void HWR_CreateStaticLightmaps(INT32 bspnum);
 void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color);
 void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 actualcolor, UINT8 strength);
-void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32 actualcolor);	 
+void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32 actualcolor);	// Lat: separate flags from color since color needs to be an uint to work right.
 
 UINT8 *HWR_GetScreenshot(void);
 void HWR_SetMultisample(boolean enabled);
@@ -63,10 +63,10 @@ void HWR_DoWipe(UINT8 wipenum, UINT8 scrnnum);
 void HWR_MakeScreenFinalTexture(void);
 void HWR_DrawScreenFinalTexture(int width, int height);
 
-
+// This stuff is put here so models can use them
 boolean HWR_UseShader(void);
 void HWR_Lighting(FSurfaceInfo *Surface, INT32 light_level, extracolormap_t *colormap);
-UINT8 HWR_FogBlockAlpha(INT32 light, extracolormap_t *colormap);  
+UINT8 HWR_FogBlockAlpha(INT32 light, extracolormap_t *colormap); // Let's see if this can work
 
 UINT8 HWR_GetTranstableAlpha(INT32 transtablenum);
 FBITFIELD HWR_GetBlendModeFlag(INT32 style);
@@ -106,12 +106,12 @@ extern consvar_t cv_glpalettedepth;
 
 extern consvar_t cv_glwireframe;
 
-
+// BP: big hack for a test in lighting ref : 1249753487AB
 extern fixed_t *hwbbox;
 extern FTransform atransform;
 extern float gl_viewsin, gl_viewcos;
 
-
+// Render stats
 extern ps_metric_t ps_hw_skyboxtime;
 extern ps_metric_t ps_hw_portaltime;
 extern ps_metric_t ps_hw_numportals;
@@ -123,7 +123,7 @@ extern ps_metric_t ps_hw_textureuploadtime;
 extern ps_metric_t ps_hw_textureuploads;
 extern ps_metric_t ps_hw_batchedsprites;
 
-
+// Render stats for batching
 extern ps_metric_t ps_hw_numpolys;
 extern ps_metric_t ps_hw_numverts;
 extern ps_metric_t ps_hw_numcalls;

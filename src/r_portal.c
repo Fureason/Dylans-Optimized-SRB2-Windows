@@ -8,30 +8,30 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_portal.c
+/// \brief Software renderer portals.
 
 #include "r_portal.h"
 #include "r_plane.h"
 #include "r_main.h"
 #include "doomstat.h"
-#include "p_spec.h"  
-#include "p_slopes.h"  
+#include "p_spec.h" // Skybox viewpoints
+#include "p_slopes.h" // P_GetSectorFloorZAt and P_GetSectorCeilingZAt
 #include "p_local.h"
 #include "z_zone.h"
 #include "r_things.h"
 #include "r_sky.h"
 
-UINT8 portalrender;			 
+UINT8 portalrender;			/**< When rendering a portal, it establishes the depth of the current BSP traversal. */
 
-
+// Linked list for portals.
 portal_t *portal_base, *portal_cap;
 
 line_t *portalclipline;
 sector_t *portalcullsector;
 INT32 portalclipstart, portalclipend;
 
-boolean portalline;  
+boolean portalline; // is curline a portal seg?
 
 void Portal_InitList (void)
 {
@@ -39,12 +39,12 @@ void Portal_InitList (void)
 	portal_base = portal_cap = NULL;
 }
 
-                                                              
-  
-                                                           
-                                                                   
-                      
-   
+/** Store the clipping window for a portal in its given range.
+ *
+ * The window is copied from the current window at the time
+ * the function is called, so it is useful for converting one-sided
+ * lines into portals.
+ */
 void Portal_ClipRange (portal_t* portal)
 {
 	INT32 start	= portal->start;
@@ -60,8 +60,8 @@ void Portal_ClipRange (portal_t* portal)
 	memcpy(portal->frontscale, &frontscale[start], columns * sizeof(*frontscale));
 }
 
-                                            
-   
+/** Apply the clipping window from a portal.
+ */
 void Portal_ClipApply (const portal_t* portal)
 {
 	INT32 i;
@@ -77,7 +77,7 @@ void Portal_ClipApply (const portal_t* portal)
 	memcpy(&floorclip[start], portal->floorclip, columns * sizeof(*floorclip));
 	memcpy(&frontscale[start], portal->frontscale, columns * sizeof(*frontscale));
 
-
+	// HACKS FOLLOW
 	for (i = 0; i < start; i++)
 	{
 		floorclip[i] = -1;
@@ -97,7 +97,7 @@ static portal_t* Portal_Add (const INT16 x1, const INT16 x2)
 	INT16 *floorclipsave	= Z_Malloc(sizeof(INT16)*(x2-x1 + 1), PU_LEVEL, NULL);
 	fixed_t *frontscalesave	= Z_Malloc(sizeof(fixed_t)*(x2-x1 + 1), PU_LEVEL, NULL);
 
-
+	// Linked list.
 	if (!portal_base)
 	{
 		portal_base	= portal;
@@ -110,14 +110,14 @@ static portal_t* Portal_Add (const INT16 x1, const INT16 x2)
 	}
 	portal->clipline = -1;
 
-
+	// Store clipping values so they can be restored once the portal is rendered.
 	portal->ceilingclip	= ceilingclipsave;
 	portal->floorclip	= floorclipsave;
 	portal->frontscale	= frontscalesave;
 	portal->start	= x1;
 	portal->end		= x2;
 
-
+	// Increase recursion level.
 	portal->pass = portalrender+1;
 
 	return portal;
@@ -135,7 +135,7 @@ void Portal_Remove (portal_t* portal)
 
 static void Portal_GetViewpointForLine(portal_t *portal, line_t *start, line_t *dest, angle_t dangle)
 {
-
+	// Offset the portal view by the linedef centers
 	fixed_t disttopoint;
 	angle_t angtopoint;
 
@@ -143,15 +143,15 @@ static void Portal_GetViewpointForLine(portal_t *portal, line_t *start, line_t *
 		fixed_t x, y;
 	} dest_c, start_c;
 
-
-	                                                                        
-                                                                            
-                                                                            
-                                          
+	// looking glass center
+	/* Fixed-point map coordinates can exceed +/-16384 map units. Adding two
+	 * endpoints in 32 bits overflowed before the division, sending the virtual
+	 * camera to the wrong side of large maps and producing the dramatic portal
+	 * cutoff/split seen in software mode. */
 	start_c.x = (fixed_t)(((INT64)start->v1->x + start->v2->x) / 2);
 	start_c.y = (fixed_t)(((INT64)start->v1->y + start->v2->y) / 2);
 
-
+	// other side center
 	dest_c.x = (fixed_t)(((INT64)dest->v1->x + dest->v2->x) / 2);
 	dest_c.y = (fixed_t)(((INT64)dest->v1->y + dest->v2->y) / 2);
 
@@ -164,16 +164,16 @@ static void Portal_GetViewpointForLine(portal_t *portal, line_t *start, line_t *
 	portal->viewangle = viewangle + dangle;
 }
 
-                                                                    
-  
-                                                     
-                                                  
+/** Creates a portal out of two lines and a determined screen range.
+ *
+ * line1 determines the entrance, and line2 the exit.
+ * x1 and x2 determine the screen's column bounds.
 
-                                                            
-                                                         
-                                                          
-                                       
-   
+ * The view's offset from the entry line center is obtained,
+ * and then rotated&translated to the exit line's center.
+ * When the portal renders, it will create the illusion of
+ * the two lines being seamed together.
+ */
 void Portal_Add2Lines (const INT32 line1, const INT32 line2, const INT32 x1, const INT32 x2)
 {
 	portal_t* portal = Portal_Add(x1, x2);
@@ -190,14 +190,14 @@ void Portal_Add2Lines (const INT32 line1, const INT32 line2, const INT32 x1, con
 
 	Portal_ClipRange(portal);
 
-	portalline = true;  
+	portalline = true; // this tells R_StoreWallRange that curline is a portal seg
 }
 
-                                                            
-  
-                                                               
-                                         
-   
+/** Store the clipping window for a portal using a visplane.
+ *
+ * Since visplanes top/bottom windows work in an identical way,
+ * it can just be copied almost directly.
+ */
 static void Portal_ClipVisplane (const visplane_t* plane, portal_t* portal)
 {
 	INT16 start	= portal->start;
@@ -206,7 +206,7 @@ static void Portal_ClipVisplane (const visplane_t* plane, portal_t* portal)
 
 	for (i = 0; i < end - start; i++)
 	{
-
+		// Invalid column.
 		if (plane->top[i + start] == 65535)
 		{
 			portal->ceilingclip[i] = -1;
@@ -226,8 +226,8 @@ static boolean TrimVisplaneBounds (const visplane_t* plane, INT16* start, INT16*
 	*start = plane->minx;
 	*end = plane->maxx + 1;
 
-
-
+	// Visplanes have 1-px pads on their sides (extra columns).
+	// Trim them, else it may render out of bounds.
 	if (*end > viewwidth)
 		*end = viewwidth;
 
@@ -235,12 +235,12 @@ static boolean TrimVisplaneBounds (const visplane_t* plane, INT16* start, INT16*
 		return true;
 
 
-	                                                               
-   
-                                                              
-                                                            
-               
-    
+	/** Trims a visplane's horizontal gap to match its render area.
+	 *
+	 * Visplanes' minx/maxx may sometimes exceed the area they're
+	 * covering. This merely adjusts the boundaries to the next
+	 * valid area.
+	 */
 
 	while (*start < *end && plane->bottom[*start] == 0 && plane->top[*start] == 65535)
 	{
@@ -248,10 +248,10 @@ static boolean TrimVisplaneBounds (const visplane_t* plane, INT16* start, INT16*
 	}
 
 
-	                                                                         
-                                                                            
-                                                                          
-                                                                          
+	/* The original right-edge test mixed bottom[end-1] with top[start]. That
+	 * could retain empty garbage columns or collapse an angled portal based on
+	 * an unrelated pixel at the opposite edge. Test one column consistently,
+	 * with the bounds check first just like the corrected left-edge loop. */
 	while (*start < *end && plane->bottom[*end - 1] == 0
 	&& plane->top[*end - 1] == 65535)
 	{
@@ -273,7 +273,7 @@ static void Portal_GetViewpointForSkybox(portal_t *portal)
 
 	mapheader_t *mh = mapheaderinfo[gamemap-1];
 
-
+	// If a relative viewpoint exists, offset the viewpoint.
 	if (skyboxmo[1])
 	{
 		fixed_t x = 0, y = 0;
@@ -289,7 +289,7 @@ static void Portal_GetViewpointForSkybox(portal_t *portal)
 		else if (mh->skybox_scaley < 0)
 			y = (viewy - skyboxmo[1]->y) * -mh->skybox_scaley;
 
-
+		// Apply transform to account for the skybox viewport angle.
 		portal->viewx += FixedMul(x,FINECOSINE(ang)) - FixedMul(y,  FINESINE(ang));
 		portal->viewy += FixedMul(x,  FINESINE(ang)) + FixedMul(y,FINECOSINE(ang));
 	}
@@ -300,11 +300,11 @@ static void Portal_GetViewpointForSkybox(portal_t *portal)
 		portal->viewz += viewz * -mh->skybox_scalez;
 }
 
-                                              
-  
-                                                     
-                                  
-   
+/** Creates a skybox portal out of a visplane.
+ *
+ * Applies the necessary offsets and rotation to give
+ * a depth illusion to the skybox.
+ */
 static boolean Portal_AddSkybox (const visplane_t* plane)
 {
 	INT16 start, end;
@@ -345,7 +345,7 @@ static void Portal_GetViewpointForSecPortal(portal_t *portal, sectorportal_t *se
 	case SECPORTAL_LINE:
 		angle = secportal->line.dest->angle - secportal->line.start->angle;
 		Portal_GetViewpointForLine(portal, secportal->line.start, secportal->line.dest, angle);
-		portal->viewz = viewz;  
+		portal->viewz = viewz; // Apparently it just works like that. Not going to question it.
 		return;
 	case SECPORTAL_OBJECT:
 		if (P_MobjWasRemoved(secportal->mobj))
@@ -388,7 +388,7 @@ static void Portal_GetViewpointForSecPortal(portal_t *portal, sectorportal_t *se
 	fixed_t refy = target_y - viewy;
 	fixed_t refz = target_z - viewz;
 
-
+	// Rotate the X/Y to match the target angle
 	if (angle != 0)
 	{
 		fixed_t tr_x = refx, tr_y = refy;
@@ -403,14 +403,14 @@ static void Portal_GetViewpointForSecPortal(portal_t *portal, sectorportal_t *se
 	portal->viewangle = angle + viewangle;
 }
 
-                                              
-   
+/** Creates a sector portal out of a visplane.
+ */
 static boolean Portal_AddSectorPortal (const visplane_t* plane)
 {
 	INT16 start, end;
 	sectorportal_t *secportal = plane->portalsector;
 
-
+	// Shortcut
 	if (secportal->type == SECPORTAL_SKYBOX)
 	{
 		if (R_SkyboxEnabled() && skyboxmo[0])
@@ -430,8 +430,8 @@ static boolean Portal_AddSectorPortal (const visplane_t* plane)
 	return true;
 }
 
-                                        
-   
+/** Creates a transferred sector portal.
+ */
 void Portal_AddTransferred (const UINT32 secportalnum, const INT32 x1, const INT32 x2)
 {
 	if (secportalnum >= secportalcount)
@@ -458,9 +458,9 @@ void Portal_AddTransferred (const UINT32 secportalnum, const INT32 x1, const INT
 	portalline = true;
 }
 
-                                                                
-                                                            
-   
+/** Creates portals for the currently existing portal visplanes.
+ * The visplanes are also removed and cleared from the list.
+ */
 void Portal_AddPlanePortals (boolean add_skyboxes)
 {
 	visplane_t *pl;
@@ -469,21 +469,21 @@ void Portal_AddPlanePortals (boolean add_skyboxes)
 	{
 		for (pl = visplanes[i]; pl; pl = pl->next)
 		{
-			 
+			/* Keep the stock 2.2.15 minimum portal width. */
 			if (pl->minx >= pl->maxx)
 				continue;
 
 			boolean added_portal = false;
 
-
+			// Render sector portal if recursiveness limit hasn't been reached
 			if (pl->portalsector && portalrender < R_PortalDepthLimit())
 				added_portal = Portal_AddSectorPortal(pl);
 
-
+			// Render skybox portal
 			if (!added_portal && pl->picnum == skyflatnum && add_skyboxes && skyboxmo[0])
 				added_portal = Portal_AddSkybox(pl);
 
-
+			// don't render this visplane anymore
 			if (added_portal)
 			{
 				pl->minx = 0;

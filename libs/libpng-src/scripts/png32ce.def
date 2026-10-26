@@ -1,17 +1,17 @@
-
-
-
+;------------------------------------------
+; LIBPNG module definition file for Windows
+;------------------------------------------
 
 LIBRARY lpngce
 
 EXPORTS
-
+;Version 1.2.46
   png_build_grayscale_palette  @1
   png_check_sig        @2
   png_chunk_error      @3
   png_chunk_warning      @4
-
-
+;  png_convert_from_struct_tm   @5
+;  png_convert_from_time_t    @6
   png_create_info_struct     @7
   png_create_read_struct     @8
   png_create_write_struct    @9
@@ -81,7 +81,7 @@ EXPORTS
   png_read_end    @74
   png_read_image    @75
   png_read_info    @76
-
+; png_read_init is deprecated
   png_read_init    @77
   png_read_png    @78
   png_read_row    @79
@@ -167,62 +167,62 @@ EXPORTS
   png_write_image    @159
   png_write_info    @160
   png_write_info_before_PLTE  @161
-
+; png_write_init is deprecated
   png_write_init    @162
   png_write_png    @163
   png_write_row    @164
   png_write_rows    @165
-
+; png_read_init_2 and png_write_init_2 are deprecated.
   png_read_init_2    @166
   png_write_init_2    @167
   png_access_version_number  @168
-
-
+;  png_sig_bytes    @169
+;  png_libpng_ver    @170
   png_init_io    @171
   png_convert_to_rfc1123     @172
   png_set_invalid  @173
-
-
+; Added at version 1.0.12
+; For compatiblity with 1.0.7-1.0.11
   png_info_init @174
   png_read_init_3    @175
   png_write_init_3    @176
   png_info_init_3 @177
   png_destroy_struct  @178
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+; Added at version 1.2.0
+; For use with PNG_USER_MEM_SUPPORTED
+; png_destroy_struct_2  @179
+; png_create_read_struct_2 @180
+; png_create_write_struct_2 @181
+; png_malloc_default @182
+; png_free_default @183
+; MNG features
+; png_permit_mng_features  @184
+; MMX support
+; png_mmx_support  @185
+; png_get_mmx_flagmask  @186
+; png_get_asm_flagmask  @187
+; png_get_asm_flags  @188
+; png_get_mmx_bitdepth_threshold  @189
+; png_get_mmx_rowbytes_threshold  @190
+; png_set_asm_flags  @191
+; png_init_mmx_flags  @192
+; Strip error numbers
   png_set_strip_error_numbers @193
-
+; Added at version 1.2.2
   png_handle_as_unknown @179
   png_zalloc @180
   png_zfree @181
-
-
-
-
+; png_handle_as_unknown @194
+; png_zalloc @195
+; png_zfree @196
+; Added at version 1.2.6
   png_malloc_warn @195
   png_get_user_height_max @196
   png_get_user_width_max @197
   png_set_user_limits @198
-
+; Added at version 1.2.7
   png_set_add_alpha @199
-
+; Added at version 1.2.9
   png_get_uint_32 @200
   png_save_uint_32 @201
   png_get_uint_16 @202
@@ -231,6 +231,6 @@ EXPORTS
   png_save_int_32 @205
   png_get_uint_31 @206
   png_set_expand_gray_1_2_4_to_8  @207
-
+; Added at version 1.2.41
   png_write_sig @208
   png_check_cHRM_fixed @217

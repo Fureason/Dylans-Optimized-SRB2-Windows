@@ -1,4 +1,4 @@
- 
+/* $Id: minixml.h,v 1.8 2019/02/10 12:29:25 nanard Exp $ */
 /* minimal xml parser
  *
  * Project : miniupnp
@@ -12,12 +12,12 @@
 #define MINIXML_H_INCLUDED
 #define IS_WHITE_SPACE(c) ((c)==' ' || (c)=='\t' || (c)=='\r' || (c)=='\n')
 
-                                                 
-                                
+/* if a callback function pointer is set to NULL,
+ * the function is not called */
 struct xmlparser {
 	const char *xmlstart;
 	const char *xmlend;
-	const char *xml;	 
+	const char *xml;	/* pointer to current character */
 	int xmlsize;
 	void * data;
 	void (*starteltfunc) (void *, const char *, int);
@@ -26,11 +26,11 @@ struct xmlparser {
 	void (*attfunc) (void *, const char *, int, const char *, int);
 };
 
-             
-                                                              
-                                                           
-                                 
-                                                                 
+/* parsexml()
+ * the xmlparser structure must be initialized before the call
+ * the following structure members have to be initialized :
+ * xmlstart, xmlsize, data, *func
+ * xml is for internal usage, xmlend is computed automatically */
 void parsexml(struct xmlparser *);
 
 #endif

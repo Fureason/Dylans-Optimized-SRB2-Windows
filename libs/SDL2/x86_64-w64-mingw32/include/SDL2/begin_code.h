@@ -19,22 +19,22 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-   
-                      
-  
-                                                                        
-                                                                         
-                                                                           
-   
+/**
+ *  \file begin_code.h
+ *
+ *  This file sets things up for C dynamic library function definitions,
+ *  static inlined functions, and structures aligned at 4-byte alignment.
+ *  If you don't like ugly C preprocessor code, don't look at this file. :)
+ */
 
- 
+/* This shouldn't be nested -- included it around code only. */
 #ifdef SDL_begin_code_h
 #error Nested inclusion of begin_code.h
 #endif
 #define SDL_begin_code_h
 
 #ifndef SDL_DEPRECATED
-#  if defined(__GNUC__) && (__GNUC__ >= 4)   
+#  if defined(__GNUC__) && (__GNUC__ >= 4)  /* technically, this arrived in gcc 3.1, but oh well. */
 #    define SDL_DEPRECATED __attribute__((deprecated))
 #  else
 #    define SDL_DEPRECATED
@@ -49,7 +49,7 @@
 #  endif
 #endif
 
- 
+/* Some compilers use a special export keyword */
 #ifndef DECLSPEC
 # if defined(__WIN32__) || defined(__WINRT__) || defined(__CYGWIN__) || defined(__GDK__)
 #  ifdef DLL_EXPORT
@@ -72,31 +72,31 @@
 # endif
 #endif
 
- 
+/* By default SDL uses the C calling convention */
 #ifndef SDLCALL
 #if (defined(__WIN32__) || defined(__WINRT__) || defined(__GDK__)) && !defined(__GNUC__)
 #define SDLCALL __cdecl
 #elif defined(__OS2__) || defined(__EMX__)
 #define SDLCALL _System
 # if defined (__GNUC__) && !defined(_System)
-#  define _System  
+#  define _System /* for old EMX/GCC compat.  */
 # endif
 #else
 #define SDLCALL
 #endif
-#endif  
+#endif /* SDLCALL */
 
- 
+/* Removed DECLSPEC on Symbian OS because SDL cannot be a DLL in EPOC */
 #ifdef __SYMBIAN32__
 #undef DECLSPEC
 #define DECLSPEC
-#endif  
+#endif /* __SYMBIAN32__ */
 
-                                               
-                                                                          
-                                                                           
-                                                             
-   
+/* Force structure packing at 4 byte alignment.
+   This is necessary if the header is included in code which has structure
+   packing set to an alternate value, say for loading structures from disk.
+   The packing is reset to the previous value in close_code.h
+ */
 #if defined(_MSC_VER) || defined(__MWERKS__) || defined(__BORLANDC__)
 #ifdef _MSC_VER
 #pragma warning(disable: 4103)
@@ -108,12 +108,12 @@
 #pragma nopackwarning
 #endif
 #ifdef _WIN64
- 
+/* Use 8-byte alignment on 64-bit architectures, so pointers are aligned */
 #pragma pack(push,8)
 #else
 #pragma pack(push,4)
 #endif
-#endif  
+#endif /* Compiler needs structure packing set */
 
 #ifndef SDL_INLINE
 #if defined(__GNUC__)
@@ -132,7 +132,7 @@
 #define __inline__ inline
 #endif
 #endif
-#endif  
+#endif /* SDL_INLINE not defined */
 
 #ifndef SDL_FORCE_INLINE
 #if defined(_MSC_VER)
@@ -142,7 +142,7 @@
 #else
 #define SDL_FORCE_INLINE static SDL_INLINE
 #endif
-#endif  
+#endif /* SDL_FORCE_INLINE not defined */
 
 #ifndef SDL_NORETURN
 #if defined(__GNUC__)
@@ -152,9 +152,9 @@
 #else
 #define SDL_NORETURN
 #endif
-#endif  
+#endif /* SDL_NORETURN not defined */
 
- 
+/* Apparently this is needed by several Windows compilers */
 #if !defined(__MACH__)
 #ifndef NULL
 #ifdef __cplusplus
@@ -162,8 +162,8 @@
 #else
 #define NULL ((void *)0)
 #endif
-#endif  
-#endif  
+#endif /* NULL */
+#endif /* ! Mac OS X - breaks precompiled headers */
 
 #ifndef SDL_FALLTHROUGH
 #if (defined(__cplusplus) && __cplusplus >= 201703L) || \
@@ -174,14 +174,14 @@
 #define SDL_HAS_FALLTHROUGH __has_attribute(__fallthrough__)
 #else
 #define SDL_HAS_FALLTHROUGH 0
-#endif  
+#endif /* __has_attribute */
 #if SDL_HAS_FALLTHROUGH && \
    ((defined(__GNUC__) && __GNUC__ >= 7) || \
     (defined(__clang_major__) && __clang_major__ >= 10))
 #define SDL_FALLTHROUGH __attribute__((__fallthrough__))
 #else
-#define SDL_FALLTHROUGH do {} while (0)  
-#endif  
+#define SDL_FALLTHROUGH do {} while (0) /* fallthrough */
+#endif /* SDL_HAS_FALLTHROUGH */
 #undef SDL_HAS_FALLTHROUGH
-#endif  
-#endif  
+#endif /* C++17 or C2x */
+#endif /* SDL_FALLTHROUGH not defined */

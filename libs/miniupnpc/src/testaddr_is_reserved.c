@@ -1,4 +1,4 @@
- 
+/* $Id: testaddr_is_reserved.c,v 1.1 2020/10/15 22:12:51 nanard Exp $ */
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * Project : miniupnp
  * Web : http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
@@ -39,8 +39,8 @@ int main(int argc, char * * argv) {
 		printf("testing %s %d %d\n", tests[i].str, tests[i].expected_result, result);
 		if (result != tests[i].expected_result) {
 			fprintf(stderr, "*** FAILURE ***\n");
-			return 1;	 
+			return 1;	/* Failure */
 		}
 	}
-	return 0;	 
+	return 0;	/* success */
 }

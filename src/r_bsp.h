@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_bsp.h
+/// \brief Refresh module, BSP traversal and handling
 
 #ifndef __R_BSP__
 #define __R_BSP__
@@ -23,7 +23,7 @@ extern side_t *sidedef;
 extern line_t *linedef;
 extern sector_t *frontsector;
 extern sector_t *backsector;
-extern boolean portalline;  
+extern boolean portalline; // is curline a portal seg?
 
 extern INT32 checkcoord[12][4];
 
@@ -38,7 +38,7 @@ extern boolean horizonline;
 
 extern INT32 doorclosed;
 
-
+// BSP?
 void R_ClearClipSegs(void);
 void R_PortalClearClipSegs(INT32 start, INT32 end);
 void R_ClearDrawSegs(void);
@@ -47,9 +47,9 @@ void R_RenderPortalHorizonLine(sector_t *sector);
 
 void R_SortPolyObjects(subsector_t *sub);
 
-extern size_t numpolys;         
-extern size_t num_po_ptrs;      
-extern polyobj_t **po_ptrs;  
+extern size_t numpolys;        // number of polyobjects in current subsector
+extern size_t num_po_ptrs;     // number of polyobject pointers allocated
+extern polyobj_t **po_ptrs; // temp ptr array to sort polyobject pointers
 
 sector_t *R_FakeFlat(sector_t *sec, sector_t *tempsec, INT32 *floorlightlevel,
 	INT32 *ceilinglightlevel, boolean back);

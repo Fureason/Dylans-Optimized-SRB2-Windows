@@ -1,6 +1,6 @@
+// TurboGrafx-16/PC Engine HES music file emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef HES_EMU_H
 #define HES_EMU_H
 
@@ -11,7 +11,7 @@
 class Hes_Emu : private Hes_Cpu, public Classic_Emu {
 	typedef Hes_Cpu cpu;
 public:
-
+	// HES file header
 	enum { header_size = 0x20 };
 	struct header_t
 	{
@@ -26,7 +26,7 @@ public:
 		byte unused [4];
 	};
 	
-
+	// Header for currently loaded file
 	header_t const& header() const { return header_; }
 	
 	static gme_type_t static_type() { return gme_hes_type; }
@@ -44,7 +44,7 @@ protected:
 	void update_eq( blip_eq_t const& );
 	void unload();
 public: private: friend class Hes_Cpu;
-	byte* write_pages [page_count + 1];  
+	byte* write_pages [page_count + 1]; // 0 if unmapped or I/O space
 	
 	int cpu_read_( hes_addr_t );
 	int cpu_read( hes_addr_t );
@@ -83,7 +83,7 @@ private:
 	
 	void recalc_timer_load();
 	
-
+	// large items
 	Hes_Apu apu;
 	byte sgx [3 * page_size + cpu_padding];
 	

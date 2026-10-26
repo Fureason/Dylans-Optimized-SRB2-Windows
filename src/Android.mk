@@ -75,7 +75,7 @@ LOCAL_CFLAGS += -DPLATFORM_ANDROID -DNONX86 -DLINUX -DDEBUGMODE -DNOPIX -DUNIXCO
 
 LOCAL_MODULE := libsrb2
 
-
+# we live in an APK, so no prelink for us!
 LOCAL_PRELINK_MODULE := false
 
 LOCAL_SHARED_LIBRARIES += liblog libdl

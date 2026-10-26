@@ -23,7 +23,7 @@ typedef LUAI_MEM l_mem;
 
 
 
- 
+/* chars used as small naturals (so that `char' is reserved for characters) */
 typedef unsigned char lu_byte;
 
 
@@ -32,26 +32,26 @@ typedef unsigned char lu_byte;
 #define MAX_LUMEM	((lu_mem)(~(lu_mem)0)-2)
 
 
-#define MAX_INT (INT_MAX-2)   
+#define MAX_INT (INT_MAX-2)  /* maximum value of an int (-2 for safety) */
 
-  
-                                   
-                                                               
-                                      
-  
+/*
+** conversion of pointer to integer
+** this is for hashing only; there is no problem if the integer
+** cannot hold the whole pointer value
+*/
 #define IntPoint(p)  ((unsigned int)(lu_mem)(p))
 
 
 
- 
+/* type to ensure maximum alignment */
 typedef LUAI_USER_ALIGNMENT_T L_Umaxalign;
 
 
- 
+/* result of a `usual argument conversion' over lua_Number */
 typedef LUAI_UACNUMBER l_uacNumber;
 
 
- 
+/* internal assertions for in-house debugging */
 #ifdef lua_assert
 
 #define check_exp(c,e)		(lua_assert(c), (e))
@@ -67,7 +67,7 @@ typedef LUAI_UACNUMBER l_uacNumber;
 
 
 #ifndef UNUSED
-#define UNUSED(x)	((void)(x))	 
+#define UNUSED(x)	((void)(x))	/* to avoid warnings */
 #endif
 
 
@@ -81,26 +81,26 @@ typedef LUAI_UACNUMBER l_uacNumber;
 
 
 
-  
-                                        
-                                                                          
-  
+/*
+** type for virtual-machine instructions
+** must be an unsigned with (at least) 4 bytes (see details in lopcodes.h)
+*/
 typedef lu_int32 Instruction;
 
 
 
- 
+/* maximum stack for a Lua function */
 #define MAXSTACK	250
 
 
 
- 
+/* minimum size for the string table (must be power of 2) */
 #ifndef MINSTRTABSIZE
 #define MINSTRTABSIZE	32
 #endif
 
 
- 
+/* minimum size for string buffer */
 #ifndef LUA_MINBUFFER
 #define LUA_MINBUFFER	32
 #endif
@@ -116,9 +116,9 @@ typedef lu_int32 Instruction;
 #endif
 
 
-  
-                                                                      
-  
+/*
+** macro to control inclusion of some hard tests on stack reallocation
+*/
 #ifndef HARDSTACKTESTS
 #define condhardstacktests(x)	((void)0)
 #else

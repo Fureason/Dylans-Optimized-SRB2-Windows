@@ -11,42 +11,42 @@
 
 typedef struct
 {
-	float x, y, z;		 
-	float nx, ny, nz;	 
-	float s0, t0;		 
+	float x, y, z;		// Vertex
+	float nx, ny, nz;	// Normal
+	float s0, t0;		// Texcoord0
 } vbo32_t;
 
 typedef struct
 {
-	float x, y, z;	 
-	float s0, t0;	 
-	unsigned char r, g, b, a;  
-	float pad[2];  
+	float x, y, z;	// Vertex
+	float s0, t0;	// Texcoord0
+	unsigned char r, g, b, a; // Color
+	float pad[2]; // Pad
 } vbo2d32_t;
 
 typedef struct
 {
-	float x, y;  
-	float s0, t0;  
+	float x, y; // Vertex
+	float s0, t0; // Texcoord0
 } vbofont_t;
 
 typedef struct
 {
-	short x, y, z;  
-	char nx, ny, nz;  
-	char tanx, tany, tanz;  
-	float s0, t0;  
+	short x, y, z; // Vertex
+	char nx, ny, nz; // Normal
+	char tanx, tany, tanz; // Tangent
+	float s0, t0; // Texcoord0
 } vbotiny_t;
 
 typedef struct
 {
-	float x, y, z;       
-	float nx, ny, nz;    
-	float s0, t0;        
-	float s1, t1;        
-	float s2, t2;        
-	float tan0, tan1, tan2;  
-	unsigned char r, g, b, a;	 
+	float x, y, z;      // Vertex
+	float nx, ny, nz;   // Normal
+	float s0, t0;       // Texcoord0
+	float s1, t1;       // Texcoord1
+	float s2, t2;       // Texcoord2
+	float tan0, tan1, tan2; // Tangent
+	unsigned char r, g, b, a;	// Color
 } vbo64_t;
 
 #endif

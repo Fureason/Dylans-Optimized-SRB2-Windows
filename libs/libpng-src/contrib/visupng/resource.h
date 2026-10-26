@@ -1,7 +1,7 @@
-
-
-
-
+//{{NO_DEPENDENCIES}}
+// Microsoft Developer Studio generated include file.
+// Used by VisualPng.rc
+//
 #define IDM_FILE_OPEN                   40001
 #define IDM_FILE_SAVE                   40002
 #define IDM_FILE_NEXT                   40003
@@ -11,8 +11,8 @@
 #define IDM_OPTIONS_STRETCH             40007
 #define IDM_HELP_ABOUT                  40008
 
-
-
+// Next default values for new objects
+//
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        113

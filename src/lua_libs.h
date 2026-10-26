@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_libs.h
+/// \brief libraries for Lua scripting
 
 extern lua_State *gL;
 
@@ -44,7 +44,7 @@ extern boolean ignoregameinputs;
 #define META_SOUNDSID "SKIN_T*SOUNDSID"
 #define META_SKINSPRITES "SKIN_T*SKINSPRITES"
 #define META_SKINSPRITESLIST "SKIN_T*SKINSPRITES[]"
-#define META_SKINSPRITESCOMPAT "SKIN_T*SPRITES"  
+#define META_SKINSPRITESCOMPAT "SKIN_T*SPRITES" // TODO: 2.3: Delete
 
 #define META_VERTEX "VERTEX_T*"
 #define META_LINE "LINE_T*"

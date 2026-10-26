@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Audio_Scope.h"
 
@@ -42,7 +42,7 @@ Audio_Scope::~Audio_Scope()
 const char* Audio_Scope::init( int width, int height )
 {
 	assert( height <= 256 );
-	assert( !buf );  
+	assert( !buf ); // can only call init() once
 	
 	buf = (byte*) calloc( width * sizeof *buf, 1 );
 	if ( !buf )
@@ -69,7 +69,7 @@ const char* Audio_Scope::init( int width, int height )
 	static SDL_Color palette [2] = { {0, 0, 0}, {0, 255, 0} };
 	SDL_SetColors( surface, palette, 1, 2 );
 	
-	return 0;  
+	return 0; // success
 }
 
 const char* Audio_Scope::draw( const short* in, long count, double step )
@@ -107,7 +107,7 @@ const char* Audio_Scope::draw( const short* in, long count, double step )
 	if ( SDL_Flip( screen ) < 0 )
 		return "Couldn't flip screen";
 	
-	return 0;  
+	return 0; // success
 }
 
 void Audio_Scope::render( short const* in, long count, long step )
@@ -125,13 +125,13 @@ void Audio_Scope::render( short const* in, long count, long step )
 	
 	while ( count-- )
 	{
-
-
+		// Line drawing/erasing starts at previous sample and ends one short of
+		// current sample, except when previous and current are the same.
 		
-
-
+		// Extra read on the last iteration of line loops will always be at the
+		// height of the next sample, and thus within the gworld bounds.
 		
-
+		// Erase old line
 		{
 			int delta = *old_pos - old_erase;
 			int offset = old_erase * surface_pitch;
@@ -152,7 +152,7 @@ void Audio_Scope::render( short const* in, long count, long step )
 			while ( delta-- > 1 );
 		}
 		
-
+		// Draw new line and put in old_buf
 		{
 			
 			int in_whole = in_pos >> step_bits;
@@ -174,7 +174,7 @@ void Audio_Scope::render( short const* in, long count, long step )
 			
 			*old_pos++ = sample;
 			
-
+			// min/max updating can be interleved anywhere
 			
 			if ( low_y > sample )
 				low_y = sample;

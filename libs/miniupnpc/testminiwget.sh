@@ -1,21 +1,21 @@
 #!/bin/sh
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# $Id: testminiwget.sh,v 1.20 2022/10/21 21:09:42 nanard Exp $
+# vim: tabstop=4 shiftwidth=4 noexpandtab
+# project miniupnp : http://miniupnp.free.fr/
+#                    or https://miniupnp.tuxfamily.org/
+# (c) 2011-2022 Thomas Bernard
+#
+# test program for miniwget.c
+# is usually invoked by "make check"
+#
+# This test program :
+#  1 - launches a local HTTP server (minihttptestserver)
+#  2 - uses testminiwget to retrieve data from this server
+#  3 - compares served and received data
+#  4 - kills the local HTTP server and exits
+#
+# The script was tested and works with ksh, bash
+# it should now also run with dash
 
 TMPD=`mktemp -d -t miniwgetXXXXXXXXXX`
 if [ -z "$TESTSERVER" ] ; then
@@ -59,12 +59,12 @@ esac
 
 if [ ! -x "$TESTSERVER" ] || [ ! -x "$TESTMINIWGET" ] ; then
 	echo "Please build $TESTSERVER and $TESTMINIWGET"
-
-
+	#make minihttptestserver
+	#make testminiwget
 	exit 1
 fi
 
-
+# launching the test HTTP server
 $TESTSERVER $SERVERARGS -e $EXPECTEDFILE > $HTTPSERVEROUT &
 SERVERPID=$!
 while [ -z "$PORT" ]; do
@@ -114,11 +114,11 @@ fi
 echo "malformed response test ..."
 $TESTMINIWGET $URL4 "${DOWNLOADEDFILE}.4"
 
-
+# kill the test HTTP server
 kill $SERVERPID
 wait $SERVERPID
 
-
+# remove temporary files (for success cases)
 if [ $RET -eq 0 ]; then
 	rm -f "${DOWNLOADEDFILE}.1"
 	rm -f "${DOWNLOADEDFILE}.2"

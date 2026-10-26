@@ -8,15 +8,15 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_aatree.h
+/// \brief AA trees code
 
 #include "m_aatree.h"
 #include "z_zone.h"
 
-
-
-
+// A partial implementation of AA trees,
+// according to the algorithms given on Wikipedia.
+// http://en.wikipedia.org/wiki/AA_tree
 
 typedef struct aatree_node_s
 {
@@ -60,8 +60,8 @@ static aatree_node_t *M_AATreeSkew(aatree_node_t *node)
 {
 	if (node && node->left && node->left->level == node->level)
 	{
-
-
+		// Not allowed: horizontal left-link. Reverse the
+		// horizontal link and hook the orphan back in.
 		aatree_node_t *oldleft = node->left;
 		node->left = oldleft->right;
 		oldleft->right = node;
@@ -69,7 +69,7 @@ static aatree_node_t *M_AATreeSkew(aatree_node_t *node)
 		return oldleft;
 	}
 
-
+	// No change needed.
 	return node;
 }
 
@@ -77,9 +77,9 @@ static aatree_node_t *M_AATreeSplit(aatree_node_t *node)
 {
 	if (node && node->right && node->right->right && node->level == node->right->right->level)
 	{
-
-
-
+		// Not allowed: two consecutive horizontal right-links.
+		// The middle one becomes the new root at this point,
+		// with suitable adjustments below.
 
 		aatree_node_t *oldright = node->right;
 		node->right = oldright->left;
@@ -89,7 +89,7 @@ static aatree_node_t *M_AATreeSplit(aatree_node_t *node)
 		return oldright;
 	}
 
-
+	// No change needed.
 	return node;
 }
 
@@ -97,7 +97,7 @@ static aatree_node_t *M_AATreeSet_Node(aatree_node_t *node, UINT32 flags, INT32 
 {
 	if (!node)
 	{
-
+		// Nothing here, so just add where we are
 
 		node = Z_Malloc(sizeof (aatree_node_t), PU_STATIC, NULL);
 		node->level = 1;
@@ -130,8 +130,8 @@ void M_AATreeSet(aatree_t *aatree, INT32 key, void* value)
 	aatree->root = M_AATreeSet_Node(aatree->root, aatree->flags, key, value);
 }
 
-
-
+// Caveat: we don't distinguish between nodes that don't exists
+// and nodes with value == NULL.
 static void *M_AATreeGet_Node(aatree_node_t *node, INT32 key)
 {
 	if (node)

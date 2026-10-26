@@ -1,7 +1,7 @@
+# Makefile for PngMinus (png2pnm and pnm2png)
+# Linux / Unix
 
-
-
-
+#CC = cc
 CC = gcc
 LD = $(CC)
 
@@ -11,12 +11,12 @@ PNGINC = -I../..
 PNGLIB_SHARED = -L../.. -lpng
 PNGLIB_STATIC = ../../libpng.a
 
+# Uncomment the following if you have a custom zlib build at ../../../zlib
+#ZINC = -I../../../zlib
+#ZLIB_SHARED = -L../../../zlib -lz
+#ZLIB_STATIC = ../../../zlib/libz.a
 
-
-
-
-
-
+# Use the system zlib otherwise
 ZLIB_SHARED = -lz
 ZLIB_STATIC = -lz
 
@@ -27,9 +27,9 @@ LIBS_SHARED = $(PNGLIB_SHARED) $(ZLIB_SHARED)
 LIBS_STATIC = $(PNGLIB_STATIC) $(ZLIB_STATIC)
 
 EXEEXT =
+#EXEEXT = .exe
 
-
-
+# dependencies
 
 all: png2pnm$(EXEEXT) pnm2png$(EXEEXT) png2pnm-static$(EXEEXT) pnm2png-static$(EXEEXT)
 
@@ -59,4 +59,4 @@ clean:
 	$(RM) png2pnm-static$(EXEEXT)
 	$(RM) pnm2png-static$(EXEEXT)
 
-
+# End of makefile for png2pnm / pnm2png

@@ -10,22 +10,22 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-
-
-
-
-
-
+# DESCRIPTION:
+#   Makefile for DooM Legacy Master Server
+#   Created on 06/23/2000 by Thierry Van Elsuwe
+#   e-mail: hurdler@newdoom.com
+#
+#-----------------------------------------------------------------------------
 
 PORT=28900
+#PORT=7896
 
-
-
+#*******************************************************************#
 
 CCFILES=common.cpp ipcs.cpp crypt.cpp md5.cpp
-Main_CCFILES=server.cpp  
+Main_CCFILES=server.cpp #client.cpp
 
-
+#******************************************************************#
 
 MYSQL_CONFIG?= mysql_config
 MYSQL_CFLAGS?=$(shell $(MYSQL_CONFIG) --cflags)
@@ -50,7 +50,7 @@ OFILES=$(CCFILES:.cpp=.o)
 Main_OFILES=$(Main_CCFILES:.cpp=.o)
 EXEFILE=$(Main_CCFILES:.cpp=)
 
-
+#####################################################################
 
 .SUFFIXES:	.cpp .h
 
@@ -75,7 +75,7 @@ end:
 		@echo "*** Makefile ended successfully  ***"
 		@echo
 
-
+#####################################################################
 
 $(EXEFILE): $(OFILES) $(Main_OFILES)
 		@echo Linking ...
@@ -87,13 +87,13 @@ endif
 endif
 		@echo File $@ has been created
 
-
+#####################################################################
 
 .cpp.o:
 		@echo Compiling $< -\> $@
 		@$(CXX) $(CXXFLAGS) $(INCS) -c $< -o $@
 
-
+#####################################################################
 
 debug:		debug_
 debug_:
@@ -131,7 +131,7 @@ bak:		clean
 		@rm -f *~ *.bak
 		@echo
 
-
+#mrproper:      dep clean default
 mrproper:       clean default
 
 install:	mrproper

@@ -8,23 +8,23 @@
 # unlimited permission to copy and/or distribute it, with or without
 # modifications, as long as this notice is preserved.
 
+# serial 8 ltoptions.m4
 
-
-
+# This is to help aclocal find these macros, as it can't see m4_define.
 AC_DEFUN([LTOPTIONS_VERSION], [m4_if([1])])
 
 
-
-
+# _LT_MANGLE_OPTION(MACRO-NAME, OPTION-NAME)
+# ------------------------------------------
 m4_define([_LT_MANGLE_OPTION],
 [[_LT_OPTION_]m4_bpatsubst($1__$2, [[^a-zA-Z0-9_]], [_])])
 
 
-
-
-
-
-
+# _LT_SET_OPTION(MACRO-NAME, OPTION-NAME)
+# ---------------------------------------
+# Set option OPTION-NAME for macro MACRO-NAME, and if there is a
+# matching handler defined, dispatch to it.  Other OPTION-NAMEs are
+# saved as a flag.
 m4_define([_LT_SET_OPTION],
 [m4_define(_LT_MANGLE_OPTION([$1], [$2]))dnl
 m4_ifdef(_LT_MANGLE_DEFUN([$1], [$2]),
@@ -33,17 +33,17 @@ m4_ifdef(_LT_MANGLE_DEFUN([$1], [$2]),
 ])
 
 
-
-
-
+# _LT_IF_OPTION(MACRO-NAME, OPTION-NAME, IF-SET, [IF-NOT-SET])
+# ------------------------------------------------------------
+# Execute IF-SET if OPTION is set, IF-NOT-SET otherwise.
 m4_define([_LT_IF_OPTION],
 [m4_ifdef(_LT_MANGLE_OPTION([$1], [$2]), [$3], [$4])])
 
 
-
-
-
-
+# _LT_UNLESS_OPTIONS(MACRO-NAME, OPTION-LIST, IF-NOT-SET)
+# -------------------------------------------------------
+# Execute IF-NOT-SET unless all options in OPTION-LIST for MACRO-NAME
+# are set.
 m4_define([_LT_UNLESS_OPTIONS],
 [m4_foreach([_LT_Option], m4_split(m4_normalize([$2])),
 	    [m4_ifdef(_LT_MANGLE_OPTION([$1], _LT_Option),
@@ -53,12 +53,12 @@ m4_ifdef([$0_found], [m4_undefine([$0_found])], [$3
 ])
 
 
-
-
-
-
-
-
+# _LT_SET_OPTIONS(MACRO-NAME, OPTION-LIST)
+# ----------------------------------------
+# OPTION-LIST is a space-separated list of Libtool options associated
+# with MACRO-NAME.  If any OPTION has a matching handler declared with
+# LT_OPTION_DEFINE, dispatch to that macro; otherwise complain about
+# the unknown option and exit.
 m4_defun([_LT_SET_OPTIONS],
 [# Set options
 m4_foreach([_LT_Option], m4_split(m4_normalize([$2])),
@@ -88,25 +88,25 @@ m4_if([$1],[LT_INIT],[
 ])# _LT_SET_OPTIONS
 
 
+## --------------------------------- ##
+## Macros to handle LT_INIT options. ##
+## --------------------------------- ##
 
-
-
-
-
-
+# _LT_MANGLE_DEFUN(MACRO-NAME, OPTION-NAME)
+# -----------------------------------------
 m4_define([_LT_MANGLE_DEFUN],
 [[_LT_OPTION_DEFUN_]m4_bpatsubst(m4_toupper([$1__$2]), [[^A-Z0-9_]], [_])])
 
 
-
-
+# LT_OPTION_DEFINE(MACRO-NAME, OPTION-NAME, CODE)
+# -----------------------------------------------
 m4_define([LT_OPTION_DEFINE],
 [m4_define(_LT_MANGLE_DEFUN([$1], [$2]), [$3])[]dnl
 ])# LT_OPTION_DEFINE
 
 
-
-
+# dlopen
+# ------
 LT_OPTION_DEFINE([LT_INIT], [dlopen], [enable_dlopen=yes
 ])
 
@@ -324,8 +324,8 @@ dnl AC_DEFUN([AM_DISABLE_FAST_INSTALL], [])
 # _LT_WITH_AIX_SONAME([DEFAULT])
 # ----------------------------------
 # implement the --with-aix-soname flag, and support the `aix-soname=aix'
-
-
+# and `aix-soname=both' and `aix-soname=svr4' LT_INIT options. DEFAULT
+# is either `aix', `both' or `svr4'.  If omitted, it defaults to `aix'.
 m4_define([_LT_WITH_AIX_SONAME],
 [m4_define([_LT_WITH_AIX_SONAME_DEFAULT], [m4_if($1, svr4, svr4, m4_if($1, both, both, aix))])dnl
 shared_archive_member_spec=
@@ -348,11 +348,11 @@ power*-*-aix[[5-9]]*,yes)
     with_aix_soname=$lt_cv_with_aix_soname])
   AC_MSG_RESULT([$with_aix_soname])
   if test aix != "$with_aix_soname"; then
-
-
-
-
-
+    # For the AIX way of multilib, we name the shared archive member
+    # based on the bitwidth used, traditionally 'shr.o' or 'shr_64.o',
+    # and 'shr.imp' or 'shr_64.imp', respectively, for the Import File.
+    # Even when GNU compilers ignore OBJECT_MODE but need '-maix64' flag,
+    # the AIX toolchain works better with OBJECT_MODE set (default 32).
     if test 64 = "${OBJECT_MODE-32}"; then
       shared_archive_member_spec=shr_64
     else
@@ -374,11 +374,11 @@ LT_OPTION_DEFINE([LT_INIT], [aix-soname=both], [_LT_WITH_AIX_SONAME([both])])
 LT_OPTION_DEFINE([LT_INIT], [aix-soname=svr4], [_LT_WITH_AIX_SONAME([svr4])])
 
 
-
-
-
-
-
+# _LT_WITH_PIC([MODE])
+# --------------------
+# implement the --with-pic flag, and support the 'pic-only' and 'no-pic'
+# LT_INIT options.
+# MODE is either 'yes' or 'no'.  If omitted, it defaults to 'both'.
 m4_define([_LT_WITH_PIC],
 [AC_ARG_WITH([pic],
     [AS_HELP_STRING([--with-pic@<:@=PKGS@:>@],
@@ -388,7 +388,7 @@ m4_define([_LT_WITH_PIC],
     yes|no) pic_mode=$withval ;;
     *)
       pic_mode=default
-
+      # Look at the argument we got.  We use all the common list separators.
       lt_save_ifs=$IFS; IFS=$IFS$PATH_SEPARATOR,
       for lt_pkg in $withval; do
 	IFS=$lt_save_ifs
@@ -407,7 +407,7 @@ _LT_DECL([], [pic_mode], [0], [What type of objects to build])dnl
 LT_OPTION_DEFINE([LT_INIT], [pic-only], [_LT_WITH_PIC([yes])])
 LT_OPTION_DEFINE([LT_INIT], [no-pic], [_LT_WITH_PIC([no])])
 
-
+# Old name:
 AU_DEFUN([AC_LIBTOOL_PICMODE],
 [_LT_SET_OPTION([LT_INIT], [pic-only])
 AC_DIAGNOSE([obsolete],

@@ -1,6 +1,6 @@
-
-
-
+#
+# Warn about old build directories and offer to purge.
+#
 
 _old:=$(wildcard $(addprefix ../bin/,FreeBSD Linux \
 		Linux64 Mingw Mingw64 SDL dummy) ../objs ../dep)

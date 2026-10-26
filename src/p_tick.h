@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  p_tick.h
+/// \brief Thinkers, Tickers
 
 #ifndef __P_TICK__
 #define __P_TICK__
@@ -22,14 +22,14 @@
 
 extern tic_t leveltime;
 
-
+// Called by G_Ticker. Carries out all thinking of enemies and players.
 void Command_Numthinkers_f(void);
 void Command_CountMobjs_f(void);
 
 void P_Ticker(boolean run);
 void P_PreTicker(INT32 frames);
 void P_DoTeamscrambling(void);
-void P_RemoveThinkerDelayed(thinker_t *thinker);  
+void P_RemoveThinkerDelayed(thinker_t *thinker); //killed
 
 mobj_t *P_SetTarget2(mobj_t **mo, mobj_t *target
 #ifdef PARANOIA

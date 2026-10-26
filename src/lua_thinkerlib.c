@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_thinkerlib.c
+/// \brief thinker library for Lua scripting
 
 #include "doomdef.h"
 #include "p_local.h"
@@ -18,15 +18,15 @@
 
 #define META_ITERATIONSTATE "iteration state"
 
-                                         
-       
-        
-       
+/*static const char *const iter_opt[] = {
+	"all",
+	"mobj",
+	NULL};
 
-                                        
-      
-                          
-    
+static const actionf_p1 iter_funcs[] = {
+	NULL,
+	(actionf_p1)P_MobjThinker
+};*/
 
 struct iterationState {
 	actionf_p1 filter;
@@ -119,7 +119,7 @@ static int lib_startIterate(lua_State *L)
 	luaL_getmetatable(L, META_ITERATIONSTATE);
 	lua_setmetatable(L, -2);
 
-	it->filter = (actionf_p1)P_MobjThinker;  
+	it->filter = (actionf_p1)P_MobjThinker; //iter_funcs[luaL_checkoption(L, 1, "mobj", iter_opt)];
 	it->next = LUA_REFNIL;
 	return 2;
 }

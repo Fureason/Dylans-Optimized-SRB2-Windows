@@ -3,17 +3,17 @@
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
-  
-                                                                    
-                                                               
-                                                                   
-                                                                   
-                                                                   
-                                                                 
-                   
-   
+/*
+ * minigzip is a minimal implementation of the gzip utility. This is
+ * only an example of using zlib and isn't meant to replace the
+ * full-featured gzip. No attempt is made to deal with file systems
+ * limiting names to 14 or 8+3 characters, etc... Error checking is
+ * very limited. So use minigzip only for testing; use gzip for the
+ * real thing. On MSDOS, use only on file names without extension
+ * or in pipe mode.
+ */
 
- 
+/* @(#) $Id$ */
 
 #include "zlib.h"
 #include <stdio.h>
@@ -54,11 +54,11 @@
 #  define fileno(file) file->__file
 #endif
 #if defined(__MWERKS__) && __dest_os != __be_os && __dest_os != __win32_os
-#  include <unix.h>  
+#  include <unix.h> /* for fileno */
 #endif
 
 #if !defined(Z_HAVE_UNISTD_H) && !defined(_LARGEFILE64_SOURCE)
-#ifndef WIN32  
+#ifndef WIN32 /* unlink already in stdio.h for WIN32 */
   extern int unlink(const char *);
 #endif
 #endif
@@ -67,15 +67,15 @@
 #  include <windows.h>
 #  define perror(s) pwinerror(s)
 
-                                                                    
-                                                                    
-                                    
+/* Map the Windows error number in ERROR to a locale-dependent error
+   message string and return a pointer to it.  Typically, the values
+   for ERROR come from GetLastError.
 
-                                                                  
-                                                             
+   The string pointed to shall not be modified by the application,
+   but may be overwritten by a subsequent call to strwinerror
 
-                                                               
-                       
+   The strwinerror function does not change the current setting
+   of GetLastError.  */
 
 static char *strwinerror (error)
      DWORD error;
@@ -88,12 +88,12 @@ static char *strwinerror (error)
         | FORMAT_MESSAGE_ALLOCATE_BUFFER,
         NULL,
         error,
-        0,  
+        0, /* Default language */
         (LPVOID)&msgbuf,
         0,
         NULL);
     if (chars != 0) {
-         
+        /* If there is an \r\n appended, zap it.  */
         if (chars >= 2
             && msgbuf[chars - 2] == '\r' && msgbuf[chars - 1] == '\n') {
             chars -= 2;
@@ -125,7 +125,7 @@ static void pwinerror (s)
         fprintf(stderr, "%s\n", strwinerror(GetLastError ()));
 }
 
-#endif  
+#endif /* UNDER_CE */
 
 #ifndef GZ_SUFFIX
 #  define GZ_SUFFIX ".gz"
@@ -137,16 +137,16 @@ static void pwinerror (s)
 
 #ifdef MAXSEG_64K
 #  define local static
-    
+   /* Needed for systems with limitation on stack size. */
 #else
 #  define local
 #endif
 
 #ifdef Z_SOLO
- 
+/* for Z_SOLO, create simplified gz* functions using deflate and inflate */
 
 #if defined(Z_HAVE_UNISTD_H) || defined(Z_LARGE)
-#  include <unistd.h>        
+#  include <unistd.h>       /* for unlink() */
 #endif
 
 static void *myalloc(void *q, unsigned n, unsigned m) {
@@ -292,37 +292,37 @@ static const char *gzerror(gzFile gz, int *err) {
 
 static char *prog;
 
-                                                                              
-                                 
-   
+/* ===========================================================================
+ * Display error message and exit
+ */
 static void error(const char *msg) {
     fprintf(stderr, "%s: %s\n", prog, msg);
     exit(1);
 }
 
-#ifdef USE_MMAP  
+#ifdef USE_MMAP /* MMAP version, Miguel Albrecht <malbrech@eso.org> */
 
-                                                                    
-                              
-   
+/* Try compressing the input file at once using mmap. Return Z_OK if
+ * success, Z_ERRNO otherwise.
+ */
 static int gz_compress_mmap(FILE *in, gzFile out) {
     int len;
     int err;
     int ifd = fileno(in);
-    caddr_t buf;     
-    off_t buf_len;   
+    caddr_t buf;    /* mmap'ed buffer for the entire input file */
+    off_t buf_len;  /* length of the input file */
     struct stat sb;
 
-     
+    /* Determine the size of the file, needed for mmap: */
     if (fstat(ifd, &sb) < 0) return Z_ERRNO;
     buf_len = sb.st_size;
     if (buf_len <= 0) return Z_ERRNO;
 
-     
+    /* Now do the actual mmap: */
     buf = mmap((caddr_t) 0, buf_len, PROT_READ, MAP_SHARED, ifd, (off_t)0);
     if (buf == (caddr_t)(-1)) return Z_ERRNO;
 
-     
+    /* Compress the whole file at once: */
     len = gzwrite(out, (char *)buf, (unsigned)buf_len);
 
     if (len != (int)buf_len) error(gzerror(out, &err));
@@ -332,11 +332,11 @@ static int gz_compress_mmap(FILE *in, gzFile out) {
     if (gzclose(out) != Z_OK) error("failed gzclose");
     return Z_OK;
 }
-#endif  
+#endif /* USE_MMAP */
 
-                                                                              
-                                                  
-   
+/* ===========================================================================
+ * Compress input to output then close both files.
+ */
 
 static void gz_compress(FILE *in, gzFile out) {
     local char buf[BUFLEN];
@@ -344,9 +344,9 @@ static void gz_compress(FILE *in, gzFile out) {
     int err;
 
 #ifdef USE_MMAP
-                                                                         
-                                        
-       
+    /* Try first compressing with mmap. If mmap fails (minigzip used in a
+     * pipe), use the normal fread loop.
+     */
     if (gz_compress_mmap(in, out) == Z_OK) return;
 #endif
     for (;;) {
@@ -363,9 +363,9 @@ static void gz_compress(FILE *in, gzFile out) {
     if (gzclose(out) != Z_OK) error("failed gzclose");
 }
 
-                                                                              
-                                                    
-   
+/* ===========================================================================
+ * Uncompress input to output then close both files.
+ */
 static void gz_uncompress(gzFile in, FILE *out) {
     local char buf[BUFLEN];
     int len;
@@ -386,10 +386,10 @@ static void gz_uncompress(gzFile in, FILE *out) {
 }
 
 
-                                                                              
-                                                                          
-            
-   
+/* ===========================================================================
+ * Compress the given file: create a corresponding .gz file and remove the
+ * original.
+ */
 static void file_compress(char *file, char *mode) {
     local char outfile[MAX_NAME_LEN];
     FILE  *in;
@@ -423,9 +423,9 @@ static void file_compress(char *file, char *mode) {
 }
 
 
-                                                                              
-                                                     
-   
+/* ===========================================================================
+ * Uncompress the given file and remove the original.
+ */
 static void file_uncompress(char *file) {
     local char buf[MAX_NAME_LEN];
     char *infile, *outfile;
@@ -474,15 +474,15 @@ static void file_uncompress(char *file) {
 }
 
 
-                                                                              
-                                                                  
-                                  
-                    
-                                  
-                                      
-                             
-                                 
-   
+/* ===========================================================================
+ * Usage:  minigzip [-c] [-d] [-f] [-h] [-r] [-1 to -9] [files...]
+ *   -c : write to standard output
+ *   -d : decompress
+ *   -f : compress with Z_FILTERED
+ *   -h : compress with Z_HUFFMAN_ONLY
+ *   -r : compress with Z_RLE
+ *   -1 to -9 : compression level
+ */
 
 int main(int argc, char *argv[]) {
     int copyout = 0;

@@ -6,13 +6,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw3dsdrv.h
+/// \brief 3D sound import/export prototypes for low-level hardware interface
 
 #ifndef __HW_3DS_DRV_H__
 #define __HW_3DS_DRV_H__
 
-
+// Use standart hardware API
 #include "hw_dll.h"
 #include "hws_data.h"
 
@@ -20,7 +20,7 @@
 EXPORT void HWRAPI(Shutdown) (void);
 #endif
 
-
+// Use standart Init and Shutdown functions
 
 EXPORT INT32    HWRAPI (Startup) (I_Error_t FatalErrorFunction, snddev_t *snd_dev);
 EXPORT u_int  HWRAPI (AddSfx) (sfx_data_t *sfx);
@@ -72,6 +72,6 @@ extern struct hardware3ds_s hw3ds_driver;
 #define HW3DS hw3ds_driver
 
 
-#endif   
+#endif  // _CREATE_DLL_
 
-#endif  
+#endif // __HW_3DS_DRV_H__

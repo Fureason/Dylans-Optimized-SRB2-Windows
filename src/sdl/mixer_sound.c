@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file
+/// \brief SDL Mixer interface for sound
 
 #ifdef HAVE_GME
 #ifdef HAVE_ZLIB
@@ -26,11 +26,11 @@
 #endif
 
 #include <zlib.h>
-#endif  
-#endif  
+#endif // HAVE_ZLIB
+#endif // HAVE_GME
 
 #include "../doomdef.h"
-#include "../doomstat.h"  
+#include "../doomstat.h" // menuactive
 
 #if defined(HAVE_SDL) && defined(HAVE_MIXER) && SOUND==SOUND_MIXER
 
@@ -55,19 +55,19 @@
 #include "SDL_mixer.h"
 #endif
 
- 
+/* This is the version number macro for the current SDL_mixer version: */
 #ifndef SDL_MIXER_COMPILEDVERSION
 #define SDL_MIXER_COMPILEDVERSION \
 	SDL_VERSIONNUM(MIX_MAJOR_VERSION, MIX_MINOR_VERSION, MIX_PATCHLEVEL)
 #endif
 
- 
+/* This macro will evaluate to true if compiled with SDL_mixer at least X.Y.Z */
 #ifndef SDL_MIXER_VERSION_ATLEAST
 #define SDL_MIXER_VERSION_ATLEAST(X, Y, Z) \
 	(SDL_MIXER_COMPILEDVERSION >= SDL_VERSIONNUM(X, Y, Z))
 #endif
 
-
+// thanks alam for making the buildbots happy!
 #if SDL_MIXER_VERSION_ATLEAST(2,0,2)
 #define MUS_MP3_MAD MUS_MP3_MAD_UNUSED
 #define MUS_MODPLUG MUS_MODPLUG_UNUSED
@@ -77,7 +77,7 @@
 #include <gme/gme.h>
 #define GME_TREBLE 5.0f
 #define GME_BASS 1.0f
-#endif  
+#endif // HAVE_GME
 
 static UINT16 BUFFERSIZE = 2048;
 static UINT16 SAMPLERATE = 44100;
@@ -95,8 +95,8 @@ static void I_MovieAudioPostMix(void *userdata, UINT8 *stream, INT32 len)
 	(void)userdata;
 	if (!movie_audio_file || !stream || len <= 0)
 		return;
-	                                                                            
-                                                               
+	/* Never perform disk I/O in SDL's real-time mixer callback. The main thread
+	 * drains this single-producer buffer every rendered frame. */
 	if ((size_t)len > MOVIE_AUDIO_BUFFER_SIZE - movie_audio_pending_bytes)
 	{
 		movie_audio_dropped_bytes += (size_t)len
@@ -192,21 +192,21 @@ void I_StopMovieAudioCapture(void)
 #include "libopenmpt/libopenmpt.h"
 #endif
 
-
-
-
+/// ------------------------
+/// Audio Declarations
+/// ------------------------
 
 UINT8 sound_started = false;
 
 static Mix_Music *music;
 static UINT8 music_volume, sfx_volume, internal_volume;
 static float loop_point;
-static float song_length;  
+static float song_length; // length in seconds
 static boolean songpaused;
 static UINT32 music_bytes;
 static boolean is_looping;
 
-
+// fading
 static boolean is_fading;
 static UINT8 fading_source;
 static UINT8 fading_target;
@@ -240,7 +240,7 @@ static void Midiplayer_Onchange(void)
 
 	if (Mix_GetMidiPlayer() != cv_midiplayer.value)
 	{
-		if (Mix_SetMidiPlayer(cv_midiplayer.value))  
+		if (Mix_SetMidiPlayer(cv_midiplayer.value)) // <> 0 means error
 			CONS_Alert(CONS_ERROR, "Midi player error: %s", Mix_GetError());
 		else
 			restart = true;
@@ -248,7 +248,7 @@ static void Midiplayer_Onchange(void)
 
 	if (!Mix_GetSoundFonts() || stricmp(Mix_GetSoundFonts(), cv_midisoundfontpath.string))
 	{
-		if (!Mix_SetSoundFonts(cv_midisoundfontpath.string))  
+		if (!Mix_SetSoundFonts(cv_midisoundfontpath.string)) // == 0 means error
 			CONS_Alert(CONS_ERROR, "Sound font error: %s", Mix_GetError());
 		else
 			restart = true;
@@ -273,9 +273,9 @@ static void MidiSoundfontPath_Onchange(void)
 		char *miditoken;
 		char *source = strdup(cv_midisoundfontpath.string);
 		boolean proceed = true;
+		// check if file exists; menu calls this method at every keystroke
 
-
-
+		// get first token
 		miditoken = strtok(source, ";");
 
 		while (miditoken != NULL)
@@ -303,10 +303,10 @@ static void MidiSoundfontPath_Onchange(void)
 	}
 }
 
-
-
+// make sure that s_sound.c does not already verify these
+// which happens when: defined(HAVE_MIXERX) && !defined(HAVE_MIXER)
 static CV_PossibleValue_t midiplayer_cons_t[] = {{MIDI_OPNMIDI, "OPNMIDI"}, {MIDI_Fluidsynth, "Fluidsynth"}, {MIDI_Timidity, "Timidity"}, {MIDI_Native, "Native"}, {0, NULL}};
-consvar_t cv_midiplayer = CVAR_INIT ("midiplayer", "OPNMIDI"  , CV_CALL|CV_NOINIT|CV_SAVE, midiplayer_cons_t, Midiplayer_Onchange);
+consvar_t cv_midiplayer = CVAR_INIT ("midiplayer", "OPNMIDI" /*MIDI_OPNMIDI*/, CV_CALL|CV_NOINIT|CV_SAVE, midiplayer_cons_t, Midiplayer_Onchange);
 consvar_t cv_midisoundfontpath = CVAR_INIT ("midisoundfont", "sf2/8bitsf.SF2", CV_CALL|CV_NOINIT|CV_SAVE, NULL, MidiSoundfontPath_Onchange);
 consvar_t cv_miditimiditypath = CVAR_INIT ("midisoundbank", "./timidity", CV_SAVE, NULL, NULL);
 #endif
@@ -320,15 +320,15 @@ static void var_cleanup(void)
 	songpaused = is_looping =\
 	 is_fading = false;
 
-
-
+	// HACK: See music_loop, where we want the fade timing to proceed after a non-looping
+	// song has stopped playing
 	if (!fading_nocleanup)
 	{
 		fading_callback = NULL;
 		fading_do_callback = false;
 	}
 	else
-		fading_nocleanup = false;  
+		fading_nocleanup = false; // use it once, set it back immediately
 
 	internal_volume = 100;
 }
@@ -356,23 +356,23 @@ static const char* get_zlib_error(int zErr)
 }
 #endif
 
-
-
-
+/// ------------------------
+/// Audio System
+/// ------------------------
 
 void I_StartupSound(void)
 {
-
+	//I_Assert(!sound_started);
 	if (sound_started)
 		return;
 
 #ifdef _WIN32
-
-
+	// Force DirectSound instead of WASAPI
+	// SDL 2.0.6+ defaults to the latter and it screws up our sound effects
 	SDL_setenv("SDL_AUDIODRIVER", "directsound", 1);
 #endif
 
-
+	// EE inits audio first so we're following along.
 	if (SDL_WasInit(SDL_INIT_AUDIO) == SDL_INIT_AUDIO)
 	{
 		CONS_Debug(DBG_DETAILED, "SDL Audio already started\n");
@@ -381,7 +381,7 @@ void I_StartupSound(void)
 	else if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0)
 	{
 		CONS_Alert(CONS_ERROR, "Error initializing SDL Audio: %s\n", SDL_GetError());
-
+		// call to start audio failed -- we do not have it
 		return;
 	}
 
@@ -408,7 +408,7 @@ void I_StartupSound(void)
 	if (Mix_OpenAudio(SAMPLERATE, AUDIO_S16SYS, 2, BUFFERSIZE) < 0)
 	{
 		CONS_Alert(CONS_ERROR, "Error starting SDL_Mixer: %s\n", Mix_GetError());
-
+		// call to start audio failed -- we do not have it
 		return;
 	}
 
@@ -426,7 +426,7 @@ void I_ShutdownSound(void)
 {
 	I_StopMovieAudioCapture();
 	if (!sound_started)
-		return;  
+		return; // not an error condition
 	sound_started = false;
 
 	Mix_CloseAudio();
@@ -457,12 +457,12 @@ void I_UpdateSound(void)
 	}
 }
 
+/// ------------------------
+/// SFX
+/// ------------------------
 
-
-
-
-
-
+// this is as fast as I can possibly make it.
+// sorry. more asm needed.
 static Mix_Chunk *ds2chunk(void *stream)
 {
 	UINT16 ver,freq;
@@ -474,42 +474,42 @@ static Mix_Chunk *ds2chunk(void *stream)
 	INT16 o;
 	fixed_t step, frac;
 
-
-	ver = READUINT16(stream);  
-	if (ver != 3)  
-		return NULL;  
+	// lump header
+	ver = READUINT16(stream); // sound version format?
+	if (ver != 3) // It should be 3 if it's a doomsound...
+		return NULL; // onos! it's not a doomsound!
 	freq = READUINT16(stream);
 	samples = READUINT32(stream);
 
-
+	// convert from signed 8bit ???hz to signed 16bit 44100hz.
 	switch(freq)
 	{
 	case 44100:
 		if (samples >= UINT32_MAX>>2)
-			return NULL;  
+			return NULL; // would wrap, can't store.
 		newsamples = samples;
 		break;
 	case 22050:
 		if (samples >= UINT32_MAX>>3)
-			return NULL;  
+			return NULL; // would wrap, can't store.
 		newsamples = samples<<1;
 		break;
 	case 11025:
 		if (samples >= UINT32_MAX>>4)
-			return NULL;  
+			return NULL; // would wrap, can't store.
 		newsamples = samples<<2;
 		break;
 	default:
 		frac = (44100 << FRACBITS) / (UINT32)freq;
-		if (!(frac & 0xFFFF))  
+		if (!(frac & 0xFFFF)) // other solid multiples (change if FRACBITS != 16)
 			newsamples = samples * (frac >> FRACBITS);
-		else  
-			newsamples = FixedMul(FixedDiv(samples, freq), 44100) + 1;  
+		else // strange and unusual fractional frequency steps, plus anything higher than 44100hz.
+			newsamples = FixedMul(FixedDiv(samples, freq), 44100) + 1; // add 1 to counter truncation.
 		if (newsamples >= UINT32_MAX>>2)
-			return NULL;  
+			return NULL; // would and/or did wrap, can't store.
 		break;
 	}
-	sound = Z_Malloc(newsamples<<2, PU_SOUND, NULL);  
+	sound = Z_Malloc(newsamples<<2, PU_SOUND, NULL); // samples * frequency shift * bytes per sample * channels
 
 	s = (SINT8 *)stream;
 	d = (INT16 *)sound;
@@ -517,48 +517,48 @@ static Mix_Chunk *ds2chunk(void *stream)
 	i = 0;
 	switch(freq)
 	{
-	case 44100:  
+	case 44100: // already at the same rate? well that makes it simple.
 		while(i++ < samples)
 		{
-			o = ((INT16)(*s++)+0x80)<<8;  
-			*d++ = o;  
-			*d++ = o;  
+			o = ((INT16)(*s++)+0x80)<<8; // changed signedness and shift up to 16 bits
+			*d++ = o; // left channel
+			*d++ = o; // right channel
 		}
 		break;
-	case 22050:  
+	case 22050: // unwrap 2x
 		while(i++ < samples)
 		{
-			o = ((INT16)(*s++)+0x80)<<8;  
-			*d++ = o;  
-			*d++ = o;  
-			*d++ = o;  
-			*d++ = o;  
+			o = ((INT16)(*s++)+0x80)<<8; // changed signedness and shift up to 16 bits
+			*d++ = o; // left channel
+			*d++ = o; // right channel
+			*d++ = o; // left channel
+			*d++ = o; // right channel
 		}
 		break;
-	case 11025:  
+	case 11025: // unwrap 4x
 		while(i++ < samples)
 		{
-			o = ((INT16)(*s++)+0x80)<<8;  
-			*d++ = o;  
-			*d++ = o;  
-			*d++ = o;  
-			*d++ = o;  
-			*d++ = o;  
-			*d++ = o;  
-			*d++ = o;  
-			*d++ = o;  
+			o = ((INT16)(*s++)+0x80)<<8; // changed signedness and shift up to 16 bits
+			*d++ = o; // left channel
+			*d++ = o; // right channel
+			*d++ = o; // left channel
+			*d++ = o; // right channel
+			*d++ = o; // left channel
+			*d++ = o; // right channel
+			*d++ = o; // left channel
+			*d++ = o; // right channel
 		}
 		break;
-	default:  
+	default: // convert arbitrary hz to 44100.
 		step = 0;
-		frac = ((UINT32)freq << FRACBITS) / 44100 + 1;  
+		frac = ((UINT32)freq << FRACBITS) / 44100 + 1; //Add 1 to counter truncation.
 		while (i < samples)
 		{
-			o = (INT16)(*s+0x80)<<8;  
-			while (step < FRACUNIT)  
+			o = (INT16)(*s+0x80)<<8; // changed signedness and shift up to 16 bits
+			while (step < FRACUNIT) // this is as fast as I can make it.
 			{
-				*d++ = o;  
-				*d++ = o;  
+				*d++ = o; // left channel
+				*d++ = o; // right channel
 				step += frac;
 			}
 			do {
@@ -569,7 +569,7 @@ static Mix_Chunk *ds2chunk(void *stream)
 		break;
 	}
 
-
+	// return Mixer Chunk.
 	return Mix_QuickLoad_RAW(sound, (Uint32)((UINT8*)d-sound));
 }
 
@@ -587,9 +587,16 @@ void *I_GetSfx(sfxinfo_t *sfx)
 		sfx->lumpnum = S_GetSfxLumpNum(sfx);
 	sfx->length = W_LumpLength(sfx->lumpnum);
 
-	lump = W_CacheLumpNum(sfx->lumpnum, PU_SOUND);
+	lump = W_TryCacheLumpNum(sfx->lumpnum, PU_SOUND);
+	if (!lump)
+	{
+		CONS_Alert(CONS_WARNING,
+			"Skipping unreadable sound %.6s; the containing add-on may have changed while SRB2 was running.\n",
+			sfx->name);
+		return NULL;
+	}
 
-
+	// convert from standard DoomSound format.
 	chunk = ds2chunk(lump);
 	if (chunk)
 	{
@@ -597,9 +604,9 @@ void *I_GetSfx(sfxinfo_t *sfx)
 		return chunk;
 	}
 
-
+	// Not a doom sound? Try something else.
 #ifdef HAVE_GME
-
+	// VGZ format
 	if (((UINT8 *)lump)[0] == 0x1F
 		&& ((UINT8 *)lump)[1] == 0x8B)
 	{
@@ -607,31 +614,31 @@ void *I_GetSfx(sfxinfo_t *sfx)
 		UINT8 *inflatedData;
 		size_t inflatedLen;
 		z_stream stream;
-		int zErr;  
+		int zErr; // Somewhere to handle any error messages zlib tosses out
 
-		memset(&stream, 0x00, sizeof (z_stream));  
-
-		inflatedLen = *(UINT32 *)lump + (sfx->length-4);  
-		inflatedData = (UINT8 *)Z_Malloc(inflatedLen, PU_SOUND, NULL);  
+		memset(&stream, 0x00, sizeof (z_stream)); // Init zlib stream
+		// Begin the inflation process
+		inflatedLen = *(UINT32 *)lump + (sfx->length-4); // Last 4 bytes are the decompressed size, typically
+		inflatedData = (UINT8 *)Z_Malloc(inflatedLen, PU_SOUND, NULL); // Make room for the decompressed data
 		stream.total_in = stream.avail_in = sfx->length;
 		stream.total_out = stream.avail_out = inflatedLen;
 		stream.next_in = (UINT8 *)lump;
 		stream.next_out = inflatedData;
 
 		zErr = inflateInit2(&stream, 32 + MAX_WBITS);
-		if (zErr == Z_OK)  
+		if (zErr == Z_OK) // We're good to go
 		{
 			zErr = inflate(&stream, Z_FINISH);
 			if (zErr == Z_STREAM_END) {
-
+				// Run GME on new data
 				if (!gme_open_data(inflatedData, inflatedLen, &emu, SAMPLERATE))
 				{
 					short *mem;
 					UINT32 len;
 					gme_equalizer_t eq = {GME_TREBLE, GME_BASS, 0,0,0,0,0,0,0,0};
 
-					Z_Free(inflatedData);  
-					Z_Free(lump);  
+					Z_Free(inflatedData); // GME supposedly makes a copy for itself, so we don't need this lying around
+					Z_Free(lump); // We're done with the uninflated lump now, too.
 
 					gme_start_track(emu, 0);
 					gme_set_equalizer(emu, &eq);
@@ -650,14 +657,14 @@ void *I_GetSfx(sfxinfo_t *sfx)
 				CONS_Alert(CONS_ERROR,"Encountered %s when running inflate: %s\n", get_zlib_error(zErr), stream.msg);
 			(void)inflateEnd(&stream);
 		}
-		else  
+		else // Hold up, zlib's got a problem
 			CONS_Alert(CONS_ERROR,"Encountered %s when running inflateInit: %s\n", get_zlib_error(zErr), stream.msg);
-		Z_Free(inflatedData);  
+		Z_Free(inflatedData); // GME didn't open jack, but don't let that stop us from freeing this up
 #else
-		return NULL;  
+		return NULL; // No zlib support
 #endif
 	}
-
+	// Try to read it as a GME sound
 	else if (!gme_open_data(lump, sfx->length, &emu, SAMPLERATE))
 	{
 		short *mem;
@@ -680,7 +687,7 @@ void *I_GetSfx(sfxinfo_t *sfx)
 	}
 #endif
 
-
+	// Try to load it as a WAVE or OGG using Mixer.
 	rw = SDL_RWFromMem(lump, sfx->length);
 	if (rw != NULL)
 	{
@@ -688,7 +695,7 @@ void *I_GetSfx(sfxinfo_t *sfx)
 		return chunk;
 	}
 
-	return NULL;  
+	return NULL; // haven't been able to get anything
 }
 
 void I_FreeSfx(sfxinfo_t *sfx)
@@ -699,14 +706,14 @@ void I_FreeSfx(sfxinfo_t *sfx)
 		UINT8 *abufdata = NULL;
 		if (chunk->allocated == 0)
 		{
-
-
+			// We allocated the data in this chunk, so get the abuf from mixer, then let it free the chunk, THEN we free the data
+			// I believe this should ensure the sound is not playing when we free it
 			abufdata = chunk->abuf;
 		}
 		Mix_FreeChunk(sfx->data);
 		if (abufdata)
 		{
-
+			// I'm going to assume we used Z_Malloc to allocate this data.
 			Z_Free(abufdata);
 		}
 	}
@@ -716,28 +723,37 @@ void I_FreeSfx(sfxinfo_t *sfx)
 
 INT32 I_StartSound(sfxenum_t id, UINT8 vol, UINT8 sep, UINT8 pitch, UINT8 priority, INT32 channel)
 {
-	UINT8 volume = (((UINT16)vol + 1) * (UINT16)sfx_volume) / 62;  
-	INT32 handle = Mix_PlayChannel(channel, S_sfx[id].data, 0);
+	UINT8 volume = (((UINT16)vol + 1) * (UINT16)sfx_volume) / 62; // (256 * 31) / 62 == 127
+	INT32 handle;
+	if (!S_sfx[id].data)
+		return -1;
+	handle = Mix_PlayChannel(channel, S_sfx[id].data, 0);
 	Mix_Volume(handle, volume);
 	Mix_SetPanning(handle, min((UINT16)(0xff-sep)<<1, 0xff), min((UINT16)(sep)<<1, 0xff));
-	(void)pitch;  
-	(void)priority;  
+	(void)pitch; // Mixer can't handle pitch
+	(void)priority; // priority and channel management is handled by SRB2...
 	return handle;
 }
 
 void I_StopSound(INT32 handle)
 {
+	if (handle < 0 || handle >= Mix_AllocateChannels(-1))
+		return;
 	Mix_HaltChannel(handle);
 }
 
 boolean I_SoundIsPlaying(INT32 handle)
 {
+	if (handle < 0 || handle >= Mix_AllocateChannels(-1))
+		return false;
 	return Mix_Playing(handle);
 }
 
 void I_UpdateSoundParams(INT32 handle, UINT8 vol, UINT8 sep, UINT8 pitch)
 {
-	UINT8 volume = (((UINT16)vol + 1) * (UINT16)sfx_volume) / 62;  
+	UINT8 volume = (((UINT16)vol + 1) * (UINT16)sfx_volume) / 62; // (256 * 31) / 62 == 127
+	if (handle < 0 || handle >= Mix_AllocateChannels(-1))
+		return;
 	Mix_Volume(handle, volume);
 	Mix_SetPanning(handle, min((UINT16)(0xff-sep)<<1, 0xff), min((UINT16)(sep)<<1, 0xff));
 	(void)pitch;
@@ -748,27 +764,27 @@ void I_SetSfxVolume(UINT8 volume)
 	sfx_volume = volume;
 }
 
-
-
-
+/// ------------------------
+/// Music Utilities
+/// ------------------------
 
 static UINT32 get_real_volume(UINT8 volume)
 {
 #ifdef _WIN32
 	if (I_SongType() == MU_MID)
-
-
-		return ((UINT32)31*128/31);  
+		// HACK: Until we stop using native MIDI,
+		// disable volume changes
+		return ((UINT32)31*128/31); // volume = 31
 	else
 #endif
-
-
+		// convert volume to mixer's 128 scale
+		// then apply internal_volume as a percentage
 		return ((UINT32)volume*128/31) * (UINT32)internal_volume / 100;
 }
 
 static UINT32 get_adjusted_position(UINT32 position)
 {
-
+	// all in milliseconds
 	UINT32 length = I_GetSongLength();
 	UINT32 looppoint = I_GetSongLoopPoint();
 	if (length)
@@ -779,13 +795,13 @@ static UINT32 get_adjusted_position(UINT32 position)
 
 static void do_fading_callback(void)
 {
-
+	// TODO: Should I use a mutex here or something?
 	fading_do_callback = true;
 }
 
-
-
-
+/// ------------------------
+/// Music Hooks
+/// ------------------------
 
 static void count_music_bytes(int chan, void *stream, int len, void *udata)
 {
@@ -804,15 +820,15 @@ static void music_loop(void)
 	{
 		Mix_PlayMusic(music, 0);
 		Mix_SetMusicPosition(loop_point);
-		music_bytes = (UINT32)(loop_point*44100.0L*4);  
+		music_bytes = (UINT32)(loop_point*44100.0L*4); //assume 44.1khz, 4-byte length (see I_GetSongPosition)
 	}
 	else
 	{
-
-
-
-
-
+		// HACK: Let fade timing proceed beyond the end of a
+		// non-looping song. This is a specific case where the timing
+		// should persist after stopping a song, so I don't believe
+		// this should apply every time the user stops a song.
+		// This is auto-unset in var_cleanup, called by I_StopSong
 		fading_nocleanup = true;
 		I_StopSong();
 	}
@@ -830,7 +846,7 @@ static UINT32 music_fade(UINT32 interval, void *param)
 		do_fading_callback();
 		return 0;
 	}
-	else if (songpaused)  
+	else if (songpaused) // don't decrement timer
 		return interval;
 	else if ((fading_timer -= 10) <= 0)
 	{
@@ -861,18 +877,18 @@ static void mix_gme(void *udata, Uint8 *stream, int len)
 
 	(void)udata;
 
-
+	// no gme? no music.
 	if (!gme || gme_track_ended(gme) || songpaused)
 		return;
 
-
+	// play gme into stream
 	gme_play(gme, len/2, (short *)stream);
 
-
+	// Limiter to prevent music from being disorted with some formats
 	if (music_volume >= 18)
 		music_volume = 18;
 
-
+	// apply volume to stream
 	for (i = 0, p = (short *)stream; i < len / 2; i++, p++)
 		*p = ((INT32)*p) * music_volume * internal_volume / 100 / 20;
 }
@@ -889,22 +905,22 @@ static void mix_openmpt(void *udata, Uint8 *stream, int len)
 	if (!openmpt_mhandle || songpaused)
 		return;
 
-
+	// Play module into stream
 	openmpt_module_read_interleaved_stereo(openmpt_mhandle, SAMPLERATE, BUFFERSIZE, (short *)stream);
 
-
+	// Limiter to prevent music from being disorted with some formats
 	if (music_volume >= 18)
 		music_volume = 18;
 
-
+	// apply volume to stream
 	for (i = 0, p = (short *)stream; i < len / 2; i++, p++)
 		*p = ((INT32)*p) * music_volume * internal_volume / 100 / 20;
 }
 #endif
 
-
-
-
+/// ------------------------
+/// Music System
+/// ------------------------
 
 void I_InitMusic(void)
 {
@@ -915,9 +931,9 @@ void I_ShutdownMusic(void)
 	I_UnloadSong();
 }
 
-
-
-
+/// ------------------------
+/// Music Properties
+/// ------------------------
 
 musictype_t I_SongType(void)
 {
@@ -967,14 +983,14 @@ boolean I_SongPaused(void)
 	return songpaused;
 }
 
-
-
-
+/// ------------------------
+/// Music Effects
+/// ------------------------
 
 boolean I_SetSongSpeed(float speed)
 {
 	if (speed > 250.0f)
-		speed = 250.0f;  
+		speed = 250.0f; //limit speed up to 250x
 #ifdef HAVE_GME
 	if (gme)
 	{
@@ -989,10 +1005,10 @@ boolean I_SetSongSpeed(float speed)
 	if (openmpt_mhandle)
 	{
 		if (speed > 4.0f)
-			speed = 4.0f;  
+			speed = 4.0f; // Limit this to 4x to prevent crashing, stupid fix but... ~SteelT 27/9/19
 #if OPENMPT_API_VERSION_MAJOR < 1 && OPENMPT_API_VERSION_MINOR < 5
 		{
-
+			// deprecated in 0.5.0
 			char modspd[13];
 			sprintf(modspd, "%g", speed);
 			openmpt_module_ctl_set(openmpt_mhandle, "play.tempo_factor", modspd);
@@ -1009,9 +1025,9 @@ boolean I_SetSongSpeed(float speed)
 	return false;
 }
 
-
-
-
+/// ------------------------
+///  MUSIC SEEKING
+/// ------------------------
 
 UINT32 I_GetSongLength(void)
 {
@@ -1030,14 +1046,14 @@ UINT32 I_GetSongLength(void)
 		}
 		else
 		{
-
-
+			// reconstruct info->play_length, from GME source
+			// we only want intro + 1 loop, not 2
 			length = info->length;
 			if (length <= 0)
 			{
-				length = info->intro_length + info->loop_length;  
+				length = info->intro_length + info->loop_length; // intro + 1 loop
 				if (length <= 0)
-					length = 150 * 1000;  
+					length = 150 * 1000; // 2.5 minutes
 			}
 		}
 
@@ -1065,8 +1081,8 @@ UINT32 I_GetSongLength(void)
 		if (xlength >= 0)
 			return (UINT32)(xlength*1000);
 #endif
-
-
+		// VERY IMPORTANT to set your LENGTHMS= in your song files, folks!
+		// SDL mixer can't read music length itself.
 		length = (UINT32)(song_length*1000);
 		if (!length)
 			CONS_Debug(DBG_DETAILED, "Getting music length: music is missing LENGTHMS= tag. Needed for seeking.\n");
@@ -1124,34 +1140,34 @@ boolean I_SetSongPosition(UINT32 position)
 #ifdef HAVE_GME
 	if (gme)
 	{
-
+		// this is unstable, so fail silently
 		return true;
+		// this isn't required technically, but GME thread-locks for a second
+		// if you seek too high from the counter
+		// length = I_GetSongLength();
+		// if (length)
+		// 	position = get_adjusted_position(position);
 
+		// SDL_LockAudio();
+		// gme_err_t gme_e = gme_seek(gme, position);
+		// SDL_UnlockAudio();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+		// if (gme_e != NULL)
+		// {
+		// 	CONS_Alert(CONS_ERROR, "GME error: %s\n", gme_e);
+		// 	return false;
+		// }
+		// else
+		// 	return true;
 	}
 	else
 #endif
 #ifdef HAVE_OPENMPT
 	if (openmpt_mhandle)
 	{
-
-
-		openmpt_module_set_position_seconds(openmpt_mhandle, (double)(get_adjusted_position(position)/1000.0L));  
+		// This isn't 100% correct because we don't account for loop points because we can't get them.
+		// But if you seek past end of song, OpenMPT seeks to 0. So adjust the position anyway.
+		openmpt_module_set_position_seconds(openmpt_mhandle, (double)(get_adjusted_position(position)/1000.0L)); // returns new position
 		return true;
 	}
 	else
@@ -1159,23 +1175,23 @@ boolean I_SetSongPosition(UINT32 position)
 	if (!music || I_SongType() == MU_MID)
 		return false;
 	else if (I_SongType() == MU_MOD)
-		return Mix_SetMusicPosition(position);  
+		return Mix_SetMusicPosition(position); // Goes by channels
 	else
 	{
+		// Because SDL mixer can't identify song length, if you have
+		// a position input greater than the real length, then
+		// music_bytes becomes inaccurate.
 
-
-
-
-		length = I_GetSongLength();  
+		length = I_GetSongLength(); // get it in MS
 		if (length)
 			position = get_adjusted_position(position);
 
-		Mix_RewindMusic();  
+		Mix_RewindMusic(); // needed for mp3
 		if(Mix_SetMusicPosition((float)(position/1000.0L)) == 0)
-			music_bytes = (UINT32)(position/1000.0L*44100.0L*4);  
+			music_bytes = (UINT32)(position/1000.0L*44100.0L*4); //assume 44.1khz, 4-byte length (see I_GetSongPosition)
 		else
-
-
+			// NOTE: This block fires on incorrect song format,
+			// NOT if position input is greater than song length.
 			music_bytes = 0;
 
 		return true;
@@ -1199,13 +1215,13 @@ UINT32 I_GetSongPosition(void)
 		}
 		else
 		{
-
+			// adjust position, since GME's counter keeps going past loop
 			if (info->length > 0)
 				position %= info->length;
 			else if (info->intro_length + info->loop_length > 0)
 				position = position >= (info->intro_length + info->loop_length) ? (position % info->loop_length) : position;
 			else
-				position %= 150 * 1000;  
+				position %= 150 * 1000; // 2.5 minutes
 		}
 
 		gme_free_info(info);
@@ -1215,10 +1231,10 @@ UINT32 I_GetSongPosition(void)
 #endif
 #ifdef HAVE_OPENMPT
 	if (openmpt_mhandle)
-
-
+		// This will be incorrect if we adjust for length because we can't get loop points.
+		// So return unadjusted. See note in SetMusicPosition: we adjust for that.
 		return (UINT32)(openmpt_module_get_position_seconds(openmpt_mhandle)*1000.);
-
+		//return get_adjusted_position((UINT32)(openmpt_module_get_position_seconds(openmpt_mhandle)*1000.));
 	else
 #endif
 	if (!music || I_SongType() == MU_MID)
@@ -1230,16 +1246,16 @@ UINT32 I_GetSongPosition(void)
 		if (xposition >= 0)
 			return (UINT32)(xposition*1000);
 #endif
-		return (UINT32)(music_bytes/44100.0L*1000.0L/4);  
-
-
-
+		return (UINT32)(music_bytes/44100.0L*1000.0L/4); //assume 44.1khz
+		// 4 = byte length for 16-bit samples (AUDIO_S16SYS), stereo (2-channel)
+		// This is hardcoded in I_StartupSound. Other formats for factor:
+		// 8M: 1 | 8S: 2 | 16M: 2 | 16S: 4
 	}
 }
 
-
-
-
+/// ------------------------
+/// Music Playback
+/// ------------------------
 
 boolean I_LoadSong(char *data, size_t len)
 {
@@ -1262,7 +1278,7 @@ boolean I_LoadSong(char *data, size_t len)
 	)
 		I_UnloadSong();
 
-
+	// always do this whether or not a music already exists
 	var_cleanup();
 
 #ifdef HAVE_GME
@@ -1273,27 +1289,27 @@ boolean I_LoadSong(char *data, size_t len)
 		UINT8 *inflatedData;
 		size_t inflatedLen;
 		z_stream stream;
-		int zErr;  
+		int zErr; // Somewhere to handle any error messages zlib tosses out
 
-		memset(&stream, 0x00, sizeof (z_stream));  
-
-		inflatedLen = *(UINT32 *)(data + (len-4));  
-		inflatedData = (UINT8 *)Z_Calloc(inflatedLen, PU_MUSIC, NULL);  
+		memset(&stream, 0x00, sizeof (z_stream)); // Init zlib stream
+		// Begin the inflation process
+		inflatedLen = *(UINT32 *)(data + (len-4)); // Last 4 bytes are the decompressed size, typically
+		inflatedData = (UINT8 *)Z_Calloc(inflatedLen, PU_MUSIC, NULL); // Make room for the decompressed data
 		stream.total_in = stream.avail_in = len;
 		stream.total_out = stream.avail_out = inflatedLen;
 		stream.next_in = (UINT8 *)data;
 		stream.next_out = inflatedData;
 
 		zErr = inflateInit2(&stream, 32 + MAX_WBITS);
-		if (zErr == Z_OK)  
+		if (zErr == Z_OK) // We're good to go
 		{
 			zErr = inflate(&stream, Z_FINISH);
 			if (zErr == Z_STREAM_END)
 			{
-
+				// Run GME on new data
 				if (!gme_open_data(inflatedData, inflatedLen, &gme, SAMPLERATE))
 				{
-					Z_Free(inflatedData);  
+					Z_Free(inflatedData); // GME supposedly makes a copy for itself, so we don't need this lying around
 					return true;
 				}
 			}
@@ -1301,9 +1317,9 @@ boolean I_LoadSong(char *data, size_t len)
 				CONS_Alert(CONS_ERROR, "Encountered %s when running inflate: %s\n", get_zlib_error(zErr), stream.msg);
 			(void)inflateEnd(&stream);
 		}
-		else  
+		else // Hold up, zlib's got a problem
 			CONS_Alert(CONS_ERROR, "Encountered %s when running inflateInit: %s\n", get_zlib_error(zErr), stream.msg);
-		Z_Free(inflatedData);  
+		Z_Free(inflatedData); // GME didn't open jack, but don't let that stop us from freeing this up
 		return false;
 #else
 		CONS_Alert(CONS_ERROR, "Cannot decompress VGZ; no zlib support\n");
@@ -1322,16 +1338,16 @@ boolean I_LoadSong(char *data, size_t len)
 #if SDL_MIXER_VERSION_ATLEAST(2,5,0)
 	Mix_SetTimidityCfg(cv_miditimiditypath.string);
 #else
-	Mix_Timidity_addToPathList(cv_miditimiditypath.string);  
+	Mix_Timidity_addToPathList(cv_miditimiditypath.string); // this overwrites previous custom path
 #endif
 #endif
 
 #ifdef HAVE_OPENMPT
-	  
-                                                                                          
-                                                       
-                                            
-   
+	/*
+		If the size of the data to be checked is bigger than the recommended size (> 2048 bytes)
+		Let's just set the probe size to the recommended size
+		Otherwise let's give it the full data size
+	*/
 
 	if (len > openmpt_probe_file_header_get_recommended_size())
 		probesize = openmpt_probe_file_header_get_recommended_size();
@@ -1340,10 +1356,10 @@ boolean I_LoadSong(char *data, size_t len)
 
 	result = openmpt_probe_file_header(OPENMPT_PROBE_FILE_HEADER_FLAGS_DEFAULT, data, probesize, len, NULL, NULL, NULL, NULL, NULL, NULL);
 
-	if (result == OPENMPT_PROBE_FILE_HEADER_RESULT_SUCCESS)  
+	if (result == OPENMPT_PROBE_FILE_HEADER_RESULT_SUCCESS) // We only cared if it succeeded, continue on if not.
 	{
 		openmpt_mhandle = openmpt_module_create_from_memory2(data, len, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-		if (!openmpt_mhandle)  
+		if (!openmpt_mhandle) // Failed to create module handle? Show error and return!
 		{
 			mod_err = openmpt_module_error_get_last(openmpt_mhandle);
 			mod_err_str = openmpt_error_string(mod_err);
@@ -1351,11 +1367,11 @@ boolean I_LoadSong(char *data, size_t len)
 			return false;
 		}
 		else
-			return true;  
+			return true; // All good and we're ready for music playback!
 	}
 #endif
 
-
+	// Let's see if Mixer is able to load this.
 	rw = SDL_RWFromMem(data, len);
 	{
 		music = Mix_LoadMUS_RW(rw, 1);
@@ -1366,13 +1382,13 @@ boolean I_LoadSong(char *data, size_t len)
 		return false;
 	}
 
-
+	// Find the OGG loop point.
 	loop_point = 0.0f;
 	song_length = 0.0f;
 
-	                                                                          
-                                                                         
-                                                                             
+	/* Loop tags live in the file metadata, but the old code called strncmp at
+	 * every byte of large music lumps. Jump directly between 'L' bytes so a
+	 * music change does not spend needless time scanning audio payload data. */
 	while ((size_t)(p - data) < len)
 	{
 		size_t remaining = len - (size_t)(p - data);
@@ -1383,28 +1399,28 @@ boolean I_LoadSong(char *data, size_t len)
 
 		if (fpclassify(loop_point) == FP_ZERO && remaining >= key1len && !memcmp(p, key1, key1len))
 		{
-			p += key1len;  
+			p += key1len; // skip LOOP
 			remaining = len - (size_t)(p - data);
-			if (remaining >= key2len && !memcmp(p, key2, key2len))  
+			if (remaining >= key2len && !memcmp(p, key2, key2len)) // is it LOOPPOINT=?
 			{
-				p += key2len;  
-				loop_point = (float)((44.1L+atoi(p)) / 44100.0L);  
-
-
-
-
+				p += key2len; // skip POINT=
+				loop_point = (float)((44.1L+atoi(p)) / 44100.0L); // LOOPPOINT works by sample count.
+				// because SDL_Mixer is USELESS and can't even tell us
+				// something simple like the frequency of the streaming music,
+				// we are unfortunately forced to assume that ALL MUSIC is 44100hz.
+				// This means a lot of tracks that are only 22050hz for a reasonable downloadable file size will loop VERY badly.
 			}
-			else if (remaining >= key3len && !memcmp(p, key3, key3len))  
+			else if (remaining >= key3len && !memcmp(p, key3, key3len)) // is it LOOPMS=?
 			{
-				p += key3len;  
-				loop_point = (float)(atoi(p) / 1000.0L);  
-
+				p += key3len; // skip MS=
+				loop_point = (float)(atoi(p) / 1000.0L); // LOOPMS works by real time, as miliseconds.
+				// Everything that uses LOOPMS will work perfectly with SDL_Mixer.
 			}
 		}
 
-		if (fpclassify(loop_point) != FP_ZERO)  
+		if (fpclassify(loop_point) != FP_ZERO) // Got what we needed
 			break;
-		else  
+		else // continue searching
 			p++;
 	}
 	return true;
@@ -1459,7 +1475,7 @@ boolean I_PlaySong(boolean looping)
 		openmpt_module_select_subsong(openmpt_mhandle, 0);
 		openmpt_module_set_render_param(openmpt_mhandle, OPENMPT_MODULE_RENDER_INTERPOLATIONFILTER_LENGTH, cv_modfilter.value);
 		if (looping)
-			openmpt_module_set_repeat_count(openmpt_mhandle, -1);  
+			openmpt_module_set_repeat_count(openmpt_mhandle, -1); // Always repeat
 		current_subsong = 0;
 		Mix_HookMusic(mix_openmpt, openmpt_mhandle);
 		return true;
@@ -1477,7 +1493,7 @@ boolean I_PlaySong(boolean looping)
 		CONS_Alert(CONS_ERROR, "Mix_PlayMusic: %s\n", Mix_GetError());
 		return false;
 	}
-	else if ((I_SongType() == MU_MOD || I_SongType() == MU_MID || I_SongType() == MU_MID_EX) && Mix_PlayMusic(music, looping ? -1 : 0) == -1)  
+	else if ((I_SongType() == MU_MOD || I_SongType() == MU_MID || I_SongType() == MU_MID_EX) && Mix_PlayMusic(music, looping ? -1 : 0) == -1) // if MOD, loop forever
 	{
 		CONS_Alert(CONS_ERROR, "Mix_PlayMusic: %s\n", Mix_GetError());
 		return false;
@@ -1488,7 +1504,7 @@ boolean I_PlaySong(boolean looping)
 	I_SetMusicVolume(music_volume);
 
 	if (I_SongType() != MU_MOD && I_SongType() != MU_MID && I_SongType() != MU_MID_EX)
-		Mix_HookMusicFinished(music_loop);  
+		Mix_HookMusicFinished(music_loop); // don't bother counting if MOD
 
 	if(I_SongType() != MU_MOD && I_SongType() != MU_MID && I_SongType() != MU_MID_EX && !Mix_RegisterEffect(MIX_CHANNEL_POST, count_music_bytes, NULL, NULL))
 		CONS_Alert(CONS_WARNING, "Error registering SDL music position counter: %s\n", Mix_GetError());
@@ -1498,8 +1514,8 @@ boolean I_PlaySong(boolean looping)
 
 void I_StopSong(void)
 {
-
-
+	// HACK: See music_loop on why we want fade timing to proceed
+	// after end of song
 	if (!fading_nocleanup)
 		I_StopFadingSong();
 
@@ -1529,7 +1545,7 @@ void I_StopSong(void)
 
 void I_PauseSong(void)
 {
-	if(I_SongType() == MU_MID)  
+	if(I_SongType() == MU_MID) // really, SDL Mixer? why can't you pause MIDI???
 		return;
 
 	if(I_SongType() != MU_GME && I_SongType() != MU_MOD && I_SongType() != MU_MID)
@@ -1547,7 +1563,7 @@ void I_ResumeSong(void)
 	if (I_SongType() != MU_GME && I_SongType() != MU_MOD && I_SongType() != MU_MID)
 	{
 		while(Mix_UnregisterEffect(MIX_CHANNEL_POST, count_music_bytes) != 0) { }
-
+			// HACK: fixes issue of multiple effect callbacks being registered
 
 		if(music && I_SongType() != MU_MOD && I_SongType() != MU_MID && !Mix_RegisterEffect(MIX_CHANNEL_POST, count_music_bytes, NULL, NULL))
 			CONS_Alert(CONS_WARNING, "Error registering SDL music position counter: %s\n", Mix_GetError());
@@ -1564,8 +1580,8 @@ void I_SetMusicVolume(UINT8 volume)
 
 #ifdef _WIN32
 	if (I_SongType() == MU_MID)
-
-
+		// HACK: Until we stop using native MIDI,
+		// disable volume changes
 		music_volume = 31;
 	else
 #endif
@@ -1577,7 +1593,7 @@ void I_SetMusicVolume(UINT8 volume)
 boolean I_SetSongTrack(INT32 track)
 {
 #ifdef HAVE_GME
-
+	// If the specified track is within the number of tracks playing, then change it
 	if (gme)
 	{
 		if (current_track == track)
@@ -1624,9 +1640,9 @@ boolean I_SetSongTrack(INT32 track)
 	return false;
 }
 
-
-
-
+/// ------------------------
+/// MUSIC FADING
+/// ------------------------
 
 void I_SetInternalMusicVolume(UINT8 volume)
 {
@@ -1642,8 +1658,8 @@ void I_StopFadingSong(void)
 		SDL_RemoveTimer(fading_id);
 	is_fading = false;
 	fading_source = fading_target = fading_timer = fading_duration = fading_id = 0;
-
-
+	// don't unset fading_nocleanup here just yet; fading_callback is cleaned up
+	// in var_cleanup()
 }
 
 boolean I_FadeSongFromVolume(UINT8 target_volume, UINT8 source_volume, UINT32 ms, void (*callback)(void))
@@ -1670,11 +1686,11 @@ boolean I_FadeSongFromVolume(UINT8 target_volume, UINT8 source_volume, UINT32 ms
 		return true;
 	}
 
-
-
+	// Round MS to nearest 10
+	// If n - lower > higher - n, then round up
 	ms = (ms - ((ms / 10) * 10) > (((ms / 10) * 10) + 10) - ms) ?
-		(((ms / 10) * 10) + 10)  
-		: ((ms / 10) * 10);  
+		(((ms / 10) * 10) + 10) // higher
+		: ((ms / 10) * 10); // lower
 
 	if (!ms)
 		I_SetInternalMusicVolume(target_volume);

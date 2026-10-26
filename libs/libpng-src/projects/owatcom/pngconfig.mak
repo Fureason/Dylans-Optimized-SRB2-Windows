@@ -1,41 +1,41 @@
-
-
-
-
-
-
-
-
-
-
+# This is an OpenWatcom make file which builds pnglibconf.h - the libpng
+# configuration header.  You can ignore this file if you don't need to
+# configure libpng; a default configuration will be built.
+#
+# For more information build libpng.wpj under the IDE and then read the
+# generated files:
+#
+#    config.inf: Basic configuration information for a standard build.
+#    pngconfig.dfa: Advanced configuration for non-standard libpng builds.
+#
 DELETE=rm -f
 ECHO=echo
 COPY=copy
-
-
-
-
+#
+# If your configuration needs to test compiler flags when building
+# pnglibconf.h you may need to override the following on the wmake command
+# line:
 CFLAGS=
 CC=wcl386
 CPP=$(CC) -pw0
-
-
-
-
+#
+# Read awk from the environment if set, else it can be set on the command
+# line (the default approach is to set the %awk% environment variable in the
+# IDE libpng.wpj 'before' rule - this setting is local.)
 !ifdef %awk
 AWK=$(%awk)
 !endif
-
-
-
-
+#
+# pnglibconf.h must exist in the source directory, this is the final rule
+# which copies the local built version (and this is the default target for
+# this makefile.)
 ..\..\pnglibconf.h: pnglibconf.h
  $(COPY) pnglibconf.h $@
 
 !ifdef AWK
-
-
-
+# CPPFLAGS should contain the options to control the result,
+# but DEFS and CFLAGS are also supported here, override
+# as appropriate
 DFNFLAGS = $(DEFS) $(CPPFLAGS) $(CFLAGS)
 
 pnglibconf.h: pnglibconf.dfn
@@ -65,19 +65,19 @@ pnglibconf.dfn: ..\..\scripts\pnglibconf.dfa ..\..\scripts\options.awk pngconfig
  $(DELETE) dfn1.out dfn2.out
 
 !else
-
-
-
-
-
-
-
-
-
-
-
-
-
+# The following lines are used to copy scripts\pnglibconf.h.prebuilt and make
+# the required change to the calling convention.
+#
+# By default libpng is built to use the __cdecl calling convention on
+# Windows.  This gives compatibility with MSVC and GCC.  Unfortunately it
+# does not work with OpenWatcom because OpenWatcom implements longjmp using
+# the __watcall convention (compared with both MSVC and GCC which use __cdecl
+# for library functions.)
+#
+# Thus the default must be changed to build on OpenWatcom and, once changed,
+# the result will not be compatible with applications built using other
+# compilers (in fact attempts to build will fail at compile time.)
+#
 pnglibconf.h: ..\..\scripts\pnglibconf.h.prebuilt .existsonly
  @$(ECHO) .
  @$(ECHO) .
@@ -98,7 +98,7 @@ projects/owatcom/pngconfig.dfa.
 
 !endif
 
-
+# Make the default files
 defaults: .symbolic
  @$(COPY) << config.inf
 $# The libpng project is incompletely configured.  To complete configuration

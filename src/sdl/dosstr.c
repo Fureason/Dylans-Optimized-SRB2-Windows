@@ -4,10 +4,10 @@
 // This file is in the public domain.
 // (Re)written by Graue in 2006.
 //
-
-
-
-
+//-----------------------------------------------------------------------------
+/// \file
+/// \brief String uppercasing/lowercasing functions for non-DOS non-Win32
+///        systems
 
 #include "../doomtype.h"
 

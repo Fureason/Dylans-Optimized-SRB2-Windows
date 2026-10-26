@@ -8,9 +8,9 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  m_misc.h
+/// \brief Commonly used routines
+///        Default config file, PCX screenshots, file i/o
 
 #ifndef __M_MISC__
 #define __M_MISC__
@@ -18,7 +18,7 @@
 #include "doomtype.h"
 #include "tables.h"
 
-#include "d_event.h"  
+#include "d_event.h" // Screenshot responder
 #include "command.h"
 
 typedef enum {
@@ -41,7 +41,7 @@ void M_SaveFrame(void);
 void M_StopMovie(void);
 void M_GetMovieDiagnostics(char *buffer, size_t buffer_size);
 
-
+// the file where game vars and settings are saved
 #define CONFIGFILENAME "config.cfg"
 
 INT32 M_MapNumber(char first, char second);
@@ -77,14 +77,14 @@ void Command_LoadConfig_f(void);
 void Command_ChangeConfig_f(void);
 
 void M_FirstLoadConfig(void);
-
+// save game config: cvars, aliases..
 void M_SaveConfig(const char *filename);
 
 INT32 axtoi(const char *hexStg);
 
 const char *GetRevisionString(void);
 
-
+// s1 = s2+s3+s1 (1024 lenghtmax)
 void strcatbf(char *s1, const char *s2, const char *s3);
 
 void M_SetupMemcpy(void);
@@ -96,33 +96,33 @@ boolean M_IsPathAbsolute (const char *path);
 void    M_MkdirEach      (const char *path, int start, int mode);
 void    M_MkdirEachUntil (const char *path, int start, int end, int mode);
 
- 
- 
+/* Return offset to the first word in a string. */
+/* E.g. cursor += M_JumpWord(line + cursor); */
 int M_JumpWord (const char *s);
 
- 
- 
+/* Return index of the last word behind offset bytes in a string. */
+/* E.g. cursor = M_JumpWordReverse(line, cursor); */
 int M_JumpWordReverse (const char *line, int offset);
 
-  
-                                                           
-                                                     
-  
+/*
+Return dot and then the fractional part of a float, without
+trailing zeros, or "" if the fractional part is zero.
+*/
 const char * M_Ftrim (double);
 
-
+// Returns true if the string is empty.
 boolean M_IsStringEmpty(const char *s);
 
-
+// Converts a string containing a whole number into an int. Returns false if the conversion failed.
 boolean M_StringToNumber(const char *input, int *out);
 
-
+// Converts a string containing a number into a double. Returns false if the conversion failed.
 boolean M_StringToDecimal(const char *input, double *out);
 
-
+// counting bits, for weapon ammo code, usually
 FUNCMATH UINT8 M_CountBits(UINT32 num, UINT8 size);
 
-
+// Rounds off floating numbers and checks for 0 - 255 bounds
 int M_RoundUp(double number);
 
 #include "w_wad.h"

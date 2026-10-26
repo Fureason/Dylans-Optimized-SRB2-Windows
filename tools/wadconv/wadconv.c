@@ -13,8 +13,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file wadconv.c
+/// \brief Converts wads made for version 2.0 to 2.1.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,56 +22,56 @@
 #include <ctype.h>
 #include "wad.h"
 
-
-
-
-
-
-
-
-
+//
+// Texture definition.
+// Each texture is composed of one or more patches,
+// with patches being lumps stored in the WAD.
+// The lumps are referenced by number, and patched
+// into the rectangular texture space using origin
+// and possibly other attributes.
+//
 typedef struct
 {
 	wad_int16_t originx, originy;
 	wad_int16_t patch, stepdir, colormap;
 } mappatch_t;
 
-
-
-
-
-
+//
+// Texture definition.
+// An SRB2 wall texture is a list of patches
+// which are to be combined in a predefined order.
+//
 typedef struct
 {
 	char name[8];
 	wad_int32_t masked;
 	wad_int16_t width;
 	wad_int16_t height;
-	wad_int32_t columndirectory;  
+	wad_int32_t columndirectory; // FIXTHIS: OBSOLETE
 	wad_int16_t patchcount;
 	mappatch_t patches[1];
 } maptexture_t;
 
-
-
-
+// A single patch from a texture definition,
+//  basically a rectangular area within
+//  the texture rectangle.
 typedef struct
 {
-
+	// Block origin (always UL), which has already accounted for the internal origin of the patch.
 	wad_uint16_t originx, originy;
 	lump_t *patch;
 } texpatch_t;
 
-
-
-
+// A maptexturedef_t describes a rectangular texture,
+//  which is composed of one or more mappatch_t structures
+//  that arrange graphic patches.
 typedef struct
 {
-
+	// Keep name for switch changing, etc.
 	char name[8];
 	wad_int16_t width, height;
 
-
+	// All the patches[patchcount] are drawn back to front into the cached texture.
 	wad_uint16_t patchcount;
 	texpatch_t patches[1];
 } texture_t;
@@ -80,12 +80,12 @@ static void ConvertTextures(wad_t *wad)
 {
 	wad_uint32_t i, j;
 	lump_t *l;
-
+	// PNAMES lump.
 	char pname[9];
 	char *pnamesdata;
 	lump_t *pnames, **patchlookup;
 	wad_uint32_t numpatches;
-
+	// TEXTURE lump.
 	lump_t *texturex = NULL;
 	texture_t **textures;
 	texpatch_t *patch;
@@ -93,10 +93,10 @@ static void ConvertTextures(wad_t *wad)
 	mappatch_t *mpatch;
 	wad_uint32_t *directory, *maptex, numtextures, offset;
 	size_t maxoffset;
-
+	// TX_START.
 	lump_t *tx_start;
 
-
+	// PNAMES.
 	if (!(pnames = WAD_CacheLumpInWADByName(wad, "PNAMES")))
 	{
 		printf("error caching lump: %s\n", WAD_Error());
@@ -123,7 +123,7 @@ static void ConvertTextures(wad_t *wad)
 
 	WAD_UncacheLump(pnames);
 
-
+	// TEXTURE.
 
 	for (i = 1; (texturex = WAD_LumpInWADByName(wad, WAD_VA("TEXTURE%i", i))); i++)
 		if (texturex)
@@ -256,7 +256,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-
+	// Open the WAD files.
 	for (i = 1; i < (unsigned)argc; i++)
 	{
 		if (!WAD_OpenWAD(argv[i]))
@@ -269,7 +269,7 @@ int main(int argc, char **argv)
 	for (i = 0; i < wad_numwads; i = WAD_WADLoopAdvance(i))
 	{
 		w = WAD_WADByNum(i);
-
+		// Convert textures.
 		printf("Converting textures for wad %s...\n", WAD_BaseName(w->filename));
 		ConvertTextures(w);
 	}

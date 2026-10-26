@@ -14,8 +14,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file wad_static.h
+/// \brief Static header for internal libwad operations.
 
 #ifndef __WAD_STATIC_H__
 #define __WAD_STATIC_H__
@@ -31,4 +31,4 @@ void WAD_ErrorSet(const char *text);
 
 inline void WAD_FreeMemory(FILE *file, wadheader_t *header, void *lumpdir, lump_t *lumps, wad_t *wad);
 
-#endif  
+#endif // __WAD_STATIC_H__

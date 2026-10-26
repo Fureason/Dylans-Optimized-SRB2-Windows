@@ -7,29 +7,29 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
+# Where the zlib library and include files are located
 ZLIBLIB=/opt/zlib/lib
 ZLIBINC=/opt/zlib/include
 
+# Note that if you plan to build a libpng shared library, zlib must also
+# be a shared library, which zlib's configure does not do.  After running
+# zlib's configure, edit the appropriate lines of makefile to read:
+#   CPPFLAGS=-DHAVE_UNISTD -DUSE_MAP
+#   CFLAGS=-O1 -fPIC
+#   LDSHARED=ld -b
+#   SHAREDLIB=libz.sl
 
-
-
-
-
-
-
-
-
+# Library name:
 LIBNAME = libpng16
 PNGMAJ = 16
 
-
+# Shared library names:
 LIBSO=$(LIBNAME).sl
 LIBSOMAJ=$(LIBNAME).sl.$(PNGMAJ)
 LIBSOREL=$(LIBSOMAJ).$(RELEASE)
 OLDSO=libpng.sl
 
-
+# Utilities:
 AR_RC=ar rc
 CC=cc
 MKDIR_P=mkdir -p
@@ -37,7 +37,7 @@ LN_SF=ln -sf
 RANLIB=ranlib
 RM_F=/bin/rm -f
 
-
+# where make install puts libpng.a, libpng16.sl, and png.h
 prefix=/opt/libpng
 exec_prefix=$(prefix)
 INCPATH=$(prefix)/include
@@ -47,18 +47,18 @@ BINPATH=$(exec_prefix)/bin
 
 CPPFLAGS=-I$(ZLIBINC)
 CFLAGS=-O -Ae +DA1.1 +DS2.0
-
+# Caution: be sure you have built zlib with the same CFLAGS.
 CCFLAGS=-O -Ae +DA1.1 +DS2.0
 LDFLAGS=-L. -L$(ZLIBLIB) -lpng -lz -lm
 
-
-
-
-
-
-
-
-
+# override DESTDIR= on the make install command line to easily support
+# installing into a temporary location.  Example:
+#
+#    make install DESTDIR=/tmp/build/libpng
+#
+# If you're going to install into a temporary location
+# via DESTDIR, $(DESTDIR)$(prefix) must already exist before
+# you execute make install.
 DESTDIR=
 
 DB=$(DESTDIR)$(BINPATH)
@@ -66,8 +66,8 @@ DI=$(DESTDIR)$(INCPATH)
 DL=$(DESTDIR)$(LIBPATH)
 DM=$(DESTDIR)$(MANPATH)
 
-
-
+# Pre-built configuration
+# See scripts/pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT = scripts/pnglibconf.h.prebuilt
 
 OBJS = png.o pngset.o pngget.o pngrutil.o pngtrans.o pngwutil.o \

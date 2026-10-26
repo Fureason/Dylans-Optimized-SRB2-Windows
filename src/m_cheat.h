@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_cheat.h
+/// \brief Cheat code checking
 
 #ifndef __M_CHEAT__
 #define __M_CHEAT__
@@ -22,14 +22,14 @@
 boolean cht_Responder(event_t *ev);
 void cht_Init(void);
 
-
-
-
+//
+// ObjectPlace
+//
 void Command_ObjectPlace_f(void);
 void Command_Writethings_f(void);
 
 extern consvar_t cv_opflags, cv_ophoopflags, cv_mapthingnum, cv_speed;
-
+//extern consvar_t cv_snapto, cv_grid;
 
 extern boolean objectplacing;
 extern mobjtype_t op_currentthing;
@@ -38,12 +38,12 @@ extern UINT32 op_displayflags;
 
 boolean OP_FreezeObjectplace(void);
 void OP_ResetObjectplace(void);
-
+//void OP_NightsObjectplace(player_t *player);
 void OP_ObjectplaceMovement(player_t *player);
 
-
-
-
+//
+// Other cheats
+//
 void Command_CheatNoClip_f(void);
 void Command_CheatGod_f(void);
 void Command_CheatNoTarget_f(void);

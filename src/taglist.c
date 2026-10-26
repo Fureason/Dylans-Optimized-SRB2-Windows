@@ -8,28 +8,28 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  taglist.c
+/// \brief Ingame sector/line/mapthing tagging.
 
 #include "taglist.h"
 #include "z_zone.h"
 #include "r_data.h"
 #include "p_spec.h"
 
-
+// Bit array of whether a tag exists for sectors/lines/things.
 bitarray_t tags_available[BIT_ARRAY_SIZE (MAXTAGS)];
 
 size_t num_tags;
 
-
-
-
+// Taggroups are used to list elements of the same tag, for iteration.
+// Since elements can now have multiple tags, it means an element may appear
+// in several taggroups at the same time. These are built on level load.
 taggroup_t* tags_sectors[MAXTAGS + 1];
 taggroup_t* tags_lines[MAXTAGS + 1];
 taggroup_t* tags_mapthings[MAXTAGS + 1];
 
-
-
+/// Adds a tag to a given element's taglist. It will not add a duplicate.
+/// \warning This does not rebuild the global taggroups, which are used for iteration.
 void Tag_Add (taglist_t* list, const mtag_t tag)
 {
 	if (Tag_Find(list, tag))
@@ -38,8 +38,8 @@ void Tag_Add (taglist_t* list, const mtag_t tag)
 	list->tags[list->count++] = tag;
 }
 
-
-
+/// Removes a tag from a given element's taglist.
+/// \warning This does not rebuild the global taggroups, which are used for iteration.
 void Tag_Remove(taglist_t* list, const mtag_t tag)
 {
 	UINT16 i;
@@ -57,8 +57,8 @@ void Tag_Remove(taglist_t* list, const mtag_t tag)
 	}
 }
 
-
-
+/// Sets the first tag entry in a taglist.
+/// Replicates the old way of accessing element->tag.
 void Tag_FSet (taglist_t* list, const mtag_t tag)
 {
 	if (!list->count)
@@ -70,8 +70,8 @@ void Tag_FSet (taglist_t* list, const mtag_t tag)
 	list->tags[0] = tag;
 }
 
-
-
+/// Gets the first tag entry in a taglist.
+/// Replicates the old way of accessing element->tag.
 mtag_t Tag_FGet (const taglist_t* list)
 {
 	if (list->count)
@@ -80,7 +80,7 @@ mtag_t Tag_FGet (const taglist_t* list)
 	return 0;
 }
 
-
+/// Returns true if the given tag exist inside the list.
 boolean Tag_Find (const taglist_t* list, const mtag_t tag)
 {
 	size_t i;
@@ -91,7 +91,7 @@ boolean Tag_Find (const taglist_t* list, const mtag_t tag)
 	return false;
 }
 
-
+/// Returns true if at least one tag is shared between two given lists.
 boolean Tag_Share (const taglist_t* list1, const taglist_t* list2)
 {
 	size_t i;
@@ -102,7 +102,7 @@ boolean Tag_Share (const taglist_t* list1, const taglist_t* list2)
 	return false;
 }
 
-
+/// Returns true if both lists are identical.
 boolean Tag_Compare (const taglist_t* list1, const taglist_t* list2)
 {
 	size_t i;
@@ -117,7 +117,7 @@ boolean Tag_Compare (const taglist_t* list1, const taglist_t* list2)
 	return true;
 }
 
-
+/// Search for an element inside a global taggroup.
 size_t Taggroup_Find (const taggroup_t *group, const size_t id)
 {
 	size_t i;
@@ -132,13 +132,13 @@ size_t Taggroup_Find (const taggroup_t *group, const size_t id)
 	return -1;
 }
 
-
+/// group->count, but also checks for NULL
 size_t Taggroup_Count (const taggroup_t *group)
 {
 	return group ? group->count : 0;
 }
 
-
+/// Iterate thru elements in a global taggroup.
 INT32 Taggroup_Iterate
 (		taggroup_t *garray[],
 		const size_t max_elements,
@@ -165,18 +165,18 @@ INT32 Taggroup_Iterate
 	return -1;
 }
 
-
+/// Add an element to a global taggroup.
 void Taggroup_Add (taggroup_t *garray[], const mtag_t tag, size_t id)
 {
 	taggroup_t *group;
-	size_t i;  
+	size_t i; // Insert position.
 
 	if (tag == MTAG_GLOBAL)
 		return;
 
 	group = garray[(UINT16)tag];
 
-
+	// Don't add duplicate entries.
 	if (Taggroup_Find(group, id) != (size_t)-1)
 		return;
 
@@ -186,7 +186,7 @@ void Taggroup_Add (taggroup_t *garray[], const mtag_t tag, size_t id)
 		set_bit_array(tags_available, (UINT16)tag);
 	}
 
-
+	// Create group if empty.
 	if (!group)
 	{
 		i = 0;
@@ -194,8 +194,8 @@ void Taggroup_Add (taggroup_t *garray[], const mtag_t tag, size_t id)
 	}
 	else
 	{
-
-
+		// Keep the group element ids in an ascending order.
+		// Find the location to insert the element to.
 		for (i = 0; i < group->count; i++)
 			if (group->elements[i] > id)
 				break;
@@ -203,7 +203,7 @@ void Taggroup_Add (taggroup_t *garray[], const mtag_t tag, size_t id)
 
 	group->elements = Z_Realloc(group->elements, (group->count + 1) * sizeof(size_t), PU_LEVEL, NULL);
 
-
+	// Offset existing elements to make room for the new one.
 	if (i < group->count)
 		memmove(&group->elements[i + 1], &group->elements[i], group->count - i);
 
@@ -226,11 +226,11 @@ static void Taggroup_Add_Init(taggroup_t *garray[], const mtag_t tag, size_t id)
 		set_bit_array(tags_available, (UINT16)tag);
 	}
 
-
+	// Create group if empty.
 	if (!group)
 		group = garray[(UINT16)tag] = Z_Calloc(sizeof(taggroup_t), PU_LEVEL, NULL);
 	else if (group->elements[group->count - 1] == id)
-		return;  
+		return; // Don't add duplicates
 
 	group->count++;
 
@@ -253,7 +253,7 @@ static size_t total_elements_with_tag (const mtag_t tag)
 		);
 }
 
-
+/// Remove an element from a global taggroup.
 void Taggroup_Remove (taggroup_t *garray[], const mtag_t tag, size_t id)
 {
 	taggroup_t *group;
@@ -274,7 +274,7 @@ void Taggroup_Remove (taggroup_t *garray[], const mtag_t tag, size_t id)
 		unset_bit_array(tags_available, (UINT16)tag);
 	}
 
-
+	// Strip away taggroup if no elements left.
 	if (!(oldcount = group->count--))
 	{
 		Z_Free(group->elements);
@@ -286,7 +286,7 @@ void Taggroup_Remove (taggroup_t *garray[], const mtag_t tag, size_t id)
 		size_t *newelements = Z_Malloc(group->count * sizeof(size_t), PU_LEVEL, NULL);
 		size_t i;
 
-
+		// Copy the previous entries save for the one to remove.
 		for (i = 0; i < rempos; i++)
 			newelements[i] = group->elements[i];
 
@@ -298,7 +298,7 @@ void Taggroup_Remove (taggroup_t *garray[], const mtag_t tag, size_t id)
 	}
 }
 
-
+// Initialization.
 
 static void Taglist_AddToSectors (const mtag_t tag, const size_t itemid)
 {
@@ -315,8 +315,8 @@ static void Taglist_AddToMapthings (const mtag_t tag, const size_t itemid)
 	Taggroup_Add_Init(tags_mapthings, tag, itemid);
 }
 
-
-
+/// After all taglists have been built for each element (sectors, lines, things),
+/// the global taggroups, made for iteration, are built here.
 void Taglist_InitGlobalTables(void)
 {
 	size_t i, j;
@@ -347,7 +347,7 @@ void Taglist_InitGlobalTables(void)
 	}
 }
 
-
+// Iteration, ingame search.
 
 INT32 Tag_Iterate_Sectors (const mtag_t tag, const size_t p)
 {
@@ -384,7 +384,7 @@ INT32 Tag_FindLineSpecial(const INT16 special, const mtag_t tag)
 	return -1;
 }
 
-
+/// Backwards compatibility iteration function for Lua scripts.
 INT32 P_FindSpecialLineFromTag(INT16 special, INT16 tag, INT32 start)
 {
 	if (tag == -1)
@@ -404,9 +404,9 @@ INT32 P_FindSpecialLineFromTag(INT16 special, INT16 tag, INT32 start)
 		size_t p = 0;
 		INT32 id;
 
-
-
-
+		// For backwards compatibility's sake, simulate the old linked taglist behavior:
+		// Iterate through the taglist and find the "start" line's position in the list,
+		// And start checking with the next one (if it exists).
 		if (start != -1)
 		{
 			for (; (id = Tag_Iterate_Lines(tag, p)) >= 0; p++)
@@ -426,9 +426,9 @@ INT32 P_FindSpecialLineFromTag(INT16 special, INT16 tag, INT32 start)
 }
 
 
+// Ingame list manipulation.
 
-
-
+/// Adds the tag to the given sector, and updates the global taggroups.
 void Tag_SectorAdd (const size_t id, const mtag_t tag)
 {
 	sector_t* sec = &sectors[id];
@@ -436,7 +436,7 @@ void Tag_SectorAdd (const size_t id, const mtag_t tag)
 	Taggroup_Add(tags_sectors, tag, id);
 }
 
-
+/// Removes the tag from the given sector, and updates the global taggroups.
 void Tag_SectorRemove (const size_t id, const mtag_t tag)
 {
 	sector_t* sec = &sectors[id];
@@ -444,7 +444,7 @@ void Tag_SectorRemove (const size_t id, const mtag_t tag)
 	Taggroup_Remove(tags_sectors, tag, id);
 }
 
-
+/// Changes the first tag for a given sector, and updates the global taggroups.
 void Tag_SectorFSet (const size_t id, const mtag_t tag)
 {
 	sector_t* sec = &sectors[id];
@@ -456,8 +456,8 @@ void Tag_SectorFSet (const size_t id, const mtag_t tag)
 	Taggroup_Add(tags_sectors, tag, id);
 	Tag_FSet(&sec->tags, tag);
 
-
-
+	// Sectors with linedef trigger effects need to have their trigger tag updated too
+	// This is a bit of a hack...
 	if (!udmf && GETSECSPECIAL(sec->special, 2) >= 1 && GETSECSPECIAL(sec->special, 2) <= 7)
 		sec->triggertag = tag;
 }

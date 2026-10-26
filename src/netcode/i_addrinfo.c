@@ -6,11 +6,11 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
-
-
+/// \file  i_addrinfo.c
+/// \brief getaddr stubs, for lesser OSes
+///
+///        Some systems/SDKs, like PSL1GHT v2 does not have addrinfo functions
+///        So a stub is needed
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -28,29 +28,29 @@
 
 #include "i_addrinfo.h"
 
-  
-                                       
-                                                                   
-                                                              
-                                                                      
-                                                              
-                                                             
-                         
-                                                                                                            
-                                       
-                                                                                                           
-   
+/*
+ * This addrinfo stub have a testcases:
+ * To test the stub, use this command to compile the stub testcase:
+ * gcc -g -DTESTCASE -Dtest_stub -Wall -W i_addrinfo.c -o stub
+ * To test the real getaddrinfo API, use this command to get real one:
+ * gcc -g -DTESTCASE -Utest_stub -Wall -W i_addrinfo.c -o real
+ * For Win32,you need the WinSock library, version 1.1 or 2.2
+ * for 1.1, add -lwsock32
+ * i686-w64-mingw32-gcc -g -DTESTCASE -Dtest_stub -UUSE_WINSOCK2 -Wall -W i_addrinfo.c -o stub.exe -lwsock32
+ * for 2.2, add -DUSE_WINSOCK2 -lws2_32
+ * i686-w64-mingw32-gcc -g -DTESTCASE -Utest_stub -DUSE_WINSOCK2 -Wall -W i_addrinfo.c -o real.exe -lws2_32
+ */
 
 #ifndef I_getaddrinfo
 
-#if !defined (_MSC_VER) || (_MSC_VER >= 1800)  
+#if !defined (_MSC_VER) || (_MSC_VER >= 1800) // MSVC 2013 and forward
 #include <stdbool.h>
 #else
 typedef char bool;
 #endif
 
 #ifdef _WIN32
-
+// it seems windows doesn't define that... maybe some other OS? OS/2
 static int inet_aton(const char *cp, struct in_addr *addr)
 {
 	if( cp == NULL || addr == NULL )
@@ -96,8 +96,8 @@ static HMODULE WS_getfunctions(HMODULE tmp)
 static void WS_addrinfosetup(void)
 {
 	if (WS_getaddrinfo && WS_freeaddrinfo)
-		return;  
-
+		return; // already have the functions
+	// why not hold it into ipv6dll? becase we already link with ws2_32, silly!
 	if (WS_getfunctions(GetModuleHandleA("ws2_32.dll")) == NULL)
 		ipv6dll = WS_getfunctions(LoadLibraryA("wship6.dll"));
 }
@@ -135,21 +135,21 @@ int I_getaddrinfo(const char *node, const char *service,
 		return WS_getaddrinfo(node, service, hints, res);
 #endif
 
-
+	// param check
 	if (node == NULL && service == NULL)
 		return EAI_NONAME;
-
+	//note: testcase show NULL as res crashes libc
 	if (res == NULL)
 		return -1;
 
-
+	// check hints
 	if (hints)
 	{
-
+		// no support for IPv6
 		if (hints->ai_family != AF_INET && hints->ai_family != AF_UNSPEC)
-			return -1;  
+			return -1; //EAI_FAMILY
 #ifdef AI_NUMERICHOST
-
+		// do not look up hostnames
 		if ((hints->ai_flags & AI_NUMERICHOST) == AI_NUMERICHOST)
 		{
 			hostlookup = false;
@@ -157,16 +157,16 @@ int I_getaddrinfo(const char *node, const char *service,
 		}
 #endif
 #ifdef AI_PASSIVE
-
+		// return loopback or any address?
 		if ((hints->ai_flags & AI_PASSIVE) == AI_PASSIVE)
 		{
 			passivemode = true;
 			flags |= AI_PASSIVE;
 		}
 #endif
-
-
-
+		// why no support for canon names? lazy
+		//AI_CANONNAME
+		// what kind of socket?
 		socktype = hints->ai_socktype;
 	}
 	else
@@ -179,7 +179,7 @@ int I_getaddrinfo(const char *node, const char *service,
 #endif
 	}
 
-
+	// we need gethostbyname to convert numeric strings
 	if (node && hostlookup)
 	{
 		if (node == NULL)
@@ -205,7 +205,7 @@ int I_getaddrinfo(const char *node, const char *service,
 	else
 		addrlen = 1;
 
-	if (service)  
+	if (service) //AI_NUMERICSERV
 		sockport = atoi(service);
 
 	if (socktype == 0)
@@ -247,7 +247,7 @@ int I_getaddrinfo(const char *node, const char *service,
 		}
 		ai->ai_addrlen = famsize;
 		ai->ai_addr = (struct sockaddr *)&addr[i];
-
+		//ai_cannonname
 		ai->ai_next = ai+1;
 	}
 	ai->ai_next = NULL;
@@ -360,7 +360,7 @@ static const char* inet_ntopA(int af, const void *cp, char *buf, socklen_t len)
 	return buf;
 }
 #elif defined (_WIN32)
-
+// w32api, ws2tcpip.h, r1.12
 static inline char* gai_strerror(int ecode)
 {
         static char message[1024+1];
@@ -538,7 +538,7 @@ void printaddrinfo(const struct my_addrinfo *data)
 		printsocktype(data->ai_socktype);
 		printaddr(data->ai_family, data->ai_addr);
 		printprotocol(data->ai_protocol);
-
+		//addrlen
 		data = data->ai_next;
 	}
 }
@@ -565,30 +565,30 @@ int main(int argc, char **argv)
 	}
 #endif
 	printf("-----------------------------------------------------------\n");
-#ifndef _WIN32  
+#ifndef _WIN32 //NULL as res crashes Win32
 	gaie = I_getaddrinfo(NULL, NULL, &hints, NULL);
 	if (gaie != EAI_NONAME)
 		printf("NULLs test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	I_freeaddrinfo(res);
 #endif
-#if 0  
+#if 0 //NULL as res crashes
 	gaie = I_getaddrinfo("localhost", "5029", NULL, NULL);
     if (gaie == 0)
 		printf("NULL crashes: %s(%d)\n", gai_strerror(gaie), gaie);
 	I_freeaddrinfo(res);
 #endif
 	gaie = I_getaddrinfo("localhost", NULL, &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULL service test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo(NULL, "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULLs test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo("localhost", "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("no hints test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
@@ -596,17 +596,17 @@ int main(int argc, char **argv)
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
 	gaie = I_getaddrinfo("localhost", NULL, &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULL service test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo(NULL, "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULLs test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo("localhost", "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("no hints test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
@@ -614,68 +614,68 @@ int main(int argc, char **argv)
 	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_protocol = IPPROTO_UDP;
 	gaie = I_getaddrinfo("localhost", NULL, &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULL service test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo(NULL, "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULLs test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo("localhost", "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("no hints test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	printf("-----------------------------------------------------------\n");
 	hints.ai_flags = AI_NUMERICHOST;
 	gaie = I_getaddrinfo("localhost", NULL, &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULL service test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo(NULL, "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULLs test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo("localhost", "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("no hints test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	printf("-----------------------------------------------------------\n");
 	gaie = I_getaddrinfo("127.0.0.1", NULL, &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULL service test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo("127.0.0.1", "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("no hints test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	printf("-----------------------------------------------------------\n");
 	gaie = I_getaddrinfo("255.255.255.255", NULL, &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULL service test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo("255.255.255.255", "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("no hints test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	printf("-----------------------------------------------------------\n");
 	hints.ai_flags = AI_PASSIVE;
 	gaie = I_getaddrinfo("0.0.0.0", NULL, &hints, &res);
-
+    //if (gaie != 0)
 		printf("NULL service test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;
 	gaie = I_getaddrinfo("0.0.0.0", "5029", &hints, &res);
-
+    //if (gaie != 0)
 		printf("no hints test returned: %s(%d)\n", gai_strerror(gaie), gaie);
 	printaddrinfo(res);
 	I_freeaddrinfo(res); res = NULL;

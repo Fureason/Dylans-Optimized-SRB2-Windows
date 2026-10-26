@@ -1,6 +1,6 @@
-
-
-
+;
+; Slightly modified version of ../nt/zlib.dnt :-)
+;
 
 LIBRARY		Z
 DESCRIPTION	"Zlib compression library for OS/2"

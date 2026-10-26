@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple test of the SDL threading code */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,7 @@ static SDL_TLSID tls;
 static int alive = 0;
 static int testprio = 0;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -85,10 +85,10 @@ int main(int argc, char *argv[])
     int arg = 1;
     SDL_Thread *thread;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Load the SDL library */
     if (SDL_Init(0) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
@@ -134,6 +134,6 @@ int main(int argc, char *argv[])
     }
     (void)raise(SIGTERM);
 
-    SDL_Quit();  
-    return 0;    
+    SDL_Quit(); /* Never reached */
+    return 0;   /* Never reached */
 }

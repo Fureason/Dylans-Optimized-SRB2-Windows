@@ -6,36 +6,36 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  m_easing.c
+/// \brief Easing functions
+///        Referenced from https://easings.net/
 
 #include "m_easing.h"
 #include "tables.h"
 #include "doomdef.h"
 
-  
-                                                                                
-                                                                               
-                                                                        
-                                                                             
-                                        
+/*
+	For the computation of the logarithm, we choose, by trial and error, from among
+	a sequence of particular factors those, that when multiplied with the function
+	argument, normalize it to unity. For every factor chosen, we add up the
+	corresponding logarithm value stored in a table. The sum then corresponds to
+	the logarithm of the function argument.
 
-                                                 
-                          
-                                     
-                               
+	For the integer portion, we would want to choose
+		2^i, i = 1, 2, 4, 8, ...
+	and for the factional part we choose
+		1+2^-i, i = 1, 2, 3, 4, 5 ...
 
-                                                                                     
-                                                                                    
-                                                                                         
-                                                                                          
-                                                                                                          
+	The algorithm for the exponential is closely related and quite literally the inverse
+	of the logarithm algorithm. From among the sequence of tabulated logarithms for our
+	chosen factors, we pick those that when subtracted from the function argument ultimately
+	reduce it to zero. Starting with unity, we multiply with all the factors whose logarithms
+	we have subtracted in the process. The resulting product corresponds to the result of the exponentiation.
 
-                                                                                                    
-                                                                                                        
-                                                                                                            
-  
+	Logarithms of values greater than unity can be computed by applying the algorithm to the reciprocal
+	of the function argument (with the negation of the result as appropriate), likewise exponentiation with
+	negative function arguments requires us negate the function argument and compute the reciprocal at the end.
+*/
 
 static fixed_t logtabdec[FRACBITS] =
 {
@@ -53,11 +53,11 @@ static fixed_t fixlog2(fixed_t a)
 	if (x > FRACUNIT)
 		x = FixedDiv(FRACUNIT, x);
 
-
-
-
-
-
+	// Integer part
+	//   1<<19 = 0x80000
+	//   1<<18 = 0x40000
+	//   1<<17 = 0x20000
+	//   1<<16 = 0x10000
 
 #define dologtab(i) \
 	t = (x << shift); \
@@ -75,7 +75,7 @@ static fixed_t fixlog2(fixed_t a)
 
 #undef dologtab
 
-
+	// Decimal part
 	for (i = 0; i < FRACBITS; i++)
 	{
 		t = x + (x >> (i + 1));
@@ -92,20 +92,20 @@ static fixed_t fixlog2(fixed_t a)
 	return y;
 }
 
-
+// Notice how this is symmetric to fixlog2.
 static INT32 fixexp(fixed_t a)
 {
 	UINT32 x, y;
 	fixed_t t, i, shift = 8;
 
-
+	// Underflow prevention.
 	if (a <= -15 * FRACUNIT)
 		return 0;
 
 	x = (a < 0) ? (-a) : (a);
 	y = FRACUNIT;
 
-
+	// Integer part (see fixlog2)
 #define dologtab(i) \
 	t = x - (1 << (19 - i)); \
 	if (t >= 0) \
@@ -122,7 +122,7 @@ static INT32 fixexp(fixed_t a)
 
 #undef dologtab
 
-
+	// Decimal part
 	for (i = 0; i < FRACBITS; i++)
 	{
 		t = (x - logtabdec[i]);
@@ -144,26 +144,26 @@ static INT32 fixexp(fixed_t a)
 #define fixintdiv(x, y) FixedDiv(x, (y) * FRACUNIT)
 #define fixinterp(start, end, t) FixedMul((FRACUNIT - (t)), start) + FixedMul(t, end)
 
-
-
-
+// ==================
+//  EASING FUNCTIONS
+// ==================
 
 #define EASINGFUNC(type) fixed_t Easing_ ## type (fixed_t t, fixed_t start, fixed_t end)
 
-
-
-
+//
+// Linear
+//
 
 EASINGFUNC(Linear)
 {
 	return fixinterp(start, end, t);
 }
 
+//
+// Sine
+//
 
-
-
-
-
+// This is equivalent to calculating (x * pi) and converting the result from radians into degrees.
 #define fixang(x) FixedMul((x), 180*FRACUNIT)
 
 EASINGFUNC(InSine)
@@ -189,9 +189,9 @@ EASINGFUNC(InOutSine)
 
 #undef fixang
 
-
-
-
+//
+// Quad
+//
 
 EASINGFUNC(InQuad)
 {
@@ -211,9 +211,9 @@ EASINGFUNC(InOutQuad)
 	return fixinterp(start, end, x);
 }
 
-
-
-
+//
+// Cubic
+//
 
 EASINGFUNC(InCubic)
 {
@@ -234,9 +234,9 @@ EASINGFUNC(InOutCubic)
 	return fixinterp(start, end, x);
 }
 
-
-
-
+//
+// "Quart"
+//
 
 EASINGFUNC(InQuart)
 {
@@ -258,9 +258,9 @@ EASINGFUNC(InOutQuart)
 	return fixinterp(start, end, x);
 }
 
-
-
-
+//
+// "Quint"
+//
 
 EASINGFUNC(InQuint)
 {
@@ -282,9 +282,9 @@ EASINGFUNC(InOutQuint)
 	return fixinterp(start, end, x);
 }
 
-
-
-
+//
+// Exponential
+//
 
 EASINGFUNC(InExpo)
 {
@@ -324,12 +324,12 @@ EASINGFUNC(InOutExpo)
 	return fixinterp(start, end, x);
 }
 
+//
+// "Back"
+//
 
-
-
-
-#define EASEBACKCONST1 111514  
-#define EASEBACKCONST2 99942  
+#define EASEBACKCONST1 111514 // 1.70158
+#define EASEBACKCONST2 99942 // 1.525
 
 static fixed_t EaseInBack(fixed_t t, fixed_t start, fixed_t end, fixed_t c1)
 {
@@ -406,7 +406,7 @@ EASINGFUNC(InOutBackParameterized)
 
 #undef EASINGFUNC
 
-
+// Function list
 
 #define EASINGFUNC(type) Easing_ ## type
 #define COMMA ,
@@ -416,7 +416,7 @@ easingfunc_t easing_funclist[EASE_MAX] =
 	EASINGFUNCLIST(COMMA)
 };
 
-
+// Function names
 
 #undef EASINGFUNC
 #define EASINGFUNC(type) #type

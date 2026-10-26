@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  b_bot.h
+/// \brief Basic bot handling
 
 void B_UpdateBotleader(player_t *player);
 void B_BuildTiccmd(player_t *player, ticcmd_t *cmd);

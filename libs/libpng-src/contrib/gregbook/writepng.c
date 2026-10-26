@@ -54,14 +54,14 @@
   ---------------------------------------------------------------------------*/
 
 
-#include <stdlib.h>      
+#include <stdlib.h>     /* for exit() prototype */
 #include <zlib.h>
 
-#include "png.h"         
-#include "writepng.h"    
+#include "png.h"        /* libpng header, includes setjmp.h */
+#include "writepng.h"   /* typedefs, common macros, public prototypes */
 
 
- 
+/* local prototype */
 
 static void writepng_error_handler(png_structp png_ptr, png_const_charp msg);
 
@@ -78,35 +78,35 @@ void writepng_version_info(void)
 
 
 
-                                                                           
-                                                            
+/* returns 0 for success, 2 for libpng problem, 4 for out of memory, 11 for
+ *  unexpected pnmtype; note that outfile might be stdout */
 
 int writepng_init(mainprog_info *mainprog_ptr)
 {
-    png_structp  png_ptr;        
+    png_structp  png_ptr;       /* note:  temporary variables! */
     png_infop  info_ptr;
     int color_type, interlace_type;
 
 
-     
+    /* could also replace libpng warning-handler (final NULL), but no need: */
 
     png_ptr = png_create_write_struct(png_get_libpng_ver(NULL), mainprog_ptr,
       writepng_error_handler, NULL);
     if (!png_ptr)
-        return 4;    
+        return 4;   /* out of memory */
 
     info_ptr = png_create_info_struct(png_ptr);
     if (!info_ptr) {
         png_destroy_write_struct(&png_ptr, NULL);
-        return 4;    
+        return 4;   /* out of memory */
     }
 
 
-                                                                         
-                                                                         
-                                                                         
-                                                                     
-                                          
+    /* setjmp() must be called in every function that calls a PNG-writing
+     * libpng function, unless an alternate error handler was installed--
+     * but compatible error handlers must either use longjmp() themselves
+     * (as in this program) or some other method to return control to
+     * application code, so here we go: */
 
     if (setjmp(mainprog_ptr->jmpbuf)) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -114,30 +114,30 @@ int writepng_init(mainprog_info *mainprog_ptr)
     }
 
 
-     
+    /* make sure outfile is (re)opened in BINARY mode */
 
     png_init_io(png_ptr, mainprog_ptr->outfile);
 
 
-                                                                             
-                                                                          
-                                                                             
-                                                                           
-                                                                            
-                       
+    /* set the compression levels--in general, always want to leave filtering
+     * turned on (except for palette images) and allow all of the filters,
+     * which is the default; want 32K zlib window, unless entire image buffer
+     * is 16K or smaller (unknown here)--also the default; usually want max
+     * compression (NOT the default); and remaining compression flags should
+     * be left alone */
 
     png_set_compression_level(png_ptr, Z_BEST_COMPRESSION);
-  
-                                                                         
-                                                              
-                              
-                                              
-                                                 
-                                           
-   
+/*
+    >> this is default for no filtering; Z_FILTERED is default otherwise:
+    png_set_compression_strategy(png_ptr, Z_DEFAULT_STRATEGY);
+    >> these are all defaults:
+    png_set_compression_mem_level(png_ptr, 8);
+    png_set_compression_window_bits(png_ptr, 15);
+    png_set_compression_method(png_ptr, 8);
+ */
 
 
-     
+    /* set the image parameters appropriately */
 
     if (mainprog_ptr->pnmtype == 5)
         color_type = PNG_COLOR_TYPE_GRAY;
@@ -160,7 +160,7 @@ int writepng_init(mainprog_info *mainprog_ptr)
     if (mainprog_ptr->gamma > 0.0)
         png_set_gAMA(png_ptr, info_ptr, mainprog_ptr->gamma);
 
-    if (mainprog_ptr->have_bg) {    
+    if (mainprog_ptr->have_bg) {   /* we know it's RGBA, not gray+alpha */
         png_color_16  background;
 
         background.red = mainprog_ptr->bg_red;
@@ -220,32 +220,32 @@ int writepng_init(mainprog_info *mainprog_ptr)
     }
 
 
-     
+    /* write all chunks up to (but not including) first IDAT */
 
     png_write_info(png_ptr, info_ptr);
 
 
-                                                                          
-                                                                           
-                                                                         
-                                                                           
-                  
+    /* if we wanted to write any more text info *after* the image data, we
+     * would set up text struct(s) here and call png_set_text() again, with
+     * just the new data; png_set_tIME() could also go here, but it would
+     * have no effect since we already called it above (only one tIME chunk
+     * allowed) */
 
 
-                                                                           
-                                                       
+    /* set up the transformations:  for now, just pack low-bit-depth pixels
+     * into bytes (one, two or four pixels per byte) */
 
     png_set_packing(png_ptr);
- 
+/*  png_set_shift(png_ptr, &sig_bit);  to scale low-bit-depth values */
 
 
-     
+    /* make sure we save our pointers for use in writepng_encode_image() */
 
     mainprog_ptr->png_ptr = png_ptr;
     mainprog_ptr->info_ptr = info_ptr;
 
 
-     
+    /* OK, that's all we need to do for now; return happy */
 
     return 0;
 }
@@ -254,7 +254,7 @@ int writepng_init(mainprog_info *mainprog_ptr)
 
 
 
- 
+/* returns 0 for success, 2 for libpng (longjmp) problem */
 
 int writepng_encode_image(mainprog_info *mainprog_ptr)
 {
@@ -262,8 +262,8 @@ int writepng_encode_image(mainprog_info *mainprog_ptr)
     png_infop info_ptr = (png_infop)mainprog_ptr->info_ptr;
 
 
-                                                                        
-                                     
+    /* as always, setjmp() must be called in every function that calls a
+     * PNG-writing libpng function */
 
     if (setjmp(mainprog_ptr->jmpbuf)) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -273,15 +273,15 @@ int writepng_encode_image(mainprog_info *mainprog_ptr)
     }
 
 
-                                                                              
-                
+    /* and now we just write the whole image; libpng takes care of interlacing
+     * for us */
 
     png_write_image(png_ptr, mainprog_ptr->row_pointers);
 
 
-                                                                            
-                                                                          
-                                                                              
+    /* since that's it, we also close out the end of the PNG file now--if we
+     * had any text or time info to write after the IDATs, second argument
+     * would be info_ptr, but we optimize slightly by sending NULL pointer: */
 
     png_write_end(png_ptr, NULL);
 
@@ -292,16 +292,16 @@ int writepng_encode_image(mainprog_info *mainprog_ptr)
 
 
 
- 
+/* returns 0 if succeeds, 2 if libpng problem */
 
-int writepng_encode_row(mainprog_info *mainprog_ptr)   
+int writepng_encode_row(mainprog_info *mainprog_ptr)  /* NON-interlaced only! */
 {
     png_structp png_ptr = (png_structp)mainprog_ptr->png_ptr;
     png_infop info_ptr = (png_infop)mainprog_ptr->info_ptr;
 
 
-                                                                        
-                                     
+    /* as always, setjmp() must be called in every function that calls a
+     * PNG-writing libpng function */
 
     if (setjmp(mainprog_ptr->jmpbuf)) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -311,7 +311,7 @@ int writepng_encode_row(mainprog_info *mainprog_ptr)
     }
 
 
-     
+    /* image_data points at our one row of image data */
 
     png_write_row(png_ptr, mainprog_ptr->image_data);
 
@@ -322,16 +322,16 @@ int writepng_encode_row(mainprog_info *mainprog_ptr)
 
 
 
- 
+/* returns 0 if succeeds, 2 if libpng problem */
 
-int writepng_encode_finish(mainprog_info *mainprog_ptr)    
+int writepng_encode_finish(mainprog_info *mainprog_ptr)   /* NON-interlaced! */
 {
     png_structp png_ptr = (png_structp)mainprog_ptr->png_ptr;
     png_infop info_ptr = (png_infop)mainprog_ptr->info_ptr;
 
 
-                                                                        
-                                     
+    /* as always, setjmp() must be called in every function that calls a
+     * PNG-writing libpng function */
 
     if (setjmp(mainprog_ptr->jmpbuf)) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -341,8 +341,8 @@ int writepng_encode_finish(mainprog_info *mainprog_ptr)
     }
 
 
-                                                                         
-                                                       
+    /* close out PNG file; if we had any text or time info to write after
+     * the IDATs, second argument would be info_ptr: */
 
     png_write_end(png_ptr, NULL);
 
@@ -370,32 +370,32 @@ static void writepng_error_handler(png_structp png_ptr, png_const_charp msg)
 {
     mainprog_info  *mainprog_ptr;
 
-                                                                        
-                                                                          
-                                                                      
-                                                                        
-                                                                     
-                                                                     
-                                                                          
-                       
+    /* This function, aside from the extra step of retrieving the "error
+     * pointer" (below) and the fact that it exists within the application
+     * rather than within libpng, is essentially identical to libpng's
+     * default error handler.  The second point is critical:  since both
+     * setjmp() and longjmp() are called from the same code, they are
+     * guaranteed to have compatible notions of how big a jmp_buf is,
+     * regardless of whether _BSD_SOURCE or anything else has (or has not)
+     * been defined. */
 
     fprintf(stderr, "writepng libpng error: %s\n", msg);
     fflush(stderr);
 
     mainprog_ptr = png_get_error_ptr(png_ptr);
-    if (mainprog_ptr == NULL) {          
+    if (mainprog_ptr == NULL) {         /* we are completely hosed now */
         fprintf(stderr,
           "writepng severe error:  jmpbuf not recoverable; terminating.\n");
         fflush(stderr);
         exit(99);
     }
 
-                                                                      
-                                                                     
-                                                                         
-                                                                        
-                                                                         
-                                                                      
-       
+    /* Now we have our data structure we can use the information in it
+     * to return control to our own higher level code (all the points
+     * where 'setjmp' is called in this file.)  This will work with other
+     * error handling mechanisms as well - libpng always calls png_error
+     * when it can proceed no further, thus, so long as the error handler
+     * is intercepted, application code can do its own error recovery.
+     */
     longjmp(mainprog_ptr->jmpbuf, 1);
 }

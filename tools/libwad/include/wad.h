@@ -14,8 +14,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file wad.h
+/// \brief WAD file manipulation library.
 
 #ifndef __WAD_H__
 #define __WAD_H__
@@ -25,9 +25,9 @@ extern "C"
 {
 #endif
 
-
-
-
+//
+// Exact-width integer types.
+//
 #ifdef _MSC_VER
 typedef signed __int8 wad_int8_t;
 typedef unsigned __int8 wad_uint8_t;
@@ -41,7 +41,7 @@ typedef unsigned __int32 wad_uint32_t;
 typedef __int64 wad_int64_t;
 typedef unsigned __int64 wad_uint64_t;
 
-
+// Older Visual C++ headers don't have the Win64-compatible typedefs...
 #if ((_MSC_VER <= 1200) && (!defined(DWORD_PTR)))
 #define DWORD_PTR DWORD
 #endif
@@ -101,51 +101,51 @@ typedef enum
 
 typedef struct
 {
-	char id[4];		 
-	wad_uint32_t numlumps;	 
-	wad_uint32_t lumpdir;	 
+	char id[4];		// The WAD header's 4-character ID.
+	wad_uint32_t numlumps;	// The number of lumps the WAD has.
+	wad_uint32_t lumpdir;	// The pointer to the lump directory.
 } wadheader_t;
 
 typedef struct wad_s
 {
-	char *filename;		 
+	char *filename;		// The filename of the open WAD.
 
-	wadheader_t *header;	 
+	wadheader_t *header;	// The WAD's header.
 	wad_boolean_t compressed;
 
-	struct lump_s *lumps;	 
+	struct lump_s *lumps;	// The WAD's lumps buffer.
 } wad_t;
 
 typedef struct lump_s
 {
-	wad_t *wad;		 
+	wad_t *wad;		// The WAD the lump belongs to.
 
-	char name[9];		 
+	char name[9];		// The name of the lump.
 
-	wad_uint64_t disksize;	 
-	size_t size;		 
+	wad_uint64_t disksize;	// The size of the lump on disk.
+	size_t size;		// The real (uncompressed) size of the lump.
 
 	wad_boolean_t compressed;
 
-	void *data;		 
+	void *data;		// The actual lump data.
 
-	wad_uint32_t num;	 
-	struct lump_s *prev; 	 
-	struct lump_s *next;	 
+	wad_uint32_t num;	// The lump number in the WAD.
+	struct lump_s *prev; 	// The previous node in the tree.
+	struct lump_s *next;	// The next node in the tree.
 } lump_t;
 
-
+// a raw entry of the wad directory
 typedef struct
 {
-	wad_uint32_t position;		 
-	wad_uint32_t size;		 
-	char name[8];			 
+	wad_uint32_t position;		// The position of the lump in the WAD file.
+	wad_uint32_t size;		// Size of the lump.
+	char name[8];			// The lump's name.
 } lumpdir_t;
 
-
-
-
-
+//
+// wad_static.c
+// Static file for internal libwad operations.
+//
 extern char *WAD_Error(void);
 extern char *WAD_BaseName(char *path);
 extern char *WAD_VA(const char *format, ...);
@@ -153,10 +153,10 @@ extern char *WAD_VA(const char *format, ...);
 extern inline wad_int16_t WAD_INT16_Endianness(wad_int16_t x);
 extern inline wad_int32_t WAD_INT32_Endianness(wad_int32_t x);
 
-
-
-
-
+//
+// wad.c
+// WAD interface functionality.
+//
 extern wad_uint32_t wad_numwads;
 
 extern wad_uint32_t WAD_WADLoopAdvance(wad_uint32_t i);
@@ -178,10 +178,10 @@ extern void WAD_CloseWAD(wad_t *wad);
 extern inline void WAD_CloseWADByNum(wad_uint16_t num);
 extern inline void WAD_CloseWADByFileName(const char *filename);
 
-
-
-
-
+//
+// lump.c
+// Lump interface functionality.
+//
 extern char *WAD_LumpNameFromFileName(char *path);
 extern lump_t *WAD_LumpInWADByNum(wad_t *wad, wad_uint32_t num);
 extern lump_t *WAD_LumpInWADByName(wad_t *wad, const char *name);
@@ -221,7 +221,7 @@ extern inline void WAD_RemoveLumpInWADByName(wad_t *wad, const char *name);
 extern inline void WAD_RemoveLumpByName(const char *name);
 
 #ifdef __cplusplus
-}  
+} // extern "C"
 #endif
 
-#endif  
+#endif // __WAD_H__

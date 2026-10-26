@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Gme_File.h"
 
@@ -29,7 +29,7 @@ void Gme_File::clear_playlist()
 
 void Gme_File::unload()
 {
-	clear_playlist();  
+	clear_playlist(); // *before* clearing track count
 	track_count_     = 0;
 	raw_track_count_ = 0;
 	file_data.clear();
@@ -40,8 +40,8 @@ Gme_File::Gme_File()
 	type_         = 0;
 	user_data_    = 0;
 	user_cleanup_ = 0;
-	unload();  
-	blargg_verify_byte_order();  
+	unload(); // clears fields
+	blargg_verify_byte_order(); // used by most emulator types, so save them the trouble
 }
 
 Gme_File::~Gme_File()
@@ -52,7 +52,7 @@ Gme_File::~Gme_File()
 
 blargg_err_t Gme_File::load_mem_( byte const* data, long size )
 {
-	require( data != file_data.begin() );  
+	require( data != file_data.begin() ); // load_mem_() or load_() must be overridden
 	Mem_File_Reader in( data, size );
 	return load_( in );
 }
@@ -64,12 +64,12 @@ blargg_err_t Gme_File::load_( Data_Reader& in )
 	return load_mem_( file_data.begin(), file_data.size() );
 }
 
-
+// public load functions call this at beginning
 void Gme_File::pre_load() { unload(); }
 
 void Gme_File::post_load_() { }
 
-
+// public load functions call this at end
 blargg_err_t Gme_File::post_load( blargg_err_t err )
 {
 	if ( !track_count() )
@@ -82,7 +82,7 @@ blargg_err_t Gme_File::post_load( blargg_err_t err )
 	return err;
 }
 
-
+// Public load functions
 
 blargg_err_t Gme_File::load_mem( void const* in, long size )
 {
@@ -110,38 +110,38 @@ blargg_err_t Gme_File::load_remaining_( void const* h, long s, Data_Reader& in )
 	return load( rem );
 }
 
-
+// Track info
 
 void Gme_File::copy_field_( char* out, const char* in, int in_size )
 {
 	if ( !in || !*in )
 		return;
 	
-
+	// remove spaces/junk from beginning
 	while ( in_size && unsigned (*in - 1) <= ' ' - 1 )
 	{
 		in++;
 		in_size--;
 	}
 	
-
+	// truncate
 	if ( in_size > max_field_ )
 		in_size = max_field_;
 	
-
+	// find terminator
 	int len = 0;
 	while ( len < in_size && in [len] )
 		len++;
 	
-
+	// remove spaces/junk from end
 	while ( len && unsigned (in [len - 1]) <= ' ' )
 		len--;
 	
-
+	// copy
 	out [len] = 0;
 	memcpy( out, in, len );
 	
-
+	// strip out stupid fields that should have been left blank
 	if ( !strcmp( out, "?" ) || !strcmp( out, "<?>" ) || !strcmp( out, "< ? >" ) )
 		out [0] = 0;
 }
@@ -197,7 +197,7 @@ blargg_err_t Gme_File::track_info( track_info_t* out, int track ) const
 	RETURN_ERR( remap_track_( &remapped ) );
 	RETURN_ERR( track_info_( out, remapped ) );
 	
-
+	// override with m3u info
 	if ( playlist.size() )
 	{
 		M3u_Playlist::info_t const& i = playlist.info();

@@ -12,26 +12,26 @@
 #include "lzio.h"
 
 
-  
-                        
-  
+/*
+** Expression descriptor
+*/
 
 typedef enum {
-  VVOID,	 
+  VVOID,	/* no value */
   VNIL,
   VTRUE,
   VFALSE,
-  VK,		 
-  VKNUM,	 
-  VLOCAL,	 
-  VUPVAL,        
-  VGLOBAL,	 
-  VINDEXED,	 
-  VJMP,		 
-  VRELOCABLE,	 
-  VNONRELOC,	 
-  VCALL,	 
-  VVARARG	 
+  VK,		/* info = index of constant in `k' */
+  VKNUM,	/* nval = numerical value */
+  VLOCAL,	/* info = local register */
+  VUPVAL,       /* info = index of upvalue in `upvalues' */
+  VGLOBAL,	/* info = index of table; aux = index of global name in `k' */
+  VINDEXED,	/* info = table register; aux = index register (or `k') */
+  VJMP,		/* info = instruction pc */
+  VRELOCABLE,	/* info = instruction pc */
+  VNONRELOC,	/* info = result register */
+  VCALL,	/* info = instruction pc */
+  VVARARG	/* info = instruction pc */
 } expkind;
 
 typedef struct expdesc {
@@ -40,13 +40,13 @@ typedef struct expdesc {
     struct { int info, aux; } s;
     lua_Number nval;
   } u;
-  int t;   
-  int f;   
+  int t;  /* patch list of `exit when true' */
+  int f;  /* patch list of `exit when false' */
 } expdesc;
 
 typedef struct expdesc_list {
   struct expdesc_list *prev;
-  expdesc v;   
+  expdesc v;  /* variable (global, local, upvalue, or indexed) */
 } expdesc_list;
 
 typedef struct upvaldesc {
@@ -55,30 +55,30 @@ typedef struct upvaldesc {
 } upvaldesc;
 
 
-struct BlockCnt;   
+struct BlockCnt;  /* defined in lparser.c */
 
 
- 
+/* state needed to generate code for a given function */
 typedef struct FuncState {
-  Proto *f;   
-  Table *h;   
-  struct FuncState *prev;   
-  struct LexState *ls;   
-  struct lua_State *L;   
-  struct BlockCnt *bl;   
-  expdesc_list *lhs;   
-  short nlhs;   
-  short nrhs;   
-  int pc;   
-  int lasttarget;    
-  int jpc;   
-  int freereg;   
-  int nk;   
-  int np;   
-  short nlocvars;   
-  lu_byte nactvar;   
-  upvaldesc upvalues[LUAI_MAXUPVALUES];   
-  unsigned short actvar[LUAI_MAXVARS];   
+  Proto *f;  /* current function header */
+  Table *h;  /* table to find (and reuse) elements in `k' */
+  struct FuncState *prev;  /* enclosing function */
+  struct LexState *ls;  /* lexical state */
+  struct lua_State *L;  /* copy of the Lua state */
+  struct BlockCnt *bl;  /* chain of current blocks */
+  expdesc_list *lhs;  /* chain of left hand sides during assign */
+  short nlhs;  /* number of lhs in chain */
+  short nrhs;  /* number of rhs in assignment */
+  int pc;  /* next position to code (equivalent to `ncode') */
+  int lasttarget;   /* `pc' of last `jump target' */
+  int jpc;  /* list of pending jumps to `pc' */
+  int freereg;  /* first free register */
+  int nk;  /* number of elements in `k' */
+  int np;  /* number of elements in `p' */
+  short nlocvars;  /* number of elements in `locvars' */
+  lu_byte nactvar;  /* number of active local variables */
+  upvaldesc upvalues[LUAI_MAXUPVALUES];  /* upvalues */
+  unsigned short actvar[LUAI_MAXVARS];  /* declared-variable stack */
 } FuncState;
 
 

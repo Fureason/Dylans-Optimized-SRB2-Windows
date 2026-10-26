@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  gamestate.c
+/// \brief Gamestate (re)sending
 
 #include "d_clisrv.h"
 #include "d_netfil.h"
@@ -62,7 +62,7 @@ void SV_SendSaveGame(INT32 node, boolean resending)
 	precise_t operation_started = I_GetPreciseTime();
 	precise_t phase_started;
 
-
+	// first save it in a malloced buffer
 	savebuffer.size = SAVEGAMESIZE;
 	savebuffer.buf = (UINT8 *)malloc(savebuffer.size);
 	if (!savebuffer.buf)
@@ -71,7 +71,7 @@ void SV_SendSaveGame(INT32 node, boolean resending)
 		return;
 	}
 
-
+	// Leave room for the uncompressed length.
 	savebuffer.pos = sizeof(UINT32);
 
 	phase_started = I_GetPreciseTime();
@@ -81,8 +81,8 @@ void SV_SendSaveGame(INT32 node, boolean resending)
 
 	length = savebuffer.pos;
 
-
-
+	// Allocate space for compressed save: one byte fewer than for the
+	// uncompressed data to ensure that the compression is worthwhile.
 	compressedsave = malloc(length - 1);
 	if (!compressedsave)
 	{
@@ -91,7 +91,7 @@ void SV_SendSaveGame(INT32 node, boolean resending)
 		return;
 	}
 
-
+	// Attempt to compress it.
 	phase_started = I_GetPreciseTime();
 	compressedlen = lzf_compress(savebuffer.buf + sizeof(UINT32),
 		length - sizeof(UINT32), compressedsave + sizeof(UINT32),
@@ -100,22 +100,22 @@ void SV_SendSaveGame(INT32 node, boolean resending)
 		phase_started, 10);
 	if (compressedlen)
 	{
-
+		// Compressing succeeded; send compressed data
 
 		free(savebuffer.buf);
 
-
+		// State that we're compressed.
 		buffertosend = compressedsave;
 		WRITEUINT32(compressedsave, length - sizeof(UINT32));
 		length = compressedlen + sizeof(UINT32);
 	}
 	else
 	{
-
+		// Compression failed to make it smaller; send original
 
 		free(compressedsave);
 
-
+		// State that we're not compressed
 		buffertosend = savebuffer.buf;
 		savebuffer.pos = 0;
 		P_WriteUINT32(&savebuffer, 0);
@@ -125,9 +125,9 @@ void SV_SendSaveGame(INT32 node, boolean resending)
 	I_ReportHitch(resending ? "prepare complete resync transfer" : "prepare complete join transfer",
 		operation_started, 25);
 
-
+	// Remember when we started sending the savegame so we can handle timeouts
 	netnodes[node].sendingsavegame = true;
-	netnodes[node].freezetimeout = I_GetTime() + jointimeout + length / 1024;  
+	netnodes[node].freezetimeout = I_GetTime() + jointimeout + length / 1024; // 1 extra tic for each kilobyte
 }
 
 #ifdef DUMPCONSISTENCY
@@ -144,7 +144,7 @@ void SV_SavedGame(void)
 
 	sprintf(tmpsave, "%s" PATHSEP TMPSAVENAME, srb2home);
 
-
+	// first save it in a malloced buffer
 	savebuffer.size = SAVEGAMESIZE;
 	savebuffer.buf = (UINT8 *)malloc(savebuffer.size);
 	if (!savebuffer.buf)
@@ -156,7 +156,7 @@ void SV_SavedGame(void)
 
 	P_SaveNetGame(&savebuffer, false);
 
-
+	// then save it!
 	if (!FIL_WriteFile(tmpsave, savebuffer.buf, savebuffer.pos))
 		CONS_Printf(M_GetText("Didn't save %s for netgame"), tmpsave);
 
@@ -189,7 +189,7 @@ boolean CL_LoadReceivedSavegame(boolean reloading)
 		return false;
 	}
 
-
+	// Decompress saved game if necessary.
 	decompressedlen = P_ReadUINT32(&savebuffer);
 	if (P_SaveBufferReadError(&savebuffer))
 		goto corruptsave;
@@ -214,7 +214,7 @@ boolean CL_LoadReceivedSavegame(boolean reloading)
 	titledemo = false;
 	automapactive = false;
 
-
+	// load a base level
 	if (P_LoadNetGame(&savebuffer, reloading))
 	{
 		const UINT8 actnum = mapheaderinfo[gamemap-1]->actnum;
@@ -232,15 +232,15 @@ boolean CL_LoadReceivedSavegame(boolean reloading)
 	else
 		goto corruptsave;
 
-
+	// done
 	Z_Free(savebuffer.buf);
 	if (unlink(tmpsave) == -1)
 		CONS_Alert(CONS_ERROR, M_GetText("Can't delete %s\n"), tmpsave);
 	consistancy[gametic%BACKUPTICS] = Consistancy();
 	CON_ToggleOff();
 
-
-
+	// Tell the server we have received and reloaded the gamestate
+	// so they know they can resume the game
 	netbuffer->packettype = PT_RECEIVEDGAMESTATE;
 	HSendPacket(servernode, true, 0, 0);
 	return true;
@@ -313,7 +313,7 @@ void Command_ResendGamestate(void)
 	if (playernum == -1 || playernum == 0)
 		return;
 
-
+	// Send a PT_WILLRESENDGAMESTATE packet to the client so they know what's going on
 	netbuffer->packettype = PT_WILLRESENDGAMESTATE;
 	if (!HSendPacket(playernode[playernum], true, 0, 0))
 	{
@@ -329,7 +329,7 @@ void PT_CanReceiveGamestate(SINT8 node)
 
 	CONS_Printf(M_GetText("Resending game state to %s...\n"), player_names[netnodes[node].player]);
 
-	SV_SendSaveGame(node, true);  
+	SV_SendSaveGame(node, true); // Resend a complete game state
 	netnodes[node].resendingsavegame = true;
 }
 
@@ -349,14 +349,14 @@ void PT_WillResendGamestate(SINT8 node)
 	if (server || cl_redownloadinggamestate)
 		return;
 
-
-
-
+	// The stock packet has no room for the server's failing checksum/tic. Keep
+	// a local snapshot report anyway; paired with the host report it narrows
+	// the cause without changing the 2.2.15 network protocol.
 	D_WriteConsistencyReport("client-resync-notice", gametic, node,
 		consistancy[gametic%BACKUPTICS], consistancy[gametic%BACKUPTICS]);
 
-
-
+	// Send back a PT_CANRECEIVEGAMESTATE packet to the server
+	// so they know they can start sending the game state
 	netbuffer->packettype = PT_CANRECEIVEGAMESTATE;
 	if (!HSendPacket(servernode, true, 0, 0))
 		return;
@@ -365,7 +365,7 @@ void PT_WillResendGamestate(SINT8 node)
 
 	sprintf(tmpsave, "%s" PATHSEP TMPSAVENAME, srb2home);
 
-
+	// Don't get a corrupt savegame error because tmpsave already exists
 	if (FIL_FileExists(tmpsave) && unlink(tmpsave) == -1)
 		I_Error("Can't delete %s\n", tmpsave);
 

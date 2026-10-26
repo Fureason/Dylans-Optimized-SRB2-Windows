@@ -10,14 +10,14 @@
   freely.
 */
 
- 
+/* Simple test of the SDL MessageBox API */
 
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "SDL.h"
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -39,12 +39,12 @@ button_messagebox(void *eventNumber)
 
     SDL_MessageBoxData data = {
         SDL_MESSAGEBOX_INFORMATION,
-        NULL,  
+        NULL, /* no parent window */
         "Custom MessageBox",
         "This is a custom messagebox",
         2,
-        NULL,  
-        NULL   
+        NULL, /* buttons */
+        NULL  /* Default color scheme */
     };
 
     int button = -1;
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
 {
     int success;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     success = SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
         quit(1);
     }
 
-     
+    /* Google says this is Traditional Chinese for "beef with broccoli" */
     success = SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                                        "UTF-8 Simple MessageBox",
                                        "Unicode text: '牛肉西蘭花' ...",
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
         quit(1);
     }
 
-     
+    /* Google says this is Traditional Chinese for "beef with broccoli" */
     success = SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                                        "UTF-8 Simple MessageBox",
                                        "Unicode text and newline:\r\n'牛肉西蘭花'\n'牛肉西蘭花'",
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
         quit(1);
     }
 
-     
+    /* Google says this is Traditional Chinese for "beef with broccoli" */
     success = SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                                        "牛肉西蘭花",
                                        "Unicode text in the title.",
@@ -153,12 +153,12 @@ int main(int argc, char *argv[])
 
     button_messagebox(NULL);
 
-                                                           
+    /* Test showing a message box from a background thread.
 
-                                                                        
-                                                                        
-                                    
-       
+       On Mac OS X, the video subsystem needs to be initialized for this
+       to work, since the message box events are dispatched by the Cocoa
+       subsystem on the main thread.
+     */
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL video subsystem: %s\n", SDL_GetError());
         return 1;
@@ -180,14 +180,14 @@ int main(int argc, char *argv[])
         SDL_Log("Message box thread return %i\n", status);
     }
 
-     
+    /* Test showing a message box with a parent window */
     {
         SDL_Event event;
         SDL_Window *window = SDL_CreateWindow("Test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, 0);
 
-                                                                       
-                                   
-          
+        /* On wayland, no window will actually show until something has
+           actually been displayed.
+        */
         SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, 0);
         SDL_RenderPresent(renderer);
 

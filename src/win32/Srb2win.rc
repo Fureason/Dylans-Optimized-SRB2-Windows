@@ -1,27 +1,27 @@
-
-
+//Microsoft Developer Studio generated resource script.
+//
 #include "resource.h"
 #include "winver.h"
 #include "winuser.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
-
-
-
-
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
 #include "afxres.h"
 
-
+/////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
-
-
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-               
-                                         
-                       
-                 
+/*#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32*/
 
 #ifndef RT_MANIFEST
 #define RT_MANIFEST 24
@@ -31,22 +31,22 @@
 #define CREATEPROCESS_MANIFEST_RESOURCE_ID 1
 #endif
 
- 
+/* CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST srb2win.exe.manifest */
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
 
-
-
-
-
-
-
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
 IDI_ICON1               ICON    DISCARDABLE     "Srb2win.ico"
 
 #ifdef APSTUDIO_INVOKED
-
-
-
-
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
 
 1 TEXTINCLUDE DISCARDABLE
 BEGIN
@@ -65,16 +65,16 @@ BEGIN
     "\0"
 END
 
-#endif     
+#endif    // APSTUDIO_INVOKED
 
 
 #ifndef _MAC
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
 
-
-
-
-
-#include "../doomdef.h"  
+#include "../doomdef.h" // Needed for version string
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 2,2,14,0
@@ -113,19 +113,19 @@ BEGIN
     END
 END
 
-#endif     
+#endif    // !_MAC
 
-#endif     
-
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
 
 
 
 #ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
 
 
-
-
-
-
-
-#endif     
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED

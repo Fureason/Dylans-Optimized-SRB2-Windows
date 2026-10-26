@@ -1,5 +1,5 @@
-
-
+#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
 
 AC_INIT([minizip], [1.3.1], [bugzilla.redhat.com])
 AC_CONFIG_SRCDIR([minizip.c])

@@ -1,4 +1,4 @@
- 
+/* $Id: testportlistingparse.c,v 1.2 2014/11/01 10:37:32 nanard Exp $ */
 /* Project : miniupnp
  * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
  * Author : Thomas Bernard
@@ -22,7 +22,7 @@ struct port_mapping {
 	unsigned char enabled;
 };
 
- 
+/* return the number of differences */
 int test(const char * portListingXml, int portListingXmlLen,
          const struct port_mapping * ref, int count)
 {
@@ -134,7 +134,7 @@ const struct port_mapping port_mappings[PORT_MAPPINGS_COUNT] = {
 {0, 5002, 4001, "", "192.168.1.123", "UDP", "xxx", 1}
 };
 
- 
+/* --- main --- */
 int main(void)
 {
 	int r;

@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Music_Player.h"
 
@@ -27,10 +27,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 			return err_;\
 	} while ( 0 )
 
-
+// Number of audio buffers per second. Adjust if you encounter audio skipping.
 const int fill_rate = 45;
 
-
+// Simple sound driver using SDL
 typedef void (*sound_callback_t)( void* data, short* out, int count );
 static const char* sound_init( long sample_rate, int buf_size, sound_callback_t, void* data );
 static void sound_start();
@@ -84,7 +84,7 @@ gme_err_t Music_Player::load_file( const char* path )
 	if ( !p )
 		p = m3u_path + strlen( m3u_path );
 	strcpy( p, ".m3u" );
-	if ( gme_load_m3u( emu_, m3u_path ) ) { }  
+	if ( gme_load_m3u( emu_, m3u_path ) ) { } // ignore error
 	
 	return 0;
 }
@@ -102,11 +102,11 @@ gme_err_t Music_Player::start_track( int track )
 		track_info_ = NULL;
 		RETURN_ERR( gme_track_info( emu_, &track_info_, track ) );
 	
-
+		// Sound must not be running when operating on emulator
 		sound_stop();
 		RETURN_ERR( gme_start_track( emu_, track ) );
 		
-
+		// Calculate track length
 		if ( track_info_->length <= 0 )
 			track_info_->length = track_info_->intro_length +
 						track_info_->loop_length * 2;
@@ -181,14 +181,14 @@ void Music_Player::fill_buffer( void* data, sample_t* out, int count )
 	Music_Player* self = (Music_Player*) data;
 	if ( self->emu_ )
 	{
-		if ( gme_play( self->emu_, count, out ) ) { }  
+		if ( gme_play( self->emu_, count, out ) ) { } // ignore error
 		
 		if ( self->scope_buf )
 			memcpy( self->scope_buf, out, self->scope_buf_size * sizeof *self->scope_buf );
 	}
 }
 
-
+// Sound output driver using SDL
 
 #include "SDL.h"
 
@@ -207,7 +207,7 @@ static const char* sound_init( long sample_rate, int buf_size,
 	sound_callback = cb;
 	sound_callback_data = data;
 	
-	static SDL_AudioSpec as;  
+	static SDL_AudioSpec as; // making static clears all fields to 0
 	as.freq     = sample_rate;
 	as.format   = AUDIO_S16SYS;
 	as.channels = 2;
@@ -233,7 +233,7 @@ static void sound_stop()
 {
 	SDL_PauseAudio( true );
 	
-
+	// be sure audio thread is not active
 	SDL_LockAudio();
 	SDL_UnlockAudio();
 }

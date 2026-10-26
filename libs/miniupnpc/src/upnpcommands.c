@@ -1,4 +1,4 @@
- 
+/* $Id: upnpcommands.c,v 1.51 2019/04/23 11:45:15 nanard Exp $ */
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * Project : miniupnp
  * Author : Thomas Bernard
@@ -20,8 +20,8 @@ my_atoui(const char * s)
 	return s ? ((UNSIGNED_INTEGER)STRTOUI(s, NULL, 0)) : 0;
 }
 
-  
-     
+/*
+ * */
 MINIUPNP_LIBSPEC UNSIGNED_INTEGER
 UPNP_GetTotalBytesSent(const char * controlURL,
 					const char * servicetype)
@@ -36,7 +36,7 @@ UPNP_GetTotalBytesSent(const char * controlURL,
 		return (UNSIGNED_INTEGER)UPNPCOMMAND_HTTP_ERROR;
 	}
 	ParseNameValue(buffer, bufsize, &pdata);
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	free(buffer);
 	p = GetValueFromNameValueList(&pdata, "NewTotalBytesSent");
 	r = my_atoui(p);
@@ -44,8 +44,8 @@ UPNP_GetTotalBytesSent(const char * controlURL,
 	return r;
 }
 
-  
-     
+/*
+ * */
 MINIUPNP_LIBSPEC UNSIGNED_INTEGER
 UPNP_GetTotalBytesReceived(const char * controlURL,
 						const char * servicetype)
@@ -60,7 +60,7 @@ UPNP_GetTotalBytesReceived(const char * controlURL,
 		return (UNSIGNED_INTEGER)UPNPCOMMAND_HTTP_ERROR;
 	}
 	ParseNameValue(buffer, bufsize, &pdata);
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	free(buffer);
 	p = GetValueFromNameValueList(&pdata, "NewTotalBytesReceived");
 	r = my_atoui(p);
@@ -68,8 +68,8 @@ UPNP_GetTotalBytesReceived(const char * controlURL,
 	return r;
 }
 
-  
-     
+/*
+ * */
 MINIUPNP_LIBSPEC UNSIGNED_INTEGER
 UPNP_GetTotalPacketsSent(const char * controlURL,
 						const char * servicetype)
@@ -84,7 +84,7 @@ UPNP_GetTotalPacketsSent(const char * controlURL,
 		return (UNSIGNED_INTEGER)UPNPCOMMAND_HTTP_ERROR;
 	}
 	ParseNameValue(buffer, bufsize, &pdata);
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	free(buffer);
 	p = GetValueFromNameValueList(&pdata, "NewTotalPacketsSent");
 	r = my_atoui(p);
@@ -92,8 +92,8 @@ UPNP_GetTotalPacketsSent(const char * controlURL,
 	return r;
 }
 
-  
-     
+/*
+ * */
 MINIUPNP_LIBSPEC UNSIGNED_INTEGER
 UPNP_GetTotalPacketsReceived(const char * controlURL,
 						const char * servicetype)
@@ -108,7 +108,7 @@ UPNP_GetTotalPacketsReceived(const char * controlURL,
 		return (UNSIGNED_INTEGER)UPNPCOMMAND_HTTP_ERROR;
 	}
 	ParseNameValue(buffer, bufsize, &pdata);
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	free(buffer);
 	p = GetValueFromNameValueList(&pdata, "NewTotalPacketsReceived");
 	r = my_atoui(p);
@@ -116,8 +116,8 @@ UPNP_GetTotalPacketsReceived(const char * controlURL,
 	return r;
 }
 
-                                                          
-                                           
+/* UPNP_GetStatusInfo() call the corresponding UPNP method
+ * returns the current status and uptime */
 MINIUPNP_LIBSPEC int
 UPNP_GetStatusInfo(const char * controlURL,
 				const char * servicetype,
@@ -141,7 +141,7 @@ UPNP_GetStatusInfo(const char * controlURL,
 		return UPNPCOMMAND_HTTP_ERROR;
 	}
 	ParseNameValue(buffer, bufsize, &pdata);
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	free(buffer);
 	up = GetValueFromNameValueList(&pdata, "NewUptime");
 	p = GetValueFromNameValueList(&pdata, "NewConnectionStatus");
@@ -181,8 +181,8 @@ UPNP_GetStatusInfo(const char * controlURL,
 	return ret;
 }
 
-                                                                  
-                                 
+/* UPNP_GetConnectionTypeInfo() call the corresponding UPNP method
+ * returns the connection type */
 MINIUPNP_LIBSPEC int
 UPNP_GetConnectionTypeInfo(const char * controlURL,
                            const char * servicetype,
@@ -204,8 +204,8 @@ UPNP_GetConnectionTypeInfo(const char * controlURL,
 	ParseNameValue(buffer, bufsize, &pdata);
 	free(buffer);
 	p = GetValueFromNameValueList(&pdata, "NewConnectionType");
-	 
-	 
+	/*p = GetValueFromNameValueList(&pdata, "NewPossibleConnectionTypes");*/
+	/* PossibleConnectionTypes will have several values.... */
 	if(p) {
 		strncpy(connectionType, p, 64 );
 		connectionType[63] = '\0';
@@ -221,11 +221,11 @@ UPNP_GetConnectionTypeInfo(const char * controlURL,
 	return ret;
 }
 
-                                                                    
-                                                                 
-                                
-                                                                    
-                                                                            
+/* UPNP_GetLinkLayerMaxBitRate() call the corresponding UPNP method.
+ * Returns 2 values: Downloadlink bandwidth and Uplink bandwidth.
+ * One of the values can be null
+ * Note : GetLinkLayerMaxBitRates belongs to WANPPPConnection:1 only
+ * We can use the GetCommonLinkProperties from WANCommonInterfaceConfig:1 */
 MINIUPNP_LIBSPEC int
 UPNP_GetLinkLayerMaxBitRates(const char * controlURL,
                              const char * servicetype,
@@ -243,21 +243,21 @@ UPNP_GetLinkLayerMaxBitRates(const char * controlURL,
 	if(!bitrateDown && !bitrateUp)
 		return UPNPCOMMAND_INVALID_ARGS;
 
-	 
+	/* shouldn't we use GetCommonLinkProperties ? */
 	if(!(buffer = simpleUPnPcommand(-1, controlURL, servicetype,
 	                                "GetCommonLinkProperties", 0, &bufsize))) {
-	                               
+	                              /*"GetLinkLayerMaxBitRates", 0, &bufsize);*/
 		return UPNPCOMMAND_HTTP_ERROR;
 	}
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	ParseNameValue(buffer, bufsize, &pdata);
 	free(buffer);
-	 
-	 
+	/*down = GetValueFromNameValueList(&pdata, "NewDownstreamMaxBitRate");*/
+	/*up = GetValueFromNameValueList(&pdata, "NewUpstreamMaxBitRate");*/
 	down = GetValueFromNameValueList(&pdata, "NewLayer1DownstreamMaxBitRate");
 	up = GetValueFromNameValueList(&pdata, "NewLayer1UpstreamMaxBitRate");
-	 
-	 
+	/*GetValueFromNameValueList(&pdata, "NewWANAccessType");*/
+	/*GetValueFromNameValueList(&pdata, "NewPhysicalLinkStatus");*/
 	if(down && up)
 		ret = UPNPCOMMAND_SUCCESS;
 
@@ -284,17 +284,17 @@ UPNP_GetLinkLayerMaxBitRates(const char * controlURL,
 }
 
 
-                                                                  
-                                                          
-                                      
-  
-                  
-              
-                                                                  
-  
-                                                                      
-                                                                       
-   
+/* UPNP_GetExternalIPAddress() call the corresponding UPNP method.
+ * if the third arg is not null the value is copied to it.
+ * at least 16 bytes must be available
+ *
+ * Return values :
+ * 0 : SUCCESS
+ * NON ZERO : ERROR Either an UPnP error code or an unknown error.
+ *
+ * 402 Invalid Args - See UPnP Device Architecture section on Control.
+ * 501 Action Failed - See UPnP Device Architecture section on Control.
+ */
 MINIUPNP_LIBSPEC int
 UPNP_GetExternalIPAddress(const char * controlURL,
                           const char * servicetype,
@@ -313,10 +313,10 @@ UPNP_GetExternalIPAddress(const char * controlURL,
 	                                "GetExternalIPAddress", 0, &bufsize))) {
 		return UPNPCOMMAND_HTTP_ERROR;
 	}
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	ParseNameValue(buffer, bufsize, &pdata);
 	free(buffer);
-	 
+	/*printf("external ip = %s\n", GetValueFromNameValueList(&pdata, "NewExternalIPAddress") );*/
 	p = GetValueFromNameValueList(&pdata, "NewExternalIPAddress");
 	if(p) {
 		strncpy(extIpAdd, p, 16 );
@@ -381,14 +381,14 @@ UPNP_AddPortMapping(const char * controlURL, const char * servicetype,
 	if(!buffer) {
 		return UPNPCOMMAND_HTTP_ERROR;
 	}
-	 
-	 
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
+	/*buffer[bufsize] = '\0';*/
+	/*puts(buffer);*/
 	ParseNameValue(buffer, bufsize, &pdata);
 	free(buffer);
 	resVal = GetValueFromNameValueList(&pdata, "errorCode");
 	if(resVal) {
-		 
+		/*printf("AddPortMapping errorCode = '%s'\n", resVal); */
 		ret = UPNPCOMMAND_UNKNOWN_ERROR;
 		sscanf(resVal, "%d", &ret);
 	} else {
@@ -472,7 +472,7 @@ UPNP_DeletePortMapping(const char * controlURL, const char * servicetype,
                        const char * extPort, const char * proto,
                        const char * remoteHost)
 {
-	 
+	/*struct NameValueParserData pdata;*/
 	struct UPNParg * DeletePortMappingArgs;
 	char * buffer;
 	int bufsize;
@@ -499,7 +499,7 @@ UPNP_DeletePortMapping(const char * controlURL, const char * servicetype,
 	if(!buffer) {
 		return UPNPCOMMAND_HTTP_ERROR;
 	}
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	ParseNameValue(buffer, bufsize, &pdata);
 	free(buffer);
 	resVal = GetValueFromNameValueList(&pdata, "errorCode");
@@ -696,9 +696,9 @@ UPNP_GetPortMappingNumberOfEntries(const char * controlURL,
 	return ret;
 }
 
-                                                                      
-                                                              
-                                           
+/* UPNP_GetSpecificPortMappingEntry retrieves an existing port mapping
+ * the result is returned in the intClient and intPort strings
+ * please provide 16 and 6 bytes of data */
 MINIUPNP_LIBSPEC int
 UPNP_GetSpecificPortMappingEntry(const char * controlURL,
                                  const char * servicetype,
@@ -737,7 +737,7 @@ UPNP_GetSpecificPortMappingEntry(const char * controlURL,
 	if(!buffer) {
 		return UPNPCOMMAND_HTTP_ERROR;
 	}
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	ParseNameValue(buffer, bufsize, &pdata);
 	free(buffer);
 
@@ -785,14 +785,14 @@ UPNP_GetSpecificPortMappingEntry(const char * controlURL,
 	return ret;
 }
 
-                               
-  
-                              
-                            
-                                                                             
-                                                                          
-                                           
-   
+/* UPNP_GetListOfPortMappings()
+ *
+ * Possible UPNP Error codes :
+ * 606 Action not Authorized
+ * 730 PortMappingNotFound - no port mapping is found in the specified range.
+ * 733 InconsistantParameters - NewStartPort and NewEndPort values are not
+ *                              consistent.
+ */
 MINIUPNP_LIBSPEC int
 UPNP_GetListOfPortMappings(const char * controlURL,
                            const char * servicetype,
@@ -834,34 +834,34 @@ UPNP_GetListOfPortMappings(const char * controlURL,
 		return UPNPCOMMAND_HTTP_ERROR;
 	}
 
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	ParseNameValue(buffer, bufsize, &pdata);
 	free(buffer);
 
-	 
-	         
-                                     
-    
-	                                           
-                                                      
+	/*p = GetValueFromNameValueList(&pdata, "NewPortListing");*/
+	/*if(p) {
+		printf("NewPortListing : %s\n", p);
+	}*/
+	/*printf("NewPortListing(%d chars) : %s\n",
+	       pdata.portListingLength, pdata.portListing);*/
 	if(pdata.portListing)
 	{
-		                          
-              
+		/*struct PortMapping * pm;
+		int i = 0;*/
 		ParsePortListing(pdata.portListing, pdata.portListingLength,
 		                 data);
 		ret = UPNPCOMMAND_SUCCESS;
-		  
-                                                                     
-   
-                                              
-                                                                
-                           
-                                           
-       
-   
-    
-		 
+		/*
+		for(pm = data->head.lh_first; pm != NULL; pm = pm->entries.le_next)
+		{
+			printf("%2d %s %5hu->%s:%-5hu '%s' '%s'\n",
+			       i, pm->protocol, pm->externalPort, pm->internalClient,
+			       pm->internalPort,
+			       pm->description, pm->remoteHost);
+			i++;
+		}
+		*/
+		/*FreePortListing(&data);*/
 	}
 
 	p = GetValueFromNameValueList(&pdata, "errorCode");
@@ -871,12 +871,12 @@ UPNP_GetListOfPortMappings(const char * controlURL,
 	}
 	ClearNameValueList(&pdata);
 
-	 
+	/*printf("%.*s", bufsize, buffer);*/
 
 	return ret;
 }
 
- 
+/* IGD:2, functions for service WANIPv6FirewallControl:1 */
 MINIUPNP_LIBSPEC int
 UPNP_GetFirewallStatus(const char * controlURL,
 				const char * servicetype,
@@ -905,12 +905,12 @@ UPNP_GetFirewallStatus(const char * controlURL,
 		ret = UPNPCOMMAND_SUCCESS;
 	if(fe)
 		*firewallEnabled = my_atoui(fe);
-	      
-                         
+	/*else
+		*firewallEnabled = 0;*/
 	if(ipa)
 		*inboundPinholeAllowed = my_atoui(ipa);
-	      
-                               
+	/*else
+		*inboundPinholeAllowed = 0;*/
 	p = GetValueFromNameValueList(&pdata, "errorCode");
 	if(p)
 	{
@@ -1001,7 +1001,7 @@ UPNP_AddPinhole(const char * controlURL, const char * servicetype,
 	AddPinholeArgs = calloc(7, sizeof(struct UPNParg));
 	if(AddPinholeArgs == NULL)
 		return UPNPCOMMAND_MEM_ALLOC_ERROR;
-	 
+	/* RemoteHost can be wilcarded */
 	if(strncmp(remoteHost, "empty", 5)==0)
 	{
 		AddPinholeArgs[0].elt = "RemoteHost";
@@ -1046,7 +1046,7 @@ UPNP_AddPinhole(const char * controlURL, const char * servicetype,
 	resVal = GetValueFromNameValueList(&pdata, "errorCode");
 	if(resVal)
 	{
-		 
+		/*printf("AddPortMapping errorCode = '%s'\n", resVal);*/
 		ret = UPNPCOMMAND_UNKNOWN_ERROR;
 		sscanf(resVal, "%d", &ret);
 	}
@@ -1090,7 +1090,7 @@ UPNP_UpdatePinhole(const char * controlURL, const char * servicetype,
 	resVal = GetValueFromNameValueList(&pdata, "errorCode");
 	if(resVal)
 	{
-		 
+		/*printf("AddPortMapping errorCode = '%s'\n", resVal); */
 		ret = UPNPCOMMAND_UNKNOWN_ERROR;
 		sscanf(resVal, "%d", &ret);
 	}
@@ -1105,7 +1105,7 @@ UPNP_UpdatePinhole(const char * controlURL, const char * servicetype,
 MINIUPNP_LIBSPEC int
 UPNP_DeletePinhole(const char * controlURL, const char * servicetype, const char * uniqueID)
 {
-	 
+	/*struct NameValueParserData pdata;*/
 	struct UPNParg * DeletePinholeArgs;
 	char * buffer;
 	int bufsize;
@@ -1126,7 +1126,7 @@ UPNP_DeletePinhole(const char * controlURL, const char * servicetype, const char
 	free(DeletePinholeArgs);
 	if(!buffer)
 		return UPNPCOMMAND_HTTP_ERROR;
-	 
+	/*DisplayNameValueList(buffer, bufsize);*/
 	ParseNameValue(buffer, bufsize, &pdata);
 	free(buffer);
 	resVal = GetValueFromNameValueList(&pdata, "errorCode");

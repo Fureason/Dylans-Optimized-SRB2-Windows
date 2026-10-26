@@ -1,4 +1,4 @@
- 
+/* $Id: testigddescparse.c,v 1.11 2019/02/10 12:33:32 nanard Exp $ */
 /* Project : miniupnp
  * http://miniupnp.free.fr/
  * Author : Thomas Bernard
@@ -13,7 +13,7 @@
 #include "minixml.h"
 #include "miniupnpc.h"
 
- 
+/* count number of differences */
 int compare_service(struct IGDdatas_service * s, FILE * f)
 {
 	int n = 0;
@@ -29,9 +29,9 @@ int compare_service(struct IGDdatas_service * s, FILE * f)
 		while((l > 0) && ((line[l-1] == '\r') || (line[l-1] == '\n') || (line[l-1] == ' ')))
 			line[--l] = '\0';
 		if(l == 0)
-			break;	 
+			break;	/* end on blank line */
 		if(line[0] == '#')
-			continue;	 
+			continue;	/* skip comments */
 		equal = strchr(line, '=');
 		if(equal == NULL) {
 			fprintf(stderr, "Warning, line does not contain '=' : %s\n", line);
@@ -79,7 +79,7 @@ int compare_igd(struct IGDdatas * p, FILE * f)
 		while((l > 0) && (line[l-1] == '\r' || (line[l-1] == '\n')))
 			line[--l] = '\0';
 		if(l == 0 || line[0] == '#')
-			continue;	 
+			continue;	/* skip blank lines and comments */
 		colon = strchr(line, ':');
 		if(colon == NULL) {
 			fprintf(stderr, "Warning, no ':' : %s\n", line);
@@ -126,7 +126,7 @@ int test_igd_desc_parse(char * buffer, int len, FILE * f)
 	parsexml(&parser);
 #ifdef DEBUG
 	printIGD(&igd);
-#endif  
+#endif /* DEBUG */
 	GetUPNPUrls(&urls, &igd, "http://fake/desc/url/file.xml", 0);
 	printf("ipcondescURL='%s'\n", urls.ipcondescURL);
 	printf("controlURL='%s'\n", urls.controlURL);

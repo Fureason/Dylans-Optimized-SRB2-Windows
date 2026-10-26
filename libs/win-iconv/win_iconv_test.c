@@ -60,9 +60,9 @@ setdll(const char *dllpath)
 }
 #endif
 
-  
-                                                            
-   
+/*
+ * We can test the codepage that is installed in the system.
+ */
 int
 check_enc(const char *encname, int codepage)
 {
@@ -164,7 +164,7 @@ int
 main(int argc, char **argv)
 {
 #ifdef USE_LIBICONV_DLL
-     
+    /* test use of dll if $DEFAULT_LIBICONV_DLL was defined. */
     if (setdll(""))
     {
         success("ascii", "ABC", "ascii", "ABC");
@@ -181,19 +181,19 @@ main(int argc, char **argv)
     if (check_enc("ascii", 20127))
     {
         success("ascii", "ABC", "ascii", "ABC");
-         
+        /* MSB is dropped.  Hmm... */
         success("ascii", "\x80\xFF", "ascii", "\x00\x7F");
     }
 
-     
+    /* unicode (CP1200 CP1201 CP12000 CP12001 CP65001) */
     if (check_enc("utf-8", 65001)
             && check_enc("utf-16be", 1201) && check_enc("utf-16le", 1200)
             && check_enc("utf-32be", 12001) && check_enc("utf-32le", 12000)
             )
     {
-                                
-                                                                 
-                                                                
+        /* Test the BOM behavior
+         * 1. Remove the BOM when "fromcode" is utf-16 or utf-32.
+         * 2. Add the BOM when "tocode" is utf-16 or utf-32.  */
         success("utf-16", "\xFE\xFF\x01\x02", "utf-16be", "\x01\x02");
         success("utf-16", "\xFF\xFE\x02\x01", "utf-16be", "\x01\x02");
         success("utf-32", "\x00\x00\xFE\xFF\x00\x00\x01\x02", "utf-32be", "\x00\x00\x01\x02");
@@ -232,14 +232,14 @@ main(int argc, char **argv)
         einval("utf-8", "\xE3", "utf-16be", "");
     }
 
-     
+    /* Japanese (CP932 CP20932 CP50220 CP50221 CP50222 CP51932) */
     if (check_enc("cp932", 932)
             && check_enc("cp20932", 20932) && check_enc("euc-jp", 51932)
             && check_enc("cp50220", 50220) && check_enc("cp50221", 50221)
             && check_enc("cp50222", 50222) && check_enc("iso-2022-jp", 50221))
     {
-                                                                   
-                                                                        
+        /* Test the compatibility for each other Japanese codepage.
+         * And validate the escape sequence handling for iso-2022-jp. */
         success("utf-16be", "\xFF\x5E", "cp932", "\x81\x60");
         success("utf-16be", "\x30\x1C", "cp932", "\x81\x60");
         success("utf-16be", "\xFF\x5E", "cp932//nocompat", "\x81\x60");
@@ -254,18 +254,18 @@ main(int argc, char **argv)
         success("iso-2022-jp", "\x1B\x24\x42\x21\x41\x1B\x28\x42", "UTF-16BE", "\xFF\x5E");
     }
 
-      
-                          
-                                                                                
-       
+    /*
+     * test for //translit
+     * U+FF41 (FULLWIDTH LATIN SMALL LETTER A) <-> U+0062 (LATIN SMALL LETTER A)
+     */
     eilseq("UTF-16BE", "\xFF\x41", "iso-8859-1", "");
     success("UTF-16BE", "\xFF\x41", "iso-8859-1//translit", "a");
 
-      
-            
-                                           
-                                                    
-       
+    /*
+     * TODO:
+     * Test for state after iconv() failed.
+     * Ensure iconv() error is safe and continuable.
+     */
 
     return 0;
 }

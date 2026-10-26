@@ -1,13 +1,13 @@
+// Nintendo NES/Famicom NSFE music file emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef NSFE_EMU_H
 #define NSFE_EMU_H
 
 #include "blargg_common.h"
 #include "Nsf_Emu.h"
 
-
+// Allows reading info from NSFE file without creating emulator
 class Nsfe_Info {
 public:
 	blargg_err_t load( Data_Reader&, Nsf_Emu* );
@@ -44,12 +44,12 @@ public:
 	static gme_type_t static_type() { return gme_nsfe_type; }
 	
 public:
-
+	// deprecated
 	struct header_t { char tag [4]; };
 	using Music_Emu::load;
-	blargg_err_t load( header_t const& h, Data_Reader& in )  
+	blargg_err_t load( header_t const& h, Data_Reader& in ) // use Remaining_Reader
 			{ return load_remaining_( &h, sizeof h, in ); }
-	void disable_playlist( bool = true );  
+	void disable_playlist( bool = true ); // use clear_playlist()
 
 public:
 	Nsfe_Emu();

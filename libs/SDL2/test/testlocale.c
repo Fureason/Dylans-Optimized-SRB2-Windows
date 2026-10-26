@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include "SDL.h"
 
- 
+/* !!! FIXME: move this to the test framework */
 
 static void log_locales(void)
 {
@@ -35,10 +35,10 @@ static void log_locales(void)
 
 int main(int argc, char **argv)
 {
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Print locales and languages */
     if (SDL_Init(SDL_INIT_VIDEO) != -1) {
         log_locales();
 
@@ -64,4 +64,4 @@ int main(int argc, char **argv)
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

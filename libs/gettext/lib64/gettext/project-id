@@ -18,7 +18,7 @@
 
 want_version="$1"
 
-
+# NLS nuisances: Letter ranges are different in the Estonian locale.
 LC_ALL=C
 
 while true; do

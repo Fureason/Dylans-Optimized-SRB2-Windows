@@ -1,5 +1,5 @@
-
-
+# Makefile for PngMinus (png2pnm and pnm2png)
+# TurboC++ 3.0
 
 CC=tcc -Ic:\tc3\inc
 LD=tcc -Lc:\tc3\lib
@@ -14,7 +14,7 @@ O=.obj
 L=.lib
 E=.exe
 
-
+# dependencies
 
 all: png2pnm$(E) pnm2png$(E)
 
@@ -34,5 +34,5 @@ clean:
         $(RM) *$(O)
         $(RM) *$(E)
 
-
+# End of makefile for png2pnm / pnm2png
 

@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Wave_Writer.h"
 
@@ -66,7 +66,7 @@ void Wave_Writer::write( const sample_t* in, long remain, int skip )
 			n = remain;
 		remain -= n;
 		
-
+		// convert to lsb first format
 		unsigned char* p = &buf [buf_pos];
 		while ( n-- )
 		{
@@ -95,14 +95,14 @@ void Wave_Writer::write( const float* in, long remain, int skip )
 			n = remain;
 		remain -= n;
 		
-
+		// convert to lsb first format
 		unsigned char* p = &buf [buf_pos];
 		while ( n-- )
 		{
 			long s = (long) (*in * 0x7FFF);
 			in += skip;
 			if ( (short) s != s )
-				s = 0x7FFF - (s >> 24);  
+				s = 0x7FFF - (s >> 24); // clamp to 16 bits
 			*p++ = (unsigned char) s;
 			*p++ = (unsigned char) (s >> 8);
 		}
@@ -118,7 +118,7 @@ void Wave_Writer::close()
 	{
 		flush();
 		
-
+		// generate header
 		long ds = sample_count_ * sizeof (sample_t);
 		long rs = header_size - 8 + ds;
 		int frame_size = chan_count * sizeof (sample_t);
@@ -126,25 +126,25 @@ void Wave_Writer::close()
 		unsigned char header [header_size] =
 		{
 			'R','I','F','F',
-			rs,rs>>8,            
+			rs,rs>>8,           // length of rest of file
 			rs>>16,rs>>24,
 			'W','A','V','E',
 			'f','m','t',' ',
-			0x10,0,0,0,          
-			1,0,                 
-			chan_count,0,        
-			rate,rate >> 8,      
+			0x10,0,0,0,         // size of fmt chunk
+			1,0,                // uncompressed format
+			chan_count,0,       // channel count
+			rate,rate >> 8,     // sample rate
 			rate>>16,rate>>24,
-			bps,bps>>8,          
+			bps,bps>>8,         // bytes per second
 			bps>>16,bps>>24,
-			frame_size,0,        
-			16,0,                
+			frame_size,0,       // bytes per sample frame
+			16,0,               // bits per sample
 			'd','a','t','a',
-			ds,ds>>8,ds>>16,ds>>24 
-
+			ds,ds>>8,ds>>16,ds>>24// size of sample data
+			// ...              // sample data
 		};
 		
-
+		// write header
 		fseek( file, 0, SEEK_SET );
 		fwrite( header, sizeof header, 1, file );
 		
@@ -159,7 +159,7 @@ Wave_Writer::~Wave_Writer()
 	close();
 }
 
-
+// C interface
 
 static Wave_Writer* ww;
 

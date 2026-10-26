@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  d_ticcmd.h
+/// \brief Button/action code definitions, ticcmd_t
 
 #ifndef __D_TICCMD__
 #define __D_TICCMD__
@@ -23,34 +23,34 @@
 
 #define MAXPREDICTTICS 12
 
-
+// Button/action code definitions.
 typedef enum
 {
-
-	BT_WEAPONMASK = 0x0F,  
+	// First 4 bits are weapon change info, DO NOT USE!
+	BT_WEAPONMASK = 0x0F, //our first four bits.
 
 	BT_WEAPONNEXT = 1<<4,
 	BT_WEAPONPREV = 1<<5,
 
-	BT_ATTACK     = 1<<6,  
+	BT_ATTACK     = 1<<6, // shoot rings
 	BT_SPIN       = 1<<7,
-	BT_CAMLEFT    = 1<<8,  
-	BT_CAMRIGHT   = 1<<9,  
+	BT_CAMLEFT    = 1<<8, // turn camera left
+	BT_CAMRIGHT   = 1<<9, // turn camera right
 	BT_TOSSFLAG   = 1<<10,
 	BT_JUMP       = 1<<11,
-	BT_FIRENORMAL = 1<<12,  
+	BT_FIRENORMAL = 1<<12, // Fire a normal ring no matter what
 
 	BT_CUSTOM1    = 1<<13,
 	BT_CUSTOM2    = 1<<14,
 	BT_CUSTOM3    = 1<<15,
 } buttoncode_t;
 
+// The data sampled per tick (single player)
+// and transmitted to other peers (multiplayer).
+// Mainly movements/button commands per game tick,
+// plus a checksum for internal state consistency.
 
-
-
-
-
-
+// bits in angleturn
 #define TICCMD_RECEIVED 1
 #define TICCMD_XY 2
 
@@ -60,12 +60,12 @@ typedef enum
 
 typedef struct
 {
-	SINT8 forwardmove;  
-	SINT8 sidemove;  
-	INT16 angleturn;  
-	INT16 aiming;  
+	SINT8 forwardmove; // -MAXPLMOVE to MAXPLMOVE (50)
+	SINT8 sidemove; // -MAXPLMOVE to MAXPLMOVE (50)
+	INT16 angleturn; // <<16 for angle delta - saved as 1 byte into demos
+	INT16 aiming; // vertical aiming, see G_BuildTicCmd
 	UINT16 buttons;
-	UINT8 latency;  
+	UINT8 latency; // Netgames: how many tics ago was this ticcmd generated from this player's end?
 } ATTRPACK ticcmd_t;
 
 #if defined(_MSC_VER)

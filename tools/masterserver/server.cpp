@@ -13,7 +13,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 #ifdef __GNUC__
 #include <unistd.h>
 #include <sys/types.h>
@@ -26,9 +26,9 @@
 #include "mysql.h"
 #include "md5.h"
 #include <time.h>
+//#include <netdb.h>
 
-
-
+//=============================================================================
 
 #ifdef __GNUC__
 #define ATTRPACK __attribute__ ((packed))
@@ -52,7 +52,7 @@ FILE *pidfile;
 
 typedef struct
 {
-	char ip[16];			 
+	char ip[16];			// Big enough to hold a full address.
 	UINT16 port;
 	UINT8 padding1[2];
 	UINT32 time;
@@ -65,17 +65,17 @@ typedef struct
 	UINT32 time;
 } ATTRPACK msaskinfo_pak;
 
-
-
-
+//
+// SRB2 network packet data.
+//
 typedef struct
 {
 	UINT32 checksum;
-	UINT8 ack;  
-	UINT8 ackreturn;  
+	UINT8 ack; // if not null the node asks for acknowledgement, the receiver must resend the ack
+	UINT8 ackreturn; // the return of the ack number
 
 	UINT8 packettype;
-	UINT8 reserved;  
+	UINT8 reserved; // padding
 
 	msaskinfo_pak msaskinfo;
 } ATTRPACK doomdata_t;
@@ -84,14 +84,14 @@ typedef struct
 #pragma pack()
 #endif
 
-
+//=============================================================================
 
 #define HOSTNAME "localhost"
 #define USER "srb2_ms"
 #define PASSWORD "gLRDRb7WgLRDRb7W"
 #define DATABASE "srb2_ms"
 
-
+// MySQL Stuff :D
 
    const char *server = HOSTNAME;
    const char *user = USER;
@@ -103,55 +103,55 @@ typedef struct
    MYSQL_RES *res;
    MYSQL_ROW row;
    int mysqlconnected = 0;
-  
-                                                  
- 
-         
-                
+/*
+char *str_replace(char * t1, char * t2, char * t6)
+{
+	char*t4;
+	char*t5=new(0);
 
-                      
-                         
-                                        
-                
-                 
-        
-  
-                      
- 
-  
-  
-               
-                                
- 
-                                            
-                                            
-                                            
+	while(strstr(t6,t1)){
+        t4=strstr(t6,t1);
+        strncpy(t5+strlen(t5),t6,t4-t6);
+		strcat(t5,t2);
+		t4+=strlen(t1);
+		t6=t4;
+	}
+	return strcat(t5,t4);
+}
+*/
+/*
+// Cue was here
+char *str_quakeformat(char *msg)
+{
+    char *quakemsg , *quakemsg1, *quakemsg2;
+    char *quakemsg3, *quakemsg4, *quakemsg5;
+    char *quakemsg6, *quakemsg7, *quakemsg8;
 
-                                                      
-                           
-                                                    
-                                                    
-                                                    
-                                                    
-                                                    
-                                                    
-                                                    
-                                                   
-                      
-                      
-                      
-                      
-                      
-                      
-                      
-                      
+    quakemsg1 = new(sizeof(char) * (strlen(msg) + 1));
+    strcpy(quakemsg1, msg);
+    quakemsg2 = str_replace("^1", "\x81",quakemsg1);
+    quakemsg3 = str_replace("^2", "\x82",quakemsg2);
+    quakemsg4 = str_replace("^3", "\x83",quakemsg3);
+    quakemsg5 = str_replace("^4", "\x84",quakemsg4);
+    quakemsg6 = str_replace("^5", "\x85",quakemsg5);
+    quakemsg7 = str_replace("^6", "\x86",quakemsg6);
+    quakemsg8 = str_replace("^7", "\x87",quakemsg7);
+    quakemsg = str_replace("^0", "\x80",quakemsg8);
+    delete(quakemsg1);
+    delete(quakemsg2);
+    delete(quakemsg3);
+    delete(quakemsg4);
+    delete(quakemsg5);
+    delete(quakemsg6);
+    delete(quakemsg7);
+    delete(quakemsg8);
 
-                    
- 
-    
+    return quakemsg;
+}
+  */
 void MySQL_Conn(bool force) {
-
-
+	//if(mysql_ping(conn))
+		//mysqlconnected = 0;
 	logPrintf(mysqlfile, "Trying to connect to MySQL...\n");
 	if(mysqlconnected != 1 || force) {
 		if(force)
@@ -163,14 +163,14 @@ void MySQL_Conn(bool force) {
 
 		conn = mysql_init(NULL);
 
-		 
+		/* Connect to database */
 		if (!mysql_real_connect(conn, server,
 			user, password, database, 8219, NULL, 0)) {
 			logPrintf(errorfile, "%s\n", mysql_error(conn));
 		}
 		conn = mysql_init(NULL);
 
-		 
+		/* Connect to database */
 		if (!mysql_real_connect(conn, server, user, password, database, 0, NULL, 0)) {
 			logPrintf(errorfile, "%s\n", mysql_error(conn));
 			mysqlconnected = 0;
@@ -187,10 +187,10 @@ static int MySQL_CheckBan(const char *ip, UINT32 id, bool sendinfo, bool type) {
 	MySQL_Conn(false);
 	msg.id = id;
     char banqueryp1[500] = "SELECT bid,INET_NTOA(ipstart),INET_NTOA(ipend),DATE_FORMAT(FROM_UNIXTIME(full_endtime),'%%a %%b %%e %%Y at %%k:%%i (CDT)'),reason,hostonly,permanent FROM ms_bans WHERE INET_ATON('%s') BETWEEN `ipstart` AND `ipend` AND (`full_endtime` > %ld OR `permanent` = '1') LIMIT 1";
-
-
+//    char exqueryp1[500] = "SELECT * FROM ms_exceptions WHERE `ip` = '%s' AND `bid` = '%s' LIMIT 1";
+//    char exquery[500];
     char banquery[500];
-
+//    char bid[5];
 
     time_t current_time = time (NULL);
     sprintf(banquery, banqueryp1, ip, current_time);
@@ -384,7 +384,7 @@ void MySQL_ListServers(UINT32 id, UINT32 type, const char *ip, UINT32 room) {
           {
 		msg_server_t *info = (msg_server_t *) msg.buffer;
 
-		info->header[0] = '\0';  
+		info->header[0] = '\0'; // nothing interresting in it (for now)
 		strcpy(info->ip,      row[0]);
 		strcpy(info->port,    row[1]);
 		strcpy(info->name,    row[2]);
@@ -412,7 +412,7 @@ void MySQL_ListServers(UINT32 id, UINT32 type, const char *ip, UINT32 room) {
 void MySQL_ListRooms(UINT32 id, UINT32 type, const char *ip, bool sendtype) {
 	msg_t msg;
 	int writecode;
-
+	//(void)ip;
 	MySQL_Conn(false);
 	msg.id = id;
 	msg.type = type;
@@ -421,7 +421,7 @@ void MySQL_ListRooms(UINT32 id, UINT32 type, const char *ip, bool sendtype) {
 	if(MySQL_CheckBan(ip,id,true,sendtype))
 		return;
 
-
+	//Hmph!  I suppose it'll be up to me to handle this. ~Inuyasha
 	if (sendtype)
 	{
 		char overridequery[500];
@@ -459,10 +459,10 @@ void MySQL_ListRooms(UINT32 id, UINT32 type, const char *ip, bool sendtype) {
 
 				row = mysql_fetch_row(res);
 
-				info->header[0] = '\0';  
+				info->header[0] = '\0'; // nothing interesting in it (for now)
 				strcpy(info->name, row[1]);
 
-
+				// Just in case, let's make sure we don't overflow.
 				sprintf(roommotd, "\x85Your server has had a room override applied to it, so this is the only room you may host in.\x80\n\n%s", row[2]);
 				strncpy(info->motd, roommotd, 255);
 				info->motd[255] = '\0';
@@ -507,7 +507,7 @@ void MySQL_ListRooms(UINT32 id, UINT32 type, const char *ip, bool sendtype) {
 		{
 			msg_rooms_t *info = (msg_rooms_t *) msg.buffer;
 
-			info->header[0] = '\0';  
+			info->header[0] = '\0'; // nothing interresting in it (for now)
 			strcpy(info->name,	row[1]);
 			strcpy(info->motd,	row[2]);
 			info->id = atoi(row[0]);
@@ -576,9 +576,9 @@ void MySQL_ListServServers(UINT32 id, UINT32 type, const char *ip) {
        msg_t msg;
        int writecode;
        static char str[1024];
-
-
-
+       //char banqueryp1[500] = "SELECT reason,name,FROM_UNIXTIME(endtime) FROM ms_bans WHERE INET_ATON('%s') BETWEEN `ipstart` AND `ipend` AND `endtime` < %ld LIMIT 1";
+       //char banquery[500];
+       //time_t current_time = time (NULL);
        char servquery[1000] = "SELECT ip, port, name, version, permanent FROM ( SELECT * FROM `ms_servers` WHERE `upnow` = '1' OR `permanent` = '1' ORDER BY `sid` ASC) as ms_servers ORDER BY `sticky` DESC";
        MySQL_Conn(false);
      if(!MySQL_CheckBan(ip,0,false,0)) {
@@ -599,7 +599,7 @@ void MySQL_ListServServers(UINT32 id, UINT32 type, const char *ip) {
 		else
                 snprintf(str, sizeof str, "IP\t\t: %s\nPort\t\t: %s\nHostname\t: %s\nVersion\t\t: %s\nPermanent\t: %s\n", row[0], row[1], row[2], row[3], "No");
 
-        msg.length = (INT32)(strlen(str)+1);  
+        msg.length = (INT32)(strlen(str)+1); // send also the '\0'
 		strcpy(msg.buffer, str);
 		dbgPrintf(CYAN, "Writing: (%d)\n%s\n", msg.length, msg.buffer);
 		writecode = server_socket.write(&msg);
@@ -632,7 +632,7 @@ void MySQL_RemoveServer(char *ip, char *port, char *name, char *version) {
         }
 }
 
- 
+/* LIVE FUNCTIONS */
 void LIVE_AuthUser(UINT32 id, char *buffer)
 {
 	msg_live_auth_t *auth;
@@ -651,7 +651,7 @@ void LIVE_AuthUser(UINT32 id, char *buffer)
 	auth = (msg_live_auth_t *)buffer;
 
 	logPrintf(logfile, "Got User %s Pass %s\n", auth->username, auth->password);
-
+	// retrieve the true ip of the server
 	strcpy(ip, server_socket.getClientIP(id));
 	MySQL_Conn(false);
 	msg2.id = id;
@@ -700,7 +700,7 @@ void LIVE_AuthUser(UINT32 id, char *buffer)
 						row = mysql_fetch_row(res);
 						msg_live_user_t *user = (msg_live_user_t *) msg2.buffer;
 
-						user->header[0] = '\0';  
+						user->header[0] = '\0'; // nothing interresting in it (for now)
 						user->uid = atoi(row[0]);
 						strcpy(user->username,	row[1]);
 						logPrintf(logfile, "Found user: %s, id %s\n", row[1], row[0]);
@@ -726,9 +726,9 @@ void LIVE_AuthUser(UINT32 id, char *buffer)
 	mysql_free_result(res);
 }
 
-  
-                            
-  
+/*
+** sendServersInformations()
+*/
 static void sendServersInformations(UINT32 id, UINT32 room)
 {
 	msg_t msg;
@@ -740,9 +740,9 @@ static void sendServersInformations(UINT32 id, UINT32 room)
 	msg.id = id;
 	msg.type = SEND_SERVER_MSG;
 	msg.room = 0;
-	MySQL_ListServServers(id, SEND_SERVER_MSG, ip);  
+	MySQL_ListServServers(id, SEND_SERVER_MSG, ip); // Awesome new MySQL Code!
 	msg.length = 0;
-
+	//dbgPrintf(CYAN, "Writing: (%d) %s\n", msg.length, "");
 	writecode = server_socket.write(&msg);
 	if (writecode < 0)
 	{
@@ -751,9 +751,9 @@ static void sendServersInformations(UINT32 id, UINT32 room)
 	}
 }
 
-  
-                                 
-  
+/*
+** sendShortServersInformations()
+*/
 static void sendShortServersInformations(UINT32 id, UINT32 room)
 {
 	msg_t msg;
@@ -764,7 +764,7 @@ static void sendShortServersInformations(UINT32 id, UINT32 room)
 	logPrintf(logfile, "Sending short servers informations\n");
 	msg.id = id;
 	msg.type = SEND_SHORT_SERVER_MSG;
-	MySQL_ListServers(id, SEND_SHORT_SERVER_MSG, ip, room);  
+	MySQL_ListServers(id, SEND_SHORT_SERVER_MSG, ip, room); // New code that's full of win!
 	logPrintf(logfile, "Packet Room: %d\n", room);
 	msg.length = 0;
 	writecode = server_socket.write(&msg);
@@ -775,9 +775,9 @@ static void sendShortServersInformations(UINT32 id, UINT32 room)
 	}
 }
 
-  
-                         
-  
+/*
+** sendRoomInformations()
+*/
 static void sendRoomInformations(UINT32 id, UINT32 room, bool type)
 {
 	msg_t msg;
@@ -789,7 +789,7 @@ static void sendRoomInformations(UINT32 id, UINT32 room, bool type)
 	msg.id = id;
 	msg.type = SEND_ROOMS_MSG;
 	msg.room = 0;
-	MySQL_ListRooms(id, SEND_ROOMS_MSG, ip, type);  
+	MySQL_ListRooms(id, SEND_ROOMS_MSG, ip, type); // New code that's full of win!
 	msg.length = 0;
 	writecode = server_socket.write(&msg);
 	if (writecode < 0)
@@ -799,9 +799,9 @@ static void sendRoomInformations(UINT32 id, UINT32 room, bool type)
 	}
 }
 
-  
-                            
-  
+/*
+** sendVersionInformations()
+*/
 static void sendVersionInformations(UINT32 id, UINT32 modid, char *modversion)
 {
 	msg_t msg;
@@ -813,7 +813,7 @@ static void sendVersionInformations(UINT32 id, UINT32 modid, char *modversion)
 	msg.id = id;
 	msg.type = SEND_VERSION_MSG;
 	msg.room = 0;
-	MySQL_CheckVersion(id, SEND_VERSION_MSG, ip, modid, modversion);  
+	MySQL_CheckVersion(id, SEND_VERSION_MSG, ip, modid, modversion); // New code that's full of win!
 	msg.length = sizeof msg.buffer;
 	writecode = server_socket.write(&msg);
 	if (writecode < 0)
@@ -823,21 +823,21 @@ static void sendVersionInformations(UINT32 id, UINT32 modid, char *modversion)
 	}
 }
 
-  
-              
-  
+/*
+** addServer()
+*/
 static void addServer(int id, char *buffer, bool firstadd)
 {
 	msg_server_t *info;
 	char oldversion = 0;
 
-
-
-
+	//TODO: Be sure there is no flood from a given IP:
+	//      If a host need more than 2 servers, then it should be registrated
+	//      manually
 
 	info = (msg_server_t *)buffer;
 
-
+	// I want to be sure the informations are correct, of course!
 	info->port[sizeof (info->port)-1] = '\0';
 	info->name[sizeof (info->name)-1] = '\0';
 	info->version[sizeof (info->version)-1] = '\0';
@@ -845,9 +845,9 @@ static void addServer(int id, char *buffer, bool firstadd)
 	logPrintf(logfile, "addServer(): Version = \"%s\"\n", info->version);
 	logPrintf(logfile, "addServer(): Key = \"%s\"\n", info->key);
 
-
+	// retrieve the true ip of the server
 	strcpy(info->ip, server_socket.getClientIP(id));
-
+	//strcpy(info->port, server_socket.getClientPort(id));
 
 	if (info->version[0] == '1' &&
 		info->version[1] == '.' &&
@@ -881,42 +881,42 @@ static void addServer(int id, char *buffer, bool firstadd)
 	}
 }
 
-  
-                 
-  
+/*
+** removeServer()
+*/
 static void removeServer(int id, char *buffer)
 {
 	msg_server_t *info;
 
 	info = (msg_server_t *)buffer;
 
-
+	// I want to be sure the informations are correct, of course!
 	info->port[sizeof (info->port)-1] = '\0';
 	info->name[sizeof (info->name)-1] = '\0';
 	info->version[sizeof (info->version)-1] = '\0';
 
-
+	// retrieve the true ip of the server
 	strcpy(info->ip, server_socket.getClientIP(id));
 
 	logPrintf(logfile, "Removing the temporary server: %s %s %s %s\n", info->ip, info->port, info->name, info->version);
-	MySQL_RemoveServer(info->ip, info->port, info->name, info->version);  
+	MySQL_RemoveServer(info->ip, info->port, info->name, info->version); // New and win.
 }
 
-  
-               
-  
+/*
+** analyseUDP()
+*/
 static int analyseUDP(size_t size, const char *buffer)
 {
-
-
+	// this would be the part of reading the PT_SERVERINFO packet,
+	// but i'm not about to backport that sloppy code
 	(void)size;
 	(void)buffer;
 	return INVALID_MSG;
 }
 
-  
-               
-  
+/*
+** UDPMessage()
+*/
 static int UDPMessage(size_t size, const char *buffer)
 {
 	if (size == 4)
@@ -936,9 +936,9 @@ static int UDPMessage(size_t size, const char *buffer)
 		return INVALID_MSG;
 }
 
-  
-                   
-  
+/*
+** analyseMessage()
+*/
 static int analyseMessage(msg_t *msg)
 {
 	switch (msg->type)
@@ -980,9 +980,9 @@ static int analyseMessage(msg_t *msg)
 	return 0;
 }
 
-  
-         
-  
+/*
+** main()
+*/
 int main(int argc, char *argv[])
 {
 	msg_t msg;
@@ -1012,30 +1012,30 @@ int main(int argc, char *argv[])
 	pid = fork();
 	switch (pid)
 	{
-	case 0: break;   
+	case 0: break;  // child
 	case -1: printf("Error while launching the server in background\n"); return -1;
 	default:
 		pidfile = fopen("msd.pid", "w+");
 		sprintf(pidstr, "%d", pid);
 		fputs(pidstr, pidfile);
 		fclose(pidfile);
-		return 0;  
+		return 0; // parent: keep child in background
 	}
 #endif
-	srand((unsigned)time(NULL));  
+	srand((unsigned)time(NULL)); // Alam: GUIDs
 	for (;;)
 	{
-		memset(&msg, 0, sizeof (msg));  
+		memset(&msg, 0, sizeof (msg)); // remove previous message
 		if (!server_socket.read(&msg))
 		{
-
+			// valid message: header message seems ok
 			analyseMessage(&msg);
-
+			//servers_list.show(); // for debug purpose
 		}
 	}
 
 #ifndef _MSC_VER
-	 
+	/* NOTREACHED */
 	return 0;
 #endif
 }

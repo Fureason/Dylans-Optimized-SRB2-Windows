@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_script.h
+/// \brief Lua scripting basics
 
 #ifndef LUA_SCRIPT_H
 #define LUA_SCRIPT_H
@@ -27,14 +27,14 @@
 #define lua_optboolean(L, i) (!lua_isnoneornil(L, i) && lua_toboolean(L, i))
 #define lua_opttrueboolean(L, i) (lua_isnoneornil(L, i) || lua_toboolean(L, i))
 
-
-
-
+// fixed_t casting
+// TODO add some distinction between fixed numbers and integer numbers
+// for at least the purpose of printing and maybe math.
 #define luaL_checkfixed(L, i) luaL_checkinteger(L, i)
 #define lua_pushfixed(L, f) lua_pushinteger(L, f)
 
-
-
+// angle_t casting
+// TODO deal with signedness
 #define luaL_checkangle(L, i) ((angle_t)luaL_checkinteger(L, i))
 #define lua_pushangle(L, a) lua_pushinteger(L, a)
 
@@ -42,7 +42,7 @@
 void LUA_ClearExtVars(void);
 #endif
 
-extern INT32 lua_lumploading;  
+extern INT32 lua_lumploading; // is LUA_LoadLump being called?
 
 int LUA_GetErrorMessage(lua_State *L);
 int LUA_Call(lua_State *L, int nargs, int nresults, int errorhandlerindex);
@@ -57,8 +57,8 @@ void LUA_Archive(save_t *save_p);
 boolean LUA_UnArchive(save_t *save_p);
 int LUA_PushGlobals(lua_State *L, const char *word);
 int LUA_CheckGlobals(lua_State *L, const char *word);
-void Got_Luacmd(UINT8 **cp, INT32 playernum);  
-void LUA_CVarChanged(void *cvar);  
+void Got_Luacmd(UINT8 **cp, INT32 playernum); // lua_consolelib.c
+void LUA_CVarChanged(void *cvar); // lua_consolelib.c
 int Lua_optoption(lua_State *L, int narg, int def, int list_ref);
 int Lua_CreateFieldTable(lua_State *L, const char *const lst[]);
 void LUA_HookNetArchive(lua_CFunction archFunc);
@@ -134,15 +134,15 @@ void LUA_InvalidateLevel(void);
 void LUA_InvalidateMapthings(void);
 void LUA_InvalidatePlayer(player_t *player);
 
-
+// Console wrapper
 void COM_Lua_f(void);
 
 #define LUA_ErrInvalid(L, type) luaL_error(L, "accessed " type " doesn't exist anymore, please check 'valid' before using " type ".");
 
 #define LUA_ErrSetDirectly(L, type, field) luaL_error(L, type " field " LUA_QL(field) " cannot be set directly.")
 
-
-
+// Deprecation warnings
+// Shows once upon use. Then doesn't show again.
 #define LUA_Deprecated(L,this_func,use_instead)\
 {\
 	static UINT8 seen = 0;\
@@ -152,8 +152,8 @@ void COM_Lua_f(void);
 	}\
 }
 
-
-
+// Warnings about incorrect function usage.
+// Shows once, then never again, like deprecation
 #define LUA_UsageWarning(L, warningmsg)\
 {\
 	static UINT8 seen = 0;\
@@ -163,8 +163,8 @@ void COM_Lua_f(void);
 	}\
 }
 
-
-
+// uncomment if you want seg_t/node_t in Lua
+// #define HAVE_LUA_SEGS
 
 #define ISINLEVEL \
 	(gamestate == GS_LEVEL || titlemapinaction)
@@ -172,4 +172,4 @@ void COM_Lua_f(void);
 #define INLEVEL if (! ISINLEVEL)\
 return luaL_error(L, "This can only be used in a level!");
 
-#endif 
+#endif/*LUA_SCRIPT_H*/

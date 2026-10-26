@@ -1,6 +1,6 @@
+// Atari XL/XE SAP music file emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef SAP_EMU_H
 #define SAP_EMU_H
 
@@ -51,7 +51,7 @@ private:
 	Sap_Apu apu;
 	Sap_Apu apu2;
 	
-
+	// large items
 	struct {
 		byte padding1 [0x100];
 		byte ram [0x10000];

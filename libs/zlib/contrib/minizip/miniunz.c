@@ -28,7 +28,7 @@
 #endif
 
 #if defined(__APPLE__) || defined(__HAIKU__) || defined(MINIZIP_FOPEN_NO_64)
-
+// In darwin and perhaps other BSD variants off_t is a 64 bit value, hence no need for specific 64 bit functions
 #define FOPEN_FUNC(filename, mode) fopen(filename, mode)
 #define FTELLO_FUNC(stream) ftello(stream)
 #define FSEEKO_FUNC(stream, offset, origin) fseeko(stream, offset, origin)
@@ -66,21 +66,21 @@
 #define USEWIN32IOAPI
 #include "iowin32.h"
 #endif
-  
-                                   
+/*
+  mini unzip, demo of unzip package
 
-         
-                                                                     
+  usage :
+  Usage : miniunz [-exvlo] file.zip [file_to_extract] [-d extractdir]
 
-                                                                                  
-                
-  
+  list the file in the zipfile, and print the content of FILE_ID.ZIP or README.TXT
+    if it exists
+*/
 
 
-                                                    
-                                                                        
-                                                        
-                                                        
+/* change_file_date : change the date/time of a file
+    filename : the filename of the file where date/time must be modified
+    dosdate : the new date at the MSDOS format (4 bytes)
+    tmu_date : the SAME new date at the tm_unz format */
 static void change_file_date(const char *filename, uLong dosdate, tm_unz tmu_date) {
 #ifdef _WIN32
   HANDLE hFile;
@@ -120,8 +120,8 @@ static void change_file_date(const char *filename, uLong dosdate, tm_unz tmu_dat
 }
 
 
-                                                      
-                                                                     
+/* mymkdir and change_file_date are not 100 % portable
+   As I don't know well Unix, I wait feedback for the unix portion */
 
 static int mymkdir(const char* dirname) {
     int ret=0;
@@ -202,7 +202,7 @@ static void do_help(void) {
 }
 
 static void Display64BitsSize(ZPOS64_T n, int size_char) {
-   
+  /* to avoid compatibility problem , we do here the conversion */
   char number[21];
   int offset=19;
   int pos_string = 19;
@@ -254,7 +254,7 @@ static int do_list(unzFile uf) {
         if (file_info.uncompressed_size>0)
             ratio = (uLong)((file_info.compressed_size*100)/file_info.uncompressed_size);
 
-         
+        /* display a '*' if the file is encrypted */
         if ((file_info.flag & 1) != 0)
             charCrypt='*';
 
@@ -269,7 +269,7 @@ static int do_list(unzFile uf) {
             else if (iLevel==1)
               string_method="Defl:X";
             else if ((iLevel==2) || (iLevel==3))
-              string_method="Defl:F";  
+              string_method="Defl:F"; /* 2:fast , 3 : extra fast*/
         }
         else
         if (file_info.compression_method==Z_BZIP2ED)
@@ -412,7 +412,7 @@ static int do_extract_currentfile(unzFile uf, const int* popt_extract_without_pa
         if ((skip==0) && (err==UNZ_OK))
         {
             fout=FOPEN_FUNC(write_filename,"wb");
-             
+            /* some zipfile don't contain directory alone before file */
             if ((fout==NULL) && ((*popt_extract_without_path)==0) &&
                                 (filename_withoutpath!=(char*)filename_inzip))
             {
@@ -467,7 +467,7 @@ static int do_extract_currentfile(unzFile uf, const int* popt_extract_without_pa
             }
         }
         else
-            unzCloseCurrentFile(uf);  
+            unzCloseCurrentFile(uf); /* don't lose the error */
     }
 
     free(buf);
@@ -594,7 +594,7 @@ int main(int argc, char *argv[]) {
 #        endif
 
         strncpy(filename_try, zipfilename,MAXFILENAME-1);
-         
+        /* strncpy doesn't append the trailing NULL, of the string is too long. */
         filename_try[ MAXFILENAME ] = '\0';
 
 #        ifdef USEWIN32IOAPI

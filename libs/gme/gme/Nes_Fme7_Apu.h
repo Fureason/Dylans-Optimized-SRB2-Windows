@@ -1,6 +1,6 @@
+// Sunsoft FME-7 sound emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef NES_FME7_APU_H
 #define NES_FME7_APU_H
 
@@ -11,14 +11,14 @@ struct fme7_apu_state_t
 {
 	enum { reg_count = 14 };
 	BOOST::uint8_t regs [reg_count];
-	BOOST::uint8_t phases [3];  
+	BOOST::uint8_t phases [3]; // 0 or 1
 	BOOST::uint8_t latch;
-	BOOST::uint16_t delays [3];  
+	BOOST::uint16_t delays [3]; // a, b, c
 };
 
 class Nes_Fme7_Apu : private fme7_apu_state_t {
 public:
-
+	// See Nes_Apu.h for reference
 	void reset();
 	void volume( double );
 	void treble_eq( blip_eq_t const& );
@@ -29,22 +29,22 @@ public:
 	void save_state( fme7_apu_state_t* ) const;
 	void load_state( fme7_apu_state_t const& );
 	
-
+	// Mask and addresses of registers
 	enum { addr_mask = 0xE000 };
 	enum { data_addr = 0xE000 };
 	enum { latch_addr = 0xC000 };
 	
-
+	// (addr & addr_mask) == latch_addr
 	void write_latch( int );
 	
-
+	// (addr & addr_mask) == data_addr
 	void write_data( blip_time_t, int data );
 	
 public:
 	Nes_Fme7_Apu();
 	BLARGG_DISABLE_NOTHROW
 private:
-
+	// noncopyable
 	Nes_Fme7_Apu( const Nes_Fme7_Apu& );
 	Nes_Fme7_Apu& operator = ( const Nes_Fme7_Apu& );
 	
@@ -56,7 +56,7 @@ private:
 	} oscs [osc_count];
 	blip_time_t last_time;
 	
-	enum { amp_range = 192 };  
+	enum { amp_range = 192 }; // can be any value; this gives best error/quality tradeoff
 	Blip_Synth<blip_good_quality,1> synth;
 	
 	void run_until( blip_time_t );
@@ -64,7 +64,7 @@ private:
 
 inline void Nes_Fme7_Apu::volume( double v )
 {
-	synth.volume( 0.38 / amp_range * v );  
+	synth.volume( 0.38 / amp_range * v ); // to do: fine-tune
 }
 
 inline void Nes_Fme7_Apu::treble_eq( blip_eq_t const& eq )

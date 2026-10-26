@@ -36,7 +36,7 @@ void VectorRotate(vector_t *rotVec, const vector_t *axisVec, float angle)
 
 	angle = U_Deg2Rad(angle);
 
-
+	// Rotate the point (x,y,z) around the vector (u,v,w)
 	ux = axisVec->x * rotVec->x;
 	uy = axisVec->x * rotVec->y;
 	uz = axisVec->x * rotVec->z;
@@ -56,7 +56,7 @@ void VectorRotate(vector_t *rotVec, const vector_t *axisVec, float angle)
 
 void UnloadModel(model_t *model)
 {
-
+	// Wouldn't it be great if C just had destructors?
 	int i;
 	for (i = 0; i < model->numMeshes; i++)
 	{
@@ -145,16 +145,16 @@ tag_t *GetTagByName(model_t *model, char *name, int frame)
 	return NULL;
 }
 
-
-
-
-
-
+//
+// LoadModel
+//
+// Load a model and convert it to the internal format.
+//
 model_t *LoadModel(const char *filename, int ztag)
 {
 	model_t *model;
 
-
+	// What type of file?
 	const char *extension = NULL;
 	int i;
 	for (i = (int)strlen(filename)-1; i >= 0; i--)
@@ -177,7 +177,7 @@ model_t *LoadModel(const char *filename, int ztag)
 		if (!(model = MD3_LoadModel(filename, ztag, false)))
 			return NULL;
 	}
-	else if (!strcmp(extension, ".md3s"))  
+	else if (!strcmp(extension, ".md3s")) // MD3 that will be converted in memory to use full floats
 	{
 		if (!(model = MD3_LoadModel(filename, ztag, true)))
 			return NULL;
@@ -204,7 +204,7 @@ model_t *LoadModel(const char *filename, int ztag)
 	if (!model->spr2frames)
 		LoadModelInterpolationSettings(model);
 
-
+	// Default material properties
 	for (i = 0 ; i < model->numMaterials; i++)
 	{
 		material_t *material = &model->materials[i];
@@ -223,7 +223,7 @@ model_t *LoadModel(const char *filename, int ztag)
 		material->shininess = 25.0f;
 	}
 
-
+	// Set originaluvs to point to uvs
 	for (i = 0; i < model->numMeshes; i++)
 		model->meshes[i].originaluvs = model->meshes[i].uvs;
 
@@ -273,14 +273,14 @@ void LoadModelInterpolationSettings(model_t *model)
 		char interpolation_flag[3];
 		memset(&interpolation_flag, 0x00, 3);
 
-
-
-
+		// find the +i on the frame name
+		// ANIM+i00
+		// so the offset is (frame name length - 4)
 		GET_OFFSET;
 
-
-
-
+		// maybe the frame had three digits?
+		// ANIM+i000
+		// so the offset is (frame name length - 5)
 		if (!model->interpolate[i])
 		{
 			offset--;
@@ -327,7 +327,7 @@ void LoadModelSprite2(model_t *model)
 			modelframename += 5;
 			memcpy(&name, modelframename, 4);
 			modelframename += 4;
-
+			// Oh look
 			memcpy(&interpolation_flag, modelframename, 2);
 			if (!memcmp(interpolation_flag, MODEL_INTERPOLATION_FLAG, 2))
 			{
@@ -386,11 +386,11 @@ void LoadModelSprite2(model_t *model)
 	model->superspr2frames = superspr2frames;
 }
 
-
-
-
-
-
+//
+// GenerateVertexNormals
+//
+// Creates a new normal for a vertex using the average of all of the polygons it belongs to.
+//
 void GenerateVertexNormals(model_t *model)
 {
 	int i;
@@ -414,12 +414,12 @@ void GenerateVertexNormals(model_t *model)
 
 			M_Memcpy(newNormals, frame->normals, sizeof(float)*3*mesh->numTriangles*3);
 
-                      
-    
-                                       
-                                                                                        
-                                                                                 
-      
+/*			if (!systemSucks)
+			{
+				memTag = Z_GetTag(frame->tangents);
+				float *newTangents = (float*)Z_Malloc(sizeof(float)*3*mesh->numTriangles*3, memTag);
+				M_Memcpy(newTangents, frame->tangents, sizeof(float)*3*mesh->numTriangles*3);
+			}*/
 
 			for (k = 0; k < mesh->numVertices; k++)
 			{
@@ -447,7 +447,7 @@ void GenerateVertexNormals(model_t *model)
 						|| fabsf(z - testZ) > FLT_EPSILON)
 						continue;
 
-
+					// Found a vertex match! Add it...
 					normal.x += frame->normals[3 * l + 0];
 					normal.y += frame->normals[3 * l + 1];
 					normal.z += frame->normals[3 * l + 2];
@@ -456,19 +456,19 @@ void GenerateVertexNormals(model_t *model)
 
 				if (vCount > 1)
 				{
-
+//					Vector::Normalize(&normal);
 					newNormals[3 * k + 0] = (float)normal.x;
 					newNormals[3 * k + 1] = (float)normal.y;
 					newNormals[3 * k + 2] = (float)normal.z;
 
-                        
-      
-                               
-                                         
-                                         
-                                         
-                                         
-        
+/*					if (!systemSucks)
+					{
+						Vector::vector_t tangent;
+						Vector::Tangent(&normal, &tangent);
+						newTangents[3 * k + 0] = tangent.x;
+						newTangents[3 * k + 1] = tangent.y;
+						newTangents[3 * k + 2] = tangent.z;
+					}*/
 				}
 			}
 
@@ -476,12 +476,12 @@ void GenerateVertexNormals(model_t *model)
 			frame->normals = newNormals;
 			Z_Free(oldNormals);
 
-                      
-    
-                                         
-                                  
-                        
-      
+/*			if (!systemSucks)
+			{
+				float *oldTangents = frame->tangents;
+				frame->tangents = newTangents;
+				Z_Free(oldTangents);
+			}*/
 		}
 	}
 }
@@ -502,19 +502,19 @@ static boolean AddMaterialToList(materiallist_t **head, material_t *material)
 			return false;
 	}
 
-
+	// Didn't find it, so add to the list
 	newMatNode = (materiallist_t*)Z_Malloc(sizeof(materiallist_t), PU_CACHE, 0);
 	newMatNode->material = material;
 	ListAdd(newMatNode, (listitem_t**)head);
 	return true;
 }
 
-
-
-
-
-
-
+//
+// Optimize
+//
+// Groups triangles from meshes in the model
+// Only works for models with 1 frame
+//
 void Optimize(model_t *model)
 {
 	int numMeshes = 0;
@@ -525,21 +525,21 @@ void Optimize(model_t *model)
 	materiallist_t *node;
 
 	if (model->numMeshes <= 1)
-		return;  
+		return; // No need
 
 	for (i = 0; i < model->numMeshes; i++)
 	{
 		mesh_t *curMesh = &model->meshes[i];
 
 		if (curMesh->numFrames > 1)
-			return;  
+			return; // Can't optimize models with > 1 frame
 
 		if (!curMesh->frames)
-			return;  
+			return; // Don't optimize tinyframe models (no need)
 
-
-
-
+		// We are condensing to 1 mesh per material, so
+		// the # of materials we use will be the new
+		// # of meshes
 		if (AddMaterialToList(&matListHead, curMesh->frames[0].material))
 			numMeshes++;
 	}
@@ -557,7 +557,7 @@ void Optimize(model_t *model)
 		int vertCount;
 		int colorCount;
 
-
+		// Find all triangles with this material and count them
 		int numTriangles = 0;
 		int j;
 		for (j = 0; j < model->numMeshes; j++)
@@ -572,20 +572,20 @@ void Optimize(model_t *model)
 		newMesh->numTriangles = numTriangles;
 		newMesh->numVertices = numTriangles * 3;
 		newMesh->uvs = (float*)Z_Malloc(sizeof(float)*2*numTriangles*3, memTag, 0);
-
-
+//		if (node->material->lightmap)
+//			newMesh->lightuvs = (float*)Z_Malloc(sizeof(float)*2*numTriangles*3, memTag, 0);
 		newMesh->frames = (mdlframe_t*)Z_Calloc(sizeof(mdlframe_t), memTag, 0);
 		curFrame = &newMesh->frames[0];
 
 		curFrame->material = curMat;
 		curFrame->normals = (float*)Z_Malloc(sizeof(float)*3*numTriangles*3, memTag, 0);
-
-
+//		if (!systemSucks)
+//			curFrame->tangents = (float*)Z_Malloc(sizeof(float)*3*numTriangles*3, memTag, 0);
 		curFrame->vertices = (float*)Z_Malloc(sizeof(float)*3*numTriangles*3, memTag, 0);
 		curFrame->colors = (char*)Z_Malloc(sizeof(char)*4*numTriangles*3, memTag, 0);
 
-
-
+		// Now traverse the meshes of the model, adding in
+		// vertices/normals/uvs that match the current material
 		uvCount = 0;
 		vertCount = 0;
 		colorCount = 0;
@@ -604,12 +604,12 @@ void Optimize(model_t *model)
 					curMesh->uvs,
 					sizeof(float)*2*curMesh->numTriangles*3);
 
-                                   
-     
-                                          
-                        
-                                               
-       
+/*				if (node->material->lightmap)
+				{
+					M_Memcpy(&newMesh->lightuvs[uvCount],
+						curMesh->lightuvs,
+						sizeof(float)*2*curMesh->numTriangles*3);
+				}*/
 				uvCount += 2*curMesh->numTriangles*3;
 
 				dest = (float*)newMesh->frames[0].vertices;
@@ -624,14 +624,14 @@ void Optimize(model_t *model)
 					src,
 					sizeof(float)*3*curMesh->numTriangles*3);
 
-                       
-     
-                                                
-                                               
-                               
-          
-                                               
-       
+/*				if (!systemSucks)
+				{
+					dest = (float*)newMesh->frames[0].tangents;
+					src = (float*)curMesh->frames[0].tangents;
+					M_Memcpy(&dest[vertCount],
+						src,
+						sizeof(float)*3*curMesh->numTriangles*3);
+				}*/
 
 				vertCount += 3 * curMesh->numTriangles * 3;
 
@@ -687,10 +687,10 @@ void GeneratePolygonNormals(model_t *model, int ztag)
 
 			for (k = 0; k < mesh->numTriangles; k++)
 			{
-
+				/// TODO: normalize vectors
 				(void)vertices;
 				(void)polyNormals;
-
+//				Vector::Normal(vertices, polyNormals);
 				vertices += 3 * 3;
 				polyNormals++;
 			}
@@ -698,67 +698,67 @@ void GeneratePolygonNormals(model_t *model, int ztag)
 	}
 }
 
-
-
-
-
-
+//
+// Reload
+//
+// Reload VBOs
+//
 #if 0
 static void Reload(void)
 {
-                 
-                                                
-  
-        
-                                       
-   
-                                   
+/*	model_t *node;
+	for (node = modelHead; node; node = node->next)
+	{
+		int i;
+		for (i = 0; i < node->numMeshes; i++)
+		{
+			mesh_t *mesh = &node->meshes[i];
 
-                    
-    
-          
-                                         
-                                       
-    
-                             
-    
-          
-                                         
-                                           
-    
-   
-    
+			if (mesh->frames)
+			{
+				int j;
+				for (j = 0; j < mesh->numFrames; j++)
+					CreateVBO(mesh, &mesh->frames[j]);
+			}
+			else if (mesh->tinyframes)
+			{
+				int j;
+				for (j = 0; j < mesh->numFrames; j++)
+					CreateVBO(mesh, &mesh->tinyframes[j]);
+			}
+		}
+	}*/
 }
 #endif
 
 void DeleteVBOs(model_t *model)
 {
 	(void)model;
-                                             
-  
-                                   
+/*	for (int i = 0; i < model->numMeshes; i++)
+	{
+		mesh_t *mesh = &model->meshes[i];
 
-                   
-   
-                                            
-    
-                                         
-                      
-              
-                                       
-                     
-    
-   
-                            
-   
-                                            
-    
-                                              
-                      
-              
-                                       
-                     
-    
-   
-    
+		if (mesh->frames)
+		{
+			for (int j = 0; j < mesh->numFrames; j++)
+			{
+				mdlframe_t *frame = &mesh->frames[j];
+				if (!frame->vboID)
+					continue;
+				bglDeleteBuffers(1, &frame->vboID);
+				frame->vboID = 0;
+			}
+		}
+		else if (mesh->tinyframes)
+		{
+			for (int j = 0; j < mesh->numFrames; j++)
+			{
+				tinyframe_t *frame = &mesh->tinyframes[j];
+				if (!frame->vboID)
+					continue;
+				bglDeleteBuffers(1, &frame->vboID);
+				frame->vboID = 0;
+			}
+		}
+	}*/
 }

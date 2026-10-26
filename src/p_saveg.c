@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  p_saveg.c
+/// \brief Archiving: SaveGame I/O
 
 #include "doomdef.h"
 #include "byteptr.h"
@@ -304,8 +304,8 @@ void P_ReadMem(save_t *p, void *s, size_t n)
 	p->pos += n;
 }
 
-
-
+// Block UINT32s to attempt to ensure that the correct data is
+// being sent and received
 #define ARCHIVEBLOCK_MISC       0x7FEEDEED
 #define ARCHIVEBLOCK_PLAYERS    0x7F448008
 #define ARCHIVEBLOCK_WORLD      0x7F8C08C0
@@ -315,8 +315,8 @@ void P_ReadMem(save_t *p, void *s, size_t n)
 #define ARCHIVEBLOCK_EMBLEMS    0x7F4A5445
 #define ARCHIVEBLOCK_SECPORTALS 0x7FBE34C9
 
-
-
+// Note: This cannot be bigger
+// than an UINT16
 typedef enum
 {
 	CAPSULE    = 0x04,
@@ -331,17 +331,17 @@ static inline void P_ArchivePlayer(save_t *save_p)
 {
 	const player_t *player = &players[consoleplayer];
 	SINT8 pllives = player->lives;
-	if (pllives < startinglivesbalance[numgameovers])  
-		pllives = startinglivesbalance[numgameovers];  
+	if (pllives < startinglivesbalance[numgameovers]) // Bump up to 3 lives if the player
+		pllives = startinglivesbalance[numgameovers]; // has less than that.
 
 #ifdef NEWSKINSAVES
-
-
+	// Write a specific value into the old skininfo location.
+	// If we read something other than this, it's an older save file that used skin numbers.
 	P_WriteUINT16(save_p, NEWSKINSAVES);
 #endif
 
-
-
+	// Write skin names, so that loading skins in different orders
+	// doesn't change who the save file is for!
 	P_WriteStringN(save_p, skins[player->skin]->name, SKINNAMESIZE);
 
 	if (botskin != 0)
@@ -366,7 +366,7 @@ static inline void P_UnArchivePlayer(save_t *save_p)
 
 	if (backwardsCompat != NEWSKINSAVES)
 	{
-
+		// This is an older save file, which used direct skin numbers.
 		savedata.skin = backwardsCompat & ((1<<5) - 1);
 		savedata.botskin = backwardsCompat >> 5;
 	}
@@ -393,7 +393,7 @@ static void P_NetArchivePlayers(save_t *save_p)
 {
 	INT32 i, j;
 	UINT16 flags;
-
+//	size_t q;
 
 	P_WriteUINT32(save_p, ARCHIVEBLOCK_PLAYERS);
 
@@ -406,7 +406,7 @@ static void P_NetArchivePlayers(save_t *save_p)
 
 		flags = 0;
 
-
+		// no longer send ticcmds
 
 		P_WriteStringN(save_p, player_names[i], MAXPLAYERNAME);
 		P_WriteINT16(save_p, players[i].angleturn);
@@ -462,9 +462,9 @@ static void P_NetArchivePlayers(save_t *save_p)
 		P_WriteUINT32(save_p, players[i].dashmode);
 		P_WriteUINT32(save_p, players[i].skidtime);
 
-
-
-
+		//////////
+		// Bots //
+		//////////
 		P_WriteUINT8(save_p, players[i].bot);
 		P_WriteUINT8(save_p, players[i].botmem.lastForward);
 		P_WriteUINT8(save_p, players[i].botmem.lastBlocked);
@@ -475,25 +475,25 @@ static void P_NetArchivePlayers(save_t *save_p)
 		P_WriteUINT8(save_p, players[i].blocked);
 		P_WriteUINT16(save_p, players[i].lastbuttons);
 
+		////////////////////////////
+		// Conveyor Belt Movement //
+		////////////////////////////
+		P_WriteFixed(save_p, players[i].cmomx); // Conveyor momx
+		P_WriteFixed(save_p, players[i].cmomy); // Conveyor momy
+		P_WriteFixed(save_p, players[i].rmomx); // "Real" momx (momx - cmomx)
+		P_WriteFixed(save_p, players[i].rmomy); // "Real" momy (momy - cmomy)
 
-
-
-		P_WriteFixed(save_p, players[i].cmomx);  
-		P_WriteFixed(save_p, players[i].cmomy);  
-		P_WriteFixed(save_p, players[i].rmomx);  
-		P_WriteFixed(save_p, players[i].rmomy);  
-
-
-
-
+		/////////////////////
+		// Race Mode Stuff //
+		/////////////////////
 		P_WriteINT16(save_p, players[i].numboxes);
 		P_WriteINT16(save_p, players[i].totalring);
 		P_WriteUINT32(save_p, players[i].realtime);
 		P_WriteUINT8(save_p, players[i].laps);
 
-
-
-
+		////////////////////
+		// CTF Mode Stuff //
+		////////////////////
 		P_WriteINT32(save_p, players[i].ctfteam);
 		P_WriteUINT16(save_p, players[i].gotflag);
 
@@ -631,13 +631,13 @@ static void P_NetUnArchivePlayers(save_t *save_p)
 	{
 		adminplayers[i] = (INT32)P_ReadSINT8(save_p);
 
-
-
-
+		// Do NOT memset player struct to 0
+		// other areas may initialize data elsewhere
+		//memset(&players[i], 0, sizeof (player_t));
 		if (!playeringame[i])
 			continue;
 
-
+		// NOTE: sending tics should (hopefully) no longer be necessary
 
 		P_ReadStringN(save_p, player_names[i], MAXPLAYERNAME);
 		players[i].angleturn = P_ReadINT16(save_p);
@@ -676,26 +676,26 @@ static void P_NetUnArchivePlayers(save_t *save_p)
 		players[i].availabilities = P_ReadUINT32(save_p);
 		players[i].score = P_ReadUINT32(save_p);
 		players[i].recordscore = P_ReadUINT32(save_p);
-		players[i].dashspeed = P_ReadFixed(save_p);  
+		players[i].dashspeed = P_ReadFixed(save_p); // dashing speed
 		players[i].lives = P_ReadSINT8(save_p);
-		players[i].continues = P_ReadSINT8(save_p);  
-		players[i].xtralife = P_ReadSINT8(save_p);  
-		players[i].gotcontinue = P_ReadUINT8(save_p);  
-		players[i].speed = P_ReadFixed(save_p);  
+		players[i].continues = P_ReadSINT8(save_p); // continues that player has acquired
+		players[i].xtralife = P_ReadSINT8(save_p); // Ring Extra Life counter
+		players[i].gotcontinue = P_ReadUINT8(save_p); // got continue from stage
+		players[i].speed = P_ReadFixed(save_p); // Player's speed (distance formula of MOMX and MOMY values)
 		players[i].secondjump = P_ReadUINT8(save_p);
-		players[i].fly1 = P_ReadUINT8(save_p);  
-		players[i].scoreadd = P_ReadUINT8(save_p);  
-		players[i].glidetime = P_ReadUINT32(save_p);  
-		players[i].climbing = P_ReadUINT8(save_p);  
-		players[i].deadtimer = P_ReadINT32(save_p);  
-		players[i].exiting = P_ReadUINT32(save_p);  
-		players[i].homing = P_ReadUINT8(save_p);  
-		players[i].dashmode = P_ReadUINT32(save_p);  
-		players[i].skidtime = P_ReadUINT32(save_p);  
+		players[i].fly1 = P_ReadUINT8(save_p); // Tails flying
+		players[i].scoreadd = P_ReadUINT8(save_p); // Used for multiple enemy attack bonus
+		players[i].glidetime = P_ReadUINT32(save_p); // Glide counter for thrust
+		players[i].climbing = P_ReadUINT8(save_p); // Climbing on the wall
+		players[i].deadtimer = P_ReadINT32(save_p); // End game if game over lasts too long
+		players[i].exiting = P_ReadUINT32(save_p); // Exitlevel timer
+		players[i].homing = P_ReadUINT8(save_p); // Are you homing?
+		players[i].dashmode = P_ReadUINT32(save_p); // counter for dashmode ability
+		players[i].skidtime = P_ReadUINT32(save_p); // Skid timer
 
-
-
-
+		//////////
+		// Bots //
+		//////////
 		players[i].bot = P_ReadUINT8(save_p);
 
 		players[i].botmem.lastForward = P_ReadUINT8(save_p);
@@ -707,27 +707,27 @@ static void P_NetUnArchivePlayers(save_t *save_p)
 		players[i].blocked = P_ReadUINT8(save_p);
 		players[i].lastbuttons = P_ReadUINT16(save_p);
 
+		////////////////////////////
+		// Conveyor Belt Movement //
+		////////////////////////////
+		players[i].cmomx = P_ReadFixed(save_p); // Conveyor momx
+		players[i].cmomy = P_ReadFixed(save_p); // Conveyor momy
+		players[i].rmomx = P_ReadFixed(save_p); // "Real" momx (momx - cmomx)
+		players[i].rmomy = P_ReadFixed(save_p); // "Real" momy (momy - cmomy)
 
+		/////////////////////
+		// Race Mode Stuff //
+		/////////////////////
+		players[i].numboxes = P_ReadINT16(save_p); // Number of item boxes obtained for Race Mode
+		players[i].totalring = P_ReadINT16(save_p); // Total number of rings obtained for Race Mode
+		players[i].realtime = P_ReadUINT32(save_p); // integer replacement for leveltime
+		players[i].laps = P_ReadUINT8(save_p); // Number of laps (optional)
 
-
-		players[i].cmomx = P_ReadFixed(save_p);  
-		players[i].cmomy = P_ReadFixed(save_p);  
-		players[i].rmomx = P_ReadFixed(save_p);  
-		players[i].rmomy = P_ReadFixed(save_p);  
-
-
-
-
-		players[i].numboxes = P_ReadINT16(save_p);  
-		players[i].totalring = P_ReadINT16(save_p);  
-		players[i].realtime = P_ReadUINT32(save_p);  
-		players[i].laps = P_ReadUINT8(save_p);  
-
-
-
-
-		players[i].ctfteam = P_ReadINT32(save_p);  
-		players[i].gotflag = P_ReadUINT16(save_p);  
+		////////////////////
+		// CTF Mode Stuff //
+		////////////////////
+		players[i].ctfteam = P_ReadINT32(save_p); // 1 == Red, 2 == Blue
+		players[i].gotflag = P_ReadUINT16(save_p); // 1 == Red, 2 == Blue Do you have the flag?
 
 		players[i].weapondelay = P_ReadINT32(save_p);
 		players[i].tossdelay = P_ReadINT32(save_p);
@@ -812,7 +812,7 @@ static void P_NetUnArchivePlayers(save_t *save_p)
 		players[i].camerascale = P_ReadFixed(save_p);
 		players[i].shieldscale = P_ReadFixed(save_p);
 
-
+		//SetPlayerSkinByNum(i, players[i].skin);
 		players[i].charability = P_ReadUINT8(save_p);
 		players[i].charability2 = P_ReadUINT8(save_p);
 		players[i].charflags = P_ReadUINT32(save_p);
@@ -832,20 +832,20 @@ static void P_NetUnArchivePlayers(save_t *save_p)
 		players[i].height = P_ReadFixed(save_p);
 		players[i].spinheight = P_ReadFixed(save_p);
 
-		players[i].viewheight = 41*players[i].height/48;  
+		players[i].viewheight = 41*players[i].height/48; // scale cannot be factored in at this point
 	}
 }
 
-
-
-
+///
+/// Colormaps
+///
 
 static extracolormap_t *net_colormaps = NULL;
 static UINT32 num_net_colormaps = 0;
-static UINT32 num_ffloors = 0;  
+static UINT32 num_ffloors = 0; // for loading
 
-
-
+// Copypasta from r_data.c AddColormapToList
+// But also check for equality and return the matching index
 static UINT32 CheckAddNetColormapToList(extracolormap_t *extra_colormap)
 {
 	extracolormap_t *exc, *exc_prev = NULL;
@@ -877,16 +877,16 @@ static UINT32 CheckAddNetColormapToList(extracolormap_t *extra_colormap)
 
 static extracolormap_t *GetNetColormapFromList(UINT32 index)
 {
-
-
-
-
-
+	// For loading, we have to be tricky:
+	// We load the sectors BEFORE knowing the colormap values
+	// So if an index doesn't exist, fill our list with dummy colormaps
+	// until we get the index we want
+	// Then when we load the color data, we set up the dummy colormaps
 
 	extracolormap_t *exc, *last_exc = NULL;
 	UINT32 i = 0;
 
-	if (!net_colormaps)  
+	if (!net_colormaps) // initialize our list
 		net_colormaps = R_CreateDefaultColormap(false);
 
 	for (exc = net_colormaps; exc; last_exc = exc, exc = exc->next)
@@ -896,15 +896,15 @@ static extracolormap_t *GetNetColormapFromList(UINT32 index)
 	}
 
 
-
-
-
+	// LET'S HOPE that index is a sane value, because we create up to [index]
+	// entries in net_colormaps. At this point, we don't know
+	// what the total colormap count is
 	if (index >= numsectors*3 + num_ffloors)
-
-
+		// if every sector had a unique colormap change AND a fade color thinker which has two colormap entries
+		// AND every ffloor had a fade FOF thinker with one colormap entry
 		I_Error("Colormap %d from server is too high for sectors %d", index, (UINT32)numsectors);
 
-
+	// our index doesn't exist, so just make the entry
 	for (; i <= index; i++)
 	{
 		exc = R_CreateDefaultColormap(false);
@@ -919,8 +919,8 @@ static extracolormap_t *GetNetColormapFromList(UINT32 index)
 
 static void ClearNetColormaps(void)
 {
-
-
+	// We're actually Z_Freeing each entry here,
+	// so don't call this in P_NetUnArchiveColormaps (where entries will be used in-game)
 	extracolormap_t *exc, *exc_next;
 
 	for (exc = net_colormaps; exc; exc = exc_next)
@@ -935,15 +935,15 @@ static void ClearNetColormaps(void)
 
 static void P_NetArchiveColormaps(save_t *save_p)
 {
-
+	// We save and then we clean up our colormap mess
 	extracolormap_t *exc, *exc_next;
 	UINT32 i = 0;
-	P_WriteUINT32(save_p, num_net_colormaps);  
+	P_WriteUINT32(save_p, num_net_colormaps); // save for safety
 
 	for (exc = net_colormaps; i < num_net_colormaps; i++, exc = exc_next)
 	{
-
-
+		// We must save num_net_colormaps worth of data
+		// So fill non-existent entries with default.
 		if (!exc)
 			exc = R_CreateDefaultColormap(false);
 
@@ -959,7 +959,7 @@ static void P_NetArchiveColormaps(save_t *save_p)
 #endif
 
 		exc_next = exc->next;
-		Z_Free(exc);  
+		Z_Free(exc); // don't need anymore
 	}
 
 	num_net_colormaps = 0;
@@ -969,9 +969,9 @@ static void P_NetArchiveColormaps(save_t *save_p)
 
 static void P_NetUnArchiveColormaps(save_t *save_p)
 {
-
-
-
+	// When we reach this point, we already populated our list with
+	// dummy colormaps. Now that we are loading the color data,
+	// set up the dummies.
 	extracolormap_t *exc, *existing_exc, *exc_next = NULL;
 	UINT32 i = 0;
 
@@ -998,24 +998,24 @@ static void P_NetUnArchiveColormaps(save_t *save_p)
 		if (lumpname[0])
 		{
 			if (!exc)
-
-
+				// no point making a new entry since nothing points to it,
+				// but we needed to read the data so now continue
 				continue;
 
-			exc_next = exc->next;  
+			exc_next = exc->next; // this gets overwritten during our operations here, so get it now
 			existing_exc = R_ColormapForName(lumpname);
 			*exc = *existing_exc;
-			R_AddColormapToList(exc);  
+			R_AddColormapToList(exc); // see HACK note below on why we're adding duplicates
 			continue;
 		}
 #endif
 
 		if (!exc)
-
-
+			// no point making a new entry since nothing points to it,
+			// but we needed to read the data so now continue
 			continue;
 
-		exc_next = exc->next;  
+		exc_next = exc->next; // this gets overwritten during our operations here, so get it now
 
 		exc->fadestart = fadestart;
 		exc->fadeend = fadeend;
@@ -1034,36 +1034,36 @@ static void P_NetUnArchiveColormaps(save_t *save_p)
 		if (existing_exc)
 			exc->colormap = existing_exc->colormap;
 		else
-
-
-
+			// CONS_Debug(DBG_RENDER, "Creating Colormap: rgba(%d,%d,%d,%d) fadergba(%d,%d,%d,%d)\n",
+			// 	R_GetRgbaR(rgba), R_GetRgbaG(rgba), R_GetRgbaB(rgba), R_GetRgbaA(rgba),
+			//	R_GetRgbaR(fadergba), R_GetRgbaG(fadergba), R_GetRgbaB(fadergba), R_GetRgbaA(fadergba));
 			exc->colormap = R_CreateLightTable(exc);
 
-
-
-
-
+		// HACK: If this dummy is a duplicate, we're going to add it
+		// to the extra_colormaps list anyway. I think this is faster
+		// than going through every loaded sector and correcting their
+		// colormap address to the pre-existing one, PER net_colormap entry
 		R_AddColormapToList(exc);
 
 		if (i < num_net_colormaps-1 && !exc_next)
 			exc_next = R_CreateDefaultColormap(false);
 	}
 
-
-
-
-
+	// if we still have a valid net_colormap after iterating up to num_net_colormaps,
+	// some sector had a colormap index higher than num_net_colormaps. We done goofed or $$$ was corrupted.
+	// In any case, add them to the colormap list too so that at least the sectors' colormap
+	// addresses are valid and accounted properly
 	if (exc_next)
 	{
 		existing_exc = R_GetDefaultColormap();
 		for (exc = exc_next; exc; exc = exc->next)
 		{
-			exc->colormap = existing_exc->colormap;  
+			exc->colormap = existing_exc->colormap; // all our dummies are default values
 			R_AddColormapToList(exc);
 		}
 	}
 
-
+	// Don't need these anymore
 	num_net_colormaps = 0;
 	num_ffloors = 0;
 	net_colormaps = NULL;
@@ -1097,9 +1097,9 @@ static void P_NetUnArchiveWaypoints(save_t *save_p)
 	}
 }
 
-
-
-
+///
+/// World Archiving
+///
 
 #define SD_FLOORHT  0x01
 #define SD_CEILHT   0x02
@@ -1110,7 +1110,7 @@ static void P_NetUnArchiveWaypoints(save_t *save_p)
 #define SD_DIFF2    0x40
 #define SD_FFLOORS  0x80
 
-
+// diff2 flags
 #define SD_FXOFFS    0x01
 #define SD_FYOFFS    0x02
 #define SD_CXOFFS    0x04
@@ -1120,7 +1120,7 @@ static void P_NetUnArchiveWaypoints(save_t *save_p)
 #define SD_TAG       0x40
 #define SD_DIFF3     0x80
 
-
+// diff3 flags
 #define SD_TAGLIST      0x01
 #define SD_COLORMAP     0x02
 #define SD_CRUMBLESTATE 0x04
@@ -1130,7 +1130,7 @@ static void P_NetUnArchiveWaypoints(save_t *save_p)
 #define SD_SPECIALFLAG  0x40
 #define SD_DIFF4        0x80
 
-
+// diff4 flags
 #define SD_DAMAGETYPE 0x01
 #define SD_TRIGGERTAG 0x02
 #define SD_TRIGGERER 0x04
@@ -1140,12 +1140,12 @@ static void P_NetUnArchiveWaypoints(save_t *save_p)
 #define SD_CYSCALE   0x40
 #define SD_DIFF5     0x80
 
-
+// diff5 flags
 #define SD_GRAVITY     0x01
 #define SD_FLOORPORTAL 0x02
 #define SD_CEILPORTAL  0x04
 
-
+// diff1 flags
 #define LD_FLAG          0x01
 #define LD_SPECIAL       0x02
 #define LD_CLLCOUNT      0x04
@@ -1155,11 +1155,11 @@ static void P_NetUnArchiveWaypoints(save_t *save_p)
 #define LD_SIDE2         0x40
 #define LD_DIFF2         0x80
 
-
+// diff2 flags
 #define LD_EXECUTORDELAY 0x01
 #define LD_TRANSFPORTAL  0x02
 
-
+// sidedef flags
 enum
 {
 	LD_SDTEXOFFX     = 1,
@@ -1219,7 +1219,7 @@ static boolean P_AreStringArgsEqual(const line_t *li, const line_t *spawnli)
 #define FD_FLAGS 0x01
 #define FD_ALPHA 0x02
 
-
+// Check if any of the sector's FOFs differ from how they spawned
 static boolean CheckFFloorDiff(const sector_t *ss)
 {
 	ffloor_t *rover;
@@ -1229,23 +1229,23 @@ static boolean CheckFFloorDiff(const sector_t *ss)
 		if (rover->fofflags != rover->spawnflags
 		|| rover->alpha != rover->spawnalpha)
 			{
-				return true;  
-
+				return true; // we found an FOF that changed!
+				// don't bother checking for more, we do that later
 			}
 	}
 	return false;
 }
 
-
-
+// Special case: save the stats of all modified ffloors along with their ffloor "number"s
+// we don't bother with ffloors that haven't changed, that would just add to savegame even more than is really needed
 static void ArchiveFFloors(save_t *save_p, const sector_t *ss)
 {
-	size_t j = 0;  
+	size_t j = 0; // ss->ffloors is saved as ffloor #0, ss->ffloors->next is #1, etc
 	ffloor_t *rover;
 	UINT8 fflr_diff;
 	for (rover = ss->ffloors; rover; rover = rover->next)
 	{
-		fflr_diff = 0;  
+		fflr_diff = 0; // reset diff flags
 		if (rover->fofflags != rover->spawnflags)
 			fflr_diff |= FD_FLAGS;
 		if (rover->alpha != rover->spawnalpha)
@@ -1253,7 +1253,7 @@ static void ArchiveFFloors(save_t *save_p, const sector_t *ss)
 
 		if (fflr_diff)
 		{
-			P_WriteUINT16(save_p, j);  
+			P_WriteUINT16(save_p, j); // save ffloor "number"
 			P_WriteUINT8(save_p, fflr_diff);
 			if (fflr_diff & FD_FLAGS)
 				P_WriteUINT32(save_p, rover->fofflags);
@@ -1267,24 +1267,24 @@ static void ArchiveFFloors(save_t *save_p, const sector_t *ss)
 
 static void UnArchiveFFloors(save_t *save_p, const sector_t *ss)
 {
-	UINT16 j = 0;  
-	UINT16 fflr_i;  
-	UINT16 fflr_diff;  
+	UINT16 j = 0; // number of current ffloor in loop
+	UINT16 fflr_i; // saved ffloor "number" of next modified ffloor
+	UINT16 fflr_diff; // saved ffloor diff
 	ffloor_t *rover;
 
 	rover = ss->ffloors;
-	if (!rover)  
+	if (!rover) // it is assumed sectors[i].ffloors actually exists, but just in case...
 		I_Error("Sector does not have any ffloors!");
 
-	fflr_i = P_ReadUINT16(save_p);  
-	for (;;)  
+	fflr_i = P_ReadUINT16(save_p); // get first modified ffloor's number ready
+	for (;;) // for some reason the usual for (rover = x; ...) thing doesn't work here?
 	{
-		if (fflr_i == 0xffff)  
+		if (fflr_i == 0xffff) // end of modified ffloors list, let's stop already
 			break;
-
-
-
-		if (j != fflr_i)  
+		// should NEVER need to be checked
+		//if (rover == NULL)
+			//break;
+		if (j != fflr_i) // this ffloor was not modified
 		{
 			j++;
 			rover = rover->next;
@@ -1298,7 +1298,7 @@ static void UnArchiveFFloors(save_t *save_p, const sector_t *ss)
 		if (fflr_diff & FD_ALPHA)
 			rover->alpha = P_ReadINT16(save_p);
 
-		fflr_i = P_ReadUINT16(save_p);  
+		fflr_i = P_ReadUINT16(save_p); // get next ffloor "number" ready
 
 		j++;
 		rover = rover->next;
@@ -1319,9 +1319,9 @@ static void ArchiveSectors(save_t *save_p)
 			diff |= SD_FLOORHT;
 		if (ss->ceilingheight != spawnss->ceilingheight)
 			diff |= SD_CEILHT;
-
-
-
+		//
+		// flats
+		//
 		if (ss->floorpic != spawnss->floorpic)
 			diff |= SD_FLOORPIC;
 		if (ss->ceilingpic != spawnss->ceilingpic)
@@ -1442,7 +1442,7 @@ static void ArchiveSectors(save_t *save_p)
 
 			if (diff3 & SD_COLORMAP)
 				P_WriteUINT32(save_p, CheckAddNetColormapToList(ss->extra_colormap));
-
+					// returns existing index if already added, or appends to net_colormaps and returns new index
 			if (diff3 & SD_CRUMBLESTATE)
 				P_WriteINT32(save_p, ss->crumblestate);
 			if (diff3 & SD_FLOORLIGHT)
@@ -1555,11 +1555,11 @@ static void UnArchiveSectors(save_t *save_p)
 		{
 			size_t ncount = P_ReadUINT32(save_p);
 
-
+			// Remove entries from global lists.
 			for (j = 0; j < sectors[i].tags.count; j++)
 				Taggroup_Remove(tags_sectors, sectors[i].tags.tags[j], i);
 
-
+			// Reallocate if size differs.
 			if (ncount != sectors[i].tags.count)
 			{
 				sectors[i].tags.count = ncount;
@@ -1569,7 +1569,7 @@ static void UnArchiveSectors(save_t *save_p)
 			for (j = 0; j < ncount; j++)
 				sectors[i].tags.tags[j] = P_ReadINT16(save_p);
 
-
+			// Add new entries.
 			for (j = 0; j < sectors[i].tags.count; j++)
 				Taggroup_Remove(tags_sectors, sectors[i].tags.tags[j], i);
 		}
@@ -1629,7 +1629,7 @@ static UINT32 GetSideDiff(const side_t *si, const side_t *spawnsi)
 		diff |= LD_SDTEXOFFX;
 	if (si->rowoffset != spawnsi->rowoffset)
 		diff |= LD_SDTEXOFFY;
-
+	//SoM: 4/1/2000: Some textures are colormaps. Don't worry about invalid textures.
 	if (si->toptexture != spawnsi->toptexture)
 		diff |= LD_SDTOPTEX;
 	if (si->bottomtexture != spawnsi->bottomtexture)
@@ -1756,7 +1756,7 @@ static void ArchiveLines(save_t *save_p)
 		if (li->special != spawnli->special)
 			diff |= LD_SPECIAL;
 
-		if (spawnli->special == 321 || spawnli->special == 322)  
+		if (spawnli->special == 321 || spawnli->special == 322) // only reason li->callcount would be non-zero is if either of these are involved
 			diff |= LD_CLLCOUNT;
 
 		if (!P_AreArgsEqual(li, spawnli))
@@ -1963,7 +1963,7 @@ static void UnArchiveLines(save_t *save_p)
 
 static void P_NetArchiveWorld(save_t *save_p)
 {
-
+	// initialize colormap vars because paranoia
 	ClearNetColormaps();
 
 	P_WriteUINT32(save_p, ARCHIVEBLOCK_WORLD);
@@ -1980,10 +1980,10 @@ static void P_NetUnArchiveWorld(save_t *save_p)
 	if (P_ReadUINT32(save_p) != ARCHIVEBLOCK_WORLD)
 		I_Error("Bad $$$.sav at archive block World");
 
-
+	// initialize colormap vars because paranoia
 	ClearNetColormaps();
 
-
+	// count the level's ffloors so that colormap loading can have an upper limit
 	for (i = 0; i < numsectors; i++)
 	{
 		ffloor_t *rover;
@@ -1995,9 +1995,9 @@ static void P_NetUnArchiveWorld(save_t *save_p)
 	UnArchiveLines(save_p);
 }
 
-
-
-
+//
+// Thinkers
+//
 
 typedef enum
 {
@@ -2101,7 +2101,7 @@ typedef enum
 	tc_planedisplace,
 	tc_dynslopeline,
 	tc_dynslopevert,
-	tc_polyrotate,  
+	tc_polyrotate, // haleyjd 03/26/06: polyobjects
 	tc_polymove,
 	tc_polywaypoint,
 	tc_polyslidedoor,
@@ -2149,21 +2149,21 @@ static void SaveMobjThinker(save_t *save_p, const thinker_t *th, const UINT8 typ
 	UINT32 diff;
 	UINT32 diff2;
 
-
+	// Ignore stationary hoops - these will be respawned from mapthings.
 	if (mobj->type == MT_HOOP)
 		return;
 
-
+	// These are NEVER saved.
 	if (mobj->type == MT_HOOPCOLLIDE)
 		return;
 
-
+	// This hoop has already been collected.
 	if (mobj->type == MT_HOOPCENTER && mobj->threshold == 4242)
 		return;
 
 	if (mobj->spawnpoint && mobj->info->doomednum != -1)
 	{
-
+		// spawnpoint is not modified but we must save it since it is an identifier
 		diff = MD_SPAWNPOINT;
 
 		if ((mobj->x != mobj->spawnpoint->x << FRACBITS) ||
@@ -2177,11 +2177,11 @@ static void SaveMobjThinker(save_t *save_p, const thinker_t *th, const UINT8 typ
 			diff |= MD_TYPE;
 	}
 	else
-		diff = MD_POS | MD_TYPE;  
+		diff = MD_POS | MD_TYPE; // not a map spawned thing so make it from scratch
 
 	diff2 = 0;
 
-
+	// not the default but the most probable
 	if (mobj->momx != 0 || mobj->momy != 0 || mobj->momz != 0 || mobj->pmomz !=0)
 		diff |= MD_MOM;
 	if (mobj->radius != mobj->info->radius)
@@ -2313,7 +2313,7 @@ static void SaveMobjThinker(save_t *save_p, const thinker_t *th, const UINT8 typ
 	if (diff2 != 0)
 		diff |= MD_MORE;
 
-
+	// Scrap all of that. If we're a hoop center, this is ALL we're saving.
 	if (mobj->type == MT_HOOPCENTER)
 		diff = MD_SPAWNPOINT;
 
@@ -2322,10 +2322,10 @@ static void SaveMobjThinker(save_t *save_p, const thinker_t *th, const UINT8 typ
 	if (diff & MD_MORE)
 		P_WriteUINT32(save_p, diff2);
 
-
+	// save pointer, at load time we will search this pointer to reinitilize pointers
 	P_WriteUINT32(save_p, (size_t)mobj);
 
-	P_WriteFixed(save_p, mobj->z);  
+	P_WriteFixed(save_p, mobj->z); // Force this so 3dfloor problems don't arise.
 	P_WriteFixed(save_p, mobj->floorz);
 	P_WriteFixed(save_p, mobj->ceilingz);
 
@@ -2711,7 +2711,7 @@ static void SaveCrumbleThinker(save_t *save_p, const thinker_t *th, const UINT8 
 	P_WriteUINT32(save_p, SaveLine(ht->sourceline));
 	P_WriteUINT32(save_p, SaveSector(ht->sector));
 	P_WriteUINT32(save_p, SaveSector(ht->actionsector));
-	P_WriteUINT32(save_p, SavePlayer(ht->player));  
+	P_WriteUINT32(save_p, SavePlayer(ht->player)); // was dummy
 	P_WriteINT32(save_p, ht->direction);
 	P_WriteINT32(save_p, ht->origalpha);
 	P_WriteINT32(save_p, ht->timer);
@@ -2994,7 +2994,7 @@ static void P_NetArchiveThinkers(save_t *save_p)
 	for (i = 0; i < NUM_THINKERLISTS; i++)
 	{
 		UINT32 numsaved = 0;
-
+		// save off the current thinkers
 		for (th = thlist[i].next; th != &thlist[i]; th = th->next)
 		{
 			if (!(th->removing || th->function.acp1 == (actionf_p1)P_NullPrecipThinker))
@@ -3210,7 +3210,7 @@ static void P_NetArchiveThinkers(save_t *save_p)
 			}
 #ifdef PARANOIA
 			else
-				I_Assert(th->removing);  
+				I_Assert(th->removing); // wait garbage collection
 #endif
 		}
 
@@ -3220,10 +3220,10 @@ static void P_NetArchiveThinkers(save_t *save_p)
 	}
 }
 
-
-
-
-
+// Now save the pointers, tracer and target, but at load time we must
+// relink to this; the savegame contains the old position in the pointer
+// field copyed in the info field temporarily, but finally we just search
+// for the old position and relink to it.
 mobj_t *P_FindNewPosition(UINT32 oldposition)
 {
 	thinker_t *th;
@@ -3298,7 +3298,7 @@ static thinker_t* LoadMobjThinker(save_t *save_p, actionf_p1 thinker)
 
 	next = (void *)(size_t)P_ReadUINT32(save_p);
 
-	z = P_ReadFixed(save_p);  
+	z = P_ReadFixed(save_p); // Force this so 3dfloor problems don't arise.
 	floorz = P_ReadFixed(save_p);
 	ceilingz = P_ReadFixed(save_p);
 
@@ -3320,7 +3320,7 @@ static thinker_t* LoadMobjThinker(save_t *save_p, actionf_p1 thinker)
 	{
 		UINT16 spawnpointnum = P_ReadUINT16(save_p);
 
-		if (mapthings[spawnpointnum].type == 1713)  
+		if (mapthings[spawnpointnum].type == 1713) // NiGHTS Hoop special case
 		{
 			P_SpawnHoop(&mapthings[spawnpointnum]);
 			return NULL;
@@ -3334,7 +3334,7 @@ static thinker_t* LoadMobjThinker(save_t *save_p, actionf_p1 thinker)
 	else
 		mobj = Z_Calloc(sizeof (*mobj), PU_LEVEL, NULL);
 
-
+	// declare this as a valid mobj as soon as possible.
 	mobj->thinker.function.acp1 = thinker;
 
 	mobj->z = z;
@@ -3383,7 +3383,7 @@ static thinker_t* LoadMobjThinker(save_t *save_p, actionf_p1 thinker)
 		mobj->momy = P_ReadFixed(save_p);
 		mobj->momz = P_ReadFixed(save_p);
 		mobj->pmomz = P_ReadFixed(save_p);
-	}  
+	} // otherwise they're zero, and the memset took care of it
 
 	if (diff & MD_RADIUS)
 		mobj->radius = P_ReadFixed(save_p);
@@ -3575,7 +3575,7 @@ static thinker_t* LoadMobjThinker(save_t *save_p, actionf_p1 thinker)
 		bflagpoint = mobj->spawnpoint;
 	}
 
-
+	// set sprev, snext, bprev, bnext, subsector
 	P_SetThingPosition(mobj);
 
 	mobj->mobjnum = P_ReadUINT32(save_p);
@@ -3600,7 +3600,7 @@ static thinker_t* LoadMobjThinker(save_t *save_p, actionf_p1 thinker)
 		}
 	}
 
-	mobj->info = (mobjinfo_t *)next;  
+	mobj->info = (mobjinfo_t *)next; // temporarily, set when leave this function
 
 	R_AddMobjInterpolator(mobj);
 
@@ -4016,7 +4016,7 @@ static inline thinker_t* LoadFadeThinker(save_t *save_p, actionf_p1 thinker)
 	ss = LoadSector(ht->sectornum);
 	if (ss)
 	{
-		size_t j = 0;  
+		size_t j = 0; // ss->ffloors is saved as ffloor #0, ss->ffloors->next is #1, etc
 		ffloor_t *rover;
 		for (rover = ss->ffloors; rover; rover = rover->next)
 		{
@@ -4213,7 +4213,7 @@ static void P_NetUnArchiveThinkers(save_t *save_p)
 	if (P_ReadUINT32(save_p) != ARCHIVEBLOCK_THINKERS)
 		I_Error("Bad $$$.sav at archive block Thinkers");
 
-
+	// remove all the current thinkers
 	for (i = 0; i < NUM_THINKERLISTS; i++)
 	{
 		currentthinker = thlist[i].next;
@@ -4222,7 +4222,7 @@ static void P_NetUnArchiveThinkers(save_t *save_p)
 			next = currentthinker->next;
 
 			if (currentthinker->function.acp1 == (actionf_p1)P_MobjThinker || currentthinker->function.acp1 == (actionf_p1)P_NullPrecipThinker)
-				P_RemoveSavegameMobj((mobj_t *)currentthinker);  
+				P_RemoveSavegameMobj((mobj_t *)currentthinker); // item isn't saved, don't remove it
 			else
 			{
 				(next->prev = currentthinker->prev)->next = next;
@@ -4232,17 +4232,17 @@ static void P_NetUnArchiveThinkers(save_t *save_p)
 		}
 	}
 
-
+	// we don't want the removed mobjs to come back
 	iquetail = iquehead = 0;
 	P_InitThinkers();
 
-
+	// clear sector thinker pointers so they don't point to non-existant thinkers for all of eternity
 	for (i = 0; i < numsectors; i++)
 	{
 		sectors[i].floordata = sectors[i].ceilingdata = sectors[i].lightingdata = sectors[i].fadecolormapdata = NULL;
 	}
 
-
+	// read in saved thinkers
 	for (i = 0; i < NUM_THINKERLISTS; i++)
 	{
 		for (;;)
@@ -4251,7 +4251,7 @@ static void P_NetUnArchiveThinkers(save_t *save_p)
 			tclass = P_ReadUINT8(save_p);
 
 			if (tclass == tc_end)
-				break;  
+				break; // leave the saved thinker reading loop
 			numloaded++;
 
 			switch (tclass)
@@ -4430,7 +4430,7 @@ static void P_NetUnArchiveThinkers(save_t *save_p)
 		CONS_Debug(DBG_NETPLAY, "%u thinkers loaded in list %d\n", numloaded, i);
 	}
 
-
+	// Set each skyboxmo to the first skybox (or NULL)
 	skyboxmo[0] = skyboxviewpnts[0];
 	skyboxmo[1] = skyboxcenterpnts[0];
 
@@ -4450,10 +4450,10 @@ static void P_NetUnArchiveThinkers(save_t *save_p)
 	}
 }
 
-
-
-
-
+///////////////////////////////////////////////////////////////////////////////
+//
+// haleyjd 03/26/06: PolyObject saving code
+//
 #define PD_FLAGS  0x01
 #define PD_TRANS   0x02
 
@@ -4486,9 +4486,9 @@ static inline void P_UnArchivePolyObj(save_t *save_p, polyobj_t *po)
 	fixed_t x, y;
 	UINT8 diff;
 
-
-
-
+	// nullify all polyobject thinker pointers;
+	// the thinkers themselves will fight over who gets the field
+	// when they first start to run.
 	po->thinker = NULL;
 
 	id = P_ReadINT32(save_p);
@@ -4505,12 +4505,12 @@ static inline void P_UnArchivePolyObj(save_t *save_p, polyobj_t *po)
 	if (diff & PD_TRANS)
 		po->translucency = P_ReadINT32(save_p);
 
-
-
+	// if the object is bad or isn't in the id hash, we can do nothing more
+	// with it, so return now
 	if (po->isBad || po != Polyobj_GetForNum(id))
 		return;
 
-
+	// rotate and translate polyobject
 	Polyobj_MoveOnLoad(po, angle, x, y);
 }
 
@@ -4520,7 +4520,7 @@ static inline void P_ArchivePolyObjects(save_t *save_p)
 
 	P_WriteUINT32(save_p, ARCHIVEBLOCK_POBJS);
 
-
+	// save number of polyobjects
 	P_WriteINT32(save_p, numPolyObjects);
 
 	for (i = 0; i < numPolyObjects; ++i)
@@ -4548,7 +4548,7 @@ static inline void P_FinishMobjs(void)
 	thinker_t *currentthinker;
 	mobj_t *mobj;
 
-
+	// put info field there real value
 	for (currentthinker = thlist[THINK_MOBJ].next; currentthinker != &thlist[THINK_MOBJ];
 		currentthinker = currentthinker->next)
 	{
@@ -4566,7 +4566,7 @@ static void P_RelinkPointers(void)
 	mobj_t *mobj;
 	UINT32 temp;
 
-
+	// use info field (value = oldposition) to relink mobjs
 	for (currentthinker = thlist[THINK_MOBJ].next; currentthinker != &thlist[THINK_MOBJ];
 		currentthinker = currentthinker->next)
 	{
@@ -4664,7 +4664,7 @@ static inline void P_NetArchiveSpecials(save_t *save_p)
 
 	P_WriteUINT32(save_p, ARCHIVEBLOCK_SPECIALS);
 
-
+	// itemrespawn queue for deathmatch
 	i = iquetail;
 	while (iquehead != i)
 	{
@@ -4680,16 +4680,16 @@ static inline void P_NetArchiveSpecials(save_t *save_p)
 		i = (i + 1) & (ITEMQUESIZE-1);
 	}
 
-
+	// end delimiter
 	P_WriteUINT32(save_p, 0xffffffff);
 
-
+	// Sky number
 	P_WriteINT32(save_p, globallevelskynum);
 
-
+	// Current global weather type
 	P_WriteUINT8(save_p, globalweather);
 
-	if (metalplayback)  
+	if (metalplayback) // Is metal sonic running?
 	{
 		UINT8 *p = &save_p->buf[save_p->pos+1];
 		P_WriteUINT8(save_p, 0x01);
@@ -4707,7 +4707,7 @@ static void P_NetUnArchiveSpecials(save_t *save_p)
 	if (P_ReadUINT32(save_p) != ARCHIVEBLOCK_SPECIALS)
 		I_Error("Bad $$$.sav at archive block Specials");
 
-
+	// BP: added save itemrespawn queue for deathmatch
 	iquetail = iquehead = 0;
 	while ((i = P_ReadUINT32(save_p)) != 0xffffffff)
 	{
@@ -4728,25 +4728,25 @@ static void P_NetUnArchiveSpecials(save_t *save_p)
 
 		P_SwitchWeather(globalweather);
 	}
-	else  
+	else // PRECIP_NONE
 	{
 		if (curWeather != PRECIP_NONE)
 			P_SwitchWeather(globalweather);
 	}
 
-	if (P_ReadUINT8(save_p) == 0x01)  
+	if (P_ReadUINT8(save_p) == 0x01) // metal sonic
 	{
 		UINT8 *p = &save_p->buf[save_p->pos];
 		G_LoadMetal(&p);
 	}
 }
 
-
-
-
+// =======================================================================
+//          Misc
+// =======================================================================
 static inline void P_ArchiveMisc(save_t *save_p, INT16 mapnum)
 {
-
+	//lastmapsaved = mapnum;
 	lastmaploaded = mapnum;
 
 	if (gamecomplete)
@@ -4771,12 +4771,12 @@ static inline void P_UnArchiveSPGame(save_t *save_p, INT16 mapoverride)
 	else
 		gamecomplete = 0;
 
-
-
+	// gamemap changed; we assume that its map header is always valid,
+	// so make it so
 	if(!mapheaderinfo[gamemap-1])
 		P_AllocMapHeader(gamemap-1);
 
-
+	//lastmapsaved = gamemap;
 	lastmaploaded = gamemap;
 
 	tokenlist = 0;
@@ -4809,7 +4809,7 @@ static void P_NetArchiveMisc(save_t *save_p, boolean resending)
 	P_WriteINT16(save_p, gamemap);
 
 	if (gamestate != GS_LEVEL)
-		P_WriteINT16(save_p, GS_WAITINGPLAYERS);  
+		P_WriteINT16(save_p, GS_WAITINGPLAYERS); // nice hack to put people back into waitingplayers
 	else
 		P_WriteINT16(save_p, gamestate);
 	P_WriteINT16(save_p, gametype);
@@ -4874,7 +4874,7 @@ static void P_NetArchiveMisc(save_t *save_p, boolean resending)
 
 	P_WriteUINT32(save_p, hidetime);
 
-
+	// Is it paused?
 	if (paused)
 		P_WriteUINT8(save_p, 0x2f);
 	else
@@ -4899,13 +4899,13 @@ static inline boolean P_NetUnArchiveMisc(save_t *save_p, boolean reloading)
 
 	gamemap = P_ReadINT16(save_p);
 
-
-
+	// gamemap changed; we assume that its map header is always valid,
+	// so make it so
 	if(!mapheaderinfo[gamemap-1])
 		P_AllocMapHeader(gamemap-1);
 
-
-
+	// tell the sound code to reset the music since we're skipping what
+	// normally sets this flag
 	mapmusflags |= MUSIC_RELOADRESET;
 
 	G_SetGamestate(P_ReadINT16(save_p));
@@ -4917,7 +4917,7 @@ static inline boolean P_NetUnArchiveMisc(save_t *save_p, boolean reloading)
 		for (i = 0; i < MAXPLAYERS; i++)
 		{
 			playeringame[i] = (pig & (1<<i)) != 0;
-
+			// playerstate is set in unarchiveplayers
 		}
 	}
 
@@ -4931,7 +4931,7 @@ static inline boolean P_NetUnArchiveMisc(save_t *save_p, boolean reloading)
 		return false;
 	}
 
-
+	// get the time
 	leveltime = P_ReadUINT32(save_p);
 	ssspheres = P_ReadUINT32(save_p);
 	lastmap = P_ReadINT16(save_p);
@@ -4978,7 +4978,7 @@ static inline boolean P_NetUnArchiveMisc(save_t *save_p, boolean reloading)
 
 	hidetime = P_ReadUINT32(save_p);
 
-
+	// Is it paused?
 	if (P_ReadUINT8(save_p) == 0x2f)
 		paused = true;
 
@@ -5000,23 +5000,23 @@ static inline void P_NetArchiveEmblems(save_t *save_p)
 
 	P_WriteUINT32(save_p, ARCHIVEBLOCK_EMBLEMS);
 
-
-
+	// These should be synchronized before savegame loading by the wad files being the same anyway,
+	// but just in case, for now, we'll leave them here for testing. It would be very bad if they mismatch.
 	P_WriteUINT8(save_p, (UINT8)savemoddata);
 	P_WriteINT32(save_p, numemblems);
 	P_WriteINT32(save_p, numextraemblems);
 
-
-
-
+	// The rest of this is lifted straight from G_SaveGameData in g_game.c
+	// TODO: Optimize this to only send information about emblems, unlocks, etc. which actually exist
+	//       There is no need to go all the way up to MAXEMBLEMS when wads are guaranteed to be the same.
 
 	P_WriteUINT32(save_p, data->totalplaytime);
 
-
+	// TODO put another cipher on these things? meh, I don't care...
 	for (i = 0; i < NUMMAPS; i++)
 		P_WriteUINT8(save_p, (data->mapvisited[i] & MV_MAX));
 
-
+	// To save space, use one bit per collected/achieved/unlocked flag
 	for (i = 0; i < MAXEMBLEMS;)
 	{
 		btemp = 0;
@@ -5054,7 +5054,7 @@ static inline void P_NetArchiveEmblems(save_t *save_p)
 	P_WriteUINT32(save_p, data->timesBeatenWithEmeralds);
 	P_WriteUINT32(save_p, data->timesBeatenUltimate);
 
-
+	// Main records
 	for (i = 0; i < NUMMAPS; i++)
 	{
 		if (data->mainrecords[i])
@@ -5071,7 +5071,7 @@ static inline void P_NetArchiveEmblems(save_t *save_p)
 		}
 	}
 
-
+	// NiGHTS records
 	for (i = 0; i < NUMMAPS; i++)
 	{
 		if (!data->nightsrecords[i] || !data->nightsrecords[i]->nummares)
@@ -5090,7 +5090,7 @@ static inline void P_NetArchiveEmblems(save_t *save_p)
 		}
 	}
 
-
+	// Mid-map stuff
 	P_WriteUINT32(save_p, unlocktriggers);
 
 	for (i = 0; i < MAXPLAYERS; i++)
@@ -5126,33 +5126,33 @@ static inline void P_NetUnArchiveEmblems(save_t *save_p)
 	if (P_ReadUINT32(save_p) != ARCHIVEBLOCK_EMBLEMS)
 		I_Error("Bad $$$.sav at archive block Emblems");
 
-	savemoddata = (boolean)P_ReadUINT8(save_p);  
+	savemoddata = (boolean)P_ReadUINT8(save_p); // this one is actually necessary because savemoddata stays false otherwise for some reason.
 
 	if (numemblems != P_ReadINT32(save_p))
 		I_Error("Bad $$$.sav dearchiving Emblems (numemblems mismatch)");
 	if (numextraemblems != P_ReadINT32(save_p))
 		I_Error("Bad $$$.sav dearchiving Emblems (numextraemblems mismatch)");
 
-
-
-
+	// This shouldn't happen, but if something really fucked up happens and you transfer
+	// the SERVER player's gamedata over your own CLIENT gamedata,
+	// then this prevents it from being saved over yours.
 	data->loaded = false;
 
 	M_ClearSecrets(data);
 	G_ClearRecords(data);
 
-
-
-
+	// The rest of this is lifted straight from G_LoadGameData in g_game.c
+	// TODO: Optimize this to only read information about emblems, unlocks, etc. which actually exist
+	//       There is no need to go all the way up to MAXEMBLEMS when wads are guaranteed to be the same.
 
 	data->totalplaytime = P_ReadUINT32(save_p);
 
-
+	// TODO put another cipher on these things? meh, I don't care...
 	for (i = 0; i < NUMMAPS; i++)
 		if ((data->mapvisited[i] = P_ReadUINT8(save_p)) > MV_MAX)
 			I_Error("Bad $$$.sav dearchiving Emblems (invalid visit flags)");
 
-
+	// To save space, use one bit per collected/achieved/unlocked flag
 	for (i = 0; i < MAXEMBLEMS;)
 	{
 		rtemp = P_ReadUINT8(save_p);
@@ -5186,7 +5186,7 @@ static inline void P_NetUnArchiveEmblems(save_t *save_p)
 	data->timesBeatenWithEmeralds = P_ReadUINT32(save_p);
 	data->timesBeatenUltimate = P_ReadUINT32(save_p);
 
-
+	// Main records
 	for (i = 0; i < NUMMAPS; ++i)
 	{
 		recscore = P_ReadUINT32(save_p);
@@ -5205,7 +5205,7 @@ static inline void P_NetUnArchiveEmblems(save_t *save_p)
 		}
 	}
 
-
+	// Nights records
 	for (i = 0; i < NUMMAPS; ++i)
 	{
 		if ((recmares = P_ReadUINT8(save_p)) == 0)
@@ -5228,7 +5228,7 @@ static inline void P_NetUnArchiveEmblems(save_t *save_p)
 		data->nightsrecords[i]->nummares = recmares;
 	}
 
-
+	// Mid-map stuff
 	unlocktriggers = P_ReadUINT32(save_p);
 
 	for (i = 0; i < MAXPLAYERS; ++i)
@@ -5337,24 +5337,24 @@ static inline void P_ArchiveLuabanksAndConsistency(save_t *save_p)
 	UINT8 i, banksinuse = NUM_LUABANKS;
 
 	while (banksinuse && !luabanks[banksinuse-1])
-		banksinuse--;  
+		banksinuse--; // get the last used bank
 
 	if (banksinuse)
 	{
-		P_WriteUINT8(save_p, 0xb7);  
+		P_WriteUINT8(save_p, 0xb7); // luabanks marker
 		P_WriteUINT8(save_p, banksinuse);
 		for (i = 0; i < banksinuse; i++)
 			P_WriteINT32(save_p, luabanks[i]);
 	}
 
-	P_WriteUINT8(save_p, 0x1d);  
+	P_WriteUINT8(save_p, 0x1d); // consistency marker
 }
 
 static inline boolean P_UnArchiveLuabanksAndConsistency(save_t *save_p)
 {
 	switch (P_ReadUINT8(save_p))
 	{
-		case 0xb7:  
+		case 0xb7: // luabanks marker
 			{
 				UINT8 i, banksinuse = P_ReadUINT8(save_p);
 				if (banksinuse > NUM_LUABANKS)
@@ -5364,15 +5364,15 @@ static inline boolean P_UnArchiveLuabanksAndConsistency(save_t *save_p)
 				}
 				for (i = 0; i < banksinuse; i++)
 					luabanks[i] = P_ReadINT32(save_p);
-				if (P_ReadUINT8(save_p) != 0x1d)  
+				if (P_ReadUINT8(save_p) != 0x1d) // consistency marker
 				{
 					CONS_Alert(CONS_ERROR, M_GetText("Corrupt Luabanks! (Failed consistency check)\n"));
 					return false;
 				}
 			}
-		case 0x1d:  
+		case 0x1d: // consistency marker
 			break;
-		default:  
+		default: // anything else is nonsense
 			CONS_Alert(CONS_ERROR, M_GetText("Failed consistency check (???)\n"));
 			return false;
 	}
@@ -5391,13 +5391,13 @@ void P_SaveNetGame(save_t *save_p, boolean resending)
 {
 	thinker_t *th;
 	mobj_t *mobj;
-	INT32 i = 1;  
+	INT32 i = 1; // don't start from 0, it'd be confused with a blank pointer otherwise
 
 	CV_SaveNetVars(save_p);
 	P_NetArchiveMisc(save_p, resending);
 	P_NetArchiveEmblems(save_p);
 
-
+	// Assign the mobjnumber for pointer tracking
 	for (th = thlist[THINK_MOBJ].next; th != &thlist[THINK_MOBJ]; th = th->next)
 	{
 		if (th->removing)
@@ -5429,7 +5429,7 @@ boolean P_LoadGame(save_t *save_p, INT16 mapoverride)
 {
 	if (gamestate == GS_INTERMISSION)
 		Y_EndIntermission();
-	G_SetGamestate(GS_NULL);  
+	G_SetGamestate(GS_NULL); // should be changed in P_UnArchiveMisc
 
 	P_UnArchiveSPGame(save_p, mapoverride);
 	P_UnArchivePlayer(save_p);
@@ -5437,9 +5437,9 @@ boolean P_LoadGame(save_t *save_p, INT16 mapoverride)
 	if (!P_UnArchiveLuabanksAndConsistency(save_p))
 		return false;
 
-
+	// Only do this after confirming savegame is ok
 	G_DeferedInitNew(false, G_BuildMapName(gamemap), savedata.skin, false, true);
-	COM_BufAddText("dummyconsvar 1\n");  
+	COM_BufAddText("dummyconsvar 1\n"); // G_DeferedInitNew doesn't do this
 
 	return true;
 }
@@ -5466,14 +5466,14 @@ boolean P_LoadNetGame(save_t *save_p, boolean reloading)
 	if (!LUA_UnArchive(save_p))
 		return false;
 
-
+	// This is stupid and hacky, but maybe it'll work!
 	P_SetRandSeed(P_GetInitSeed());
 
-
-
-
-
-
+	// The precipitation would normally be spawned in P_SetupLevel, which is called by
+	// P_NetUnArchiveMisc above. However, that would place it up before P_NetUnArchiveThinkers,
+	// so the thinkers would be deleted later. Therefore, P_SetupLevel will *not* spawn
+	// precipitation when loading a netgame save. Instead, precip has to be spawned here.
+	// This is done in P_NetUnArchiveSpecials now.
 
 	return P_UnArchiveLuabanksAndConsistency(save_p);
 }

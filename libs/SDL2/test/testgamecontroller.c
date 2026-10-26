@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple program to test the SDL game controller routines */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,60 +34,60 @@
 #define BUTTON_SIZE 50
 #define AXIS_SIZE   50
 
- 
+/* This is indexed by SDL_GameControllerButton. */
 static const struct
 {
     int x;
     int y;
 } button_positions[] = {
-    { 387, 167 },  
-    { 431, 132 },  
-    { 342, 132 },  
-    { 389, 101 },  
-    { 174, 132 },  
-    { 232, 128 },  
-    { 289, 132 },  
-    { 75, 154 },   
-    { 305, 230 },  
-    { 77, 40 },    
-    { 396, 36 },   
-    { 154, 188 },  
-    { 154, 249 },  
-    { 116, 217 },  
-    { 186, 217 },  
-    { 232, 174 },  
-    { 132, 135 },  
-    { 330, 135 },  
-    { 132, 175 },  
-    { 330, 175 },  
-    { 0, 0 },      
+    { 387, 167 }, /* SDL_CONTROLLER_BUTTON_A */
+    { 431, 132 }, /* SDL_CONTROLLER_BUTTON_B */
+    { 342, 132 }, /* SDL_CONTROLLER_BUTTON_X */
+    { 389, 101 }, /* SDL_CONTROLLER_BUTTON_Y */
+    { 174, 132 }, /* SDL_CONTROLLER_BUTTON_BACK */
+    { 232, 128 }, /* SDL_CONTROLLER_BUTTON_GUIDE */
+    { 289, 132 }, /* SDL_CONTROLLER_BUTTON_START */
+    { 75, 154 },  /* SDL_CONTROLLER_BUTTON_LEFTSTICK */
+    { 305, 230 }, /* SDL_CONTROLLER_BUTTON_RIGHTSTICK */
+    { 77, 40 },   /* SDL_CONTROLLER_BUTTON_LEFTSHOULDER */
+    { 396, 36 },  /* SDL_CONTROLLER_BUTTON_RIGHTSHOULDER */
+    { 154, 188 }, /* SDL_CONTROLLER_BUTTON_DPAD_UP */
+    { 154, 249 }, /* SDL_CONTROLLER_BUTTON_DPAD_DOWN */
+    { 116, 217 }, /* SDL_CONTROLLER_BUTTON_DPAD_LEFT */
+    { 186, 217 }, /* SDL_CONTROLLER_BUTTON_DPAD_RIGHT */
+    { 232, 174 }, /* SDL_CONTROLLER_BUTTON_MISC1 */
+    { 132, 135 }, /* SDL_CONTROLLER_BUTTON_PADDLE1 */
+    { 330, 135 }, /* SDL_CONTROLLER_BUTTON_PADDLE2 */
+    { 132, 175 }, /* SDL_CONTROLLER_BUTTON_PADDLE3 */
+    { 330, 175 }, /* SDL_CONTROLLER_BUTTON_PADDLE4 */
+    { 0, 0 },     /* SDL_CONTROLLER_BUTTON_TOUCHPAD */
 };
 SDL_COMPILE_TIME_ASSERT(button_positions, SDL_arraysize(button_positions) == SDL_CONTROLLER_BUTTON_MAX);
 
- 
+/* This is indexed by SDL_GameControllerAxis. */
 static const struct
 {
     int x;
     int y;
     double angle;
 } axis_positions[] = {
-    { 74, 153, 270.0 },   
-    { 74, 153, 0.0 },     
-    { 306, 231, 270.0 },  
-    { 306, 231, 0.0 },    
-    { 91, -20, 0.0 },     
-    { 375, -20, 0.0 },    
+    { 74, 153, 270.0 },  /* LEFTX */
+    { 74, 153, 0.0 },    /* LEFTY */
+    { 306, 231, 270.0 }, /* RIGHTX */
+    { 306, 231, 0.0 },   /* RIGHTY */
+    { 91, -20, 0.0 },    /* TRIGGERLEFT */
+    { 375, -20, 0.0 },   /* TRIGGERRIGHT */
 };
 SDL_COMPILE_TIME_ASSERT(axis_positions, SDL_arraysize(axis_positions) == SDL_CONTROLLER_AXIS_MAX);
 
- 
+/* This is indexed by SDL_JoystickPowerLevel + 1. */
 static const char *power_level_strings[] = {
-    "unknown",  
-    "empty",    
-    "low",      
-    "medium",   
-    "full",     
-    "wired",    
+    "unknown", /* SDL_JOYSTICK_POWER_UNKNOWN */
+    "empty",   /* SDL_JOYSTICK_POWER_EMPTY */
+    "low",     /* SDL_JOYSTICK_POWER_LOW */
+    "medium",  /* SDL_JOYSTICK_POWER_MEDIUM */
+    "full",    /* SDL_JOYSTICK_POWER_FULL */
+    "wired",   /* SDL_JOYSTICK_POWER_WIRED */
 };
 SDL_COMPILE_TIME_ASSERT(power_level_strings, SDL_arraysize(power_level_strings) == SDL_JOYSTICK_POWER_MAX + 1);
 
@@ -196,7 +196,7 @@ static void AddController(int device_index, SDL_bool verbose)
     }
 
     if (FindController(controller_id) >= 0) {
-         
+        /* We already have this controller */
         return;
     }
 
@@ -291,7 +291,7 @@ static void DelController(SDL_JoystickID controller)
 
 static Uint16 ConvertAxisToRumble(Sint16 axisval)
 {
-     
+    /* Only start rumbling if the axis is past the halfway point */
     const Sint16 half_axis = (Sint16)SDL_ceil(SDL_JOYSTICK_AXIS_MAX / 2.0f);
     if (axisval > half_axis) {
         return (Uint16)(axisval - half_axis) * 4;
@@ -300,32 +300,32 @@ static Uint16 ConvertAxisToRumble(Sint16 axisval)
     }
 }
 
-                                    
-                                                                       
-  
+/* PS5 trigger effect documentation:
+   https://controllers.fandom.com/wiki/Sony_DualSense#FFB_Trigger_Modes
+*/
 typedef struct
 {
-    Uint8 ucEnableBits1;               
-    Uint8 ucEnableBits2;               
-    Uint8 ucRumbleRight;               
-    Uint8 ucRumbleLeft;                
-    Uint8 ucHeadphoneVolume;           
-    Uint8 ucSpeakerVolume;             
-    Uint8 ucMicrophoneVolume;          
-    Uint8 ucAudioEnableBits;           
-    Uint8 ucMicLightMode;              
-    Uint8 ucAudioMuteBits;             
-    Uint8 rgucRightTriggerEffect[11];  
-    Uint8 rgucLeftTriggerEffect[11];   
-    Uint8 rgucUnknown1[6];             
-    Uint8 ucLedFlags;                  
-    Uint8 rgucUnknown2[2];             
-    Uint8 ucLedAnim;                   
-    Uint8 ucLedBrightness;             
-    Uint8 ucPadLights;                 
-    Uint8 ucLedRed;                    
-    Uint8 ucLedGreen;                  
-    Uint8 ucLedBlue;                   
+    Uint8 ucEnableBits1;              /* 0 */
+    Uint8 ucEnableBits2;              /* 1 */
+    Uint8 ucRumbleRight;              /* 2 */
+    Uint8 ucRumbleLeft;               /* 3 */
+    Uint8 ucHeadphoneVolume;          /* 4 */
+    Uint8 ucSpeakerVolume;            /* 5 */
+    Uint8 ucMicrophoneVolume;         /* 6 */
+    Uint8 ucAudioEnableBits;          /* 7 */
+    Uint8 ucMicLightMode;             /* 8 */
+    Uint8 ucAudioMuteBits;            /* 9 */
+    Uint8 rgucRightTriggerEffect[11]; /* 10 */
+    Uint8 rgucLeftTriggerEffect[11];  /* 21 */
+    Uint8 rgucUnknown1[6];            /* 32 */
+    Uint8 ucLedFlags;                 /* 38 */
+    Uint8 rgucUnknown2[2];            /* 39 */
+    Uint8 ucLedAnim;                  /* 41 */
+    Uint8 ucLedBrightness;            /* 42 */
+    Uint8 ucPadLights;                /* 43 */
+    Uint8 ucLedRed;                   /* 44 */
+    Uint8 ucLedGreen;                 /* 45 */
+    Uint8 ucLedBlue;                  /* 46 */
 } DS5EffectsState_t;
 
 static void CyclePS5TriggerEffect()
@@ -333,18 +333,18 @@ static void CyclePS5TriggerEffect()
     DS5EffectsState_t state;
 
     Uint8 effects[3][11] = {
-         
+        /* Clear trigger effect */
         { 0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-         
+        /* Constant resistance across entire trigger pull */
         { 0x01, 0, 110, 0, 0, 0, 0, 0, 0, 0, 0 },
-         
+        /* Resistance and vibration when trigger is pulled */
         { 0x06, 15, 63, 128, 0, 0, 0, 0, 0, 0, 0 },
     };
 
     trigger_effect = (trigger_effect + 1) % SDL_arraysize(effects);
 
     SDL_zero(state);
-    state.ucEnableBits1 |= (0x04 | 0x08);  
+    state.ucEnableBits1 |= (0x04 | 0x08); /* Modify right and left trigger effect respectively */
     SDL_memcpy(state.rgucRightTriggerEffect, effects[trigger_effect], sizeof(effects[trigger_effect]));
     SDL_memcpy(state.rgucLeftTriggerEffect, effects[trigger_effect], sizeof(effects[trigger_effect]));
     SDL_GameControllerSendEffect(gamecontroller, &state, sizeof(state));
@@ -356,7 +356,7 @@ static SDL_bool ShowingFront()
     int i;
 
     if (gamecontroller) {
-         
+        /* Show the back of the controller if the paddles are being held */
         for (i = SDL_CONTROLLER_BUTTON_PADDLE1; i <= SDL_CONTROLLER_BUTTON_PADDLE4; ++i) {
             if (SDL_GameControllerGetButton(gamecontroller, (SDL_GameControllerButton)i) == SDL_PRESSED) {
                 showing_front = SDL_FALSE;
@@ -567,10 +567,10 @@ void loop(void *arg)
     int i;
     SDL_bool showing_front;
 
-     
+    /* Update to get the current event state */
     SDL_PumpEvents();
 
-     
+    /* Process all currently pending events */
     while (SDL_PeepEvents(&event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT) == 1) {
         switch (event.type) {
         case SDL_CONTROLLERDEVICEADDED:
@@ -607,7 +607,7 @@ void loop(void *arg)
                     event.csensor.data[2],
                     event.csensor.timestamp_us);
             break;
-#endif  
+#endif /* VERBOSE_SENSORS */
 
 #define VERBOSE_AXES
 #ifdef VERBOSE_AXES
@@ -617,7 +617,7 @@ void loop(void *arg)
             }
             SDL_Log("Controller %" SDL_PRIs32 " axis %s changed to %d\n", event.caxis.which, SDL_GameControllerGetStringForAxis((SDL_GameControllerAxis)event.caxis.axis), event.caxis.value);
             break;
-#endif  
+#endif /* VERBOSE_AXES */
 
         case SDL_CONTROLLERBUTTONDOWN:
         case SDL_CONTROLLERBUTTONUP:
@@ -626,7 +626,7 @@ void loop(void *arg)
             }
             SDL_Log("Controller %" SDL_PRIs32 " button %s %s\n", event.cbutton.which, SDL_GameControllerGetStringForButton((SDL_GameControllerButton)event.cbutton.button), event.cbutton.state ? "pressed" : "released");
 
-             
+            /* Cycle PS5 trigger effects when the microphone button is pressed */
             if (event.type == SDL_CONTROLLERBUTTONDOWN &&
                 event.cbutton.button == SDL_CONTROLLER_BUTTON_MISC1 &&
                 SDL_GameControllerGetType(gamecontroller) == SDL_CONTROLLER_TYPE_PS5) {
@@ -687,13 +687,13 @@ void loop(void *arg)
 
     showing_front = ShowingFront();
 
-     
+    /* blank screen, set up for drawing this frame. */
     SDL_SetRenderDrawColor(screen, 0xFF, 0xFF, 0xFF, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(screen);
     SDL_RenderCopy(screen, showing_front ? background_front : background_back, NULL, NULL);
 
     if (gamecontroller) {
-         
+        /* Update visual controller state */
         for (i = 0; i < SDL_CONTROLLER_BUTTON_TOUCHPAD; ++i) {
             if (SDL_GameControllerGetButton(gamecontroller, (SDL_GameControllerButton)i) == SDL_PRESSED) {
                 SDL_bool on_front = (i < SDL_CONTROLLER_BUTTON_PADDLE1 || i > SDL_CONTROLLER_BUTTON_PADDLE4);
@@ -710,7 +710,7 @@ void loop(void *arg)
 
         if (showing_front) {
             for (i = 0; i < SDL_CONTROLLER_AXIS_MAX; ++i) {
-                const Sint16 deadzone = 8000;  
+                const Sint16 deadzone = 8000; /* !!! FIXME: real deadzone */
                 const Sint16 value = SDL_GameControllerGetAxis(gamecontroller, (SDL_GameControllerAxis)(i));
                 if (value < -deadzone) {
                     const double angle = axis_positions[i].angle;
@@ -732,7 +732,7 @@ void loop(void *arg)
             }
         }
 
-         
+        /* Update LED based on left thumbstick position */
         {
             Sint16 x = SDL_GameControllerGetAxis(gamecontroller, SDL_CONTROLLER_AXIS_LEFTX);
             Sint16 y = SDL_GameControllerGetAxis(gamecontroller, SDL_CONTROLLER_AXIS_LEFTY);
@@ -761,7 +761,7 @@ void loop(void *arg)
         }
 
         if (trigger_effect == 0) {
-             
+            /* Update rumble based on trigger state */
             {
                 Sint16 left = SDL_GameControllerGetAxis(gamecontroller, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
                 Sint16 right = SDL_GameControllerGetAxis(gamecontroller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
@@ -770,7 +770,7 @@ void loop(void *arg)
                 SDL_GameControllerRumble(gamecontroller, low_frequency_rumble, high_frequency_rumble, 250);
             }
 
-             
+            /* Update trigger rumble based on thumbstick state */
             {
                 Sint16 left = SDL_GameControllerGetAxis(gamecontroller, SDL_CONTROLLER_AXIS_LEFTY);
                 Sint16 right = SDL_GameControllerGetAxis(gamecontroller, SDL_CONTROLLER_AXIS_RIGHTY);
@@ -806,10 +806,10 @@ int main(int argc, char *argv[])
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     SDL_SetHint(SDL_HINT_LINUX_JOYSTICK_DEADZONES, "1");
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize SDL (Note: video is required to start event loop) */
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
@@ -817,7 +817,7 @@ int main(int argc, char *argv[])
 
     SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt");
 
-     
+    /* Print information about the mappings */
     if (argv[1] && SDL_strcmp(argv[1], "--mappings") == 0) {
         SDL_Log("Supported mappings:\n");
         for (i = 0; i < SDL_GameControllerNumMappings(); ++i) {
@@ -830,7 +830,7 @@ int main(int argc, char *argv[])
         SDL_Log("\n");
     }
 
-     
+    /* Print information about the controller */
     for (i = 0; i < SDL_NumJoysticks(); ++i) {
         const char *name;
         const char *path;
@@ -892,7 +892,7 @@ int main(int argc, char *argv[])
     }
     SDL_Log("There are %d game controller(s) attached (%d joystick(s))\n", controller_count, SDL_NumJoysticks());
 
-     
+    /* Create a window to display controller state */
     window = SDL_CreateWindow("Game Controller Test", SDL_WINDOWPOS_CENTERED,
                               SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH,
                               SCREEN_HEIGHT, 0);
@@ -912,7 +912,7 @@ int main(int argc, char *argv[])
     SDL_RenderClear(screen);
     SDL_RenderPresent(screen);
 
-     
+    /* scale for platforms that don't give you the window size you asked for. */
     SDL_RenderSetLogicalSize(screen, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     background_front = LoadTexture(screen, "controllermap.bmp", SDL_FALSE, NULL, NULL);
@@ -928,8 +928,8 @@ int main(int argc, char *argv[])
     SDL_SetTextureColorMod(button_texture, 10, 255, 21);
     SDL_SetTextureColorMod(axis_texture, 10, 255, 21);
 
-     
-     
+    /* !!! FIXME: */
+    /*SDL_RenderSetLogicalSize(screen, background->w, background->h);*/
 
     for (i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--virtual") == 0) {
@@ -947,7 +947,7 @@ int main(int argc, char *argv[])
     }
     UpdateWindowTitle();
 
-     
+    /* Loop, getting controller events! */
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(loop, NULL, 0, 1);
 #else
@@ -956,7 +956,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
+    /* Reset trigger state */
     if (trigger_effect != 0) {
         trigger_effect = -1;
         CyclePS5TriggerEffect();
@@ -981,4 +981,4 @@ main(int argc, char *argv[])
 
 #endif
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

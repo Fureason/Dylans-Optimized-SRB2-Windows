@@ -13,7 +13,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 
 #ifdef __GNUC__
 #include <unistd.h>
@@ -22,20 +22,20 @@
 #include "common.h"
 #include "srvlist.h"
 
+//=============================================================================
 
-
-  
-  
-  
+/*
+**
+*/
 CList::CList()
 {
 	list = NULL;
 	current = NULL;
 }
 
-  
-  
-  
+/*
+**
+*/
 CList::~CList()
 {
 	CItem *p;
@@ -48,9 +48,9 @@ CList::~CList()
 	}
 }
 
-  
-  
-  
+/*
+**
+*/
 int CList::insert(CItem *item)
 {
 	item->next = list;
@@ -58,9 +58,9 @@ int CList::insert(CItem *item)
 	return 0;
 }
 
-  
-  
-  
+/*
+**
+*/
 int CList::remove(CItem *item)
 {
 	CItem *position, *q;
@@ -87,18 +87,18 @@ int CList::remove(CItem *item)
 	return 0;
 }
 
-  
-  
-  
+/*
+**
+*/
 CItem *CList::getFirst()
 {
 	current = list;
 	return current;
 }
 
-  
-  
-  
+/*
+**
+*/
 CItem *CList::getNext()
 {
 	if (current)
@@ -106,9 +106,9 @@ CItem *CList::getNext()
 	return current;
 }
 
-  
-  
-  
+/*
+**
+*/
 void CList::show()
 {
 	CItem *p;
@@ -121,21 +121,21 @@ void CList::show()
 	}
 }
 
+//=============================================================================
 
-
-  
-  
-  
+/*
+**
+*/
 CItem::CItem()
 {
 	next = NULL;
 }
 
+//=============================================================================
 
-
-  
-  
-  
+/*
+**
+*/
 CInetAddr::CInetAddr(const char *ip, const char *port)
 {
 	strcpy(this->ip, ip);
@@ -143,25 +143,25 @@ CInetAddr::CInetAddr(const char *ip, const char *port)
 	PortNotChanged = true;
 }
 
-  
-  
-  
+/*
+**
+*/
 const char *CInetAddr::getIP()
 {
 	return ip;
 }
 
-  
-  
-  
+/*
+**
+*/
 const char *CInetAddr::getPort()
 {
 	return port;
 }
 
-  
-  
-  
+/*
+**
+*/
 bool CInetAddr::setPort(const char *port)
 {
 	if (PortNotChanged)
@@ -172,29 +172,29 @@ bool CInetAddr::setPort(const char *port)
 	return !PortNotChanged;
 }
 
+//=============================================================================
 
-
-  
-  
-  
+/*
+**
+*/
 CPlayerItem::CPlayerItem(const char *ip, const char *port,
 	const char *nickname) : CInetAddr(ip, port)
 {
 	strcpy(this->nickname, nickname);
 }
 
-  
-  
-  
+/*
+**
+*/
 void CPlayerItem::print()
 {
 	dbgPrintf(GREEN, "\tIP\t\t: %s\n\tPort\t\t: %s\n\tNickname\t: %s\n",
 		ip, port, nickname);
 }
 
-  
-  
-  
+/*
+**
+*/
 char *CPlayerItem::getString()
 {
 	static char tmpbuf[1024];
@@ -205,16 +205,16 @@ char *CPlayerItem::getString()
 	return tmpbuf;
 }
 
+//=============================================================================
 
-
-  
-  
-  
+/*
+**
+*/
 CServerItem::CServerItem(const char *ip, const char *port, const char *hostname, const char *version, ServerType type) : CInetAddr(ip, port)
 {
 	time_t timenow = time(NULL);
 	const tm *timeGMT = gmtime(&timenow);
-
+	// check name of server here
 	strcpy(this->hostname, hostname);
 	strcpy(this->version, version);
 	this->type = type;
@@ -223,7 +223,7 @@ CServerItem::CServerItem(const char *ip, const char *port, const char *hostname,
 		int i;
 		memset(guid,'\0',GUID_SIZE);
 		strcpy(&guid[0], ip);
-		strcpy(&guid[15], port);  
+		strcpy(&guid[15], port); // GenUID
 		for (i = 0; i <= GUID_SIZE-1; i++)
 		{
 			if (guid[i] == '\0' || guid[i] == '.')
@@ -237,18 +237,18 @@ CServerItem::CServerItem(const char *ip, const char *port, const char *hostname,
 	HeartBeat = time(NULL);
 }
 
-  
-  
-  
+/*
+**
+*/
 void CServerItem::print()
 {
 	dbgPrintf(GREEN, "IP\t\t: %s\nPort\t\t: %s\nHostname\t: %s\nVersion\t: %s\nPermanent\t: %s\n",
 		ip, port, hostname, version, (type == ST_PERMANENT) ? "Yes" : "No");
 }
 
-  
-  
-  
+/*
+**
+*/
 const char *CServerItem::getString()
 {
 	static char tmpbuf[1024];
@@ -259,71 +259,71 @@ const char *CServerItem::getString()
 	return tmpbuf;
 }
 
-  
-  
-  
+/*
+**
+*/
 const char *CServerItem::getName()
 {
 	return hostname;
 }
 
-  
-  
-  
+/*
+**
+*/
 const char *CServerItem::getVersion()
 {
 	return version;
 }
 
-  
-  
-  
+/*
+**
+*/
 const char *CServerItem::getGuid()
 {
 	return guid;
 }
 
-  
-  
-  
+/*
+**
+*/
 const char *CServerItem::getRegtime()
 {
 	return reg_time;
 }
 
-  
-  
-  
+/*
+**
+*/
+//=============================================================================
 
-
-  
-  
-  
+/*
+**
+*/
 void CServerList::insertPlayer(CServerItem *server, CPlayerItem *player)
 {
 	server->players_list.insert(player);
 }
 
-  
-  
-  
+/*
+**
+*/
 void CServerList::removePlayer(CServerItem *server, CPlayerItem *player)
 {
 	server->players_list.remove(player);
 }
 
-  
-  
-  
+/*
+**
+*/
 int CServerList::insert(CServerItem *server)
 {
 	CList::insert((CItem *)server);
 	return 0;
 }
 
-  
-  
-  
+/*
+**
+*/
 int CServerList::insert(const char *ip, const char *port,
 	const char *hostname, const char *version, ServerType type)
 {
@@ -334,21 +334,21 @@ int CServerList::insert(const char *ip, const char *port,
 	return 0;
 }
 
-  
-  
-  
+/*
+**
+*/
 int CServerList::remove(CServerItem *server)
 {
 	return CList::remove((CItem *)server);
 }
 
-  
-  
-  
+/*
+**
+*/
 int CServerList::remove(const char *ip, const char *port,
 	const char *hostname, const char *version, ServerType type)
 {
-
+	// TODO
 	CServerItem *position, *q;
 	bool match;
 
@@ -388,9 +388,9 @@ int CServerList::remove(const char *ip, const char *port,
 	return 0;
 }
 
-  
-  
-  
+/*
+**
+*/
 void CServerList::show()
 {
 	CServerItem *p;

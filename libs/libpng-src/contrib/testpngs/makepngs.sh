@@ -1,19 +1,19 @@
 #!/bin/sh
-
-
-
+#
+# Make a set of test PNG files, MAKEPNG is the name of the makepng executable
+# built from contrib/libtests/makepng.c
 
 # Copyright (c) 2015 John Cunningham Bowler
 
-
+# Last changed in libpng 1.6.20 [December 3, 2015]
 
 # This code is released under the libpng license.
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
-
-
+# The arguments say whether to build all the files or whether just to build the
+# ones that extend the code-coverage of libpng from the existing test files in
+# contrib/pngsuite.
 test -n "$MAKEPNG" || MAKEPNG=./makepng
 opts=
 
@@ -72,19 +72,19 @@ case "$1" in
       done;;
 
    --coverage)
-
-
-
-      mpg none gray-alpha 8  
-      mpg none palette 8  
-      mpg 1.8 gray 2  
-      mpg 1.8 palette 2  
-      mpg 1.8 palette 4  
-      mpg 1.8 palette 8  
-      mpg linear palette 8  
-      mpg linear rgb-alpha 16  
-      mpg sRGB palette 1  
-      mpg sRGB rgb-alpha 16  
+      # Comments below indicate cases known to be required and not duplicated
+      # in other (required) cases; the aim is to get a minimal set that gives
+      # the maximum code coverage.
+      mpg none gray-alpha 8 # required: code coverage, sRGB opaque component
+      mpg none palette 8 # required: basic palette read
+      mpg 1.8 gray 2 # required: tests gamma threshold code
+      mpg 1.8 palette 2 # required: code coverage
+      mpg 1.8 palette 4 # required: code coverage
+      mpg 1.8 palette 8 # error limits only
+      mpg linear palette 8 # error limits only
+      mpg linear rgb-alpha 16 # error limits only
+      mpg sRGB palette 1 # required: code coverage
+      mpg sRGB rgb-alpha 16 # required: code coverage: pngread.c:2422 untested
       :;;
 
    *)

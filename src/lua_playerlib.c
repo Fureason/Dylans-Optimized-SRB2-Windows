@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_playerlib.c
+/// \brief player object library for Lua scripting
 
 #include "doomdef.h"
 #include "fastcmp.h"
@@ -19,20 +19,20 @@
 
 #include "lua_script.h"
 #include "lua_libs.h"
-#include "lua_hud.h"  
-#include "lua_hook.h"  
+#include "lua_hud.h" // hud_running errors
+#include "lua_hook.h" // hook_cmd_running errors
 
 static int lib_iteratePlayers(lua_State *L)
 {
 	INT32 i = -1;
 	if (lua_gettop(L) < 2)
 	{
-
+		//return luaL_error(L, "Don't call players.iterate() directly, use it as 'for player in players.iterate do <block> end'.");
 		lua_pushcfunction(L, lib_iteratePlayers);
 		return 1;
 	}
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 	if (!lua_isnil(L, 1))
 		i = (INT32)(*((player_t **)luaL_checkudata(L, 1, META_PLAYER)) - players);
 	for (i++; i < MAXPLAYERS; i++)
@@ -50,7 +50,7 @@ static int lib_iteratePlayers(lua_State *L)
 static int lib_getPlayer(lua_State *L)
 {
 	const char *field;
-
+	// i -> players[i]
 	if (lua_type(L, 2) == LUA_TNUMBER)
 	{
 		lua_Integer i = luaL_checkinteger(L, 2);
@@ -73,7 +73,7 @@ static int lib_getPlayer(lua_State *L)
 	return 0;
 }
 
-
+// #players -> MAXPLAYERS
 static int lib_lenPlayer(lua_State *L)
 {
 	lua_pushinteger(L, MAXPLAYERS);
@@ -407,8 +407,8 @@ static int player_get(lua_State *L)
 	case player_realmo:
 		LUA_PushUserdata(L, plr->mo, META_MOBJ);
 		break;
-
-
+	// TODO: 2.3: Kept for backward-compatibility
+	// Should be fixed to work like "realmo" later
 	case player_mo:
 		if (plr->spectator)
 			lua_pushnil(L);
@@ -843,13 +843,13 @@ static int player_get(lua_State *L)
 		I_Assert(lua_istable(L, -1));
 		lua_pushlightuserdata(L, plr);
 		lua_rawget(L, -2);
-		if (!lua_istable(L, -1)) {  
+		if (!lua_istable(L, -1)) { // no extra values table
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no extvars table or field named '%s'; returning nil.\n"), "player_t", lua_tostring(L, 2));
 			return 0;
 		}
-		lua_pushvalue(L, 2);  
+		lua_pushvalue(L, 2); // field name
 		lua_gettable(L, -2);
-		if (lua_isnil(L, -1))  
+		if (lua_isnil(L, -1)) // no value for this field
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no field named '%s'; returning nil.\n"), "player_t", lua_tostring(L, 2));
 		break;
 	}
@@ -876,8 +876,8 @@ static int player_set(lua_State *L)
 	case player_realmo:
 	{
 		mobj_t *newmo = *((mobj_t **)luaL_checkudata(L, 3, META_MOBJ));
-		plr->mo->player = NULL;  
-		(newmo->player = plr)->mo = newmo;  
+		plr->mo->player = NULL; // remove player pointer from old mobj
+		(newmo->player = plr)->mo = newmo; // set player pointer for new mobj, and set new mobj as the player's mobj
 		break;
 	}
 	case player_cmd:
@@ -1302,11 +1302,11 @@ static int player_set(lua_State *L)
 			P_SetTarget(&plr->awayviewmobj, mo);
 			if (plr->awayviewtics) {
 				if (!plr->awayviewmobj)
-					plr->awayviewtics = 0;  
+					plr->awayviewtics = 0; // can't have a NULL awayviewmobj with awayviewtics!
 				if (plr == &players[displayplayer])
-					P_ResetCamera(plr, &camera);  
+					P_ResetCamera(plr, &camera); // reset p1 camera on p1 getting an awayviewmobj
 				else if (splitscreen && plr == &players[secondarydisplayplayer])
-					P_ResetCamera(plr, &camera2);   
+					P_ResetCamera(plr, &camera2);  // reset p2 camera on p2 getting an awayviewmobj
 			}
 		}
 		break;
@@ -1314,13 +1314,13 @@ static int player_set(lua_State *L)
 	case player_awayviewtics:
 	{
 		INT32 tics = (INT32)luaL_checkinteger(L, 3);
-		if (tics && !plr->awayviewmobj)  
-			P_SetTarget(&plr->awayviewmobj, plr->mo);  
+		if (tics && !plr->awayviewmobj) // awayviewtics must ALWAYS have an awayviewmobj set!!
+			P_SetTarget(&plr->awayviewmobj, plr->mo); // but since the script might set awayviewmobj immediately AFTER setting awayviewtics, use player mobj as filler for now.
 		if ((tics && !plr->awayviewtics) || (!tics && plr->awayviewtics)) {
 			if (plr == &players[displayplayer])
-				P_ResetCamera(plr, &camera);  
+				P_ResetCamera(plr, &camera); // reset p1 camera on p1 transitioning to/from zero awayviewtics
 			else if (splitscreen && plr == &players[secondarydisplayplayer])
-				P_ResetCamera(plr, &camera2);   
+				P_ResetCamera(plr, &camera2);  // reset p2 camera on p2 transitioning to/from zero awayviewtics
 		}
 		plr->awayviewtics = tics;
 		break;
@@ -1368,16 +1368,16 @@ static int player_set(lua_State *L)
 		lua_pushlightuserdata(L, plr);
 		lua_rawget(L, -2);
 		if (lua_isnil(L, -1)) {
-
+			// This index doesn't have a table for extra values yet, let's make one.
 			lua_pop(L, 1);
 			CONS_Debug(DBG_LUA, M_GetText("'%s' has no field named '%s'; adding it as Lua data.\n"), "player_t", lua_tostring(L, 2));
 			lua_newtable(L);
 			lua_pushlightuserdata(L, plr);
-			lua_pushvalue(L, -2);  
-			lua_rawset(L, -4);  
+			lua_pushvalue(L, -2); // ext value table
+			lua_rawset(L, -4); // LREG_EXTVARS table
 		}
-		lua_pushvalue(L, 2);  
-		lua_pushvalue(L, 3);  
+		lua_pushvalue(L, 2); // key
+		lua_pushvalue(L, 3); // value to store
 		lua_settable(L, -3);
 		lua_pop(L, 2);
 		break;
@@ -1397,7 +1397,7 @@ static int player_num(lua_State *L)
 	return 1;
 }
 
-
+// powers, p -> powers[p]
 static int power_get(lua_State *L)
 {
 	UINT16 *powers = *((UINT16 **)luaL_checkudata(L, 1, META_POWERS));
@@ -1408,7 +1408,7 @@ static int power_get(lua_State *L)
 	return 1;
 }
 
-
+// powers, p, value -> powers[p] = value
 static int power_set(lua_State *L)
 {
 	UINT16 *powers = *((UINT16 **)luaL_checkudata(L, 1, META_POWERS));
@@ -1424,7 +1424,7 @@ static int power_set(lua_State *L)
 	return 0;
 }
 
-
+// #powers -> NUMPOWERS
 static int power_len(lua_State *L)
 {
 	lua_pushinteger(L, NUMPOWERS);

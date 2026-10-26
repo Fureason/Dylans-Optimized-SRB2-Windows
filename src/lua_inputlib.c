@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_inputlib.c
+/// \brief input library for Lua scripting
 
 #include "doomdef.h"
 #include "fastcmp.h"
@@ -22,9 +22,9 @@
 boolean mousegrabbedbylua = true;
 boolean ignoregameinputs = false;
 
-
-
-
+///////////////
+// FUNCTIONS //
+///////////////
 
 static int lib_gameControlDown(lua_State *L)
 {
@@ -146,9 +146,9 @@ static luaL_Reg lib[] = {
 	{NULL, NULL}
 };
 
-
-
-
+///////////////
+// VARIABLES //
+///////////////
 
 static int lib_get(lua_State *L)
 {
@@ -191,9 +191,9 @@ static int lib_set(lua_State *L)
 	return 0;
 }
 
-
-
-
+///////////////////
+// gamekeydown[] //
+///////////////////
 
 static int lib_getGameKeyDown(lua_State *L)
 {
@@ -220,9 +220,9 @@ static int lib_lenGameKeyDown(lua_State *L)
 	return 1;
 }
 
-
-
-
+///////////////
+// KEY EVENT //
+///////////////
 
 static int keyevent_get(lua_State *L)
 {
@@ -243,9 +243,9 @@ static int keyevent_get(lua_State *L)
 	return 1;
 }
 
-
-
-
+///////////
+// MOUSE //
+///////////
 
 static int mouse_get(lua_State *L)
 {
@@ -272,7 +272,7 @@ static int mouse_get(lua_State *L)
 	return 1;
 }
 
-
+// #mouse -> 1 or 2
 static int mouse_num(lua_State *L)
 {
 	mouse_t *m = *((mouse_t **)luaL_checkudata(L, 1, META_MOUSE));
@@ -288,13 +288,13 @@ int LUA_InputLib(lua_State *L)
 	LUA_RegisterUserdataMetatable(L, META_KEYEVENT, keyevent_get, NULL, NULL);
 	LUA_RegisterUserdataMetatable(L, META_MOUSE, mouse_get, NULL, mouse_num);
 
-
-
+	// Register the library, then add __index and __newindex
+	// metamethods to it to allow global variables
 	luaL_register(L, "input", lib);
 		LUA_CreateAndSetMetatable(L, lib_get, lib_set, NULL, false);
 
 		LUA_CreateAndSetUserdataField(L, -1, "gamekeydown", lib_getGameKeyDown, lib_setGameKeyDown, lib_lenGameKeyDown, false);
-
+		// TODO: 2.3: Delete this alias (moved to input library)
 		LUA_RegisterGlobalUserdata(L, "gamekeydown", lib_getGameKeyDown, lib_setGameKeyDown, lib_lenGameKeyDown);
 	lua_pop(L, 1);
 

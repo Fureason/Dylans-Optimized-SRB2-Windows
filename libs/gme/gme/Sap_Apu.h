@@ -1,6 +1,6 @@
+// Atari POKEY sound chip emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef SAP_APU_H
 #define SAP_APU_H
 
@@ -32,7 +32,7 @@ private:
 		unsigned char invert;
 		int last_amp;
 		blip_time_t delay;
-		blip_time_t period;  
+		blip_time_t period; // always recalculated before use; here for convenience
 		Blip_Buffer* output;
 	};
 	osc_t oscs [osc_count];
@@ -52,7 +52,7 @@ private:
 	friend class Sap_Apu_Impl;
 };
 
-
+// Common tables and Blip_Synth that can be shared among multiple Sap_Apu objects
 class Sap_Apu_Impl {
 public:
 	Blip_Synth<blip_good_quality,1> synth;

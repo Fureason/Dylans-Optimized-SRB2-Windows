@@ -1,11 +1,11 @@
-
+// CPU Byte Order Utilities
 
 #ifndef BLARGG_ENDIAN
 #define BLARGG_ENDIAN
 
 #include "blargg_common.h"
 
-
+// BLARGG_CPU_CISC: Defined if CPU has very few general-purpose registers (< 16)
 #if defined (__i386__) || defined (__x86_64__) || defined (_M_IX86) || defined (_M_X64)
 	#define BLARGG_CPU_X86 1
 	#define BLARGG_CPU_CISC 1
@@ -17,11 +17,11 @@
 	#define BLARGG_CPU_RISC 1
 #endif
 
-
-
+// BLARGG_BIG_ENDIAN, BLARGG_LITTLE_ENDIAN: Determined automatically, otherwise only
+// one may be #defined to 1. Only needed if something actually depends on byte order.
 #if !defined (BLARGG_BIG_ENDIAN) && !defined (BLARGG_LITTLE_ENDIAN)
 #ifdef __GLIBC__
-
+	// GCC handles this for us
 	#include <endian.h>
 	#if __BYTE_ORDER == __LITTLE_ENDIAN
 		#define BLARGG_LITTLE_ENDIAN 1
@@ -40,7 +40,7 @@
 	(defined (BIG_ENDIAN) && BIG_ENDIAN+0 != 4321)
 	#define BLARGG_BIG_ENDIAN 1
 #elif !defined (__mips__)
-
+	// No endian specified; assume little-endian, since it's most common
 	#define BLARGG_LITTLE_ENDIAN 1
 #endif
 #endif
@@ -121,7 +121,7 @@ inline void set_be32( void* p, blargg_ulong n )
 }
 
 #if BLARGG_NONPORTABLE
-
+	// Optimized implementation if byte order is known
 	#if BLARGG_LITTLE_ENDIAN
 		#define GET_LE16( addr )        (*(BOOST::uint16_t*) (addr))
 		#define GET_LE32( addr )        (*(BOOST::uint32_t*) (addr))
@@ -134,7 +134,7 @@ inline void set_be32( void* p, blargg_ulong n )
 		#define SET_BE32( addr, data )  (void) (*(BOOST::uint32_t*) (addr) = (data))
 		
 		#if BLARGG_CPU_POWERPC
-
+			// PowerPC has special byte-reversed instructions
 			#if defined (__MWERKS__)
 				#define GET_LE16( addr )        (__lhbrx( addr, 0 ))
 				#define GET_LE32( addr )        (__lwbrx( addr, 0 ))
@@ -170,7 +170,7 @@ inline void set_be32( void* p, blargg_ulong n )
 	#define SET_BE32( addr, data )  set_be32( addr, data )
 #endif
 
-
+// auto-selecting versions
 
 inline void set_le( BOOST::uint16_t* p, unsigned     n ) { SET_LE16( p, n ); }
 inline void set_le( BOOST::uint32_t* p, blargg_ulong n ) { SET_LE32( p, n ); }

@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  d_netfil.c
+/// \brief Transfer a file using HSendPacket.
 
 #ifdef HAVE_CURL
 #include <curl/curl.h>
@@ -60,48 +60,48 @@
 
 #include <errno.h>
 
-
+// Prototypes
 static boolean AddFileToSendQueue(INT32 node, UINT8 fileid);
 
-
+// Sender structure
 typedef struct filetx_s
 {
 	INT32 ram;
 	union {
-		char *filename;  
-		char *ram;  
+		char *filename; // Name of the file
+		char *ram; // Pointer to the data in RAM
 	} id;
-	UINT32 size;  
+	UINT32 size; // Size of the file
 	UINT8 fileid;
-	INT32 node;  
-	struct filetx_s *next;  
+	INT32 node; // Destination
+	struct filetx_s *next; // Next file in the list
 } filetx_t;
 
-
+// Current transfers (one for each node)
 typedef struct filetran_s
 {
-	filetx_t *txlist;  
+	filetx_t *txlist; // Linked list of all files for the node
 	UINT8 iteration;
 	UINT8 ackediteration;
-	UINT32 position;  
+	UINT32 position; // The current position in the file
 	boolean *ackedfragments;
 	UINT32 ackedsize;
-	FILE *currentfile;  
+	FILE *currentfile; // The file currently being sent/received
 	tic_t dontsenduntil;
 } filetran_t;
 static filetran_t transfer[MAXNETNODES];
 
+// Read time of file: stat _stmtime
+// Write time of file: utime
 
-
-
-
-INT32 fileneedednum;  
-fileneeded_t *fileneeded;  
+// Receiver structure
+INT32 fileneedednum; // Number of files needed to join the server
+fileneeded_t *fileneeded; // List of needed files
 static tic_t lasttimeackpacketsent = 0;
 static I_mutex downloadmutex;
 char downloaddir[512] = "DOWNLOAD";
 
-
+// For resuming failed downloads
 typedef struct
 {
 	char filename[MAX_WADPATH];
@@ -131,14 +131,14 @@ boolean waitingforluafiletransfer = false;
 boolean waitingforluafilecommand = false;
 char luafiledir[256 + 16] = "luafiles";
 
-
+// max file size to send to a player (in kilobytes)
 static CV_PossibleValue_t maxsend_cons_t[] = {{0, "MIN"}, {204800, "MAX"}, {0, NULL}};
 consvar_t cv_maxsend = CVAR_INIT ("maxsend", "4096", CV_SAVE|CV_NETVAR, maxsend_cons_t, NULL);
 consvar_t cv_autosendaddons = CVAR_INIT ("autosendaddons", "On", CV_SAVE, CV_OnOff, NULL);
 
 consvar_t cv_noticedownload = CVAR_INIT ("noticedownload", "Off", CV_SAVE|CV_NETVAR, CV_OnOff, NULL);
 
-
+// Speed of file downloading (in packets per tic)
 static CV_PossibleValue_t downloadspeed_cons_t[] = {{1, "MIN"}, {300, "MAX"}, {0, NULL}};
 consvar_t cv_downloadspeed = CVAR_INIT ("downloadspeed", "16", CV_SAVE|CV_NETVAR, downloadspeed_cons_t, NULL);
 consvar_t cv_autodownloadspeed = CVAR_INIT ("autodownloadspeed", "On", CV_SAVE, CV_OnOff, NULL);
@@ -146,10 +146,10 @@ consvar_t cv_persistentmd5 = CVAR_INIT ("persistent_addon_cache", "On", CV_SAVE,
 
 static UINT32 MaxSendBytes(void)
 {
-
-
-
-
+	// The stock 4 MiB default rejects many modern addons before a client can
+	// request them. Keep maxsend available as the conservative/manual limit,
+	// while autosendaddons opts the host into the protocol's existing 200 MiB
+	// maximum without adding a new network field.
 	const UINT32 maxsendkb = cv_autosendaddons.value ? 204800 : (UINT32)cv_maxsend.value;
 	return maxsendkb * 1024;
 }
@@ -175,12 +175,12 @@ enum
 	WILLSEND_TOOLARGE
 };
 
-                                                                      
-   
-                                                                       
-                                                                               
-   
-    
+/** Fills a serverinfo packet with information about wad files loaded.
+  *
+  * \todo Give this function a better name since it is in global scope.
+  * Used to have size limiting built in - now handled via W_InitFile in w_wad.c
+  *
+  */
 UINT8 *PutFileNeeded(UINT16 firstfile)
 {
 	UINT8 count = 0;
@@ -189,24 +189,24 @@ UINT8 *PutFileNeeded(UINT16 firstfile)
 	char wadfilename[MAX_WADPATH] = "";
 	UINT8 filestatus, folder;
 
-	for (size_t i = mainwads; i < numwadfiles; i++)  
+	for (size_t i = mainwads; i < numwadfiles; i++) //mainwads, otherwise we start on the first mainwad
 	{
-
+		// If it has only music/sound lumps, don't put it in the list
 		if (!wadfiles[i]->important)
 			continue;
 
 		if (firstfile)
-		{  
+		{ // Skip files until we reach the first file.
 			firstfile--;
 			continue;
 		}
 
 		nameonly(strcpy(wadfilename, wadfiles[i]->filename));
 
-
+		// Look below at the WRITE macros to understand what these numbers mean.
 		if (p + 1 + 4 + min(strlen(wadfilename) + 1, MAX_WADPATH) + 16 > p_start + MAXFILENEEDED)
 		{
-
+			// Too many files to send all at once
 			if (netbuffer->packettype == PT_MOREFILESNEEDED)
 				netbuffer->u.filesneededcfg.more = 1;
 			else
@@ -214,18 +214,18 @@ UINT8 *PutFileNeeded(UINT16 firstfile)
 			break;
 		}
 
-		filestatus = 1;  
+		filestatus = 1; // Importance - not really used any more, holds 1 by default for backwards compat with MS
 		folder = wadfiles[i]->type == RET_FOLDER;
 
 		if (!folder)
 		{
-
+			// Store in the upper four bits
 			if (!cv_downloading.value)
-				filestatus += (WILLSEND_NO << 4);  
+				filestatus += (WILLSEND_NO << 4); // Won't send
 			else if (wadfiles[i]->filesize <= MaxSendBytes())
-				filestatus += (WILLSEND_YES << 4);  
-
-
+				filestatus += (WILLSEND_YES << 4); // Will send if requested
+			// else
+				// filestatus += (0 << 4); -- Won't send, too big
 		}
 
 		WRITEUINT8(p, filestatus);
@@ -259,12 +259,12 @@ void FreeFileNeeded(void)
 	fileneeded = NULL;
 }
 
-                                                                         
-   
-                                                                           
-                                                                             
-   
-    
+/** Parses the serverinfo packet and fills the fileneeded table on client
+  *
+  * \param fileneedednum_parm The number of files needed to join the server
+  * \param fileneededstr The memory block containing the list of needed files
+  *
+  */
 void D_ParseFileneeded(INT32 fileneedednum_parm, UINT8 *fileneededstr, UINT16 firstfile)
 {
 	UINT8 *p;
@@ -278,16 +278,16 @@ void D_ParseFileneeded(INT32 fileneedednum_parm, UINT8 *fileneededstr, UINT16 fi
 	for (INT32 i = firstfile; i < fileneedednum; i++)
 	{
 		fileneeded[i].type = FILENEEDED_WAD;
-		fileneeded[i].status = FS_NOTCHECKED;  
+		fileneeded[i].status = FS_NOTCHECKED; // We haven't even started looking for the file yet
 		fileneeded[i].justdownloaded = false;
-		filestatus = READUINT8(p);  
-		fileneeded[i].folder = READUINT8(p);  
+		filestatus = READUINT8(p); // The first byte is the file status
+		fileneeded[i].folder = READUINT8(p); // The second byte is the folder flag
 		fileneeded[i].willsend = (UINT8)(filestatus >> 4);
-		fileneeded[i].totalsize = READUINT32(p);  
-		fileneeded[i].file = NULL;  
+		fileneeded[i].totalsize = READUINT32(p); // The four next bytes are the file size
+		fileneeded[i].file = NULL; // The file isn't open yet
 		fileneeded[i].failed = FDOWNLOAD_FAIL_NONE;
-		READSTRINGN(p, fileneeded[i].filename, MAX_WADPATH);  
-		READMEM(p, fileneeded[i].md5sum, 16);  
+		READSTRINGN(p, fileneeded[i].filename, MAX_WADPATH); // The next bytes are the file name
+		READMEM(p, fileneeded[i].md5sum, 16); // The last 16 bytes are the file checksum
 	}
 }
 
@@ -308,13 +308,13 @@ void CL_PrepareDownloadSaveGame(const char *tmpsave)
 	strcpy(fileneeded[0].filename, tmpsave);
 }
 
-                                                              
-                                                  
-   
-                                                
-                                                 
-   
-    
+/** Checks the server to see if we CAN download all the files,
+  * before starting to create them and requesting.
+  *
+  * \param direct Game will do a direct download
+  * \return True if we can download all the files
+  *
+  */
 UINT8 CL_CheckDownloadable(boolean direct)
 {
 	UINT8 dlstatus = DLSTATUS_OK;
@@ -336,29 +336,29 @@ UINT8 CL_CheckDownloadable(boolean direct)
 
 			if (fileneeded[i].willsend == WILLSEND_TOOLARGE)
 				dlstatus = DLSTATUS_TOOLARGE;
-			else  
+			else //if (fileneeded[i].willsend == WILLSEND_NO)
 				dlstatus = DLSTATUS_WONTSEND;
 		}
 
-
+	// Downloading locally disabled
 	if (direct && !dlstatus && M_CheckParm("-nodownload"))
 		dlstatus = DLSTATUS_NODOWNLOAD;
 
 	return dlstatus;
 }
 
-                                                         
-   
-                                                          
-                                               
-   
-    
+/** Returns true if a needed file transfer can be resumed
+  *
+  * \param file The needed file to resume the transfer for
+  * \return True if the transfer can be resumed
+  *
+  */
 static boolean CL_CanResumeDownload(fileneeded_t *file)
 {
 	return pauseddownload
-		&& !strcmp(pauseddownload->filename, file->filename)  
-		&& !memcmp(pauseddownload->md5sum, file->md5sum, 16)  
-		&& pauseddownload->fragmentsize == file->fragmentsize;  
+		&& !strcmp(pauseddownload->filename, file->filename) // Same name
+		&& !memcmp(pauseddownload->md5sum, file->md5sum, 16) // Same checksum
+		&& pauseddownload->fragmentsize == file->fragmentsize; // Same fragment size
 }
 
 void CL_AbortDownloadResume(void)
@@ -372,13 +372,13 @@ void CL_AbortDownloadResume(void)
 	pauseddownload = NULL;
 }
 
-                                                                       
-                  
-   
-                                                    
-                                       
-   
-    
+/** Sends requests for files in the ::fileneeded table with a status of
+  * ::FS_NOTFOUND.
+  *
+  * \return True if the packet was successfully sent
+  * \note Sends a PT_REQUESTFILE packet
+  *
+  */
 boolean CL_SendFileRequest(void)
 {
 	char *p;
@@ -403,7 +403,7 @@ boolean CL_SendFileRequest(void)
 
 		if (fileneeded[i].status == FS_NOTFOUND || fileneeded[i].status == FS_MD5SUMBAD)
 		{
-
+			// Error check for the first time around.
 			totalfreespaceneeded += fileneeded[i].totalsize;
 		}
 	}
@@ -422,9 +422,9 @@ boolean CL_SendFileRequest(void)
 	for (INT32 i = 0; i < fileneedednum; i++)
 		if (fileneeded[i].status == FS_NOTFOUND || fileneeded[i].status == FS_MD5SUMBAD)
 		{
-			WRITEUINT8(p, i);  
+			WRITEUINT8(p, i); // fileid
 
-
+			// put it in download dir
 			nameonly(fileneeded[i].filename);
 			strcatbf(fileneeded[i].filename, downloaddir, "/");
 
@@ -439,24 +439,24 @@ boolean CL_SendFileRequest(void)
 		return false;
 	}
 
-
+	// prepare to download
 	I_mkdir(downloaddir, 0755);
 
 	return true;
 }
 
-
+// get request filepak and put it on the send queue
 void PT_RequestFile(SINT8 node)
 {
 	UINT8 *p = netbuffer->u.textcmd;
 
 	if (client || !cv_downloading.value)
 	{
-		Net_CloseConnection(node);  
+		Net_CloseConnection(node); // close connection if you are not the server or disabled downloading
 		return;
 	}
 
-	while (p < netbuffer->u.textcmd + MAXTEXTCMD-1)  
+	while (p < netbuffer->u.textcmd + MAXTEXTCMD-1) // Don't allow hacked client to overflow
 	{
 		UINT8 id = READUINT8(p);
 		if (id == 0xFF)
@@ -465,23 +465,23 @@ void PT_RequestFile(SINT8 node)
 		if (!AddFileToSendQueue(node, id))
 		{
 			SV_AbortSendFiles(node);
-			Net_CloseConnection(node);  
-			return;  
+			Net_CloseConnection(node); // close connection if one of the requested files could not be sent
+			return; // don't read the rest of the files
 		}
 	}
 
-	return;  
+	return; // no problems with any files
 }
 
-                                                                   
-   
-                                       
-                                
-                                                                                        
-                                           
-                                                 
-   
-    
+/** Checks if the files needed aren't already loaded or on the disk
+  *
+  * \return 0 if some files are missing
+  *         1 if all files exist
+  *         2 if some already loaded files are not requested or are in a different order
+  *         3 too many files, over WADLIMIT
+  *         4 still checking, continuing next tic
+  *
+  */
 INT32 CL_CheckFiles(void)
 {
 	INT32 i, j;
@@ -490,15 +490,15 @@ INT32 CL_CheckFiles(void)
 	boolean downloadrequired = false;
 	UINT8 fileschecked = 0;
 	const precise_t checkstarted = I_GetPreciseTime();
-	precise_t checkbudget = (precise_t)(I_GetPrecisePrecision() / 250);  
+	precise_t checkbudget = (precise_t)(I_GetPrecisePrecision() / 250); // 4 ms
 
 	if (!checkbudget)
 		checkbudget = 1;
 
-
-
-
-
+	// Modified game handling -- the already-loaded prefix must be identical and
+	// in order. A server may have appended files while this client was connected;
+	// allow that strict tail extension to be found/downloaded and loaded during
+	// the automatic reconnect instead of requiring a full process restart.
 	if (modifiedgame)
 	{
 		CONS_Debug(DBG_NETPLAY, "game is modified; only doing basic checks\n");
@@ -506,12 +506,12 @@ INT32 CL_CheckFiles(void)
 		{
 			if (j < numwadfiles && !wadfiles[j]->important)
 			{
-
+				// Unimportant on our side.
 				++j;
 				continue;
 			}
 
-
+			// Local extra files or a changed middle entry remain incompatible.
 			if (i >= fileneedednum)
 			{
 				CONS_Alert(CONS_ERROR,
@@ -522,8 +522,8 @@ INT32 CL_CheckFiles(void)
 				return 2;
 			}
 
-
-
+			// Runtime addfile always appends. Check the server's remaining tail
+			// exactly like a clean join so it can be loaded or downloaded.
 			if (j >= numwadfiles)
 			{
 				for (; i < fileneedednum; i++)
@@ -550,7 +550,7 @@ INT32 CL_CheckFiles(void)
 				return downloadrequired ? 0 : 1;
 			}
 
-
+			// For the sake of speed, only bother with a md5 check
 			if (memcmp(wadfiles[j]->md5sum, fileneeded[i].md5sum, 16))
 			{
 				CONS_Alert(CONS_ERROR,
@@ -559,7 +559,7 @@ INT32 CL_CheckFiles(void)
 				return 2;
 			}
 
-
+			// It's accounted for! let's keep going.
 			CONS_Debug(DBG_NETPLAY, "'%s' accounted for\n", fileneeded[i].filename);
 			fileneeded[i].status = FS_OPEN;
 			++i;
@@ -576,7 +576,7 @@ INT32 CL_CheckFiles(void)
 		if (fileneeded[i].status != FS_OPEN)
 			filestoload++;
 
-		if (fileneeded[i].status != FS_NOTCHECKED)  
+		if (fileneeded[i].status != FS_NOTCHECKED) //since we're running this over multiple tics now, its possible for us to come across files checked in previous tics
 			continue;
 
 		CONS_Debug(DBG_NETPLAY, "searching for '%s' ", fileneeded[i].filename);
@@ -589,7 +589,7 @@ INT32 CL_CheckFiles(void)
 		{
 			boolean alreadyloaded = false;
 
-
+			// Check in already loaded files
 			for (j = mainwads; j < numwadfiles; j++)
 			{
 				nameonly(strcpy(wadfilename, wadfiles[j]->filename));
@@ -613,21 +613,21 @@ INT32 CL_CheckFiles(void)
 			return 4;
 	}
 
-
+	//now making it here means we've checked the entire list and no FS_NOTCHECKED files remain
 	if (numwadfiles+filestoload > MAX_WADFILES)
 		return 3;
 	else if (downloadrequired)
-		return 0;  
+		return 0; //some stuff is FS_NOTFOUND, needs download
 	else
-		return 1;  
+		return 1; //everything is FS_OPEN or FS_FOUND, proceed to loading
 }
 
-
+// Load it now
 boolean CL_LoadServerFiles(void)
 {
 	UINT8 filesloaded = 0;
 	const precise_t loadstarted = I_GetPreciseTime();
-	precise_t loadbudget = (precise_t)(I_GetPrecisePrecision() / 125);  
+	precise_t loadbudget = (precise_t)(I_GetPrecisePrecision() / 125); // 8 ms
 
 	if (M_CheckParm("-nofiles"))
 		return true;
@@ -637,7 +637,7 @@ boolean CL_LoadServerFiles(void)
 	for (INT32 i = 0; i < fileneedednum; i++)
 	{
 		if (fileneeded[i].status == FS_OPEN)
-			continue;  
+			continue; // Already loaded
 		else if (fileneeded[i].status == FS_FOUND)
 		{
 			if (fileneeded[i].folder)
@@ -655,9 +655,9 @@ boolean CL_LoadServerFiles(void)
 			G_SetGameModified(true);
 			fileneeded[i].status = FS_OPEN;
 			filesloaded++;
-			                                                            
-                                                                    
-                                                              
+			/* Preserve the exact server order, but do not spend a whole
+			 * 35 Hz tic on every tiny add-on.  Large files still yield after
+			 * one load so the connection screen remains responsive. */
 			if (filesloaded >= 8 || I_GetPreciseTime() - loadstarted >= loadbudget)
 				return false;
 		}
@@ -690,28 +690,28 @@ boolean CL_LoadServerFiles(void)
 
 void AddLuaFileTransfer(const char *filename, const char *mode)
 {
-	luafiletransfer_t **prevnext;  
+	luafiletransfer_t **prevnext; // A pointer to the "next" field of the last transfer in the list
 	luafiletransfer_t *filetransfer;
 	static INT32 id;
 
-
+	// Find the last transfer in the list and set a pointer to its "next" field
 	prevnext = &luafiletransfers;
 	while (*prevnext)
 		prevnext = &((*prevnext)->next);
 
-
+	// Allocate file transfer information and append it to the transfer list
 	filetransfer = calloc(1, sizeof(luafiletransfer_t));
 	if (!filetransfer)
 		I_Error("AddLuaFileTransfer: Out of memory\n");
 	*prevnext = filetransfer;
 	filetransfer->next = NULL;
 
-
+	// Allocate the file name
 	filetransfer->filename = strdup(filename);
 	if (!filetransfer->filename)
 		I_Error("AddLuaFileTransfer: Out of memory\n");
 
-
+	// Create and allocate the real file name
 	if (server)
 		filetransfer->realfilename = strdup(va("%s" PATHSEP "%s",
 												luafiledir, filename));
@@ -723,13 +723,13 @@ void AddLuaFileTransfer(const char *filename, const char *mode)
 
 	strlcpy(filetransfer->mode, mode, sizeof(filetransfer->mode));
 
-
+	// Only if there is no transfer already going on
 	if (server && filetransfer == luafiletransfers)
 		SV_PrepareSendLuaFile();
 	else
 		filetransfer->ongoing = false;
 
-
+	// Store the callback so it can be called once everyone has the file
 	filetransfer->id = id;
 	StoreLuaFileCallback(id);
 	id++;
@@ -745,14 +745,14 @@ static void SV_PrepareSendLuaFileToNextNode(void)
 {
 	UINT8 success = 1;
 
-
+    // Find a client to send the file to
 	for (INT32 i = 1; i < MAXNETNODES; i++)
-		if (luafiletransfers->nodestatus[i] == LFTNS_WAITING)  
+		if (luafiletransfers->nodestatus[i] == LFTNS_WAITING) // Node waiting
 		{
-
+			// Tell the client we're about to send them the file
 			netbuffer->packettype = PT_SENDINGLUAFILE;
 			if (!HSendPacket(i, true, 0, 0))
-				I_Error("Failed to send a PT_SENDINGLUAFILE packet\n");  
+				I_Error("Failed to send a PT_SENDINGLUAFILE packet\n"); // !!! Todo: Handle failure a bit better lol
 
 			luafiletransfers->nodestatus[i] = LFTNS_ASKED;
 			luafiletransfers->nodetimeouts[i] = I_GetTime() + 30 * TICRATE;
@@ -760,8 +760,8 @@ static void SV_PrepareSendLuaFileToNextNode(void)
 			return;
 		}
 
-
-
+	// No client found, everyone has the file
+	// Send a net command with 1 as its first byte to indicate the file could be opened
 	SendNetXCmd(XD_LUAFILE, &success, 1);
 }
 
@@ -771,13 +771,13 @@ void SV_PrepareSendLuaFile(void)
 
 	luafiletransfers->ongoing = true;
 
-
+	// Set status to "waiting" for everyone
 	for (INT32 i = 0; i < MAXNETNODES; i++)
 		luafiletransfers->nodestatus[i] = (netnodes[i].ingame ? LFTNS_WAITING : LFTNS_NONE);
 
 	if (FIL_ReadFileOK(luafiletransfers->realfilename))
 	{
-
+		// If opening in text mode, convert all newlines to LF
 		if (!strchr(luafiletransfers->mode, 'b'))
 		{
 			binfilename = strdup(va("%s" PATHSEP "$$$%d%d.tmp",
@@ -788,7 +788,7 @@ void SV_PrepareSendLuaFile(void)
 			if (!FIL_ConvertTextFileToBinary(luafiletransfers->realfilename, binfilename))
 				I_Error("SV_PrepareSendLuaFile: Failed to convert file newlines\n");
 
-
+			// Use the temporary file instead
 			free(luafiletransfers->realfilename);
 			luafiletransfers->realfilename = binfilename;
 		}
@@ -797,7 +797,7 @@ void SV_PrepareSendLuaFile(void)
 	}
 	else
 	{
-
+		// Send a net command with 0 as its first byte to indicate the file couldn't be opened
 		UINT8 success = 0;
 		SendNetXCmd(XD_LUAFILE, &success, 1);
 	}
@@ -806,9 +806,9 @@ void SV_PrepareSendLuaFile(void)
 void SV_HandleLuaFileSent(UINT8 node)
 {
 	luafiletransfers->nodestatus[node] = LFTNS_SENT;
-	                                                                         
-                                                                        
-                                                                               
+	/* Do not compare a client's old consistency sample with the host's first
+	 * post-transfer state.  Both sides will execute the ordered XD_LUAFILE
+	 * command, but packets already in flight can still describe the prior tic. */
 	if (node < MAXNETNODES)
 		netnodes[node].savegameresendcooldown = I_GetTime() + 3*TICRATE;
 	SV_PrepareSendLuaFileToNextNode();
@@ -818,7 +818,7 @@ void RemoveLuaFileTransfer(void)
 {
 	luafiletransfer_t *filetransfer = luafiletransfers;
 
-
+	// If it was a temporary file, delete it
 	if (server && !strchr(filetransfer->mode, 'b'))
 		remove(filetransfer->realfilename);
 
@@ -852,8 +852,8 @@ void SV_AbortLuaFileTransfer(INT32 node)
 
 void CL_PrepareDownloadLuaFile(void)
 {
-
-
+	// If there is no transfer in the list, this normally means the server
+	// called io.open before us, so we have to wait until we call it too
 	if (!luafiletransfers)
 	{
 		waitingforluafiletransfer = true;
@@ -866,7 +866,7 @@ void CL_PrepareDownloadLuaFile(void)
 		return;
 	}
 
-
+	// Tell the server we are ready to receive the file
 	netbuffer->packettype = PT_ASKLUAFILE;
 	HSendPacket(servernode, true, 0, 0);
 
@@ -882,212 +882,212 @@ void CL_PrepareDownloadLuaFile(void)
 	memset(fileneeded[0].md5sum, 0, 16);
 	strcpy(fileneeded[0].filename, luafiletransfers->realfilename);
 
-
+	// Make sure all directories in the file path exist
 	MakePathDirs(fileneeded[0].filename);
 
 	luafiletransfers->ongoing = true;
 }
 
-
-
+// Number of files to send
+// Little optimization to quickly test if there is a file in the queue
 static INT32 filestosend = 0;
 
-                                           
-   
-                                            
-                                    
-                                                                  
-                         
-                             
-   
-    
+/** Adds a file to the file list for a node
+  *
+  * \param node The node to send the file to
+  * \param filename The file to send
+  * \param fileid The index of the file in the list of added files
+  * \sa AddRamToSendQueue
+  * \sa AddLuaFileToSendQueue
+  *
+  */
 static boolean AddFileToSendQueue(INT32 node, UINT8 fileid)
 {
-	filetx_t **q;  
-	filetx_t *p;  
+	filetx_t **q; // A pointer to the "next" field of the last file in the list
+	filetx_t *p; // The new file request
 	UINT16 wadnum;
 
-
+	// Find the last file in the list and set a pointer to its "next" field
 	q = &transfer[node].txlist;
 	while (*q)
 		q = &((*q)->next);
 
-
+	// Allocate a file request and append it to the file list
 	p = *q = (filetx_t *)malloc(sizeof (filetx_t));
 	if (!p)
 		I_Error("AddFileToSendQueue: No more memory\n");
 
-
+	// Initialise with zeros
 	memset(p, 0, sizeof (filetx_t));
 
-
+	// Allocate the file name
 	p->id.filename = (char *)malloc(MAX_WADPATH);
 	if (!p->id.filename)
 		I_Error("AddFileToSendQueue: No more memory\n");
 
-
+	// Find the wad the ID refers to
 	wadnum = GetWadNumFromFileNeededId(fileid);
 
-
+	// Handle non-loaded file requests
 	if (wadnum == UINT16_MAX)
 	{
 		DEBFILE(va("fileneeded %d not found in wadfiles\n", fileid));
+		// This formerly checked if (!findfile(p->id.filename, NULL, true))
 
-
-
-
+		// Not found
+		// Don't inform client
 		DEBFILE(va("Client %d request fileneeded %d: not found\n", node, fileid));
 		free(p->id.filename);
 		free(p);
 		*q = NULL;
-		return false;  
+		return false; // cancel the rest of the requests
 	}
 
-
+	// Set the file name and get rid of the path
 	strlcpy(p->id.filename, wadfiles[wadnum]->filename, MAX_WADPATH);
 
-
+	// Handle file requests larger than the host is willing to send.
 	if (wadfiles[wadnum]->filesize > MaxSendBytes())
 	{
-
-
+		// Too big
+		// Don't inform client (client sucks, man)
 		DEBFILE(va("Client %d request %s: file too big, not sending\n", node, p->id.filename));
 		free(p->id.filename);
 		free(p);
 		*q = NULL;
-		return false;  
+		return false; // cancel the rest of the requests
 	}
 
 	if (cv_noticedownload.value)
 		CONS_Printf("Sending file \"%s\" to node %d (%s)\n", p->id.filename, node, I_GetNodeAddress(node));
 
 	DEBFILE(va("Sending file %s (id=%d) to %d\n", p->id.filename, fileid, node));
-	p->ram = SF_FILE;  
+	p->ram = SF_FILE; // It's a file, we need to close it and free its name once we're done sending it
 	p->fileid = fileid;
-	p->next = NULL;  
+	p->next = NULL; // End of list
 	filestosend++;
 	return true;
 }
 
-                                                   
-   
-                                                    
-                                        
-                                              
-                                                                  
-                                                                  
-                          
-                             
-   
-    
+/** Adds a memory block to the file list for a node
+  *
+  * \param node The node to send the memory block to
+  * \param data The memory block to send
+  * \param size The size of the block in bytes
+  * \param freemethod How to free the block after it has been sent
+  * \param fileid The index of the file in the list of added files
+  * \sa AddFileToSendQueue
+  * \sa AddLuaFileToSendQueue
+  *
+  */
 void AddRamToSendQueue(INT32 node, void *data, size_t size, freemethod_t freemethod, UINT8 fileid)
 {
-	filetx_t **q;  
-	filetx_t *p;  
+	filetx_t **q; // A pointer to the "next" field of the last file in the list
+	filetx_t *p; // The new file request
 
-
+	// Find the last file in the list and set a pointer to its "next" field
 	q = &transfer[node].txlist;
 	while (*q)
 		q = &((*q)->next);
 
-
+	// Allocate a file request and append it to the file list
 	p = *q = (filetx_t *)malloc(sizeof (filetx_t));
 	if (!p)
 		I_Error("AddRamToSendQueue: No more memory\n");
 
-
+	// Initialise with zeros
 	memset(p, 0, sizeof (filetx_t));
 
-	p->ram = freemethod;  
+	p->ram = freemethod; // Remember how to free the memory block for when we're done sending it
 	p->id.ram = data;
 	p->size = (UINT32)size;
 	p->fileid = fileid;
-	p->next = NULL;  
+	p->next = NULL; // End of list
 
 	DEBFILE(va("Sending ram %p(size:%u) to %d (id=%u)\n",p->id.ram,p->size,node,fileid));
 
 	filestosend++;
 }
 
-                                                            
-   
-                                            
-                                    
-                          
-                         
-   
-    
+/** Adds a file requested by Lua to the file list for a node
+  *
+  * \param node The node to send the file to
+  * \param filename The file to send
+  * \sa AddFileToSendQueue
+  * \sa AddRamToSendQueue
+  *
+  */
 boolean AddLuaFileToSendQueue(INT32 node, const char *filename)
 {
-	filetx_t **q;  
-	filetx_t *p;  
+	filetx_t **q; // A pointer to the "next" field of the last file in the list
+	filetx_t *p; // The new file request
 
 	luafiletransfers->nodestatus[node] = LFTNS_SENDING;
 
-
+	// Find the last file in the list and set a pointer to its "next" field
 	q = &transfer[node].txlist;
 	while (*q)
 		q = &((*q)->next);
 
-
+	// Allocate a file request and append it to the file list
 	p = *q = (filetx_t *)malloc(sizeof (filetx_t));
 	if (!p)
 		I_Error("AddLuaFileToSendQueue: No more memory\n");
 
-
+	// Initialise with zeros
 	memset(p, 0, sizeof (filetx_t));
 
-
-	p->id.filename = (char *)malloc(MAX_WADPATH);  
+	// Allocate the file name
+	p->id.filename = (char *)malloc(MAX_WADPATH); // !!!
 	if (!p->id.filename)
 		I_Error("AddLuaFileToSendQueue: No more memory\n");
 
-
-	strlcpy(p->id.filename, filename, MAX_WADPATH);  
-
+	// Set the file name and get rid of the path
+	strlcpy(p->id.filename, filename, MAX_WADPATH); // !!!
+	//nameonly(p->id.filename);
 
 	DEBFILE(va("Sending Lua file %s to %d\n", filename, node));
-	p->ram = SF_FILE;  
-	p->next = NULL;  
+	p->ram = SF_FILE; // It's a file, we need to close it and free its name once we're done sending it
+	p->next = NULL; // End of list
 	filestosend++;
 	return true;
 }
 
-                                                                                
-                                                                                    
-   
-                               
-   
-    
+/** Stops sending a file for a node, and removes the file request from the list,
+  * either because the file has been fully sent or because the node was disconnected
+  *
+  * \param node The destination
+  *
+  */
 static void SV_EndFileSend(INT32 node)
 {
 	filetx_t *p = transfer[node].txlist;
 
-
-
+	// Free the file request according to the freemethod
+	// parameter used with AddFileToSendQueue/AddRamToSendQueue
 	switch (p->ram)
 	{
-		case SF_FILE:  
+		case SF_FILE: // It's a file, close it and free its filename
 			if (cv_noticedownload.value)
 				CONS_Printf("Ending file transfer for node %d\n", node);
 			if (transfer[node].currentfile)
 				fclose(transfer[node].currentfile);
 			free(p->id.filename);
 			break;
-		case SF_Z_RAM:  
+		case SF_Z_RAM: // It's a memory block allocated with Z_Alloc or the likes, use Z_Free
 			Z_Free(p->id.ram);
 			break;
-		case SF_RAM:  
+		case SF_RAM: // It's a memory block allocated with malloc, use free
 			free(p->id.ram);
-		case SF_NOFREERAM:  
+		case SF_NOFREERAM: // Nothing to free
 			break;
 	}
 
-
+	// Remove the file request from the list
 	transfer[node].txlist = p->next;
 	free(p);
 
-
+	// Indicate that the transmission is over
 	transfer[node].currentfile = NULL;
 	if (transfer[node].ackedfragments)
 		free(transfer[node].ackedfragments);
@@ -1101,8 +1101,11 @@ static void SV_EndFileSend(INT32 node)
 static size_t D_FileTransferPayloadSize(void)
 {
 	const size_t headersize = FILETXHEADER + BASEPACKETSIZE;
-	const size_t packetlength = software_MAXPACKETLENGTH
-		? software_MAXPACKETLENGTH : INETPACKETLENGTH;
+	/* Keep menu conversions independent of network initialization. The live
+	 * packet length starts at the conservative Internet default and later
+	 * changes to MAXPACKETLENGTH, which used to make a saved 5.0 MB/s setting
+	 * appear as a different number without the user changing it. */
+	const size_t packetlength = MAXPACKETLENGTH;
 
 	return packetlength > headersize ? packetlength - headersize : 0;
 }
@@ -1133,9 +1136,9 @@ INT32 D_FileTransferPacketsForMBPerSecond(double megabytespersecond)
 		min(downloadspeed_cons_t[1].value, packetspertic));
 }
 
-                                                                           
-                                                                             
-                                                                              
+/* Automatic transfers begin conservatively, then use the connection's live
+ * loss and reliable-queue pressure as feedback. The user's download speed is
+ * always the ceiling, so Auto cannot silently exceed the configured limit. */
 static INT32 D_AutomaticFileTransferPackets(INT32 limit, boolean transferactive)
 {
 	static boolean active;
@@ -1185,21 +1188,21 @@ static INT32 D_AutomaticFileTransferPackets(INT32 limit, boolean transferactive)
 	return packets;
 }
 
-                             
-   
-    
+/** Handles file transmission
+  *
+  */
 void FileSendTicker(void)
 {
 	static INT32 currentnode = 0;
 	const precise_t sendstarted = I_GetPreciseTime();
-	const precise_t listenbudget = I_GetPrecisePrecision() / 1000;  
+	const precise_t listenbudget = I_GetPrecisePrecision() / 1000; /* 1 ms */
 	filetx_pak *p;
 	size_t fragmentsize;
 	filetx_t *f;
 	INT32 packetsent, ram, i, j;
 
-
-
+	// If someone is taking too long to download, kick them with a timeout
+	// to prevent blocking the rest of the server...
 	if (luafiletransfers)
 	{
 		for (i = 1; i < MAXNETNODES; i++)
@@ -1214,7 +1217,7 @@ void FileSendTicker(void)
 		}
 	}
 
-	if (!filestosend)  
+	if (!filestosend) // No file to send
 	{
 		D_AutomaticFileTransferPackets(cv_downloadspeed.value, false);
 		return;
@@ -1226,10 +1229,10 @@ void FileSendTicker(void)
 
 	while (packetsent-- && filestosend != 0)
 	{
-		                                                                        
-                                                                            
-                                                                             
-                                 
+		/* A playable listen server shares this thread with rendering, input and
+		 * audio. Keep bulk add-on/save transfers from consuming an unbounded part
+		 * of a frame; a dedicated companion has no renderer and keeps the original
+		 * full-throughput behavior. */
 		if (server && !dedicated && gamestate == GS_LEVEL && listenbudget
 		&& I_GetPreciseTime() - sendstarted >= listenbudget)
 			break;
@@ -1240,7 +1243,7 @@ void FileSendTicker(void)
 			if (transfer[i].txlist)
 				break;
 		}
-
+		// no transfer to do
 		if (j >= MAXNETNODES)
 			I_Error("filestosend=%d but no file to send found\n", filestosend);
 
@@ -1248,11 +1251,11 @@ void FileSendTicker(void)
 		f = transfer[i].txlist;
 		ram = f->ram;
 
-		                                                                       
-                                                                           
-                                                                        
-                                                                          
-                                  
+		/* File fragments are deliberately best-effort traffic. When gameplay's
+		 * reliable queue is already backing up for this client, spending more of
+		 * the socket budget on an add-on/save download makes resyncs and join
+		 * stalls worse. Defer only this client briefly; round-robin service for
+		 * healthy clients continues. */
 		{
 			UINT16 retries;
 			UINT16 queued = Net_GetReliableBacklog(i, &retries);
@@ -1264,10 +1267,10 @@ void FileSendTicker(void)
 			}
 		}
 
-
+		// Open the file if it isn't open yet, or
 		if (!transfer[i].currentfile)
 		{
-			if (!ram)  
+			if (!ram) // Sending a file
 			{
 				long filesize;
 
@@ -1281,8 +1284,8 @@ void FileSendTicker(void)
 				fseek(transfer[i].currentfile, 0, SEEK_END);
 				filesize = ftell(transfer[i].currentfile);
 
-
-
+				// Nobody wants to transfer a file bigger
+				// than 4GB!
 				if (filesize >= LONG_MAX)
 					I_Error("filesize of %s is too large", f->id.filename);
 				if (filesize == -1)
@@ -1291,8 +1294,8 @@ void FileSendTicker(void)
 				f->size = (UINT32)filesize;
 				fseek(transfer[i].currentfile, 0, SEEK_SET);
 			}
-			else  
-				transfer[i].currentfile = (FILE *)1;  
+			else // Sending RAM
+				transfer[i].currentfile = (FILE *)1; // Set currentfile to a non-null value to indicate that it is open
 
 			transfer[i].iteration = 1;
 			transfer[i].ackediteration = 0;
@@ -1306,13 +1309,13 @@ void FileSendTicker(void)
 			transfer[i].dontsenduntil = 0;
 		}
 
-
-
-
+		// If the client hasn't acknowledged any fragment from the previous iteration,
+		// it is most likely because their acks haven't had enough time to reach the server
+		// yet, due to latency. In that case, we wait a little to avoid useless resend.
 		if (I_GetTime() < transfer[i].dontsenduntil)
 			continue;
 
-
+		// Find the first non-acknowledged fragment
 		while (transfer[i].ackedfragments[transfer[i].position / FILEFRAGMENTSIZE])
 		{
 			transfer[i].position += FILEFRAGMENTSIZE;
@@ -1326,7 +1329,7 @@ void FileSendTicker(void)
 			}
 		}
 
-
+		// Build a packet containing a file fragment
 		p = &netbuffer->u.filetxpak;
 		fragmentsize = FILEFRAGMENTSIZE;
 		if (f->size-transfer[i].position < fragmentsize)
@@ -1346,9 +1349,9 @@ void FileSendTicker(void)
 		p->filesize = LONG(f->size);
 		p->size = SHORT((UINT16)FILEFRAGMENTSIZE);
 
-
-		if (HSendPacket(i, false, 0, FILETXHEADER + fragmentsize))  
-		{  
+		// Send the packet
+		if (HSendPacket(i, false, 0, FILETXHEADER + fragmentsize)) // Don't use the default acknowledgement system
+		{ // Success
 			transfer[i].position = (UINT32)(transfer[i].position + fragmentsize);
 			if (transfer[i].position >= f->size)
 			{
@@ -1360,8 +1363,8 @@ void FileSendTicker(void)
 			}
 		}
 		else
-		{  
-
+		{ // Not sent for some odd reason, retry at next call
+			// Exit the while (can't send this one so why should i send the next?)
 			break;
 		}
 	}
@@ -1375,7 +1378,7 @@ void PT_FileAck(SINT8 node)
 	if (client)
 		return;
 
-
+	// Wrong file id? Ignore it, it's probably a late packet
 	if (!(trans->txlist && packet->fileid == trans->txlist->fileid))
 		return;
 
@@ -1410,7 +1413,7 @@ void PT_FileAck(SINT8 node)
 					trans->ackedfragments[LONG(segment->start) + j] = true;
 					trans->ackedsize += FILEFRAGMENTSIZE;
 
-
+					// If the last missing fragment was acked, finish!
 					if (trans->ackedsize == trans->txlist->size)
 					{
 						SV_EndFileSend(node);
@@ -1435,7 +1438,7 @@ static void SendAckPacket(fileack_pak *packet, UINT8 fileid)
 
 	packetsize = sizeof(*packet) + packet->numsegments * sizeof(*packet->segments);
 
-
+	// Finalise the packet
 	packet->fileid = fileid;
 	for (INT32 i = 0; i < packet->numsegments; i++)
 	{
@@ -1443,12 +1446,12 @@ static void SendAckPacket(fileack_pak *packet, UINT8 fileid)
 		packet->segments[i].acks = LONG(packet->segments[i].acks);
 	}
 
-
+	// Send the packet
 	netbuffer->packettype = PT_FILEACK;
 	M_Memcpy(&netbuffer->u.fileack, packet, packetsize);
 	HSendPacket(servernode, false, 0, packetsize);
 
-
+	// Clear the packet
 	memset(packet, 0, sizeof(*packet) + 512);
 }
 
@@ -1462,7 +1465,7 @@ static void AddFragmentToAckPacket(fileack_pak *packet, UINT8 iteration, UINT32 
 		|| fragmentpos < segment->start
 		|| fragmentpos - segment->start >= 32)
 	{
-
+		// If the packet becomes too big, send it
 		if ((packet->numsegments + 1) * sizeof(*segment) > 512)
 			SendAckPacket(packet, fileid);
 
@@ -1471,7 +1474,7 @@ static void AddFragmentToAckPacket(fileack_pak *packet, UINT8 iteration, UINT32 
 		segment->start = fragmentpos;
 	}
 
-
+	// Set the bit that represents the fragment
 	segment->acks |= 1 << (fragmentpos - segment->start);
 }
 
@@ -1486,11 +1489,11 @@ void FileReceiveTicker(void)
 			if (lasttimeackpacketsent - I_GetTime() > TICRATE / 2)
 				SendAckPacket(file->ackpacket, i);
 
-
-
+			// When resuming a tranfer, start with telling
+			// the server what parts we already received
 			if (file->ackresendposition != UINT32_MAX && file->status == FS_DOWNLOADING)
 			{
-
+				// Acknowledge ~70 MB/s, whichs means the client sends ~18 KB/s
 				for (INT32 j = 0; j < 2048; j++)
 				{
 					if (file->receivedfragments[file->ackresendposition])
@@ -1516,7 +1519,7 @@ static void OpenNewFileForDownload(fileneeded_t *file, const char *filename)
 
 	file->currentsize = 0;
 	file->totalsize = LONG(netbuffer->u.filetxpak.filesize);
-	file->ackresendposition = UINT32_MAX;  
+	file->ackresendposition = UINT32_MAX; // Only used for resumed downloads
 
 	file->receivedfragments = calloc(file->totalsize / file->fragmentsize + 1, sizeof(*file->receivedfragments));
 	if (!file->receivedfragments)
@@ -1527,7 +1530,7 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 {
 	if (netnodes[node].ingame)
 	{
-
+		// Only accept PT_FILEFRAGMENT from the server.
 		if (node != servernode)
 		{
 			CONS_Alert(CONS_WARNING, M_GetText("%s received from non-host %d\n"), "PT_FILEFRAGMENT", node);
@@ -1568,7 +1571,7 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 	if (filenum >= fileneedednum)
 	{
 		DEBFILE(va("fileframent not needed %d>%d\n", filenum, fileneedednum));
-
+		//I_Error("Received an unneeded file fragment (file id received: %d, file id needed: %d)\n", filenum, fileneedednum);
 		return;
 	}
 
@@ -1611,7 +1614,7 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 		}
 		else
 		{
-			char backup_filename[MAX_WADPATH+14];  
+			char backup_filename[MAX_WADPATH+14]; // because "_old4294967296" is 14 characters, not that it'll get that long in practice
 			char filename_noext[MAX_WADPATH];
 			char *extension;
 			UINT32 n = 0;
@@ -1651,11 +1654,11 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 
 		file->iteration = max(file->iteration, netbuffer->u.filetxpak.iteration);
 
-		if (!file->receivedfragments[fragmentpos / fragmentsize])  
+		if (!file->receivedfragments[fragmentpos / fragmentsize]) // Not received yet
 		{
 			file->receivedfragments[fragmentpos / fragmentsize] = true;
 
-
+			// We can receive packets in the wrong order, anyway all OSes support gaped files
 			fseek(file->file, fragmentpos, SEEK_SET);
 			if (fragmentsize && fwrite(netbuffer->u.filetxpak.data, boundedfragmentsize, 1, file->file) != 1)
 				I_Error("Can't write to %s: %s\n",file->filename, M_FileError(file->file));
@@ -1663,7 +1666,7 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 
 			AddFragmentToAckPacket(file->ackpacket, file->iteration, fragmentpos / fragmentsize, filenum);
 
-
+			// Finished?
 			if (file->currentsize == file->totalsize)
 			{
 				fclose(file->file);
@@ -1673,14 +1676,14 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 				file->status = FS_FOUND;
 				file->justdownloaded = true;
 
-
+				// Tell the server we have received the file
 				netbuffer->packettype = PT_FILERECEIVED;
 				netbuffer->u.filereceived = filenum;
 				HSendPacket(servernode, true, 0, 1);
 
 				if (luafiletransfers)
 				{
-
+					// Tell the server we have received the file
 					netbuffer->packettype = PT_HASLUAFILE;
 					HSendPacket(servernode, true, 0, 0);
 					FreeFileNeeded();
@@ -1695,10 +1698,10 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 				CONS_Printf(M_GetText("Finished download of \"%s\"\n"), filename);
 			}
 		}
-		else  
+		else // Already received
 		{
-
-
+			// If they are sending us the fragment again, it's probably because
+			// they missed our previous ack, so we must re-acknowledge it
 			AddFragmentToAckPacket(file->ackpacket, file->iteration, fragmentpos / fragmentsize, filenum);
 		}
 	}
@@ -1729,23 +1732,23 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 	filedownload.current = filenum;
 }
 
-                                                 
-  
-                                    
-                                                 
-  
-   
+/** \brief Checks if a node is downloading a file
+ *
+ * \param node The node to check for
+ * \return True if the node is downloading a file
+ *
+ */
 boolean SendingFile(INT32 node)
 {
 	return transfer[node].txlist != NULL;
 }
 
-                                        
-   
-                               
-                      
-   
-    
+/** Cancels all file requests for a node
+  *
+  * \param node The destination
+  * \sa SV_EndFileSend
+  *
+  */
 void SV_AbortSendFiles(INT32 node)
 {
 	while (transfer[node].txlist)
@@ -1754,11 +1757,11 @@ void SV_AbortSendFiles(INT32 node)
 
 void CloseNetFile(void)
 {
-
+	// Is sending?
 	for (INT32 i = 0; i < MAXNETNODES; i++)
 		SV_AbortSendFiles(i);
 
-
+	// Receiving a file?
 	if (fileneeded)
 	{
 		for (INT32 i = 0; i < fileneedednum; i++)
@@ -1767,9 +1770,9 @@ void CloseNetFile(void)
 				fclose(fileneeded[i].file);
 				free(fileneeded[i].ackpacket);
 
-				if (!pauseddownload && (fileneeded[i].type == FILENEEDED_WAD || i != 0))  
+				if (!pauseddownload && (fileneeded[i].type == FILENEEDED_WAD || i != 0)) // 0 is the gamestate...
 				{
-
+					// Don't remove the file, save it for later in case we resume the download
 					pauseddownload = malloc(sizeof(*pauseddownload));
 					if (!pauseddownload)
 						I_Error("CloseNetFile: No more memory\n");
@@ -1782,7 +1785,7 @@ void CloseNetFile(void)
 				}
 				else
 				{
-
+					// File is not complete, delete it.
 					free(fileneeded[i].receivedfragments);
 					remove(fileneeded[i].filename);
 				}
@@ -1796,14 +1799,14 @@ void Command_Downloads_f(void)
 {
 	for (INT32 node = 0; node < MAXNETNODES; node++)
 		if (transfer[node].txlist
-		&& transfer[node].txlist->ram == SF_FILE)  
+		&& transfer[node].txlist->ram == SF_FILE) // Node is downloading a file?
 		{
 			const char *name = transfer[node].txlist->id.filename;
 			UINT32 position = transfer[node].ackedsize;
 			UINT32 size = transfer[node].txlist->size;
 			char ratecolor;
 
-
+			// Avoid division by zero errors
 			if (!size)
 				size = 1;
 
@@ -1817,10 +1820,10 @@ void Command_Downloads_f(void)
 				default: ratecolor = '\x80';
 			}
 
-			CONS_Printf("%2d  %c%s  ", node, ratecolor, name);  
-			CONS_Printf("\x80%uK\x84/\x80%uK ", position / 1024, size / 1024);  
-			CONS_Printf("\x80(%c%u%%\x80)  ", ratecolor, (UINT32)(100.0 * position / size));  
-			CONS_Printf("%s\n", I_GetNodeAddress(node));  
+			CONS_Printf("%2d  %c%s  ", node, ratecolor, name); // Node and file name
+			CONS_Printf("\x80%uK\x84/\x80%uK ", position / 1024, size / 1024); // Progress in kB
+			CONS_Printf("\x80(%c%u%%\x80)  ", ratecolor, (UINT32)(100.0 * position / size)); // Progress in %
+			CONS_Printf("%s\n", I_GetNodeAddress(node)); // Address and newline
 		}
 }
 
@@ -1835,7 +1838,7 @@ static int curlprogress_callback(void *clientp, curl_off_t dltotal, curl_off_t d
 
 	(void)clientp;
 	(void)ultotal;
-	(void)ulnow;  
+	(void)ulnow; // Function prototype requires these but we won't use, so just discard
 	curl_dlnow = (UINT32)dlnow;
 	curl_dltotal = (UINT32)dltotal;
 	elapsed = time(NULL) - curl_starttime;
@@ -1888,7 +1891,7 @@ boolean CURLPrepareFile(const char* url, int dfilenum)
 		curl_free(escapedname);
 		curl_easy_setopt(http_handle, CURLOPT_URL, requesturl);
 
-
+		// Only allow HTTP and HTTPS
 #if (LIBCURL_VERSION_MAJOR <= 7) && (LIBCURL_VERSION_MINOR < 85)
 		curl_easy_setopt(http_handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS);
 		curl_easy_setopt(http_handle, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS);
@@ -1897,10 +1900,10 @@ boolean CURLPrepareFile(const char* url, int dfilenum)
 		curl_easy_setopt(http_handle, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
 #endif
 
-
+		// Set user agent, as some servers won't accept invalid user agents.
 		curl_easy_setopt(http_handle, CURLOPT_USERAGENT, va("Sonic Robo Blast 2/%s", VERSIONSTRING));
 
-
+		// Authenticate if the user so wishes
 		login = CURLGetLogin(url, NULL);
 
 		if (login)
@@ -1908,14 +1911,14 @@ boolean CURLPrepareFile(const char* url, int dfilenum)
 			curl_easy_setopt(http_handle, CURLOPT_USERPWD, login->auth);
 		}
 
-
+		// Follow a redirect request, if sent by the server.
 		curl_easy_setopt(http_handle, CURLOPT_FOLLOWLOCATION, 1L);
 		curl_easy_setopt(http_handle, CURLOPT_MAXREDIRS, 5L);
 
 		curl_easy_setopt(http_handle, CURLOPT_FAILONERROR, 1L);
-		                                                                       
-                                                                         
-                                                     
+		/* The downloader runs on its own thread.  Avoid signal-based timeouts,
+		 * keep the connection warm between files, and give fast mirrors enough
+		 * receive space to fill modern broadband links. */
 		curl_easy_setopt(http_handle, CURLOPT_NOSIGNAL, 1L);
 		curl_easy_setopt(http_handle, CURLOPT_TCP_KEEPALIVE, 1L);
 		curl_easy_setopt(http_handle, CURLOPT_BUFFERSIZE, 256L * 1024L);
@@ -1955,7 +1958,7 @@ void CURLAbortFile(void)
 {
 	filedownload.http_running = false;
 
-
+	// lock and unlock to wait for the download thread to exit
 	I_lock_mutex(&downloadmutex);
 	I_unlock_mutex(downloadmutex);
 }
@@ -1963,11 +1966,11 @@ void CURLAbortFile(void)
 void CURLGetFile(void)
 {
 	I_lock_mutex(&downloadmutex);
-	CURLMcode mc;  
-	CURLcode easyres;  
-	CURLMsg *m;  
+	CURLMcode mc; /* return code used by curl_multi_wait() */
+	CURLcode easyres; /* Return from easy interface */
+	CURLMsg *m; /* for picking up messages with the transfer status */
 	CURL *e;
-	int msgs_left;  
+	int msgs_left; /* how many messages are left */
 	const char *easy_handle_error;
 	boolean running = true;
 
@@ -1977,7 +1980,7 @@ void CURLGetFile(void)
 		{
 			curl_multi_perform(multi_handle, &curl_runninghandles);
 
-			 
+			/* wait for activity, timeout or "nothing" */
 			mc = curl_multi_wait(multi_handle, NULL, 0, 1000, NULL);
 
 			if (mc != CURLM_OK)
@@ -1989,7 +1992,7 @@ void CURLGetFile(void)
 			curl_curfile->totalsize = curl_dltotal;
 		}
 
-		 
+		/* See how the transfers went */
 		while ((m = curl_multi_info_read(multi_handle, &msgs_left)))
 		{
 			if (m && (m->msg == CURLMSG_DONE))
@@ -2089,7 +2092,7 @@ CURLGetLogin (const char *url, HTTP_login ***return_prev_next)
 	return NULL;
 }
 
-
+// Functions cut and pasted from Doomatic :)
 
 void nameonly(char *s)
 {
@@ -2107,7 +2110,7 @@ void nameonly(char *s)
 		}
 }
 
-
+// Returns the length in characters of the last element of a path.
 size_t nameonlylength(const char *s)
 {
 	size_t len = strlen(s);
@@ -2163,9 +2166,9 @@ static boolean MD5CachePathEqual(const char *left, const char *right)
 #endif
 }
 
-                                                                           
-                                                                               
-                                                                              
+/* Store one spelling for each file. In particular, Windows add-on commands
+ * commonly alternate between "addons\\file.pk3" and its absolute path; keeping
+ * both wastes cache slots and leaves duplicate lines in the on-disk index. */
 static void MD5CacheCanonicalPath(const char *source, char *destination,
 	size_t destinationsize)
 {
@@ -2242,9 +2245,9 @@ static void LoadPersistentMD5Cache(void)
 	if (md5cache_loaded || !cv_persistentmd5.value)
 		return;
 	md5cache_loaded = true;
-	                                                                           
-                                                                             
-                                                                            
+	/* Core files can be checksummed before the saved configuration has enabled
+	 * the persistent cache. Remember those freshly computed records so an older
+	 * disk entry never replaces them when configuration loading catches up. */
 	for (i = 0; i < MD5_CACHE_SLOTS; i++)
 		preexisting[i] = md5cache[i].valid;
 	if (!md5cache_exitregistered)
@@ -2301,9 +2304,9 @@ static void LoadPersistentMD5Cache(void)
 		MD5CacheCanonicalPath(field, canonical, sizeof canonical);
 		strcpy(entry->filename, canonical);
 		entry->valid = true;
-		                                                                      
-                                                                         
-                                   
+		/* A metadata check is inexpensive and keeps moved, deleted, or edited
+		 * add-ons from accumulating forever. Content is still sampled before a
+		 * cached checksum is trusted. */
 		if (stat(entry->filename, &filestat) != 0
 		|| entry->size != (UINT64)filestat.st_size
 		|| entry->mtime != filestat.st_mtime
@@ -2320,8 +2323,8 @@ static void LoadPersistentMD5Cache(void)
 				continue;
 			if (preexisting[i])
 			{
-				                                                          
-                                                                      
+				/* This is the normal early-startup merge, not a duplicate
+				 * cache record. Keep the checksum just computed from the file. */
 				if (diskseen[i])
 				{
 					md5cache_duplicates++;
@@ -2330,8 +2333,8 @@ static void LoadPersistentMD5Cache(void)
 				diskseen[i] = true;
 				goto loaded_cache_line;
 			}
-			                                                               
-                                              
+			/* Later records are the newest ones in files produced by older
+			 * builds, so retain the last duplicate. */
 			md5cache[i] = parsed;
 			diskseen[i] = true;
 			md5cache_duplicates++;
@@ -2434,8 +2437,8 @@ static boolean FileQuickSignature(FILE *file, const struct stat *filestat, UINT6
 			hash ^= buffer[j];
 			hash *= 1099511628211ULL;
 		}
-
-
+		// A small file was sampled in full; hashing it five times adds no
+		// protection and only makes the fast path needlessly slower.
 		if (filesize <= sizeof buffer)
 			break;
 	}
@@ -2478,9 +2481,9 @@ static boolean CachedFileMD5(const char *filename, const struct stat *filestat,
 	return found;
 }
 
-                                                                          
-                                                                             
-                                                             
+/* Resolve an add-on from the persistent checksum cache before recursively
+ * walking the home and install trees again.  Metadata plus the quick content
+ * signature keeps stale cache entries from being trusted. */
 static boolean FindCachedFileByMD5(const char *requested, const UINT8 *wantedmd5sum,
 	char *resolved, size_t resolvedsize)
 {
@@ -2542,8 +2545,8 @@ static void CacheFileMD5(const char *filename, const struct stat *filestat,
 
 	MD5_CACHE_LOCK();
 	LoadPersistentMD5Cache();
-	                                                                      
-                                                                         
+	/* Updating an edited add-on should replace its old record rather than
+	 * consuming another slot every time the mapper saves a new revision. */
 	for (i = 0; i < MD5_CACHE_SLOTS; i++)
 		if (md5cache[i].valid
 		&& MD5CachePathEqual(md5cache[i].filename, filename))
@@ -2563,10 +2566,10 @@ static void CacheFileMD5(const char *filename, const struct stat *filestat,
 	M_Memcpy(entry->md5sum, md5sum, 16);
 	md5cache_dirty = true;
 	md5cache_pendingwrites++;
-	                                                                         
-                                                                           
-                                                                         
-                                                                               
+	/* Add-on batches can discover many checksums back-to-back. Rewriting the
+	 * complete index for the first result and then every eight results stalls
+	 * the same loading screen this cache is meant to accelerate. Persist in
+	 * larger batches and flush the remainder through the registered exit hook. */
 	if (md5cache_pendingwrites >= 32)
 		SavePersistentMD5Cache();
 	MD5_CACHE_UNLOCK();
@@ -2638,7 +2641,7 @@ boolean D_GetCachedFileMD5(const char *filename, UINT8 md5sum[16])
 		fclose(fhandle);
 		return false;
 	}
-	 
+	/* Do not cache a digest if the file changed while it was being read. */
 	have_quicksig = have_quicksig
 		&& FileQuickSignature(fhandle, &before, &afterquicksig)
 		&& quicksig == afterquicksig;
@@ -2684,13 +2687,13 @@ filestatus_t checkfilemd5(char *filename, const UINT8 *wantedmd5sum)
 
 	I_Error("Couldn't open %s for md5 check", filename);
 #endif
-	return FS_FOUND;  
+	return FS_FOUND; // will never happen, but makes the compiler shut up
 }
 
-                                                                          
-                                                                           
-                                                                              
-                                                                 
+/* Most files received from servers live directly in DOWNLOAD.  Looking up
+ * that exact path first avoids recursively walking the entire home/install
+ * tree for every item in a server's add-on list.  The normal recursive search
+ * remains the fallback for manually organised add-on folders. */
 static filestatus_t CheckExactAddonPath(char *filename, const char *directory,
 	const UINT8 *wantedmd5sum, boolean completepath)
 {
@@ -2710,7 +2713,7 @@ static filestatus_t CheckExactAddonPath(char *filename, const char *directory,
 		directory[directorylen - 1] != '\\') ? PATHSEP : "", basename)
 		>= (INT32)sizeof candidate)
 		return FS_NOTFOUND;
-	 
+	/* checkfilemd5 expects an existing regular file. */
 	probe = fopen(candidate, "rb");
 	if (!probe)
 		return FS_NOTFOUND;
@@ -2731,13 +2734,13 @@ static filestatus_t CheckExactAddonPath(char *filename, const char *directory,
 	return status;
 }
 
-
-
-
+// Rewritten by Monster Iestyn to be less stupid
+// Note: if completepath is true, "filename" is modified, but only if FS_FOUND is going to be returned
+// (Don't worry about WinCE's version of filesearch, nobody cares about that OS anymore)
 filestatus_t findfile(char *filename, const UINT8 *wantedmd5sum, boolean completepath)
 {
-	filestatus_t homecheck;  
-	boolean badmd5 = false;  
+	filestatus_t homecheck; // store result of last file search
+	boolean badmd5 = false; // store whether md5 was bad from either of the first two searches (if nothing was found in the third)
 
 	char override_dir[sizeof(srb2home) + 9];
 	strcpy(override_dir, srb2home);
@@ -2746,9 +2749,9 @@ filestatus_t findfile(char *filename, const UINT8 *wantedmd5sum, boolean complet
 	if (homecheck == FS_FOUND)
 		return FS_FOUND;
 
-	                                                                          
-                                                                          
-                                         
+	/* Server downloads always use a basename and are saved here.  This is the
+	 * common reconnect path, so do it before consulting or building an index
+	 * of recursively discovered add-ons. */
 	homecheck = CheckExactAddonPath(filename, downloaddir, wantedmd5sum, completepath);
 	if (homecheck == FS_FOUND)
 		return FS_FOUND;
@@ -2769,40 +2772,40 @@ filestatus_t findfile(char *filename, const UINT8 *wantedmd5sum, boolean complet
 	}
 #endif
 
-
+	// first, check SRB2's "home" directory
 	homecheck = filesearch(filename, srb2home, wantedmd5sum, completepath, 10);
 
-	if (homecheck == FS_FOUND)  
+	if (homecheck == FS_FOUND) // we found the file, so return that we have :)
 		return FS_FOUND;
-	else if (homecheck == FS_MD5SUMBAD)  
+	else if (homecheck == FS_MD5SUMBAD) // file has a bad md5; move on and look for a file with the right md5
 		badmd5 = true;
+	// if not found at all, just move on without doing anything
 
-
-
+	// next, check SRB2's "path" directory
 	homecheck = filesearch(filename, srb2path, wantedmd5sum, completepath, 10);
 
-	if (homecheck == FS_FOUND)  
+	if (homecheck == FS_FOUND) // we found the file, so return that we have :)
 		return FS_FOUND;
-	else if (homecheck == FS_MD5SUMBAD)  
+	else if (homecheck == FS_MD5SUMBAD) // file has a bad md5; move on and look for a file with the right md5
 		badmd5 = true;
+	// if not found at all, just move on without doing anything
 
-
-
+	// finally check "." directory
 	homecheck = filesearch(filename, ".", wantedmd5sum, completepath, 10);
 
-	if (homecheck != FS_NOTFOUND)  
-		return homecheck;  
+	if (homecheck != FS_NOTFOUND) // if not found this time, fall back on the below return statement
+		return homecheck; // otherwise return the result we got
 
-	return (badmd5 ? FS_MD5SUMBAD : FS_NOTFOUND);  
+	return (badmd5 ? FS_MD5SUMBAD : FS_NOTFOUND); // md5 sum bad or file not found
 }
 
-
-
-
-
+// Searches for a folder.
+// This can be used with a full path, or an incomplete path.
+// In the latter case, the function will try to find folders in
+// srb2home, srb2path, and the current directory.
 filestatus_t findfolder(const char *path)
 {
-
+	// Check the path by itself first.
 	if (concatpaths(path, NULL) == 1)
 		return FS_FOUND;
 
@@ -2810,9 +2813,9 @@ filestatus_t findfolder(const char *path)
 	if (concatpaths(path, startpath) == 1) \
 		return FS_FOUND
 
-	checkpath(srb2home);  
-	checkpath(srb2path);  
-	checkpath(".");  
+	checkpath(srb2home); // Then, look in srb2home.
+	checkpath(srb2path); // Now, look in srb2path.
+	checkpath("."); // Finally, look in the current directory.
 
 #undef checkpath
 

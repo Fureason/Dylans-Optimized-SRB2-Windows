@@ -5,8 +5,8 @@
 
 CC=sc
 CFLAGS=OPT
-
-
+#CFLAGS=OPT CPU=68030
+#CFLAGS=DEBUG=LINE
 LDFLAGS=LIB z.lib
 
 SCOPTIONS=OPTSCHED OPTINLINE OPTALIAS OPTTIME OPTINLOCAL STRMERGE \
@@ -47,7 +47,7 @@ SCOPTIONS: Makefile.sas
 $(SCOPTIONS)
 <
 
-
+# DO NOT DELETE THIS LINE -- make depend depends on it.
 
 adler32.o: zlib.h zconf.h
 compress.o: zlib.h zconf.h

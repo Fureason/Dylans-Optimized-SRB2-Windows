@@ -12,7 +12,7 @@ test: puff
 puft: puff.c puff.h pufftest.o
 	cc -fprofile-arcs -ftest-coverage -o puft puff.c pufftest.o
 
-
+# puff full coverage test (should say 100%)
 cov: puft
 	@rm -f *.gcov *.gcda
 	@puft -w zeros.raw 2>&1 | cat > /dev/null

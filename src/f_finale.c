@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  f_finale.c
+/// \brief Title screen, intro, game evaluation, and credits.
 
 #include "doomdef.h"
 #include "doomstat.h"
@@ -33,47 +33,47 @@
 #include "g_input.h"
 #include "console.h"
 #include "m_random.h"
-#include "m_misc.h"  
+#include "m_misc.h" // moviemode functionality
 #include "y_inter.h"
 #include "m_cond.h"
 #include "p_local.h"
 #include "p_setup.h"
-#include "st_stuff.h"  
+#include "st_stuff.h" // hud hiding
 #include "fastcmp.h"
 #include "console.h"
 
 #include "lua_hud.h"
 #include "lua_hook.h"
 
-
-
+// Stage of animation:
+// 0 = text, 1 = art screen
 INT32 finalecount;
 INT32 titlescrollxspeed = 20;
 INT32 titlescrollyspeed = 0;
 UINT8 titlemapinaction = TITLEMAP_OFF;
 
-static INT32 timetonext;  
-static INT32 continuetime;  
+static INT32 timetonext; // Delay between screen changes
+static INT32 continuetime; // Short delay when continuing
 
-static tic_t animtimer;  
-static INT16 skullAnimCounter;  
+static tic_t animtimer; // Used for some animation timings
+static INT16 skullAnimCounter; // Prompts: Chevron animation
 
 static INT32 deplete;
 static tic_t stoptimer;
 
 static boolean keypressed = false;
 
-
+// (no longer) De-Demo'd Title Screen
 mobj_t *titlemapcameraref = NULL;
 
-
+// menu presentation state
 char curbgname[9];
 SINT8 curfadevalue;
 INT32 curbgcolor;
 INT32 curbgxspeed;
 INT32 curbgyspeed;
 boolean curbghide;
-boolean hidetitlemap;		 
+boolean hidetitlemap;		// WARNING: set to false by M_SetupNextMenu and M_ClearMenus
 
 static fixed_t curbgx = 0;
 static fixed_t curbgy = 0;
@@ -81,11 +81,11 @@ static UINT8  curDemo = 0;
 static UINT32 demoDelayLeft;
 static UINT32 demoIdleLeft;
 
-
+// customizable title screen graphics
 
 ttmode_enum ttmode = TTMODE_OLD;
-UINT8 ttscale = 1;  
-
+UINT8 ttscale = 1; // FRACUNIT / ttscale
+// ttmode user vars
 char ttname[9];
 INT16 ttx = 0;
 INT16 tty = 0;
@@ -95,18 +95,18 @@ UINT16 tttics = 1;
 boolean curhidepics;
 ttmode_enum curttmode;
 UINT8 curttscale;
-
+// ttmode user vars
 char curttname[9];
 INT16 curttx;
 INT16 curtty;
 INT16 curttloop;
 UINT16 curtttics;
 
-
-static patch_t *ttbanner;  
-static patch_t *ttwing;  
-static patch_t *ttsonic;  
-static patch_t *ttswave1;  
+// ttmode old
+static patch_t *ttbanner; // white banner with "robo blast" and "2"
+static patch_t *ttwing; // wing background
+static patch_t *ttsonic; // "SONIC"
+static patch_t *ttswave1; // Title Sonics
 static patch_t *ttswave2;
 static patch_t *ttswip1;
 static patch_t *ttsprep1;
@@ -119,7 +119,7 @@ static patch_t *ttspop5;
 static patch_t *ttspop6;
 static patch_t *ttspop7;
 
-
+// ttmode alacroix
 static SINT8 testttscale = 0;
 static SINT8 activettscale = 0;
 boolean ttavailable[6];
@@ -187,25 +187,25 @@ static boolean knux_blinked_already = false;
 static INT32 knux_idle_start = 0;
 static INT32 knux_idle_end = 0;
 
-
+// ttmode user
 static patch_t *ttuser[TTMAX_USER];
 static INT32 ttuser_count = 0;
 
 static boolean goodending;
-static patch_t *endbrdr[2];  
-static patch_t *endbgsp[3];  
-static patch_t *endegrk[2];  
-static patch_t *endfwrk[3];  
-static patch_t *endspkl[3];  
-static patch_t *endglow[2];  
-static patch_t *endxpld[4];  
-static patch_t *endescp[5];  
-static INT32 sparkloffs[3][2];  
+static patch_t *endbrdr[2]; // border - blue, white, pink - where have i seen those colours before?
+static patch_t *endbgsp[3]; // nebula, sun, planet
+static patch_t *endegrk[2]; // eggrock - replaced midway through good ending
+static patch_t *endfwrk[3]; // firework - replaced with skin when good ending
+static patch_t *endspkl[3]; // sparkle
+static patch_t *endglow[2]; // glow aura - replaced with black rock's midway through good ending
+static patch_t *endxpld[4]; // mini explosion
+static patch_t *endescp[5]; // escape pod + flame
+static INT32 sparkloffs[3][2]; // eggrock explosions/blackrock sparkles
 static INT32 sparklloop;
 
-
-
-
+//
+// PROMPT STATE
+//
 boolean promptactive = false;
 static mobj_t *promptmo;
 static INT16 promptpostexectag;
@@ -215,9 +215,9 @@ static INT32 callpromptnum = INT32_MAX;
 static INT32 callpagenum = INT32_MAX;
 static INT32 callplayer = INT32_MAX;
 
-
-
-
+//
+// CUTSCENE TEXT WRITING
+//
 static const char *cutscene_basetext = NULL;
 static char cutscene_disptext[1024];
 static INT32 cutscene_baseptr = 0;
@@ -226,17 +226,17 @@ static INT32 cutscene_textcount = 0;
 static INT32 cutscene_textspeed = 0;
 static UINT8 cutscene_boostspeed = 0;
 
-
+// STJR Intro
 char stjrintro[9] = "STJRI000";
 
 static huddrawlist_h luahuddrawlist_title;
 static huddrawlist_h luahuddrawlist_continue[2];
 
-
-
-
-
-
+//
+// This alters the text string cutscene_disptext.
+// Use the typical string drawing functions to display it.
+// Returns 0 if \0 is reached (end of input)
+//
 static UINT8 F_WriteText(void)
 {
 	INT32 numtowrite = 1;
@@ -244,12 +244,12 @@ static UINT8 F_WriteText(void)
 
 	if (cutscene_boostspeed)
 	{
-
+		// for custom cutscene speedup mode
 		numtowrite = 8;
 	}
 	else
 	{
-
+		// Don't draw any characters if the count was 1 or more when we started
 		if (--cutscene_textcount >= 0)
 			return 1;
 
@@ -263,13 +263,13 @@ static UINT8 F_WriteText(void)
 		if (!c || !*c || *c=='#')
 			return 0;
 
-
+		// \xA0 - \xAF = change text speed
 		if ((UINT8)*c >= 0xA0 && (UINT8)*c <= 0xAF)
 		{
 			cutscene_textspeed = (INT32)((UINT8)*c - 0xA0);
 			continue;
 		}
-
+		// \xB0 - \xD2 = delay character for up to one second (35 tics)
 		else if ((UINT8)*c >= 0xB0 && (UINT8)*c <= (0xB0+TICRATE-1))
 		{
 			cutscene_textcount = (INT32)((UINT8)*c - 0xAF);
@@ -279,12 +279,12 @@ static UINT8 F_WriteText(void)
 
 		cutscene_disptext[cutscene_writeptr++] = *c;
 
-
+		// Ignore other control codes (color)
 		if ((UINT8)*c < 0x80)
 			--numtowrite;
 	}
-
-
+	// Reset textcount for next tic based on speed
+	// if it wasn't already set by a delay.
 	if (cutscene_textcount < 0)
 	{
 		cutscene_textcount = 0;
@@ -303,9 +303,9 @@ static void F_NewCutscene(const char *basetext)
 	cutscene_textcount = TICRATE/2;
 }
 
-
-
-
+// =============
+//  INTRO SCENE
+// =============
 #define NUMINTROSCENES 17
 INT32 intro_scenenum = 0;
 INT32 intro_curtime = 0;
@@ -314,26 +314,26 @@ const char *introtext[NUMINTROSCENES];
 
 static tic_t introscenetime[NUMINTROSCENES] =
 {
-	5*TICRATE,	 
-	10*TICRATE + (TICRATE/2),	 
-	12*TICRATE + ((TICRATE/4) * 3),	 
-	12*TICRATE + (TICRATE/4),					 
-	16*TICRATE,					 
-	20*TICRATE + (TICRATE/2),	 
-	18*TICRATE + (TICRATE/4),	 
-	9*TICRATE + (TICRATE/2),	 
-	14*TICRATE,					 
-	14*TICRATE + (TICRATE/2),	 
-	16*TICRATE + (TICRATE/2),	 
-	11*TICRATE + (TICRATE/2),	 
-	 8*TICRATE,					 
-	 8*TICRATE,					 
-	18*TICRATE + (TICRATE/2),	 
-	15*TICRATE,					 
-	23*TICRATE,					 
+	5*TICRATE,	// STJr Presents
+	10*TICRATE + (TICRATE/2),	// Two months had passed since...
+	12*TICRATE + ((TICRATE/4) * 3),	// As it was about to drain the rings...
+	12*TICRATE + (TICRATE/4),					// What Sonic, Tails, and Knuckles...
+	16*TICRATE,					// About once every year, a strange...
+	20*TICRATE + (TICRATE/2),	// Curses! Eggman yelled. That ridiculous...
+	18*TICRATE + (TICRATE/4),	// It was only later that he had an idea...
+	9*TICRATE + (TICRATE/2),	// Before beginning his scheme, Eggman decided to give Sonic...
+	14*TICRATE,					// We're ready to fire in 15 seconds, the robot said...
+	14*TICRATE + (TICRATE/2),	// Meanwhile, Sonic was tearing across the zones...
+	16*TICRATE + (TICRATE/2),	// Sonic knew he was getting closer to the city...
+	11*TICRATE + (TICRATE/2),	// Greenflower City was gone...
+	 8*TICRATE,					// You're not quite as dead as we thought, huh?...
+	 8*TICRATE,					// We'll see... let's give you a quick warm up...
+	18*TICRATE + (TICRATE/2),	// Eggman took this as his cue and blasted off...
+	15*TICRATE,					// Easy! We go find Eggman and stop his...
+	23*TICRATE,					// I'm just finding what mission obje...
 };
 
-
+// custom intros
 void F_StartCustomCutscene(INT32 cutscenenum, boolean precutscene, boolean resetplayer, boolean FLS);
 
 void F_StartIntro(void)
@@ -492,16 +492,16 @@ void F_StartIntro(void)
 	"\x80\n\xA9\xD2\xD2"
 	"\"All right, then\xAF... \xD2\xD2\xA7let's go!\"\n#");
 
-  
-                                                                         
-                                                                      
-           
-                                                                 
-                                         
-                                                      
-                                               
-                                             
-  
+/*
+	"What are we waiting for? The first emerald is ours!" Sonic was about to
+	run, when he saw a shadow pass over him, he recognized the silhouette
+	instantly.
+	"Knuckles!" Sonic said. The echidna stopped his glide and landed
+	facing Sonic. "What are you doing here?"
+	He replied, "This crisis affects the Floating Island,
+	if that explosion I saw is anything to go by."
+	If you're willing to help then... let's go!"
+*/
 
 	G_SetGamestate(GS_INTRO);
 	gameaction = ga_nothing;
@@ -514,9 +514,9 @@ void F_StartIntro(void)
 	timetonext = introscenetime[intro_scenenum];
 }
 
-
-
-
+//
+// F_IntroDrawer
+//
 void F_IntroDrawer(void)
 {
 	boolean highres = true;
@@ -525,7 +525,7 @@ void F_IntroDrawer(void)
 	INT32 bgxoffs = 0;
 	void *patch;
 
-
+	// DRAW A FULL PIC INSTEAD OF FLAT!
 	switch (intro_scenenum)
 	{
 		case 0:
@@ -618,37 +618,37 @@ void F_IntroDrawer(void)
 		else
 			V_DrawScaledPatch(bgxoffs, 0, 0, background);
 	}
-	else if (intro_scenenum == 0)  
+	else if (intro_scenenum == 0) // STJr presents
 	{
 		if (intro_curtime > 1 && intro_curtime < (INT32)introscenetime[intro_scenenum])
 		{
 			V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
 
-			if (intro_curtime < TICRATE-5)  
+			if (intro_curtime < TICRATE-5) // Make the text shine!
 			{
 				sprintf(stjrintro, "STJRI%03u", intro_curtime-1);
 			}
-			else if (intro_curtime >= TICRATE-6 && intro_curtime < 2*TICRATE-20)  
+			else if (intro_curtime >= TICRATE-6 && intro_curtime < 2*TICRATE-20) // Pause on black screen for just a second
 			{
 				return;
 			}
 			else if (intro_curtime == 2*TICRATE-19)
 			{
-
-
+				// Fade in the text
+				// The text fade out is automatically handled when switching to a new intro scene
 				strncpy(stjrintro, "STJRI029", 9);
 				background = W_CachePatchName(stjrintro, PU_PATCH_LOWPRIORITY);
 				V_DrawSmallScaledPatch(bgxoffs, 84, 0, background);
 			}
 
-			if (!WipeInAction)  
+			if (!WipeInAction) // Draw the patch if not in a wipe
 			{
 				background = W_CachePatchName(stjrintro, PU_PATCH_LOWPRIORITY);
 				V_DrawSmallScaledPatch(bgxoffs, 84, 0, background);
 			}
 		}
 	}
-	else if (intro_scenenum == 10)  
+	else if (intro_scenenum == 10) // Sky Runner
 	{
 		if (timetonext > 5*TICRATE && timetonext < 6*TICRATE)
 		{
@@ -714,74 +714,74 @@ void F_IntroDrawer(void)
 
 			if (finalecount & 1)
 			{
-
+				// Sonic
 				V_DrawSmallScaledPatch(sonicx, 54, 0, (patch = W_CachePatchName("RUN2", PU_PATCH_LOWPRIORITY)));
 				W_UnlockCachedPatch(patch);
 
-
+				// Appendages
 				if (finalecount & 2)
 				{
-
+					// Sonic's feet
 					V_DrawSmallScaledPatch(sonicx - 8, 92, 0, (patch = W_CachePatchName("PEELOUT4", PU_PATCH_LOWPRIORITY)));
 					W_UnlockCachedPatch(patch);
-
+					// Tails' tails
 					V_DrawSmallScaledPatch(tailsx, tailsy, 0, (patch = W_CachePatchName("HELICOP2", PU_PATCH_LOWPRIORITY)));
 					W_UnlockCachedPatch(patch);
 				}
 				else
 				{
-
+					// Sonic's feet
 					V_DrawSmallScaledPatch(sonicx - 8, 92, 0, (patch = W_CachePatchName("PEELOUT2", PU_PATCH_LOWPRIORITY)));
 					W_UnlockCachedPatch(patch);
-
+					// Tails' tails
 					V_DrawSmallScaledPatch(tailsx, tailsy, 0, (patch = W_CachePatchName("HELICOP1", PU_PATCH_LOWPRIORITY)));
 					W_UnlockCachedPatch(patch);
 				}
 
-
+				// Tails
 				V_DrawSmallScaledPatch(tailsx, tailsy, 0, (patch = W_CachePatchName("FLY2", PU_PATCH_LOWPRIORITY)));
 				W_UnlockCachedPatch(patch);
 
-
+				// Knuckles
 				V_DrawSmallScaledPatch(knucklesx, knucklesy, 0, (patch = W_CachePatchName("GLIDE2", PU_PATCH_LOWPRIORITY)));
 				W_UnlockCachedPatch(patch);
 			}
 			else
 			{
-
+				// Sonic
 				V_DrawSmallScaledPatch(sonicx, 54, 0, (patch = W_CachePatchName("RUN1", PU_PATCH_LOWPRIORITY)));
 				W_UnlockCachedPatch(patch);
 
-
+				// Appendages
 				if (finalecount & 2)
 				{
-
+					// Sonic's feet
 					V_DrawSmallScaledPatch(sonicx - 8, 92, 0, (patch = W_CachePatchName("PEELOUT3", PU_PATCH_LOWPRIORITY)));
 					W_UnlockCachedPatch(patch);
-
+					// Tails' tails
 					V_DrawSmallScaledPatch(tailsx, tailsy, 0, (patch = W_CachePatchName("HELICOP2", PU_PATCH_LOWPRIORITY)));
 					W_UnlockCachedPatch(patch);
 				}
 				else
 				{
-
+					// Sonic's feet
 					V_DrawSmallScaledPatch(sonicx - 8, 92, 0, (patch = W_CachePatchName("PEELOUT1", PU_PATCH_LOWPRIORITY)));
 					W_UnlockCachedPatch(patch);
-
+					// Tails' tails
 					V_DrawSmallScaledPatch(tailsx, tailsy, 0, (patch = W_CachePatchName("HELICOP1", PU_PATCH_LOWPRIORITY)));
 					W_UnlockCachedPatch(patch);
 				}
 
-
+				// Tails
 				V_DrawSmallScaledPatch(tailsx, tailsy, 0, (patch = W_CachePatchName("FLY1", PU_PATCH_LOWPRIORITY)));
 				W_UnlockCachedPatch(patch);
 
-
+				// Knuckles
 				V_DrawSmallScaledPatch(knucklesx, knucklesy, 0, (patch = W_CachePatchName("GLIDE1", PU_PATCH_LOWPRIORITY)));
 				W_UnlockCachedPatch(patch);
 			}
 
-
+			// Black bars to hide the sky on widescreen
 			V_DrawFill(-80, 0, 80, 256, 31);
 			V_DrawFill(BASEVIDWIDTH, 0, 80, 256, 31);
 		}
@@ -789,7 +789,7 @@ void F_IntroDrawer(void)
 
 	W_UnlockCachedPatch(background);
 
-	if (intro_scenenum == 4)  
+	if (intro_scenenum == 4) // The asteroid SPINS!
 	{
 		if (intro_curtime > 1)
 		{
@@ -840,19 +840,19 @@ void F_IntroDrawer(void)
 	V_DrawString(cx, cy, V_ALLOWLOWERCASE, cutscene_disptext);
 }
 
-
-
-
+//
+// F_IntroTicker
+//
 void F_IntroTicker(void)
 {
-
+	// advance animation
 	finalecount++;
 
 	timetonext--;
 
 	F_WriteText();
 
-
+	// check for skipping
 	if (keypressed)
 		keypressed = false;
 
@@ -904,11 +904,11 @@ void F_IntroTicker(void)
 				F_RunWipe(99,true);
 			}
 
-
+			// Stay on black for a bit. =)
 			{
 				tic_t nowtime, quittime, lasttime;
 				nowtime = lasttime = I_GetTime();
-				quittime = nowtime + NEWTICRATE*2;  
+				quittime = nowtime + NEWTICRATE*2; // Shortened the quit time, used to be 2 seconds
 				while (quittime > nowtime)
 				{
 					while (!((nowtime = I_GetTime()) - lasttime))
@@ -923,13 +923,13 @@ void F_IntroTicker(void)
 #ifdef HAVE_THREADS
 					I_lock_mutex(&m_menu_mutex);
 #endif
-					M_Drawer();  
+					M_Drawer(); // menu is drawn even on top of wipes
 #ifdef HAVE_THREADS
 					I_unlock_mutex(m_menu_mutex);
 #endif
-					I_FinishUpdate();  
+					I_FinishUpdate(); // Update the screen with the image Tails 06-19-2001
 
-					if (moviemode)  
+					if (moviemode) // make sure we save frames for the white hold too
 						M_SaveFrame();
 				}
 			}
@@ -966,7 +966,7 @@ void F_IntroTicker(void)
 		}
 		else if ((intro_scenenum == 5 && intro_curtime == 5*TICRATE)
 			|| (intro_scenenum == 7 && intro_curtime == 6*TICRATE)
-
+			//|| (intro_scenenum == 11 && intro_curtime == 7*TICRATE)
 			|| (intro_scenenum == 15 && intro_curtime == 7*TICRATE))
 		{
 			F_WipeStartScreen();
@@ -983,14 +983,14 @@ void F_IntroTicker(void)
 		animtimer--;
 }
 
-
-
-
+//
+// F_IntroResponder
+//
 boolean F_IntroResponder(event_t *event)
 {
 	INT32 key = event->key;
 
-
+	// remap virtual keys (mouse & joystick buttons)
 	switch (key)
 	{
 		case KEY_MOUSE1:
@@ -1036,9 +1036,9 @@ boolean F_IntroResponder(event_t *event)
 	return true;
 }
 
-
-
-
+// =========
+//  CREDITS
+// =========
 static const char *credits[] = {
 	"\1Sonic Robo Blast 2",
 	"\1Credits",
@@ -1065,32 +1065,32 @@ static const char *credits[] = {
 	"Vivian \"toaster\" Grannell",
 	"Julio \"Chaos Zero 64\" Guir",
 	"\"Hanicef\"",
-	"\"Hannu_Hanhi\"",  
+	"\"Hannu_Hanhi\"", // For many OpenGL performance improvements!
 	"\"hazepastel\"",
 	"Kepa \"Nev3r\" Iceta",
 	"Thomas \"Shadow Hog\" Igoe",
 	"Iestyn \"Monster Iestyn\" Jealous",
 	"\"Kaito Sinclaire\"",
-	"\"Kalaron\"",  
-	"Ronald \"Furyhunter\" Kinard",  
-	"\"Lat'\"",  
+	"\"Kalaron\"", // Coded some of Sryder13's collection of OpenGL fixes, especially fog
+	"Ronald \"Furyhunter\" Kinard", // The SDL2 port
+	"\"Lat'\"", // SRB2-CHAT, the chat window from Kart
 	"\"LZA\"",
 	"Matthew \"Shuffle\" Marsalko",
 	"Steven \"StroggOnMeth\" McGranahan",
-	"\"Morph\"",  
-	"Louis-Antoine \"LJ Sonic\" de Moulins",  
+	"\"Morph\"", // For SRB2Morphed stuff
+	"Louis-Antoine \"LJ Sonic\" de Moulins", // de Rochefort doesn't quite fit on the screen sorry lol
 	"John \"JTE\" Muniz",
 	"Colin \"Sonict\" Pfaff",
 	"\"Radicalicious\"",
 	"James \"james\" Robert Roman",
 	"Sean \"Sryder13\" Ryder",
 	"Ehab \"Wolfy\" Saeed",
-	"Tasos \"tatokis\" Sahanidis",  
-	"Riku \"Ors\" Salminen",  
+	"Tasos \"tatokis\" Sahanidis", // Corrected C FixedMul, making 64-bit builds netplay compatible
+	"Riku \"Ors\" Salminen", // Demo consistency improvements
 	"Jonas \"MascaraSnake\" Sauer",
 	"Wessel \"sphere\" Smit",
 	"\"SSNTails\"",
-	"\"VelocitOni\"",  
+	"\"VelocitOni\"", // Wrote the original dashmode script
 	"Ikaro \"Tatsuru\" Vinhas",
 	"Ben \"Cue\" Woodford",
 	"Lachlan \"Lach\" Wright",
@@ -1098,20 +1098,20 @@ static const char *credits[] = {
 	"\"Zwip-Zwap Zapony\"",
 	"",
 	"\1Art",
-	"Victor \"VAdaPEGA\" Ara\x1Fjo",  
+	"Victor \"VAdaPEGA\" Ara\x1Fjo", // Araújo -- sorry for our limited font! D:
 	"\"Arrietty\"",
 	"Ryan \"Blaze Hedgehog\" Bloom",
-	"Graeme P. \"SuperPhanto\" Caldwell",  
+	"Graeme P. \"SuperPhanto\" Caldwell", // for the new brak render
 	"\"ChrispyPixels\"",
 	"Paul \"Boinciel\" Clempson",
 	"Sally \"TehRealSalt\" Cochenour",
-	"\"DaJumpJump\"",  
+	"\"DaJumpJump\"", // New Ringslinger graphics (2.2.14)
 	"\"DeltaSanic\"",
 	"Desmond \"Blade\" DesJardins",
 	"Sherman \"CoatRack\" DesJardins",
 	"\"DirkTheHusky\"",
 	"Jesse \"Jeck Jims\" Emerick",
-	"\"Fighter_Builder\"",  
+	"\"Fighter_Builder\"", // for the CEZ3 button debris
 	"Buddy \"KinkaJoy\" Fischer",
 	"Vivian \"toaster\" Grannell",
 	"James \"SwitchKaze\" Hale",
@@ -1122,7 +1122,7 @@ static const char *credits[] = {
 	"Alice \"Alacroix\" de Lemos",
 	"Logan \"Hyperchaotix\" McCloud",
 	"Alexander \"DrTapeworm\" Moench-Ford",
-    "\"orbitalviolet\"",  
+    "\"orbitalviolet\"", // summit showdown hehehehe (aka Evertone)
 	"Andrew \"Senku Niola\" Moran",
 	"\"MotorRoach\"",
 	"Phillip \"TelosTurntable\" Robinson",
@@ -1137,10 +1137,10 @@ static const char *credits[] = {
 	"",
 	"\1Music and Sound",
 	"\1Production",
-	"Victor \"VAdaPEGA\" Ara\x1Fjo",  
+	"Victor \"VAdaPEGA\" Ara\x1Fjo", // Araújo
 	"Malcolm \"RedXVI\" Brown",
 	"Dave \"DemonTomatoDave\" Bulmer",
-	"Dan Cidoni",  
+	"Dan Cidoni", // aka Krabs
 	"Paul \"Boinciel\" Clempson",
 	"\"Cyan Helkaraxe\"",
 	"Claire \"clairebun\" Ellis",
@@ -1159,7 +1159,7 @@ static const char *credits[] = {
 	"Colette \"fickleheart\" Bordelon",
 	"Hank \"FuriousFox\" Brannock",
 	"Matthew \"Fawfulfan\" Chapman",
-	"Dan Cidoni",  
+	"Dan Cidoni", // aka Krabs
 	"Paul \"Boinciel\" Clempson",
 	"Sally \"TehRealSalt\" Cochenour",
 	"Desmond \"Blade\" DesJardins",
@@ -1210,13 +1210,13 @@ static const char *credits[] = {
 	"\1Special Thanks",
 	"id Software",
 	"Doom Legacy Project",
-	"FreeDoom Project",  
+	"FreeDoom Project", // Used some of the mancubus and rocket launcher sprites for Brak
 	"Kart Krew",
 	"Alex \"MistaED\" Fuller",
-	"Howard Drossin",  
-	"Pascal \"CodeImp\" vd Heiden",  
-	"Randi Heit (<!>)",  
-	"Simon \"sirjuddington\" Judd",  
+	"Howard Drossin", // Virtual Sonic - Sonic & Knuckles Theme
+	"Pascal \"CodeImp\" vd Heiden", // Doom Builder developer
+	"Randi Heit (<!>)", // For their MSPaint <!> sprite that we nicked
+	"Simon \"sirjuddington\" Judd", // SLADE developer
 	"SRB2 Community Contributors",
 	"",
 	"\1Produced By",
@@ -1249,8 +1249,8 @@ static struct {
 	{CREDITS_RIGHT - (250 >> 1),       "CREDIT10"},
 	{CREDITS_LEFT,                     "CREDIT11"},
 	{CREDITS_RIGHT - (279 >> 1),       "CREDIT12"},
-
-
+	//{(BASEVIDWIDTH - (279 >> 1)) >> 1, "CREDIT12"},
+	// CREDIT13 is extra art and is not shown by default
 	{0, NULL}
 };
 
@@ -1264,7 +1264,7 @@ void F_StartCredits(void)
 {
 	G_SetGamestate(GS_CREDITS);
 
-
+	// Just in case they're open ... somehow
 	M_ClearMenus(true);
 
 	if (creditscutscene)
@@ -1294,7 +1294,7 @@ void F_CreditDrawer(void)
 	UINT8 colornum;
 	const UINT8 *colormap;
 
-
+	// compensation for y on non-green resolutions, used to prevent text from disappearing before reaching the top
 	UINT16 compy = (vid.height - (BASEVIDHEIGHT * vid.dup)) / 2;
 
 	if (players[consoleplayer].skincolor)
@@ -1306,20 +1306,20 @@ void F_CreditDrawer(void)
 
 	V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
 
-
+	// Zig Zagz
 	V_DrawFixedPatch(-16*FRACUNIT, zagpos<<FRACBITS, FRACUNIT, V_SNAPTOLEFT, W_CachePatchName("LTZIGZAG", PU_PATCH_LOWPRIORITY), colormap);
 	V_DrawFixedPatch(-16*FRACUNIT, (zagpos - 320)<<FRACBITS, FRACUNIT, V_SNAPTOLEFT, W_CachePatchName("LTZIGZAG", PU_PATCH_LOWPRIORITY), colormap);
 	V_DrawFixedPatch((BASEVIDWIDTH + 16)*FRACUNIT, zagpos<<FRACBITS, FRACUNIT, V_SNAPTORIGHT|V_FLIP, W_CachePatchName("LTZIGZAG", PU_PATCH_LOWPRIORITY), colormap);
 	V_DrawFixedPatch((BASEVIDWIDTH + 16)*FRACUNIT, (zagpos - 320)<<FRACBITS, FRACUNIT, V_SNAPTORIGHT|V_FLIP, W_CachePatchName("LTZIGZAG", PU_PATCH_LOWPRIORITY), colormap);
 
-
+	// Draw background pictures first
 	for (i = 0; credits_pics[i].patch; i++)
 		V_DrawSciencePatch(credits_pics[i].x<<FRACBITS, (280<<FRACBITS) + (((i*credits_height)<<FRACBITS)/(credits_numpics)) - 4*(animtimer<<FRACBITS)/5, 0, W_CachePatchName(credits_pics[i].patch, PU_PATCH_LOWPRIORITY), FRACUNIT>>1);
 
-
+	// Dim the background
 	V_DrawFadeScreen(0xFF00, 16);
 
-
+	// Draw credits text on top
 	for (i = 0; credits[i]; i++)
 	{
 		switch(credits[i][0])
@@ -1350,11 +1350,11 @@ void F_CreditDrawer(void)
 
 void F_CreditTicker(void)
 {
-
+	// "Simulate" the drawing of the credits so that dedicated mode doesn't get stuck
 	UINT16 i;
 	fixed_t y = (80<<FRACBITS) - (animtimer<<FRACBITS>>1);
 
-
+	// Calculate credits height to display art properly
 	if (credits_height == 0)
 	{
 		for (i = 0; credits[i]; i++)
@@ -1366,10 +1366,10 @@ void F_CreditTicker(void)
 				default: credits_height += 12; break;
 			}
 		}
-		credits_height = 131*credits_height/80;  
+		credits_height = 131*credits_height/80; // account for scroll speeds. This is a guess now, so you may need to update this if you change the credits length.
 	}
 
-
+	// Draw credits text on top
 	for (i = 0; credits[i]; i++)
 	{
 		switch(credits[i][0])
@@ -1382,7 +1382,7 @@ void F_CreditTicker(void)
 			break;
 	}
 
-
+	// Do this here rather than in the drawer you doofus! (this is why dedicated mode broke at credits)
 	if (!credits[i] && y <= 120<<FRACBITS && !finalecount)
 	{
 		timetonext = 5*TICRATE+1;
@@ -1402,7 +1402,7 @@ boolean F_CreditResponder(event_t *event)
 {
 	INT32 key = event->key;
 
-
+	// remap virtual keys (mouse & joystick buttons)
 	switch (key)
 	{
 		case KEY_MOUSE1:
@@ -1451,15 +1451,15 @@ boolean F_CreditResponder(event_t *event)
 	return true;
 }
 
+// ============
+//  EVALUATION
+// ============
 
-
-
-
-#define SPARKLLOOPTIME 7  
+#define SPARKLLOOPTIME 7 // must be odd
 
 void F_StartGameEvaluation(void)
 {
-
+	// Credits option in extras menu
 	if (cursaveslot == -1)
 	{
 		S_FadeOutStopMusic(2*MUSICRATE);
@@ -1471,7 +1471,7 @@ void F_StartGameEvaluation(void)
 
 	G_SetGamestate(GS_EVALUATION);
 
-
+	// Just in case they're open ... somehow
 	M_ClearMenus(true);
 
 	goodending = (ALL7EMERALDS(emeralds));
@@ -1501,7 +1501,7 @@ void F_GameEvaluationDrawer(void)
 
 	V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
 
-
+	// Draw all the good crap here.
 
 	if (finalecount > 0 && useBlackRock)
 	{
@@ -1559,9 +1559,9 @@ void F_GameEvaluationDrawer(void)
 			{
 				if (j > 1 || sparklloop >= 2)
 				{
-
-
-
+					// if j == 0 - alternate between 0 and 1
+					//         1 -                   1 and 2
+					//         2 -                   2 and not rendered
 					V_DrawFixedPatch(x+sparkloffs[j-1][0], y+sparkloffs[j-1][1], FRACUNIT, 0, W_CachePatchName(va("ENDSPKL%.1d", (j - ((sparklloop & 1) ? 0 : 1))), PU_PATCH_LOWPRIORITY), R_GetTranslationColormap(TC_DEFAULT, SKINCOLOR_AQUA, GTC_CACHE));
 				}
 				j--;
@@ -1594,7 +1594,7 @@ void F_GameEvaluationDrawer(void)
 
 	V_DrawCreditString((BASEVIDWIDTH - V_CreditStringWidth(endingtext))<<(FRACBITS-1), (BASEVIDHEIGHT-100)<<(FRACBITS-1), 0, endingtext);
 
-#if 0  
+#if 0 // the following looks like hot garbage the more unlockables we add, and we now have a lot of unlockables
 	if (finalecount >= 5*TICRATE)
 	{
 		INT32 startcoord = 32;
@@ -1649,7 +1649,7 @@ void F_GameEvaluationTicker(void)
 			sparklloop = 10;
 		}
 	}
-	else if (++sparklloop == SPARKLLOOPTIME)  
+	else if (++sparklloop == SPARKLLOOPTIME) // time to roll the randomisation again
 	{
 		angle_t workingangle = FixedAngle((M_RandomKey(360))<<FRACBITS)>>ANGLETOFINESHIFT;
 		fixed_t workingradius = M_RandomKey(26);
@@ -1692,13 +1692,13 @@ void F_GameEvaluationTicker(void)
 
 #undef SPARKLLOOPTIME
 
-
-
-
+// ==========
+//   ENDING
+// ==========
 
 #define INFLECTIONPOINT (6*TICRATE)
 #define STOPPINGPOINT (14*TICRATE)
-#define SPARKLLOOPTIME 15  
+#define SPARKLLOOPTIME 15 // must be odd
 
 static void F_CacheEnding(void)
 {
@@ -1729,7 +1729,7 @@ static void F_CacheEnding(void)
 	endescp[3] = W_CachePatchName("ENDESCP3", PU_PATCH_LOWPRIORITY);
 	endescp[4] = W_CachePatchName("ENDESCP4", PU_PATCH_LOWPRIORITY);
 
-
+	// so we only need to check once
 	if ((goodending = ALL7EMERALDS(emeralds)))
 	{
 		UINT8 skinnum = players[consoleplayer].skin;
@@ -1738,7 +1738,7 @@ static void F_CacheEnding(void)
 		if (skins[skinnum]->sprites[SPR2_XTRA].numframes > (XTRA_ENDING+2))
 		{
 			sprdef = &skins[skinnum]->sprites[SPR2_XTRA];
-
+			// character head, skin specific
 			sprframe = &sprdef->spriteframes[XTRA_ENDING];
 			endfwrk[0] = W_CachePatchNum(sprframe->lumppat[0], PU_PATCH_LOWPRIORITY);
 			sprframe = &sprdef->spriteframes[XTRA_ENDING+1];
@@ -1746,7 +1746,7 @@ static void F_CacheEnding(void)
 			sprframe = &sprdef->spriteframes[XTRA_ENDING+2];
 			endfwrk[2] = W_CachePatchNum(sprframe->lumppat[0], PU_PATCH_LOWPRIORITY);
 		}
-		else  
+		else // Show a star if your character doesn't have an ending firework display. (Basically the MISSINGs for this)
 		{
 			endfwrk[0] = W_CachePatchName("ENDFWRK3", PU_PATCH_LOWPRIORITY);
 			endfwrk[1] = W_CachePatchName("ENDFWRK4", PU_PATCH_LOWPRIORITY);
@@ -1757,7 +1757,7 @@ static void F_CacheEnding(void)
 	}
 	else
 	{
-
+		// eggman, skin nonspecific
 		endfwrk[0] = W_CachePatchName("ENDFWRK0", PU_PATCH_LOWPRIORITY);
 		endfwrk[1] = W_CachePatchName("ENDFWRK1", PU_PATCH_LOWPRIORITY);
 		endfwrk[2] = W_CachePatchName("ENDFWRK2", PU_PATCH_LOWPRIORITY);
@@ -1782,16 +1782,16 @@ void F_StartEnding(void)
 	G_SetGamestate(GS_ENDING);
 	wipetypepost = INT16_MAX;
 
-
+	// Just in case they're open ... somehow
 	M_ClearMenus(true);
 
 	gameaction = ga_nothing;
 	paused = false;
 	CON_ToggleOff();
-	S_StopMusic();  
+	S_StopMusic(); // todo: placeholder
 	S_StopSounds();
 
-	finalecount = -10;  
+	finalecount = -10; // what? this totally isn't a hack. why are you asking?
 
 	memset(sparkloffs, 0, sizeof(INT32)*3*2);
 	sparklloop = 0;
@@ -1811,10 +1811,10 @@ void F_EndingTicker(void)
 	if (finalecount == -8)
 		S_ChangeMusicInternal((goodending ? "_endg" : "_endb"), false);
 
-	if (goodending && finalecount == INFLECTIONPOINT)  
+	if (goodending && finalecount == INFLECTIONPOINT) // time to swap some assets
 		F_CacheGoodEnding();
 
-	if (++sparklloop == SPARKLLOOPTIME)  
+	if (++sparklloop == SPARKLLOOPTIME) // time to roll the randomisation again
 	{
 		angle_t workingangle = FixedAngle((M_RandomRange(-170, 80))<<FRACBITS)>>ANGLETOFINESHIFT;
 		fixed_t workingradius = M_RandomKey(26);
@@ -1869,7 +1869,7 @@ void F_EndingDrawer(void)
 		V_DrawFill(24, 24, BASEVIDWIDTH-48, BASEVIDHEIGHT-48, 0);
 		V_DrawFixedPatch(x+i, y+j, FRACUNIT, 0, endegrk[0],
 			R_GetTranslationColormap(TC_BLINK, SKINCOLOR_BLACK, GTC_CACHE));
-
+		//V_DrawScaledPatch(BASEVIDWIDTH/2, BASEVIDHEIGHT/2, 0, endbrdr[1]);
 	}
 	else if (goodending && parallaxticker == -1)
 	{
@@ -1883,13 +1883,13 @@ void F_EndingDrawer(void)
 		boolean borderstuff = false;
 		INT32 tweakx = 0, tweaky = 0;
 
-		if (parallaxticker < 75)  
+		if (parallaxticker < 75) // f background's supposed to be visible
 		{
-			V_DrawFixedPatch(-(x/10), -(y/10), FRACUNIT, 0, endbgsp[0], NULL);  
-			V_DrawFixedPatch(-(x/5),  -(y/5),  FRACUNIT, 0, endbgsp[1], NULL);  
-			V_DrawFixedPatch(     0,  -(y/2),  FRACUNIT, 0, endbgsp[2], NULL);  
+			V_DrawFixedPatch(-(x/10), -(y/10), FRACUNIT, 0, endbgsp[0], NULL); // nebula
+			V_DrawFixedPatch(-(x/5),  -(y/5),  FRACUNIT, 0, endbgsp[1], NULL); // sun
+			V_DrawFixedPatch(     0,  -(y/2),  FRACUNIT, 0, endbgsp[2], NULL); // planet
 
-
+			// player's escape pod
 			V_DrawFixedPatch((200<<FRACBITS)+(finalecount<<(FRACBITS-2)),
 				(100<<FRACBITS)+(finalecount<<(FRACBITS-2)),
 				FRACUNIT, 0, endescp[4], NULL);
@@ -1903,7 +1903,7 @@ void F_EndingDrawer(void)
 					FRACUNIT, trans<<V_ALPHASHIFT, endescp[(finalecount/2)&3], NULL);
 			}
 
-			if (goodending && parallaxticker > 0)  
+			if (goodending && parallaxticker > 0) // gunchedrock
 			{
 				INT32 scale = FRACUNIT + ((parallaxticker-10)<<7);
 				INT32 trans = parallaxticker>>2;
@@ -1925,19 +1925,19 @@ void F_EndingDrawer(void)
 				x <<= 1;
 				y <<= 1;
 
-
+				// center detritrus
 				V_DrawFixedPatch(i-x, j-y, FRACUNIT, 0, endegrk[0], colormap);
 				if (trans < 10)
 					V_DrawFixedPatch(i-x, j-y, FRACUNIT, trans<<V_ALPHASHIFT, endegrk[0], NULL);
 
-
+				 // ring detritrus
 				V_DrawFixedPatch((30*(FRACUNIT-scale))+i-(2*x), (30*(FRACUNIT-scale))+j-(2*y) - ((7<<FRACBITS)/2), scale, 0, endegrk[1], colormap);
 				if (trans < 10)
 					V_DrawFixedPatch((30*(FRACUNIT-scale))+i-(2*x), (30*(FRACUNIT-scale))+j-(2*y), scale, trans<<V_ALPHASHIFT, endegrk[1], NULL);
 
 				scale += ((parallaxticker-10)<<7);
 
-
+				 // shard detritrus
 				V_DrawFixedPatch((30*(FRACUNIT-scale))+i-(x/2), (30*(FRACUNIT-scale))+j-(y/2) - ((7<<FRACBITS)/2), scale, 0, endxpld[0], colormap);
 				if (trans < 10)
 					V_DrawFixedPatch((30*(FRACUNIT-scale))+i-(x/2), (30*(FRACUNIT-scale))+j-(y/2), scale, trans<<V_ALPHASHIFT, endxpld[0], NULL);
@@ -1959,7 +1959,7 @@ void F_EndingDrawer(void)
 			j += tweaky<<2;
 		}
 
-		if (parallaxticker <= 70)  
+		if (parallaxticker <= 70) // eggrock/blackrock
 		{
 			INT32 trans;
 			fixed_t scale = FRACUNIT;
@@ -2040,7 +2040,7 @@ void F_EndingDrawer(void)
 				}
 			}
 		}
-		else  
+		else // firework
 		{
 			fixed_t scale = FRACUNIT;
 			INT32 frame;
@@ -2065,7 +2065,7 @@ void F_EndingDrawer(void)
 				V_DrawFixedPatch(x, y, scale, 0, endfwrk[frame], colormap);
 		}
 
-
+		// explosions
 		if (sparklloop >= 3 && doexplosions)
 		{
 			INT32 boomtime = parallaxticker - sparklloop;
@@ -2077,11 +2077,11 @@ void F_EndingDrawer(void)
 				FRACUNIT, 0, endxpld[sparklloop/4], NULL);
 		}
 
-
+		// initial fade
 		if (finalecount < 30)
 			V_DrawFadeFill(24, 24, BASEVIDWIDTH-48, BASEVIDHEIGHT-48, 0, 0, 30-finalecount);
 
-
+		// border - only emeralds can exist outside it
 		{
 			INT32 trans = 0;
 			if (borderstuff)
@@ -2094,7 +2094,7 @@ void F_EndingDrawer(void)
 				V_DrawScaledPatch(BASEVIDWIDTH/2, BASEVIDHEIGHT/2, (finalecount-INFLECTIONPOINT)<<V_ALPHASHIFT, endbrdr[1]);
 		}
 
-
+		// emeralds and emerald accessories
 		if (goodending && finalecount >= TICRATE && finalecount < INFLECTIONPOINT)
 		{
 			INT32 workingtime = finalecount - TICRATE;
@@ -2114,7 +2114,7 @@ void F_EndingDrawer(void)
 				eemeralds_cur[i] = (workingtime % 360)<<FRACBITS;
 			}
 
-
+			// sparkles
 			for (i = 0; i < 7; ++i)
 			{
 				UINT8* colormap;
@@ -2153,16 +2153,16 @@ void F_EndingDrawer(void)
 					y = (BASEVIDHEIGHT<<(FRACBITS-1)) + FixedMul(FINESINE(fa),radius);
 					eemeralds_cur[j] += (360<<FRACBITS)/7;
 
-
-
-
+					// if j == 0 - alternate between 0 and 1
+					//         1 -                   1 and 2
+					//         2 -                   2 and not rendered
 					V_DrawFixedPatch(x, y, FRACUNIT, 0, endspkl[(j - ((sparklloop & 1) ? 0 : 1))], colormap);
 
 					j--;
 				}
 			}
 
-
+			// ...then emeralds themselves
 			for (i = 0; i < 7; ++i)
 			{
 				fa = (FixedAngle(eemeralds_cur[0])>>ANGLETOFINESHIFT) & FINEMASK;
@@ -2173,10 +2173,10 @@ void F_EndingDrawer(void)
 				patchname[4] = 'A'+(char)i;
 				V_DrawFixedPatch(x, y, FRACUNIT, 0, W_CachePatchName(patchname, PU_PATCH_LOWPRIORITY), NULL);
 			}
-		}  
-	}  
+		} // if (goodending...
+	} // (finalecount > 20)
 
-
+	// look, i make an ending for you last-minute, the least you could do is let me have this
 	if (cv_soundtest.value == 413)
 	{
 		INT32 trans = 0;
@@ -2197,7 +2197,7 @@ void F_EndingDrawer(void)
 
 		if (trans < 10)
 		{
-
+			//colset(linkmap,  164, 165, 169); -- the ideal purple colour to represent a clicked in-game link, but not worth it just for a soundtest-controlled secret
 			V_DrawCenteredString(BASEVIDWIDTH/2, 8, V_ALLOWLOWERCASE|(trans<<V_ALPHASHIFT), str);
 			V_DrawCharacter(32, BASEVIDHEIGHT-16, '>'|(trans<<V_ALPHASHIFT), false);
 			V_DrawString(40, ((finalecount == STOPPINGPOINT-(20+TICRATE)) ? 1 : 0)+BASEVIDHEIGHT-16, ((serverGamedata->timesBeaten || finalecount >= STOPPINGPOINT-TICRATE) ? V_PURPLEMAP : V_BLUEMAP)|(trans<<V_ALPHASHIFT), " [S] ===>");
@@ -2222,9 +2222,9 @@ void F_EndingDrawer(void)
 
 #undef SPARKLLOOPTIME
 
-
-
-
+// ==========
+//  GAME END
+// ==========
 void F_StartGameEnd(void)
 {
 	G_SetGamestate(GS_GAMEEND);
@@ -2234,23 +2234,23 @@ void F_StartGameEnd(void)
 	CON_ToggleOff();
 	S_StopSounds();
 
-
+	// In case menus are still up?!!
 	M_ClearMenus(true);
 
 	timetonext = TICRATE;
 }
 
-
-
-
+//
+// F_GameEndDrawer
+//
 void F_GameEndDrawer(void)
 {
-
+	// this function does nothing
 }
 
-
-
-
+//
+// F_GameEndTicker
+//
 void F_GameEndTicker(void)
 {
 	if (timetonext > 0)
@@ -2260,9 +2260,9 @@ void F_GameEndTicker(void)
 }
 
 
-
-
-
+// ==============
+//  TITLE SCREEN
+// ==============
 
 void F_InitMenuPresValues(void)
 {
@@ -2271,7 +2271,7 @@ void F_InitMenuPresValues(void)
 	prevMenuId = 0;
 	activeMenuId = MainDef.menuid;
 
-
+	// Set defaults for presentation values
 	strncpy(curbgname, "TITLESKY", 9);
 	curfadevalue = 16;
 	curbgcolor = -1;
@@ -2288,7 +2288,7 @@ void F_InitMenuPresValues(void)
 	curttloop = ttloop;
 	curtttics = tttics;
 
-
+	// Find current presentation values
 	M_SetMenuCurBackground((gamestate == GS_TIMEATTACK) ? "RECATTBG" : "TITLESKY");
 	M_SetMenuCurFadeValue(16);
 	M_SetMenuCurTitlePics();
@@ -2297,9 +2297,9 @@ void F_InitMenuPresValues(void)
 	luahuddrawlist_title = LUA_HUD_CreateDrawList();
 }
 
-
-
-
+//
+// F_SkyScroll
+//
 void F_SkyScroll(const char *patchname)
 {
 	INT32 x, basey = 0;
@@ -2323,17 +2323,17 @@ void F_SkyScroll(const char *patchname)
 		return;
 	}
 
-
-
-
+	// Modulo the background scrolling to prevent jumps from integer overflows
+	// We already load the background patch here, so we can modulo it here
+	// to avoid also having to load the patch in F_MenuPresTicker
 	curbgx %= pat->width  * 16;
 	curbgy %= pat->height * 16;
 
-
+	// Ooh, fancy frame interpolation
 	x     = ((curbgx*vid.dup) + FixedInt((rendertimefrac-FRACUNIT) * curbgxspeed*vid.dup)) / 16;
 	basey = ((curbgy*vid.dup) + FixedInt((rendertimefrac-FRACUNIT) * curbgyspeed*vid.dup)) / 16;
 
-	if (x     > 0)  
+	if (x     > 0) // Make sure that we don't leave the left or top sides empty
 		x     -= pat->width  * vid.dup;
 	if (basey > 0)
 		basey -= pat->height * vid.dup;
@@ -2396,7 +2396,7 @@ static void F_CacheTitleScreen(void)
 			ttspop7 = W_CachePatchName("TTSPOP7", PU_PATCH_LOWPRIORITY);
 			break;
 
-
+		// don't load alacroix gfx yet; we do that upon first draw.
 		case TTMODE_ALACROIX:
 			break;
 
@@ -2428,10 +2428,10 @@ void F_StartTitleScreen(void)
 		 tails_blink = tails_blink_twice = tails_idle_start = tails_idle_end =\
 		 knux_blink  = knux_blink_twice  = knux_idle_start  = knux_idle_end  = 0;
 
-		sonic_blinked_already = tails_blinked_already = knux_blinked_already = 1;  
+		sonic_blinked_already = tails_blinked_already = knux_blinked_already = 1; // don't blink on the first idle cycle
 
 		if (curttmode == TTMODE_ALACROIX)
-			finalecount = -3;  
+			finalecount = -3; // hack so that frames don't advance during the entry wipe
 		else
 			finalecount = 0;
 		wipetypepost = menupres[MN_MAIN].enterwipe;
@@ -2458,9 +2458,9 @@ void F_StartTitleScreen(void)
 		if (!titlemap)
 			return;
 
-		players[displayplayer].playerstate = PST_DEAD;  
+		players[displayplayer].playerstate = PST_DEAD; // Don't spawn the player in dummy (I'm still a filthy cheater)
 
-
+		// Set Default Position
 		if (playerstarts[0])
 			startpos = playerstarts[0];
 		else if (deathmatchstarts[0])
@@ -2480,13 +2480,13 @@ void F_StartTitleScreen(void)
 		else
 		{
 			camera.x = camera.y = camera.z = camera.angle = camera.aiming = 0;
-			camera.subsector = NULL;  
+			camera.subsector = NULL; // toast is filthy too
 		}
 
 		camera.chase = true;
 		camera.height = 0;
 
-
+		// Run enter linedef exec for MN_MAIN, since this is where we start
 		if (menupres[MN_MAIN].entertag)
 			P_LinedefExecute(menupres[MN_MAIN].entertag, players[displayplayer].mo, NULL);
 
@@ -2495,7 +2495,7 @@ void F_StartTitleScreen(void)
 	else
 	{
 		titlemapinaction = TITLEMAP_OFF;
-		gamemap = 1;  
+		gamemap = 1; // g_game.c
 		if (!mapheaderinfo[gamemap-1])
 			P_AllocMapHeader(gamemap-1);
 		CON_ClearHUD();
@@ -2503,17 +2503,17 @@ void F_StartTitleScreen(void)
 
 	G_SetGamestate(GS_TITLESCREEN);
 
-	                                                                        
-                                                                          
-                                                                            
-                                                                            
-                                                                           
-                                                                              
-                     
+	/* G_DoLoadLevel resets interpolation while the title map is still being
+	 * assembled, before the title camera above is placed at its final start.
+	 * Loading a replacement title map from a late addfile can render one frame
+	 * against the previous title view as a result, which looks like the skybox
+	 * briefly snapping to an unrelated angle. Invalidate the completed camera
+	 * history here as well, after the final position and any menu enter executor
+	 * have both run. */
 	if (titlemapinaction)
 		R_ResetViewInterpolation(0);
 
-
+	// IWAD dependent stuff.
 
 	animtimer = skullAnimCounter = 0;
 
@@ -2525,12 +2525,12 @@ void F_StartTitleScreen(void)
 
 static void F_UnloadAlacroixGraphics(SINT8 oldttscale)
 {
-
-
-
+	// This all gets freed by PU_PATCH_LOWPRIORITY when exiting the menus.
+	// When re-visiting the menus (e.g., from exiting in-game), the gfx are force-reloaded.
+	// So leftover addresses here should not be a problem.
 
 	UINT16 i;
-	oldttscale--;  
+	oldttscale--; // zero-based index
 	for (i = 0; i < TTMAX_ALACROIX; i++)
 	{
 		if(ttembl[oldttscale][i]) { Patch_Free(ttembl[oldttscale][i]); ttembl[oldttscale][i] = 0; }
@@ -2590,7 +2590,7 @@ static void F_LoadAlacroixGraphics(SINT8 newttscale)
 	};
 	char lumpnames[22][7];
 
-	newttscale--;  
+	newttscale--; // 0-based index
 
 	if (!ttloaded[newttscale])
 	{
@@ -2634,13 +2634,13 @@ static void F_FigureActiveTtScale(void)
 	if (newttscale == testttscale)
 		return;
 
-
+	// We have a new ttscale, so load gfx
 	if(oldttscale > 0)
 		F_UnloadAlacroixGraphics(oldttscale);
 
 	testttscale = newttscale;
 
-
+	// If ttscale is unavailable: look for lower scales, then higher scales.
 	for (; newttscale >= 1; newttscale--)
 	{
 		if (ttavailable[newttscale-1])
@@ -2659,7 +2659,7 @@ static void F_FigureActiveTtScale(void)
 		F_LoadAlacroixGraphics(activettscale);
 }
 
-
+// (no longer) De-Demo'd Title Screen
 void F_TitleScreenDrawer(void)
 {
 	boolean hidepics;
@@ -2668,23 +2668,23 @@ void F_TitleScreenDrawer(void)
 	UINT8 *whitecol[2] = {NULL, NULL};
 
 	if (modeattacking)
-		return;  
+		return; // We likely came here from retrying. Don't do a damn thing.
 
-
+	// Draw that sky!
 	if (curbgcolor >= 0)
 		V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, curbgcolor);
 	else if (!curbghide || !titlemapinaction || gamestate == GS_WAITINGPLAYERS)
 		F_SkyScroll(curbgname);
 
-
+	// Don't draw outside of the title screen, or if the patch isn't there.
 	if (gamestate != GS_TITLESCREEN && gamestate != GS_WAITINGPLAYERS)
 		return;
 
-
+	// Don't draw if title mode is set to Old/None and the patch isn't there
 	if (!ttwing && (curttmode == TTMODE_OLD || curttmode == TTMODE_NONE))
 		return;
 
-
+	// rei|miru: use title pics?
 	hidepics = curhidepics;
 	if (hidepics)
 		goto luahook;
@@ -2732,25 +2732,25 @@ void F_TitleScreenDrawer(void)
 			break;
 
 		case TTMODE_ALACROIX:
+			//
+			// PRE-INTRO: WING ON BLACK BACKGROUND
+			//
 
-
-
-
-
+			// Figure the gfx scale and load gfx if necessary
 			F_FigureActiveTtScale();
 
-			if (!activettscale)  
+			if (!activettscale) // invalid scale, draw nothing
 				break;
 			sc = FRACUNIT / activettscale;
 
-
-
-
-
+			// Start at black background. Draw it until tic 30, where we replace with a white flash.
+			//
+			// TODO: How to NOT draw the titlemap while this background is drawn?
+			//
 			if (finalecount <= 29)
 				V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
-
-
+			// Flash at tic 30, timed to O__TITLE percussion. Hold the flash until tic 34.
+			// After tic 34, fade the flash until tic 44.
 			else
 			{
 				if (finalecount > 29 && finalecount < 35)
@@ -2765,7 +2765,7 @@ void F_TitleScreenDrawer(void)
 				}
 			}
 
-
+			// Draw emblem
 			V_DrawSciencePatch(40<<FRACBITS, 20<<FRACBITS, 0, TTEMBL[0], sc);
 
 			if (whitecol[0])
@@ -2774,25 +2774,25 @@ void F_TitleScreenDrawer(void)
 				V_DrawFixedPatch(40<<FRACBITS, 20<<FRACBITS, sc, V_TRANSLUCENT + ((whitefade/2) & V_ALPHAMASK), TTEMBL[0], whitecol[1]);
 			}
 
-
+			// Animate SONIC ROBO BLAST 2 before the white flash at tic 30.
 			if (finalecount <= 29)
 			{
-
+				// Ribbon unfurls, revealing SONIC text, from tic 0 to tic 24. SONIC text is pre-baked into this ribbon graphic.
 				V_DrawSciencePatch(39<<FRACBITS, 88<<FRACBITS, 0, TTRIBB[min(max(0, finalecount), 24)], sc);
 
-
+				// Darken non-text things.
 				V_DrawFadeScreen(0xFF00, 12);
 
-
+				// Animate SONIC text while the ribbon unfurls, from tic 0 to tic 28.
 				if(finalecount >= 0)
 					V_DrawSciencePatch(89<<FRACBITS, 92<<FRACBITS, 0, TTSONT[min(finalecount, 28)], sc);
 
-
+				// Fade in ROBO BLAST 2 starting at tic 10.
 				if (finalecount > 9)
 				{
 					INT32 fadeval = 0;
 
-
+					// Fade between tic 10 and tic 29.
 					if (finalecount < 30)
 					{
 						UINT8 fadecounter = 30-finalecount;
@@ -2812,18 +2812,18 @@ void F_TitleScreenDrawer(void)
 					}
 					V_DrawSciencePatch(79<<FRACBITS, 132<<FRACBITS, fadeval, TTROBO[0], sc);
 
-
+					// Draw the TWO from tic 16 to tic 31, so the TWO lands right when the screen flashes white.
 					if(finalecount > 15)
 						V_DrawSciencePatch(106<<FRACBITS, 118<<FRACBITS, fadeval, TTTWOT[min(finalecount-16, 15)], sc);
 				}
 			}
 
-
-
-
-
-
-
+			//
+			// ALACROIX CHARACTER FRAMES
+			//
+			// Start all animation from tic 34 (or whenever the white flash begins to fade; see below.)
+			// Delay the start a bit for better music timing.
+			//
 
 #define CHARSTART 41
 #define SONICSTART (CHARSTART+0)
@@ -2839,9 +2839,9 @@ void F_TitleScreenDrawer(void)
 #define KNUXX 167
 #define KNUXY 7
 
-
-
-
+			// Decide who gets to blink or not.
+			// Make this decision at the END of an idle/blink cycle.
+			// Upon first idle, both idle_start and idle_end will be 0.
 
 			if (finalecount >= KNUXIDLE)
 			{
@@ -2849,14 +2849,14 @@ void F_TitleScreenDrawer(void)
 				{
 					if (knux_blink)
 					{
-						knux_blink = false;  
+						knux_blink = false; // don't run the cycle twice in a row
 						knux_blinked_already = true;
 					}
-					else if (knux_blinked_already)  
+					else if (knux_blinked_already) // or after the first non-blink cycle, either.
 						knux_blinked_already = false;
 					else
 					{
-
+						// make this chance higher than Sonic/Tails because Knux's idle cycle is longer
 						knux_blink = !(M_RandomKey(100) % 2);
 						knux_blink_twice = knux_blink ? !(M_RandomKey(100) % 5) : false;
 					}
@@ -2872,10 +2872,10 @@ void F_TitleScreenDrawer(void)
 				{
 					if (tails_blink)
 					{
-						tails_blink = false;  
+						tails_blink = false; // don't run the cycle twice in a row
 						tails_blinked_already = true;
 					}
-					else if (tails_blinked_already)  
+					else if (tails_blinked_already) // or after the first non-blink cycle, either.
 						tails_blinked_already = false;
 					else
 					{
@@ -2885,8 +2885,8 @@ void F_TitleScreenDrawer(void)
 					tails_idle_start = finalecount;
 				}
 
-
-
+				// Tails does not actually have a non-blink idle cycle, but make up a number
+				// so he can still blink.
 				tails_idle_end = tails_blink ? (tails_blink_twice ? 17 : 7) : 30;
 			}
 
@@ -2896,10 +2896,10 @@ void F_TitleScreenDrawer(void)
 				{
 					if (sonic_blink)
 					{
-						sonic_blink = false;  
+						sonic_blink = false; // don't run the cycle twice in a row
 						sonic_blinked_already = true;
 					}
-					else if (sonic_blinked_already)  
+					else if (sonic_blinked_already) // or after the first non-blink cycle, either.
 						sonic_blinked_already = false;
 					else
 					{
@@ -2913,17 +2913,17 @@ void F_TitleScreenDrawer(void)
 			}
 
 
-
-
-
+			//
+			// BACK TAIL LAYER
+			//
 
 			if (finalecount >= TAILSSTART)
 			{
 				if (finalecount >= TAILSIDLE)
 				{
-
-
-
+					//
+					// Tails Back Tail Layer Idle
+					//
 					SINT8 taftcount = (finalecount - (TAILSIDLE)) % 41;
 					if      (taftcount >= 0   && taftcount < 5  )
 						V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTABT[0 ], sc);
@@ -2952,17 +2952,17 @@ void F_TitleScreenDrawer(void)
 				}
 			}
 
-
-
-
+			//
+			// FRONT TAIL LAYER
+			//
 
 			if (finalecount >= TAILSSTART)
 			{
 				if (finalecount >= TAILSIDLE)
 				{
-
-
-
+					//
+					// Tails Front Tail Layer Idle
+					//
 					SINT8 tabtcount = (finalecount - (TAILSIDLE)) % 41;
 					if      (tabtcount >= 0   && tabtcount < 6  )
 						V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTAFT[0 ], sc);
@@ -2991,17 +2991,17 @@ void F_TitleScreenDrawer(void)
 				}
 			}
 
-
-
-
+			//
+			// BACK LAYER CHARACTERS
+			//
 
 			if (finalecount >= KNUXSTART)
 			{
 				if (finalecount < KNUXIDLE)
 				{
-
-
-
+					//
+					// Knux Back Layer Intro
+					//
 					if      (finalecount >= KNUXSTART+0   && finalecount < KNUXSTART+6  )
 						V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNIB[0 ], sc);
 					else if (finalecount >= KNUXSTART+6   && finalecount < KNUXSTART+10 )
@@ -3040,20 +3040,20 @@ void F_TitleScreenDrawer(void)
 						V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNIB[17], sc);
 					else if (finalecount >= KNUXSTART+67  && finalecount < KNUXSTART+70 )
 						V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNIB[18], sc);
-
+					// Start idle animation (frame K20-B)
 				}
 				else
 				{
-
-
-
+					//
+					// Knux Back Layer Idle
+					//
 					if (!knux_blink)
 						V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNBA[0], sc);
 					else
 					{
-
-
-
+						//
+						// Knux Blinking
+						//
 						SINT8 idlecount = finalecount - knux_idle_start;
 						if      (idlecount >= 0  && idlecount < 2 )
 							V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNBK[0], sc);
@@ -3061,7 +3061,7 @@ void F_TitleScreenDrawer(void)
 							V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNBK[1], sc);
 						else if (idlecount >= 6  && idlecount < 7 )
 							V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNBK[2], sc);
-
+						// We reach this point if knux_blink_twice == true
 						else if (idlecount >= 7  && idlecount < 10)
 							V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNBA[0], sc);
 						else if (idlecount >= 10 && idlecount < 12)
@@ -3078,9 +3078,9 @@ void F_TitleScreenDrawer(void)
 			{
 				if (finalecount < TAILSIDLE)
 				{
-
-
-
+					//
+					// Tails Back Layer Intro
+					//
 					if      (finalecount >= TAILSSTART+0   && finalecount < TAILSSTART+6  )
 						V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTAIB[0 ], sc);
 					else if (finalecount >= TAILSSTART+6   && finalecount < TAILSSTART+10 )
@@ -3113,20 +3113,20 @@ void F_TitleScreenDrawer(void)
 						V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTAIB[14], sc);
 					else if (finalecount >= TAILSSTART+56  && finalecount < TAILSSTART+60 )
 						V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTAIB[15], sc);
-
+					// Start idle animation (frame T17-B)
 				}
 				else
 				{
-
-
-
+					//
+					// Tails Back Layer Idle
+					//
 					if (!tails_blink)
 						V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTABA[0], sc);
 					else
 					{
-
-
-
+						//
+						// Tails Blinking
+						//
 						SINT8 idlecount = finalecount - tails_idle_start;
 						if      (idlecount >= +0  && idlecount < +2 )
 							V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTABK[0], sc);
@@ -3134,7 +3134,7 @@ void F_TitleScreenDrawer(void)
 							V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTABK[1], sc);
 						else if (idlecount >= +6  && idlecount < +7 )
 							V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTABK[2], sc);
-
+						// We reach this point if tails_blink_twice == true
 						else if (idlecount >= +7  && idlecount < +10)
 							V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTABA[0], sc);
 						else if (idlecount >= +10 && idlecount < +12)
@@ -3151,9 +3151,9 @@ void F_TitleScreenDrawer(void)
 			{
 				if (finalecount < SONICIDLE)
 				{
-
-
-
+					//
+					// Sonic Back Layer Intro
+					//
 					if      (finalecount >= SONICSTART+0   && finalecount < SONICSTART+6  )
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIB[0 ], sc);
 					else if (finalecount >= SONICSTART+6   && finalecount < SONICSTART+11 )
@@ -3168,9 +3168,9 @@ void F_TitleScreenDrawer(void)
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIB[5 ], sc);
 					else if (finalecount >= SONICSTART+27  && finalecount < SONICSTART+31 )
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIB[6 ], sc);
-
-
-
+					//else if (finalecount >= SONICSTART+31  && finalecount < SONICSTART+33 )
+					//  Frame is blank
+					//	V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIB[7 ], sc);
 					else if (finalecount >= SONICSTART+33  && finalecount < SONICSTART+36 )
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIB[8 ], sc);
 					else if (finalecount >= SONICSTART+36  && finalecount < SONICSTART+40 )
@@ -3187,20 +3187,20 @@ void F_TitleScreenDrawer(void)
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIB[14], sc);
 					else if (finalecount >= SONICSTART+53  && finalecount < SONICSTART+57 )
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIB[15], sc);
-
+					// Start idle animation (frame S17-B)
 				}
 				else
 				{
-
-
-
+					//
+					// Sonic Back Layer Idle
+					//
 					if (!sonic_blink)
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOBA[0], sc);
 					else
 					{
-
-
-
+						//
+						// Sonic Blinking
+						//
 						SINT8 idlecount = finalecount - sonic_idle_start;
 						if      (idlecount >= 0  && idlecount < 2 )
 							V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOBK[0], sc);
@@ -3208,7 +3208,7 @@ void F_TitleScreenDrawer(void)
 							V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOBK[1], sc);
 						else if (idlecount >= 6  && idlecount < 7 )
 							V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOBK[2], sc);
-
+						// We reach this point if sonic_blink_twice == true
 						else if (idlecount >= 7  && idlecount < 10)
 							V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOBA[0], sc);
 						else if (idlecount >= 10 && idlecount < 12)
@@ -3221,13 +3221,13 @@ void F_TitleScreenDrawer(void)
 				}
 			}
 
+			//
+			// LOGO LAYER
+			//
 
-
-
-
-
-
-
+			// After tic 34, starting when the flash fades,
+			// draw the combined ribbon and SONIC ROBO BLAST 2 logo. Note the different Y value, because this
+			// graphic is cropped differently from the unfurling ribbon.
 			if (finalecount > 29)
 				V_DrawSciencePatch(39<<FRACBITS, 93<<FRACBITS, 0, TTRBTX[0], sc);
 
@@ -3237,17 +3237,17 @@ void F_TitleScreenDrawer(void)
 				V_DrawFixedPatch(39<<FRACBITS, 93<<FRACBITS, sc, V_TRANSLUCENT + ((whitefade/2) & V_ALPHAMASK), TTRBTX[0], whitecol[1]);
 			}
 
-
-
-
+			//
+			// FRONT LAYER CHARACTERS
+			//
 
 			if (finalecount >= KNUXSTART)
 			{
 				if (finalecount < KNUXIDLE)
 				{
-
-
-
+					//
+					// Knux Front Layer Intro
+					//
 					if      (finalecount >= KNUXSTART+22  && finalecount < KNUXSTART+28 )
 						V_DrawSciencePatch(KNUXX<<FRACBITS, KNUXY<<FRACBITS, 0, TTKNIF[6 ], sc);
 					else if (finalecount >= KNUXSTART+28  && finalecount < KNUXSTART+32 )
@@ -3257,9 +3257,9 @@ void F_TitleScreenDrawer(void)
 				}
 				else
 				{
-
-
-
+					//
+					// Knux Front Layer Idle
+					//
 					if (!knux_blink)
 					{
 						SINT8 idlecount = finalecount - knux_idle_start;
@@ -3299,9 +3299,9 @@ void F_TitleScreenDrawer(void)
 			{
 				if (finalecount < TAILSIDLE)
 				{
-
-
-
+					//
+					// Tails Front Layer Intro
+					//
 					if      (finalecount >= TAILSSTART+26  && finalecount < TAILSSTART+30 )
 						V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTAIF[7 ], sc);
 					else if (finalecount >= TAILSSTART+30  && finalecount < TAILSSTART+35 )
@@ -3315,16 +3315,16 @@ void F_TitleScreenDrawer(void)
 					else if (finalecount >= TAILSSTART+47  && finalecount < TAILSSTART+51 )
 						V_DrawSciencePatch(TAILSX<<FRACBITS, TAILSY<<FRACBITS, 0, TTTAIF[12], sc);
 				}
-
+				// No Tails Front Layer Idle
 			}
 
 			if (finalecount >= SONICSTART)
 			{
 				if (finalecount < SONICIDLE)
 				{
-
-
-
+					//
+					// Sonic Front Layer Intro
+					//
 					if      (finalecount >= SONICSTART+19  && finalecount < SONICSTART+27 )
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIF[5 ], sc);
 					else if (finalecount >= SONICSTART+27  && finalecount < SONICSTART+31 )
@@ -3339,15 +3339,15 @@ void F_TitleScreenDrawer(void)
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIF[10], sc);
 					else if (finalecount >= SONICSTART+44  && finalecount < SONICSTART+47 )
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIF[11], sc);
-
+					// ...
 					else if (finalecount >= SONICSTART+53  && finalecount < SONICSTART+57 )
 						V_DrawSciencePatch(SONICX<<FRACBITS, SONICY<<FRACBITS, 0, TTSOIF[15], sc);
 				}
 				else
 				{
-
-
-
+					//
+					// Sonic Front Layer Idle
+					//
 					if (!sonic_blink)
 					{
 						SINT8 idlecount = finalecount - sonic_idle_start;
@@ -3399,7 +3399,7 @@ void F_TitleScreenDrawer(void)
 				else if (ttuser[max(0, ttuser_count-1)])
 					ttuser_count = max(0, ttuser_count-1);
 				else
-					break;  
+					break; // draw nothing
 			}
 
 			V_DrawSciencePatch(curttx<<FRACBITS, curtty<<FRACBITS, 0, ttuser[ttuser_count], sc);
@@ -3410,9 +3410,9 @@ void F_TitleScreenDrawer(void)
 	}
 
 luahook:
-
-
-
+	// The title drawer is sometimes called without first being started
+	// In order to avoid use-before-initialization crashes, let's check and
+	// create the drawlist if it doesn't exist.
 	if (!LUA_HUD_IsDrawListValid(luahuddrawlist_title))
 	{
 		LUA_HUD_DestroyDrawList(luahuddrawlist_title);
@@ -3427,32 +3427,32 @@ luahook:
 	LUA_HUD_DrawList(luahuddrawlist_title);
 }
 
-
-
+// separate animation timer for backgrounds, since we also count
+// during GS_TIMEATTACK
 void F_MenuPresTicker(void)
 {
 	curbgx += curbgxspeed;
 	curbgy += curbgyspeed;
 }
 
-
+// (no longer) De-Demo'd Title Screen
 void F_TitleScreenTicker(boolean run)
 {
 	if (run)
 		finalecount++;
 
-
+	// don't trigger if doing anything besides idling on title
 	if (gameaction != ga_nothing || gamestate != GS_TITLESCREEN)
 		return;
 
-
+	// Execute the titlemap camera settings
 	if (titlemapinaction)
 	{
 		thinker_t *th;
 		mobj_t *mo2;
 		mobj_t *cameraref = NULL;
 
-
+		// If there's a Line 422 Switch Cut-Away view, don't force us.
 		if (!titlemapcameraref || titlemapcameraref->type != MT_ALTVIEWMAN)
 		{
 			for (th = thlist[THINK_MOBJ].next; th != &thlist[THINK_MOBJ]; th = th->next)
@@ -3486,40 +3486,40 @@ void F_TitleScreenTicker(boolean run)
 		}
 		else
 		{
-
+			// Default behavior: Do a lil' camera spin if a title map is loaded;
 			camera.angle += titlescrollxspeed*ANG1/64;
 		}
 	}
 
-
+	// no demos to play? or, are they disabled?
 	if (!cv_rollingdemos.value || !numDemos)
 		return;
 
-
-
+	// Wait for a while (for the music to finish, preferably)
+	// before starting demos
 	if (demoDelayLeft)
 	{
 		--demoDelayLeft;
 		return;
 	}
 
-
+	// Hold up for a bit if menu or console active
 	if (menuactive || CON_Ready())
 	{
 		demoIdleLeft = demoIdleTime;
 		return;
 	}
 
-
+	// is it time?
 	if (!(--demoIdleLeft))
 	{
 		char dname[9];
 		lumpnum_t l;
 
-
+		// prevent console spam if failed
 		demoIdleLeft = demoIdleTime;
 
-
+		// Replay intro when done cycling through demos
 		if (curDemo == numDemos)
 		{
 			curDemo = 0;
@@ -3527,7 +3527,7 @@ void F_TitleScreenTicker(boolean run)
 			return;
 		}
 
-
+		// Setup demo name
 		snprintf(dname, 9, "DEMO_%03u", ++curDemo);
 
 		if ((l = W_CheckNumForName(dname)) == LUMPERROR)
@@ -3548,15 +3548,15 @@ void F_TitleDemoTicker(void)
 	keypressed = false;
 }
 
-
-
-
+// ==========
+//  CONTINUE
+// ==========
 
 static skin_t *contskins[2];
 static UINT16 cont_spr2[2][6];
 static UINT8 *contcolormaps[2];
 static player_t *contPlayers[2];
-static skincolornum_t contColors[2];  
+static skincolornum_t contColors[2]; // it's possible to change your skincolor in the continue screen, so this is for Lua to identify the skincolor that was used to cache the colormap
 static boolean contOverrides[2];
 
 void F_StartContinue(void)
@@ -3579,7 +3579,7 @@ void F_StartContinue(void)
 	paused = false;
 	CON_ToggleOff();
 
-
+	// In case menus are still up?!!
 	M_ClearMenus(true);
 
 	S_ChangeMusicInternal("_conti", false);
@@ -3601,7 +3601,7 @@ void F_StartContinue(void)
 
 		if (secondarydisplayplayer != consoleplayer)
 			secondplaya = secondarydisplayplayer;
-		else  
+		else // HACK
 			secondplaya = 1;
 
 		contPlayers[1] = &players[secondplaya];
@@ -3613,7 +3613,7 @@ void F_StartContinue(void)
 		contcolormaps[1] = R_GetTranslationColormap(players[secondplaya].skin, players[secondplaya].skincolor, GTC_CACHE);
 		cont_spr2[1][4] = contskins[1]->sprites[cont_spr2[1][0]].numframes;
 		if (cont_spr2[1][0] == SPR2_CNT4)
-			cont_spr2[1][5] = 4;  
+			cont_spr2[1][5] = 4; // sorry, this one is hardcoded
 		else
 			cont_spr2[1][5] = max(1, contskins[1]->contspeed);
 	}
@@ -3630,7 +3630,7 @@ void F_StartContinue(void)
 	timetonext = (11*TICRATE)+11;
 	continuetime = 0;
 
-
+	// allocate and/or clear Lua continue screen draw lists
 	for (i = 0; i < 2; i++)
 	{
 		if (!LUA_HUD_IsDrawListValid(luahuddrawlist_continue[i]))
@@ -3667,7 +3667,7 @@ static void F_DrawContinueCharacter(INT32 dx, INT32 dy, UINT8 n)
 		(
 			HUD_HOOK(continue), luahuddrawlist_continue[n], contPlayers[n],
 			dx, dy, contskins[n]->highresscale,
-			(INT32)(contskins[n]->skinnum), cont_spr2[n][0], cont_spr2[n][1], cont_spr2[n][2] + 1, contColors[n],  
+			(INT32)(contskins[n]->skinnum), cont_spr2[n][0], cont_spr2[n][1], cont_spr2[n][2] + 1, contColors[n], // add 1 to rotation to convert internal angle numbers (0-7) to WAD editor angle numbers (1-8)
 			imcontinuing ? continuetime : timetonext, imcontinuing
 		);
 	}
@@ -3683,10 +3683,10 @@ static void F_DrawContinueCharacter(INT32 dx, INT32 dy, UINT8 n)
 	V_DrawFixedPatch((dx), (dy), contskins[n]->highresscale, (sprframe->flip & (1<<cont_spr2[n][2])) ? V_FLIP : 0, patch, contcolormaps[n]);
 }
 
-
-
-
-
+//
+// F_ContinueDrawer
+// Moved continuing out of the HUD (hack removal!!)
+//
 void F_ContinueDrawer(void)
 {
 	patch_t *patch;
@@ -3708,12 +3708,12 @@ void F_ContinueDrawer(void)
 
 	V_DrawLevelTitle(x - (V_LevelNameWidth("Continue?")>>1), 16, 0, "Continue?");
 
-
+	// Two stars...
 	patch = W_CachePatchName("CONTSTAR", PU_PATCH_LOWPRIORITY);
 	V_DrawScaledPatch(x-32, 160, 0, patch);
 	V_DrawScaledPatch(x+32, 160, 0, patch);
 
-
+	// Time left!
 	if (timeleft > 9)
 	{
 		numbuf[7] = '1';
@@ -3727,7 +3727,7 @@ void F_ContinueDrawer(void)
 		V_DrawScaledPatch(x, 160, 0, W_CachePatchName(numbuf, PU_PATCH_LOWPRIORITY));
 	}
 
-
+	// Draw the continue markers! Show continues.
 	if (!continuesInSession)
 		;
 	else if (ncontinues > 10)
@@ -3752,10 +3752,10 @@ void F_ContinueDrawer(void)
 		x = BASEVIDWIDTH>>1;
 	}
 
-
+	// Spotlight
 	V_DrawScaledPatch(x, 140, 0, W_CachePatchName("CONTSPOT", PU_PATCH_LOWPRIORITY));
 
-
+	// warping laser
 	if (continuetime)
 	{
 		INT32 w = min(continuetime, 28), brightness = (continuetime>>1) & 7;
@@ -3830,7 +3830,7 @@ void F_ContinueTicker(void)
 			cont_spr2[1][2] = 0;
 
 		if (continuetime == (3*TICRATE)-10)
-			S_StartSound(NULL, sfx_cdfm56);  
+			S_StartSound(NULL, sfx_cdfm56); // or 31
 		else if (continuetime == 5)
 		{
 			cont_spr2[0][0] = P_GetSkinSprite2(contskins[0], SPR2_CNT2, NULL);
@@ -3889,7 +3889,7 @@ boolean F_ContinueResponder(event_t *event)
 	if (event->type != ev_keydown)
 		return false;
 
-
+	// remap virtual keys (mouse & joystick buttons)
 	switch (key)
 	{
 		case KEY_ENTER:
@@ -3910,9 +3910,9 @@ boolean F_ContinueResponder(event_t *event)
 	return true;
 }
 
-
-
-
+// ==================
+//  CUSTOM CUTSCENES
+// ==================
 static INT32 scenenum, cutnum;
 static INT32 picxpos, picypos, picnum, pictime, picmode, numpics, pictoloop;
 static INT32 textxpos, textypos;
@@ -3925,7 +3925,7 @@ static void F_AdvanceToNextScene(void)
 	{
 		F_WipeStartScreen();
 
-
+		// Fade to any palette color you want.
 		if (cutscenes[cutnum]->scene[scenenum].fadecolor)
 		{
 			V_DrawFill(0,0,BASEVIDWIDTH,BASEVIDHEIGHT,cutscenes[cutnum]->scene[scenenum].fadecolor);
@@ -3937,8 +3937,8 @@ static void F_AdvanceToNextScene(void)
 		}
 	}
 
-
-
+	// Don't increment until after endcutscene check
+	// (possible overflow / bad patch names from the one tic drawn before the fade)
 	if (scenenum+1 >= cutscenes[cutnum]->numscenes)
 	{
 		F_EndCutScene();
@@ -3959,7 +3959,7 @@ static void F_AdvanceToNextScene(void)
 			cutscenes[cutnum]->scene[scenenum].musicloop,
 			cutscenes[cutnum]->scene[scenenum].musswitchposition, 0, 0);
 
-
+	// Fade to the next
 	F_NewCutscene(cutscenes[cutnum]->scene[scenenum].text);
 
 	picnum = 0;
@@ -3979,10 +3979,10 @@ static void F_AdvanceToNextScene(void)
 	}
 }
 
-
+// See also G_AfterIntermission, the only other place which handles intra-map/ending transitions
 void F_EndCutScene(void)
 {
-	cutsceneover = true;  
+	cutsceneover = true; // do this first, just in case G_EndGame or something wants to turn it back false later
 	if (runningprecutscene)
 	{
 		if (server)
@@ -4034,7 +4034,7 @@ void F_StartCustomCutscene(INT32 cutscenenum, boolean precutscene, boolean reset
 	keypressed = false;
 	finalecount = 0;
 	timetonext = 0;
-	animtimer = cutscenes[cutnum]->scene[0].picduration[0];  
+	animtimer = cutscenes[cutnum]->scene[0].picduration[0]; // Picture duration
 	stoptimer = 0;
 
 	if (cutscenes[cutnum]->scene[0].musswitch[0])
@@ -4047,9 +4047,9 @@ void F_StartCustomCutscene(INT32 cutscenenum, boolean precutscene, boolean reset
 	S_StopSounds();
 }
 
-
-
-
+//
+// F_CutsceneDrawer
+//
 void F_CutsceneDrawer(void)
 {
 	V_DrawFill(0,0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
@@ -4071,12 +4071,12 @@ void F_CutsceneTicker(void)
 {
 	INT32 i;
 
-
-
+	// Online clients tend not to instantly get the map change, so just wait
+	// and don't send 30 of them.
 	if (cutsceneover)
 		return;
 
-
+	// advance animation
 	finalecount++;
 	cutscene_boostspeed = 0;
 
@@ -4129,30 +4129,30 @@ boolean F_CutsceneResponder(event_t *event)
 	return false;
 }
 
-
-
-
+// ==================
+//  TEXT PROMPTS
+// ==================
 
 static void F_GetPageTextGeometry(UINT8 *pagelines, boolean *rightside, INT32 *boxh, INT32 *texth, INT32 *texty, INT32 *namey, INT32 *chevrony, INT32 *textx, INT32 *textr)
 {
-
-
-
+	// reuse:
+	// cutnum -> promptnum
+	// scenenum -> pagenum
 	lumpnum_t iconlump = W_CheckNumForPatchName(textprompts[cutnum]->page[scenenum].iconname);
 
 	*pagelines = textprompts[cutnum]->page[scenenum].lines ? textprompts[cutnum]->page[scenenum].lines : 4;
 	*rightside = (iconlump != LUMPERROR && textprompts[cutnum]->page[scenenum].rightside);
 
-
+	// Vertical calculations
 	*boxh = *pagelines*2;
-	*texth = textprompts[cutnum]->page[scenenum].name[0] ? (*pagelines-1)*2 : *pagelines*2;  
+	*texth = textprompts[cutnum]->page[scenenum].name[0] ? (*pagelines-1)*2 : *pagelines*2; // name takes up first line if it exists
 	*texty = BASEVIDHEIGHT - ((*texth * 4) + (*texth/2)*4);
 	*namey = BASEVIDHEIGHT - ((*boxh * 4) + (*boxh/2)*4);
-	*chevrony = BASEVIDHEIGHT - (((1*2) * 4) + ((1*2)/2)*4);  
+	*chevrony = BASEVIDHEIGHT - (((1*2) * 4) + ((1*2)/2)*4); // force on last line
 
-
-
-
+	// Horizontal calculations
+	// Shift text to the right if we have a character icon on the left side
+	// Add 4 margin against icon
 	*textx = (iconlump != LUMPERROR && !*rightside) ? ((*boxh * 4) + (*boxh/2)*4) + 4 : 4;
 	*textr = *rightside ? BASEVIDWIDTH - (((*boxh * 4) + (*boxh/2)*4) + 4) : BASEVIDWIDTH-4;
 }
@@ -4166,30 +4166,30 @@ static fixed_t F_GetPromptHideHudBound(void)
 
 	if (cutnum == INT32_MAX || scenenum == INT32_MAX || !textprompts[cutnum] || scenenum >= textprompts[cutnum]->numpages ||
 		!textprompts[cutnum]->page[scenenum].hidehud ||
-		(splitscreen && textprompts[cutnum]->page[scenenum].hidehud != 2))  
+		(splitscreen && textprompts[cutnum]->page[scenenum].hidehud != 2)) // don't hide on splitscreen, unless hide all is forced
 		return 0;
-	else if (textprompts[cutnum]->page[scenenum].hidehud == 2)  
+	else if (textprompts[cutnum]->page[scenenum].hidehud == 2) // hide all
 		return BASEVIDHEIGHT;
 
 	F_GetPageTextGeometry(&pagelines, &rightside, &boxh, &texth, &texty, &namey, &chevrony, &textx, &textr);
 
-
+	// calc boxheight (see V_DrawPromptBack)
 	boxh *= vid.dup;
-	boxh = (boxh * 4) + (boxh/2)*5;  
+	boxh = (boxh * 4) + (boxh/2)*5; // 4 lines of space plus gaps between and some leeway
 
-
-
-
-	return 0 - boxh;  
+	// return a coordinate to check
+	// if negative: don't show hud elements below this coordinate (visually)
+	// if positive: don't show hud elements above this coordinate (visually)
+	return 0 - boxh; // \todo: if prompt at top of screen (someday), make this return positive
 }
 
 boolean F_GetPromptHideHudAll(void)
 {
 	if (cutnum == INT32_MAX || scenenum == INT32_MAX || !textprompts[cutnum] || scenenum >= textprompts[cutnum]->numpages ||
 		!textprompts[cutnum]->page[scenenum].hidehud ||
-		(splitscreen && textprompts[cutnum]->page[scenenum].hidehud != 2))  
+		(splitscreen && textprompts[cutnum]->page[scenenum].hidehud != 2)) // don't hide on splitscreen, unless hide all is forced
 		return false;
-	else if (textprompts[cutnum]->page[scenenum].hidehud == 2)  
+	else if (textprompts[cutnum]->page[scenenum].hidehud == 2) // hide all
 		return true;
 	else
 		return false;
@@ -4208,7 +4208,7 @@ boolean F_GetPromptHideHud(fixed_t y)
 	fromtop = (ybound >= 0);
 	ytest = (fromtop ? ybound : BASEVIDHEIGHT + ybound);
 
-	return (fromtop ? y < ytest : y >= ytest);  
+	return (fromtop ? y < ytest : y >= ytest); // true means hide
 }
 
 static void F_PreparePageText(char *pagetext)
@@ -4226,11 +4226,11 @@ static void F_PreparePageText(char *pagetext)
 
 	F_NewCutscene(promptpagetext);
 	cutscene_textspeed = textprompts[cutnum]->page[scenenum].textspeed ? textprompts[cutnum]->page[scenenum].textspeed : TICRATE/5;
-	cutscene_textcount = 0;  
-	cutscene_boostspeed = 0;  
+	cutscene_textcount = 0; // no delay in beginning
+	cutscene_boostspeed = 0; // don't print 8 characters to start
 
-
-
+	// \todo update control hot strings on re-config
+	// and somehow don't reset cutscene text counters
 }
 
 static void F_AdvanceToNextPage(void)
@@ -4242,7 +4242,7 @@ static void F_AdvanceToNextPage(void)
 	if (textprompts[cutnum]->page[scenenum].nexttag[0])
 		F_GetPromptPageByNamedTag(textprompts[cutnum]->page[scenenum].nexttag, &nextprompt, &nextpage);
 
-
+	// determine next prompt
 	if (nextprompt != INT32_MAX)
 	{
 		if (nextprompt <= MAX_PROMPTS && textprompts[nextprompt])
@@ -4251,7 +4251,7 @@ static void F_AdvanceToNextPage(void)
 			cutnum = INT32_MAX;
 	}
 
-
+	// determine next page
 	if (nextpage != INT32_MAX)
 	{
 		if (cutnum != INT32_MAX)
@@ -4271,17 +4271,17 @@ static void F_AdvanceToNextPage(void)
 			scenenum = INT32_MAX;
 	}
 
-
+	// close the prompt if either num is invalid
 	if (cutnum == INT32_MAX || scenenum == INT32_MAX)
 		F_EndTextPrompt(false, false);
 	else
 	{
-
-
+		// on page mode, number of tics before allowing boost
+		// on timer mode, number of tics until page advances
 		timetonext = textprompts[cutnum]->page[scenenum].timetonext ? textprompts[cutnum]->page[scenenum].timetonext : TICRATE/10;
 		F_PreparePageText(textprompts[cutnum]->page[scenenum].text);
 
-
+		// gfx
 		picnum = textprompts[cutnum]->page[scenenum].pictostart;
 		numpics = textprompts[cutnum]->page[scenenum].numpics;
 		picmode = textprompts[cutnum]->page[scenenum].picmode;
@@ -4290,7 +4290,7 @@ static void F_AdvanceToNextPage(void)
 		picypos = textprompts[cutnum]->page[scenenum].ycoord[picnum];
 		animtimer = pictime = textprompts[cutnum]->page[scenenum].picduration[picnum];
 
-
+		// music change
 		if (textprompts[cutnum]->page[scenenum].musswitch[0])
 			S_ChangeMusic(textprompts[cutnum]->page[scenenum].musswitch,
 				textprompts[cutnum]->page[scenenum].musswitchflags,
@@ -4307,14 +4307,14 @@ void F_EndTextPrompt(boolean forceexec, boolean noexec)
 	if (promptwasactive)
 	{
 		if (promptmo && promptmo->player && promptblockcontrols)
-			promptmo->reactiontime = TICRATE/4;  
-
+			promptmo->reactiontime = TICRATE/4; // prevent jumping right away // \todo account freeze realtime for this)
+		// \todo reset frozen realtime?
 	}
 
-
+	// \todo net safety, maybe loop all player thinkers?
 	if ((promptwasactive || forceexec) && !noexec && promptpostexectag)
 	{
-		if (tmthing)  
+		if (tmthing) // edge case where starting an invalid prompt immediately on level load will make P_MapStart fail
 			P_LinedefExecute(promptpostexectag, promptmo, NULL);
 		else
 		{
@@ -4329,19 +4329,19 @@ void F_StartTextPrompt(INT32 promptnum, INT32 pagenum, mobj_t *mo, UINT16 postex
 {
 	INT32 i;
 
-
-
+	// if splitscreen and we already have a prompt active, ignore.
+	// \todo Proper per-player splitscreen support (individual prompts)
 	if (promptactive && splitscreen && promptnum == callpromptnum && pagenum == callpagenum)
 		return;
 
-
+	// \todo proper netgame support
 	if (netgame)
 	{
-		F_EndTextPrompt(true, false);  
+		F_EndTextPrompt(true, false); // run the post-effects immediately
 		return;
 	}
 
-
+	// We share vars, so no starting text prompts over cutscenes or title screens!
 	keypressed = false;
 	finalecount = 0;
 	timetonext = 0;
@@ -4349,13 +4349,13 @@ void F_StartTextPrompt(INT32 promptnum, INT32 pagenum, mobj_t *mo, UINT16 postex
 	stoptimer = 0;
 	skullAnimCounter = 0;
 
-
+	// Set up state
 	promptmo = mo;
 	promptpostexectag = postexectag;
 	promptblockcontrols = blockcontrols;
-	(void)freezerealtime;  
+	(void)freezerealtime; // \todo freeze player->realtime, maybe this needs to cycle through player thinkers
 
-
+	// Initialize current prompt and scene
 	callpromptnum = promptnum;
 	callpagenum = pagenum;
 	cutnum = (promptnum < MAX_PROMPTS && textprompts[promptnum]) ? promptnum : INT32_MAX;
@@ -4364,12 +4364,12 @@ void F_StartTextPrompt(INT32 promptnum, INT32 pagenum, mobj_t *mo, UINT16 postex
 
 	if (promptactive)
 	{
-
-
+		// on page mode, number of tics before allowing boost
+		// on timer mode, number of tics until page advances
 		timetonext = textprompts[cutnum]->page[scenenum].timetonext ? textprompts[cutnum]->page[scenenum].timetonext : TICRATE/10;
 		F_PreparePageText(textprompts[cutnum]->page[scenenum].text);
 
-
+		// gfx
 		picnum = textprompts[cutnum]->page[scenenum].pictostart;
 		numpics = textprompts[cutnum]->page[scenenum].numpics;
 		picmode = textprompts[cutnum]->page[scenenum].picmode;
@@ -4378,13 +4378,13 @@ void F_StartTextPrompt(INT32 promptnum, INT32 pagenum, mobj_t *mo, UINT16 postex
 		picypos = textprompts[cutnum]->page[scenenum].ycoord[picnum];
 		animtimer = pictime = textprompts[cutnum]->page[scenenum].picduration[picnum];
 
-
+		// music change
 		if (textprompts[cutnum]->page[scenenum].musswitch[0])
 			S_ChangeMusic(textprompts[cutnum]->page[scenenum].musswitch,
 				textprompts[cutnum]->page[scenenum].musswitchflags,
 				textprompts[cutnum]->page[scenenum].musicloop);
 
-
+		// get the calling player
 		if (promptblockcontrols && mo && mo->player)
 		{
 			for (i = 0; i < MAXPLAYERS; i++)
@@ -4398,7 +4398,7 @@ void F_StartTextPrompt(INT32 promptnum, INT32 pagenum, mobj_t *mo, UINT16 postex
 		}
 	}
 	else
-		F_EndTextPrompt(true, false);  
+		F_EndTextPrompt(true, false); // run the post-effects immediately
 }
 
 static boolean F_GetTextPromptTutorialTag(char *tag, INT32 length)
@@ -4409,26 +4409,26 @@ static boolean F_GetTextPromptTutorialTag(char *tag, INT32 length)
 	if (!tag || !tag[0] || !tutorialmode)
 		return false;
 
-	if (!strncmp(tag, "TAM", 3))  
+	if (!strncmp(tag, "TAM", 3)) // Movement
 		gcs = G_GetControlScheme(gamecontrol, gcl_movement, num_gcl_movement);
-	else if (!strncmp(tag, "TAC", 3))  
+	else if (!strncmp(tag, "TAC", 3)) // Camera
 	{
-
+		// Check for gcl_movement so we can differentiate between FPS and Platform schemes.
 		gcs = G_GetControlScheme(gamecontrol, gcl_movement, num_gcl_movement);
-		if (gcs == gcs_custom)  
+		if (gcs == gcs_custom) // try again, maybe we'll get a match
 			gcs = G_GetControlScheme(gamecontrol, gcl_camera, num_gcl_camera);
 		if (gcs == gcs_fps && !cv_usemouse.value)
-			gcs = gcs_platform;  
+			gcs = gcs_platform; // Platform (arrow) scheme is stand-in for no mouse
 	}
-	else if (!strncmp(tag, "TAD", 3))  
+	else if (!strncmp(tag, "TAD", 3)) // Movement and Camera
 		gcs = G_GetControlScheme(gamecontrol, gcl_movement_camera, num_gcl_movement_camera);
-	else if (!strncmp(tag, "TAJ", 3))  
+	else if (!strncmp(tag, "TAJ", 3)) // Jump
 		gcs = G_GetControlScheme(gamecontrol, gcl_jump, num_gcl_jump);
-	else if (!strncmp(tag, "TAS", 3))  
+	else if (!strncmp(tag, "TAS", 3)) // Spin
 		gcs = G_GetControlScheme(gamecontrol, gcl_spin, num_gcl_spin);
-	else if (!strncmp(tag, "TAA", 3))  
+	else if (!strncmp(tag, "TAA", 3)) // Char ability
 		gcs = G_GetControlScheme(gamecontrol, gcl_jump, num_gcl_jump);
-	else if (!strncmp(tag, "TAW", 3))  
+	else if (!strncmp(tag, "TAW", 3)) // Shield ability
 		gcs = G_GetControlScheme(gamecontrol, gcl_jump_spin, num_gcl_jump_spin);
 	else
 		gcs = G_GetControlScheme(gamecontrol, gcl_tutorial_used, num_gcl_tutorial_used);
@@ -4436,7 +4436,7 @@ static boolean F_GetTextPromptTutorialTag(char *tag, INT32 length)
 	switch (gcs)
 	{
 		case gcs_fps:
-
+			// strncat(tag, "FPS", length);
 			suffixed = false;
 			break;
 
@@ -4478,7 +4478,7 @@ void F_GetPromptPageByNamedTag(const char *tag, INT32 *promptnum, INT32 *pagenum
 		{
 			if (suffixed && fastcmp(suffixedtag, textprompts[*promptnum]->page[*pagenum].tag))
 			{
-
+				// this goes first because fastcmp ends early if first string is shorter
 				found = true;
 				break;
 			}
@@ -4488,7 +4488,7 @@ void F_GetPromptPageByNamedTag(const char *tag, INT32 *promptnum, INT32 *pagenum
 				{
 					nosuffixpromptnum = *promptnum;
 					nosuffixpagenum = *pagenum;
-
+					// continue searching for the suffixed tag
 				}
 				else
 				{
@@ -4515,16 +4515,16 @@ void F_GetPromptPageByNamedTag(const char *tag, INT32 *promptnum, INT32 *pagenum
 
 void F_TextPromptDrawer(void)
 {
-
-
-
+	// reuse:
+	// cutnum -> promptnum
+	// scenenum -> pagenum
 	lumpnum_t iconlump;
 	UINT8 pagelines;
 	boolean rightside;
 	INT32 boxh, texth, texty, namey, chevrony;
 	INT32 textx, textr;
 
-
+	// Data
 	patch_t *patch;
 
 	if (!promptactive)
@@ -4533,7 +4533,7 @@ void F_TextPromptDrawer(void)
 	iconlump = W_CheckNumForPatchName(textprompts[cutnum]->page[scenenum].iconname);
 	F_GetPageTextGeometry(&pagelines, &rightside, &boxh, &texth, &texty, &namey, &chevrony, &textx, &textr);
 
-
+	// Draw gfx first
 	if (picnum >= 0 && picnum < numpics && textprompts[cutnum]->page[scenenum].picname[picnum][0] != '\0')
 	{
 		if (textprompts[cutnum]->page[scenenum].pichires[picnum])
@@ -4544,22 +4544,22 @@ void F_TextPromptDrawer(void)
 				W_CachePatchName(textprompts[cutnum]->page[scenenum].picname[picnum], PU_PATCH_LOWPRIORITY));
 	}
 
-
+	// Draw background
 	V_DrawPromptBack(boxh, textprompts[cutnum]->page[scenenum].backcolor);
 
-
+	// Draw narrator icon
 	if (iconlump != LUMPERROR)
 	{
 		INT32 iconx, icony, scale, scaledsize;
 		patch = W_CachePatchName(textprompts[cutnum]->page[scenenum].iconname, PU_PATCH_LOWPRIORITY);
 
-
+		// scale and center
 		if (patch->width > patch->height)
 		{
 			scale = FixedDiv(((boxh * 4) + (boxh/2)*4) - 4, patch->width);
 			scaledsize = FixedMul(patch->height, scale);
 			iconx = (rightside ? BASEVIDWIDTH - (((boxh * 4) + (boxh/2)*4)) : 4) << FRACBITS;
-			icony = ((namey-4) << FRACBITS) + FixedDiv(BASEVIDHEIGHT - namey + 4 - scaledsize, 2);  
+			icony = ((namey-4) << FRACBITS) + FixedDiv(BASEVIDHEIGHT - namey + 4 - scaledsize, 2); // account for 4 margin
 		}
 		else if (patch->height > patch->width)
 		{
@@ -4583,17 +4583,17 @@ void F_TextPromptDrawer(void)
 		W_UnlockCachedPatch(patch);
 	}
 
-
+	// Draw text
 	V_DrawString(textx, texty, (V_SNAPTOBOTTOM|V_ALLOWLOWERCASE), cutscene_disptext);
 
-
-
+	// Draw name
+	// Don't use V_YELLOWMAP here so that the name color can be changed with control codes
 	if (textprompts[cutnum]->page[scenenum].name[0])
 		V_DrawString(textx, namey, (V_SNAPTOBOTTOM|V_ALLOWLOWERCASE), textprompts[cutnum]->page[scenenum].name);
 
-
+	// Draw chevron
 	if (promptblockcontrols && !timetonext)
-		V_DrawString(textr-8, chevrony + (skullAnimCounter/5), (V_SNAPTOBOTTOM|V_YELLOWMAP), "\x1B");  
+		V_DrawString(textr-8, chevrony + (skullAnimCounter/5), (V_SNAPTOBOTTOM|V_YELLOWMAP), "\x1B"); // down arrow
 }
 
 #define nocontrolallowed(j) {\
@@ -4614,27 +4614,27 @@ void F_TextPromptTicker(void)
 	if (!promptactive || paused || P_AutoPause())
 		return;
 
-
+	// advance animation
 	finalecount++;
 	cutscene_boostspeed = 0;
 
-
+	// for the chevron
 	if (--skullAnimCounter <= 0)
 		skullAnimCounter = 8;
 
-
+	// button handling
 	if (textprompts[cutnum]->page[scenenum].timetonext)
 	{
-		if (promptblockcontrols)  
+		if (promptblockcontrols) // same procedure as below, just without the button handling
 		{
 			for (i = 0; i < MAXPLAYERS; i++)
 			{
 				if (netgame && i != serverplayer && !IsPlayerAdmin(i))
 					continue;
 				else if (splitscreen) {
-
-
-
+					// Both players' controls are locked,
+					// But only consoleplayer can advance the prompt.
+					// \todo Proper per-player splitscreen support (individual prompts)
 					if (i == consoleplayer || i == secondarydisplayplayer)
 						nocontrolallowed(i)
 				}
@@ -4663,8 +4663,8 @@ void F_TextPromptTicker(void)
 				if (netgame && i != serverplayer && !IsPlayerAdmin(i))
 					continue;
 				else if (splitscreen) {
-
-
+					// Both players' controls are locked,
+					// But only the triggering player can advance the prompt.
 					if (i == consoleplayer || i == secondarydisplayplayer)
 					{
 						players[i].powers[pw_nocontrol] = 1;
@@ -4689,8 +4689,8 @@ void F_TextPromptTicker(void)
 				{
 					if (timetonext > 1)
 						timetonext--;
-					else if (cutscene_baseptr)  
-						cutscene_boostspeed = 1;  
+					else if (cutscene_baseptr) // don't set boost if we just reset the string
+						cutscene_boostspeed = 1; // only after a slight delay
 
 					if (keypressed)
 					{
@@ -4700,13 +4700,13 @@ void F_TextPromptTicker(void)
 							continue;
 					}
 
-					if (!timetonext)  
+					if (!timetonext) // is 0 when finished generating text
 					{
 						F_AdvanceToNextPage();
 						if (promptactive)
 							S_StartSound(NULL, sfx_menu1);
 					}
-					keypressed = true;  
+					keypressed = true; // prevent repeat events
 				}
 				else if (!(players[i].cmd.buttons & BT_SPIN) && !(players[i].cmd.buttons & BT_JUMP))
 					keypressed = false;
@@ -4716,15 +4716,15 @@ void F_TextPromptTicker(void)
 			}
 		}
 
-
+		// generate letter-by-letter text
 		if (scenenum >= MAX_PAGES ||
 			!textprompts[cutnum]->page[scenenum].text ||
 			!textprompts[cutnum]->page[scenenum].text[0] ||
 			!F_WriteText())
-			timetonext = !promptblockcontrols;  
+			timetonext = !promptblockcontrols; // never show the chevron if we can't toggle pages
 	}
 
-
+	// gfx
 	if (picnum >= 0 && picnum < numpics)
 	{
 		if (animtimer <= 0)
@@ -4737,7 +4737,7 @@ void F_TextPromptTicker(void)
 				picnum = pictoloop;
 			else if (picmode == PROMPT_PIC_DESTROY)
 				picnum = -1;
-			else  
+			else // if (picmode == PROMPT_PIC_PERSIST)
 				persistanimtimer = true;
 
 			if (!persistanimtimer && picnum >= 0)
@@ -4753,13 +4753,13 @@ void F_TextPromptTicker(void)
 	}
 }
 
-
-
-
+// ================
+//  WAITINGPLAYERS
+// ================
 
 void F_StartWaitingPlayers(void)
 {
-	wipegamestate = GS_TITLESCREEN;  
+	wipegamestate = GS_TITLESCREEN; // technically wiping from title screen
 	finalecount = 0;
 }
 
@@ -4770,7 +4770,7 @@ void F_WaitingPlayersTicker(void)
 
 	finalecount++;
 
-
+	// dumb hack, only start the music on the 1st tick so if you instantly go into the map you aren't hearing a tic of music
 	if (finalecount == 2)
 		S_ChangeMusicInternal("_CHSEL", true);
 }

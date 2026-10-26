@@ -2,9 +2,9 @@
 #include "../s_sound.h"
 #include "../i_sound.h"
 
-
-
-
+//
+// CD MUSIC I/O
+//
 
 UINT8 cdaudio_started = 0;
 

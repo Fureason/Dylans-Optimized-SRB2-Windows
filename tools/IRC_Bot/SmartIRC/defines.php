@@ -24,7 +24,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-
+// don't change this! unless you know what you do
 define('SMARTIRC_CRLF',      "\r\n");
 define('SMARTIRC_UNUSED',    '*');
 define('SMARTIRC_STDOUT',        0);

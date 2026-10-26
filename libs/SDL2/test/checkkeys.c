@@ -10,10 +10,10 @@
   freely.
 */
 
-                                             
-                                                                   
-                                            
-  
+/* Simple program:  Loop, watching keystrokes
+   Note that you need to call SDL_PollEvent() or SDL_WaitEvent() to
+   pump the event loop and catch keystrokes.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,7 +31,7 @@ static SDL_Renderer *renderer;
 static SDLTest_TextWindow *textwin;
 static int done;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -130,7 +130,7 @@ PrintKey(SDL_Keysym *sym, SDL_bool pressed, SDL_bool repeat)
     spot = message;
     left = sizeof(message);
 
-     
+    /* Print the keycode, name and state */
     if (sym->sym) {
         print_string(&spot, &left,
                      "Key %s:  scancode %d = %s, keycode 0x%08X = %s ",
@@ -169,8 +169,8 @@ PrintText(const char *eventtype, const char *text)
 void loop()
 {
     SDL_Event event;
-     
-     
+    /* Check for events */
+    /*SDL_WaitEvent(&event); emscripten does not like waiting*/
 
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
@@ -211,7 +211,7 @@ void loop()
             }
             break;
         case SDL_MOUSEBUTTONDOWN:
-             
+            /* Left button quits the app, other buttons toggles text input */
             if (event.button.button == SDL_BUTTON_LEFT) {
                 done = 1;
             } else {
@@ -238,7 +238,7 @@ void loop()
     SDLTest_TextWindowDisplay(textwin, renderer);
     SDL_RenderPresent(renderer);
 
-     
+    /* Slow down framerate */
     SDL_Delay(100);
 
 #ifdef __EMSCRIPTEN__
@@ -250,22 +250,22 @@ void loop()
 
 int main(int argc, char *argv[])
 {
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Disable mouse emulation */
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 
-     
+    /* Enable extended text editing events */
     SDL_SetHint(SDL_HINT_IME_SUPPORT_EXTENDED_TEXT, "1");
 
-     
+    /* Initialize SDL */
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
     }
 
-     
+    /* Set 640x480 video mode */
     window = SDL_CreateWindow("CheckKeys Test",
                               SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                               640, 480, 0);
@@ -285,17 +285,17 @@ int main(int argc, char *argv[])
     textwin = SDLTest_TextWindowCreate(0, 0, 640, 480);
 
 #if __IPHONEOS__
-     
+    /* Creating the context creates the view, which we need to show keyboard */
     SDL_GL_CreateContext(window);
 #endif
 
     SDL_StartTextInput();
 
-     
+    /* Print initial modifier state */
     SDL_PumpEvents();
     PrintModifierState();
 
-     
+    /* Watch keystrokes */
     done = 0;
 
 #ifdef __EMSCRIPTEN__
@@ -310,4 +310,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

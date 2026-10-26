@@ -7,17 +7,17 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  byteptr.h
+/// \brief Macros to read/write from/to a UINT8 *,
+///        used for packet creation and such
 
 
 #include "endian.h"
 
 #ifndef SRB2_BIG_ENDIAN
-
-
-
+//
+// Little-endian machines
+//
 #define WRITEUINT8(p,b)     do {   UINT8 *p_tmp = (void *)p; const   UINT8 tv = (  UINT8)(b); memcpy(p, &tv, sizeof(  UINT8)); p_tmp++; p = (void *)p_tmp; } while (0)
 #define WRITESINT8(p,b)     do {   SINT8 *p_tmp = (void *)p; const   SINT8 tv = (  UINT8)(b); memcpy(p, &tv, sizeof(  UINT8)); p_tmp++; p = (void *)p_tmp; } while (0)
 #define WRITEINT16(p,b)     do {   INT16 *p_tmp = (void *)p; const   INT16 tv = (  INT16)(b); memcpy(p, &tv, sizeof(  INT16)); p_tmp++; p = (void *)p_tmp; } while (0)
@@ -50,12 +50,12 @@
 #define READANGLE(p)        *((angle_t *)p)++
 #endif
 
-#else  
-
-
-
-
-
+#else //SRB2_BIG_ENDIAN
+//
+// definitions for big-endian machines with alignment constraints.
+//
+// Write a value to a little-endian, unaligned destination.
+//
 FUNCINLINE static ATTRINLINE void writeshort(void *ptr, INT32 val)
 {
 	SINT8 *cp = ptr;
@@ -82,8 +82,8 @@ FUNCINLINE static ATTRINLINE void writelong(void *ptr, INT32 val)
 #define WRITEFIXED(p,b)     do {fixed_t *p_tmp = (fixed_t *)p; writelong  (p, (fixed_t)(b)); p_tmp++; p = (void *)p_tmp;} while (0)
 #define WRITEANGLE(p,b)     do {angle_t *p_tmp = (angle_t *)p; writelong  (p, (angle_t)(b)); p_tmp++; p = (void *)p_tmp;} while (0)
 
-
-
+// Read a signed quantity from little-endian, unaligned data.
+//
 FUNCINLINE static ATTRINLINE INT16 readshort(void *ptr)
 {
 	SINT8 *cp  = ptr;
@@ -119,7 +119,7 @@ FUNCINLINE static ATTRINLINE UINT32 readulong(void *ptr)
 #define READCHAR(p)         ({    char *p_tmp = (   char *)p;    char b =        *p_tmp; p_tmp++; p = (void *)p_tmp; b; })
 #define READFIXED(p)        ({ fixed_t *p_tmp = (fixed_t *)p; fixed_t b =   readlong(p); p_tmp++; p = (void *)p_tmp; b; })
 #define READANGLE(p)        ({ angle_t *p_tmp = (angle_t *)p; angle_t b =  readulong(p); p_tmp++; p = (void *)p_tmp; b; })
-#endif  
+#endif //SRB2_BIG_ENDIAN
 
 #define WRITESTRINGN(p, s, n) {                            \
 	size_t tmp_i;                                           \

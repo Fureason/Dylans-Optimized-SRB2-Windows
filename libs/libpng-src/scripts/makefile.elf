@@ -7,19 +7,19 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
+# Modified for Debian by Junichi Uekawa and Josselin Mouette
+# Major modifications are:
+#    * link libpng explicitly with libz and libm
+#    * $(OLDSO).3 is a symlink rather than a different library
+#    * versioned symbols
 
-
-
-
-
-
-
+# Library name:
 LIBNAME = libpng12
 PNGMAJ = 0
 PNGMIN = 1.2.46
 PNGVER = $(PNGMAJ).$(PNGMIN)
 
-
+# Shared library names:
 LIBSO=$(LIBNAME).so
 LIBSOMAJ=$(LIBNAME).so.$(PNGMAJ)
 LIBSOVER=$(LIBNAME).so.$(PNGVER)
@@ -27,7 +27,7 @@ OLDSO=libpng.so
 OLDSOMAJ=libpng.so.3
 OLDSOVER=libpng.so.3.$(PNGMIN)
 
-
+# Utilities:
 AR_RC=ar rc
 CC=gcc
 MKDIR_P=mkdir -p
@@ -35,30 +35,30 @@ LN_SF=ln -sf
 RANLIB=ranlib
 RM_F=/bin/rm -f
 
-
-
-
+# where "make install" puts libpng12.a, libpng12.so*,
+# libpng12/png.h and libpng12/pngconf.h
+# Prefix must be a full pathname.
 prefix=/usr/local
 exec_prefix=$(prefix)
 
-
+# Where the zlib library and include files are located.
 ZLIBLIB=/usr/local/lib
 ZLIBINC=/usr/local/include
-
-
+# ZLIBLIB=../zlib
+# ZLIBINC=../zlib
 
 ALIGN=
-
-
+# for i386:
+#ALIGN=-malign-loops=2 -malign-functions=2
 
 WARNMORE=-Wwrite-strings -Wpointer-arith -Wshadow \
 	-Wmissing-declarations -Wtraditional -Wcast-align \
-	-Wstrict-prototypes -Wmissing-prototypes  
+	-Wstrict-prototypes -Wmissing-prototypes #-Wconversion
 
-
+# for pgcc version 2.95.1, -O3 is buggy; don't use it.
 
 CFLAGS=-W -Wall -D_REENTRANT -O2 \
-	$(ALIGN)  
+	$(ALIGN) # $(WARNMORE) -g -DPNG_DEBUG=5
 
 LDFLAGS=-L. -lpng12
 LDFLAGS_A=libpng.a -lz -lm
@@ -70,14 +70,14 @@ LIBPATH=$(exec_prefix)/lib
 MANPATH=$(prefix)/man
 BINPATH=$(exec_prefix)/bin
 
-
-
-
-
-
-
-
-
+# override DESTDIR= on the make install command line to easily support
+# installing into a temporary location.  Example:
+#
+#    make install DESTDIR=/tmp/build/libpng
+#
+# If you're going to install into a temporary location
+# via DESTDIR, $(DESTDIR)$(prefix) must already exist before
+# you execute make install.
 DESTDIR=
 
 DB=$(DESTDIR)$(BINPATH)

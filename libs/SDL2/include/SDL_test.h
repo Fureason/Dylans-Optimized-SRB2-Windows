@@ -19,13 +19,13 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-   
-                    
-  
-                                        
-  
-                                                                           
-   
+/**
+ *  \file SDL_test.h
+ *
+ *  Include file for SDL test framework.
+ *
+ *  This code is a part of the SDL2_test library, not the main SDL library.
+ */
 
 #ifndef SDL_test_h_
 #define SDL_test_h_
@@ -45,25 +45,25 @@
 #include "SDL_test_random.h"
 
 #include "begin_code.h"
- 
+/* Set up for C function definitions, even when using C++ */
 #ifdef __cplusplus
 extern "C" {
 #endif
 
- 
+/* Global definitions */
 
-  
-                                                                     
-                                                                     
-   
+/*
+ * Note: Maximum size of SDLTest log message is less than SDL's limit
+ * to ensure we can fit additional information such as the timestamp.
+ */
 #define SDLTEST_MAX_LOGMESSAGE_LENGTH   3584
 
- 
+/* Ends C function definitions when using C++ */
 #ifdef __cplusplus
 }
 #endif
 #include "close_code.h"
 
-#endif  
+#endif /* SDL_test_h_ */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

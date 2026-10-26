@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  commands.c
+/// \brief Various netgame commands, such as kick and ban
 
 #include "commands.h"
 #include "d_clisrv.h"
@@ -34,12 +34,12 @@
 typedef struct banreason_s
 {
 	char *reason;
-	struct banreason_s *prev;  
-	struct banreason_s *next;  
+	struct banreason_s *prev; //-1
+	struct banreason_s *next; //+1
 } banreason_t;
 
-static banreason_t *reasontail = NULL;  
-static banreason_t *reasonhead = NULL;  
+static banreason_t *reasontail = NULL; //last entry, use prev
+static banreason_t *reasonhead = NULL; //1st entry, use next
 
 static boolean bans_loaded = false;
 
@@ -130,7 +130,7 @@ void D_SaveBan(void)
 
 	if (!bans_loaded)
 	{
-
+		// don't save bans if they were never loaded.
 		return;
 	}
 
@@ -166,7 +166,7 @@ void D_SaveBan(void)
 	fclose(f);
 }
 
-void Command_ShowBan(void)  
+void Command_ShowBan(void) //Print out ban list
 {
 	size_t i;
 	const char *address, *mask;
@@ -213,7 +213,7 @@ void Command_Ban(void)
 		return;
 	}
 
-	if (!netgame)  
+	if (!netgame) // Don't kick Tails in splitscreen!
 	{
 		CONS_Printf(M_GetText("This only works in a netgame.\n"));
 		return;
@@ -231,7 +231,7 @@ void Command_Ban(void)
 
 		WRITEUINT8(p, pn);
 
-		if (server && I_Ban && !I_Ban(node))  
+		if (server && I_Ban && !I_Ban(node)) // only the server is allowed to do this right now
 		{
 			CONS_Alert(CONS_WARNING, M_GetText("Too many bans! Geez, that's a lot of people you're excluding...\n"));
 			WRITEUINT8(p, KICK_MSG_GO_AWAY);
@@ -239,10 +239,10 @@ void Command_Ban(void)
 		}
 		else
 		{
-			if (server)  
+			if (server) // only the server is allowed to do this right now
 			{
 				Ban_Add(COM_Argv(2));
-				D_SaveBan();  
+				D_SaveBan(); // save the ban list
 			}
 
 			if (COM_Argc() == 2)
@@ -255,7 +255,7 @@ void Command_Ban(void)
 				size_t j = COM_Argc();
 				char message[MAX_REASONLENGTH];
 
-
+				//Steal from the motd code so you don't have to put the reason in quotes.
 				strlcpy(message, COM_Argv(2), sizeof message);
 				for (size_t i = 3; i < j; i++)
 				{
@@ -282,7 +282,7 @@ void Command_BanIP(void)
 		return;
 	}
 
-	if (server)  
+	if (server) // Only the server can use this, otherwise does nothing.
 	{
 		char *addrbuf = NULL;
 		const char *address = (COM_Argv(1));
@@ -321,7 +321,7 @@ void Command_BanIP(void)
 	}
 }
 
-void Command_ReloadBan(void)   
+void Command_ReloadBan(void)  //recheck ban.txt
 {
 	Ban_Load_File(true);
 }
@@ -334,7 +334,7 @@ void Command_Kick(void)
 		return;
 	}
 
-	if (!netgame)  
+	if (!netgame) // Don't kick Tails in splitscreen!
 	{
 		CONS_Printf(M_GetText("This only works in a netgame.\n"));
 		return;
@@ -349,9 +349,9 @@ void Command_Kick(void)
 		if (pn == -1 || pn == 0)
 			return;
 
-
-
-
+		// Special case if we are trying to kick a player who is downloading the game state:
+		// trigger a timeout instead of kicking them, because a kick would only
+		// take effect after they have finished downloading
 		if (server && playernode[pn] != UINT8_MAX && netnodes[playernode[pn]].sendingsavegame)
 		{
 			Net_ConnectionTimeout(playernode[pn]);
@@ -370,7 +370,7 @@ void Command_Kick(void)
 			size_t j = COM_Argc();
 			char message[MAX_REASONLENGTH];
 
-
+			//Steal from the motd code so you don't have to put the reason in quotes.
 			strlcpy(message, COM_Argv(2), sizeof message);
 			for (size_t i = 3; i < j; i++)
 			{
@@ -394,7 +394,7 @@ void Command_connect(void)
 		CONS_Printf(M_GetText(
 			"Connect <serveraddress> (port): connect to a server\n"
 			"Connect ANY: connect to the first lan server found\n"
-
+			//"Connect SELF: connect to your own server.\n"
 			));
 		return;
 	}
@@ -406,18 +406,18 @@ void Command_connect(void)
 	}
 
 	server = false;
-  
-                                   
-  
-                 
-                
-                           
-                     
-  
-     
-  
+/*
+	if (!stricmp(COM_Argv(1), "self"))
 	{
-
+		servernode = 0;
+		server = true;
+		/// \bug should be but...
+		//SV_SpawnServer();
+	}
+	else
+*/
+	{
+		// used in menu to connect to a server in the list
 		if (netgame && !stricmp(COM_Argv(1), "node"))
 		{
 			servernode = (SINT8)atoi(COM_Argv(2));
@@ -437,9 +437,9 @@ void Command_connect(void)
 				servernode = BROADCASTADDR;
 			else if (I_NetMakeNodewPort)
 			{
-				if (COM_Argc() >= 3)  
+				if (COM_Argc() >= 3) // address AND port
 					servernode = I_NetMakeNodewPort(COM_Argv(1), COM_Argv(2));
-				else  
+				else // address only, or address:port
 					servernode = I_NetMakeNode(COM_Argv(1));
 
 				if (servernode == -1)
@@ -480,10 +480,10 @@ void Command_GetPlayerNum(void)
 		}
 }
 
-                                               
-   
-                            
-    
+/** Lists all players and their player numbers.
+  *
+  * \sa Command_GetPlayerNum
+  */
 void Command_Nodes(void)
 {
 	size_t maxlen = 0;

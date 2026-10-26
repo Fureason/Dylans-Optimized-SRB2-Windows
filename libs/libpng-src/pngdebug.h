@@ -11,30 +11,30 @@
  * and license in png.h
  */
 
-                                                                      
-                                                                   
-                                                                         
-                                                        
-  
-                                            
-                                                                     
-                                                                  
-                                                                     
-                                                                        
-                          
-  
-                                                                   
-                                                                            
-                                                                
-                                                                         
-                                                                      
-                             
-                                                                       
-   
+/* Define PNG_DEBUG at compile time for debugging information.  Higher
+ * numbers for PNG_DEBUG mean more debugging information.  This has
+ * only been added since version 0.95 so it is not implemented throughout
+ * libpng yet, but more support will be added as needed.
+ *
+ * png_debug[1-2]?(level, message ,arg{0-2})
+ *   Expands to a statement (either a simple expression or a compound
+ *   do..while(0) statement) that outputs a message with parameter
+ *   substitution if PNG_DEBUG is defined to 2 or more.  If PNG_DEBUG
+ *   is undefined, 0 or 1 every png_debug expands to a simple expression
+ *   (actually ((void)0)).
+ *
+ *   level: level of detail of message, starting at 0.  A level 'n'
+ *          message is preceded by 'n' 3-space indentations (not implemented
+ *          on Microsoft compilers unless PNG_DEBUG_FILE is also
+ *          defined, to allow debug DLL compilation with no standard IO).
+ *   message: a printf(3) style text string.  A trailing '\n' is added
+ *            to the message.
+ *   arg: 0 to 2 arguments for printf(3) style substitution in message.
+ */
 #ifndef PNGDEBUG_H
 #define PNGDEBUG_H
- 
- 
+/* These settings control the formatting of messages in png.c and pngerror.c */
+/* Moved to pngdebug.h at 1.5.0 */
 #  ifndef PNG_LITERAL_SHARP
 #    define PNG_LITERAL_SHARP 0x23
 #  endif
@@ -67,13 +67,13 @@
              _RPT2(_CRT_WARN,m PNG_STRING_NEWLINE,p1,p2)
 #        endif
 #      endif
-#    else  
+#    else /* PNG_DEBUG_FILE || !_MSC_VER */
 #      ifndef PNG_STDIO_SUPPORTED
-#        include <stdio.h>  
+#        include <stdio.h> /* not included yet */
 #      endif
 #      ifndef PNG_DEBUG_FILE
 #        define PNG_DEBUG_FILE stderr
-#      endif  
+#      endif /* PNG_DEBUG_FILE */
 
 #      if (PNG_DEBUG > 1)
 #        ifdef __STDC__
@@ -101,7 +101,7 @@
          (num_tabs==2 ? "      " : (num_tabs>2 ? "         " : ""))),p1,p2);\
        } while (0)
 #          endif
-#        else  
+#        else /* __STDC __ */
 #          ifndef png_debug
 #            define png_debug(l,m) \
        do { \
@@ -135,12 +135,12 @@
        fprintf(PNG_DEBUG_FILE,format,p1,p2); \
        } while (0)
 #          endif
-#        endif  
-#      endif  
+#        endif /* __STDC __ */
+#      endif /* (PNG_DEBUG > 1) */
 
-#    endif  
-#  endif  
-#endif  
+#    endif /* _MSC_VER */
+#  endif /* (PNG_DEBUG > 0) */
+#endif /* PNG_DEBUG */
 #ifndef png_debug
 #  define png_debug(l, m) ((void)0)
 #endif
@@ -150,4 +150,4 @@
 #ifndef png_debug2
 #  define png_debug2(l, m, p1, p2) ((void)0)
 #endif
-#endif  
+#endif /* PNGDEBUG_H */

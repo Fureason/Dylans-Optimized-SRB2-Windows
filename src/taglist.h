@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  taglist.h
+/// \brief Tag iteration and reading functions and macros' declarations.
 
 #ifndef __R_TAGLIST__
 #define __R_TAGLIST__
@@ -20,7 +20,7 @@ typedef INT16 mtag_t;
 #define MAXTAGS UINT16_MAX
 #define MTAG_GLOBAL -1
 
-
+/// Multitag list. Each taggable element will have its own taglist.
 typedef struct
 {
 	mtag_t* tags;
@@ -39,7 +39,7 @@ void Tag_SectorAdd (const size_t id, const mtag_t tag);
 void Tag_SectorRemove (const size_t id, const mtag_t tag);
 void Tag_SectorFSet (const size_t id, const mtag_t tag);
 
-
+/// Taggroup list. It is essentially just an element id list.
 typedef struct
 {
 	size_t *elements;
@@ -81,50 +81,50 @@ INT32 P_FindSpecialLineFromTag(INT16 special, INT16 tag, INT32 start);
 #define ICNAME(id) ICNAME2(id)
 #define TAG_ITER(fn, tag, return_varname) for(size_t ICNAME(__LINE__) = 0; (return_varname = fn(tag, ICNAME(__LINE__))) >= 0; ICNAME(__LINE__)++)
 
-
+// Use these macros as wrappers for a taglist iteration.
 #define TAG_ITER_SECTORS(tag, return_varname) TAG_ITER(Tag_Iterate_Sectors, tag, return_varname)
 #define TAG_ITER_LINES(tag, return_varname)   TAG_ITER(Tag_Iterate_Lines, tag, return_varname)
 #define TAG_ITER_THINGS(tag, return_varname)  TAG_ITER(Tag_Iterate_Things, tag, return_varname)
 
-                   
-      
-                                                 
+/* ITERATION MACROS
+'tag':
+Pretty much the elements' tag to iterate through.
 
-                 
-                                                          
+'return_varname':
+Target variable's name to return the iteration results to.
 
 
-        
- 
-           
-                
+EXAMPLE:
+{
+	size_t li;
+	INT32 tag1 = 4;
 
-    
+	...
 
-                         
-  
-                            
+	TAG_ITER_LINES(tag1, li)
+	{
+		line_t *line = lines + li;
 
-     
+		...
 
-                
-   
-              
-                   
+		if (something)
+		{
+			size_t sec;
+			mtag_t tag2 = 8;
 
-                       
-                              
-    
-                                     
+			// Nested iteration.
+			TAG_ITER_SECTORS(tag2, sec)
+			{
+				sector_t *sector = sectors + sec;
 
-       
-    
-   
-  
- 
+				...
+			}
+		}
+	}
+}
 
-      
-                                                                            
-  
+Notes:
+If no elements are found for a given tag, the loop inside won't be executed.
+*/
 
-#endif  
+#endif //__R_TAGLIST__

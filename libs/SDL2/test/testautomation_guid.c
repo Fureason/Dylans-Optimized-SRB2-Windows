@@ -1,6 +1,6 @@
-   
-                  
-   
+/**
+ * GUID test suite
+ */
 
 #include "SDL.h"
 #include "SDL_test.h"
@@ -9,9 +9,9 @@
 #include <stdint.h>
 #endif
 
- 
+/* ================= Test Case Implementation ================== */
 
- 
+/* Helper functions */
 
 #define NUM_TEST_GUIDS 5
 
@@ -66,13 +66,13 @@ upper_lower_to_bytestring(Uint8 *out, Uint64 upper, Uint64 lower)
     }
 }
 
- 
+/* Test case functions */
 
-   
-                                         
-  
-                         
-   
+/**
+ * @brief Check String-to-GUID conversion
+ *
+ * @sa SDL_GUIDFromString
+ */
 static int
 TestGuidFromString(void *arg)
 {
@@ -93,11 +93,11 @@ TestGuidFromString(void *arg)
     return TEST_COMPLETED;
 }
 
-   
-                                         
-  
-                       
-   
+/**
+ * @brief Check GUID-to-String conversion
+ *
+ * @sa SDL_GUIDToString
+ */
 static int
 TestGuidToString(void *arg)
 {
@@ -114,7 +114,7 @@ TestGuidToString(void *arg)
         upper_lower_to_bytestring(guid.data,
                                   test_guids[i].upper, test_guids[i].lower);
 
-         
+        /* Serialise to limited-length buffers */
         for (size = 0; size <= 36; ++size) {
             const Uint8 fill_char = size + 0xa0;
             Uint32 expected_prefix;
@@ -124,12 +124,12 @@ TestGuidToString(void *arg)
             SDL_memset(guid_str_buf, fill_char, sizeof(guid_str_buf));
             SDL_GUIDToString(guid, guid_str, size);
 
-             
+            /* Check bytes before guid_str_buf */
             expected_prefix = fill_char | (fill_char << 8) | (fill_char << 16) | (fill_char << 24);
             SDL_memcpy(&actual_prefix, guid_str_buf, 4);
             SDLTest_AssertCheck(expected_prefix == actual_prefix, "String buffer memory before output untouched, expected: %" SDL_PRIu32 ", got: %" SDL_PRIu32 ", at size=%d", expected_prefix, actual_prefix, size);
 
-             
+            /* Check that we did not overwrite too much */
             written_size = 0;
             while ((guid_str[written_size] & 0xff) != fill_char && written_size < 256) {
                 ++written_size;
@@ -144,9 +144,9 @@ TestGuidToString(void *arg)
     return TEST_COMPLETED;
 }
 
- 
+/* ================= Test References ================== */
 
- 
+/* GUID routine test cases */
 static const SDLTest_TestCaseReference guidTest1 = {
     (SDLTest_TestCaseFp)TestGuidFromString, "TestGuidFromString", "Call to SDL_GUIDFromString", TEST_ENABLED
 };
@@ -155,14 +155,14 @@ static const SDLTest_TestCaseReference guidTest2 = {
     (SDLTest_TestCaseFp)TestGuidToString, "TestGuidToString", "Call to SDL_GUIDToString", TEST_ENABLED
 };
 
- 
+/* Sequence of GUID routine test cases */
 static const SDLTest_TestCaseReference *guidTests[] = {
     &guidTest1,
     &guidTest2,
     NULL
 };
 
- 
+/* GUID routine test suite (global) */
 SDLTest_TestSuiteReference guidTestSuite = {
     "GUID",
     NULL,

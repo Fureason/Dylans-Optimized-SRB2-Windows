@@ -1,36 +1,36 @@
 #!/bin/awk -f
-
-
-
-
-
-
-
-
-
-
-
-
+# Check a list of symbols against the master definition
+# (official) list.  Arguments:
+#
+# awk -f checksym.awk official-def list-to-check
+#
+# Output is a file in the current directory called 'symbols.new',
+# the value of the awk variable "of" (which can be changed on the
+# command line if required.)  stdout holds error messages.  Error
+# code indicates success or failure.
+#
+# NOTE: this is a pure, old fashioned, awk script.  It will
+# work with any awk
 
 BEGIN{
    err=0
-   master=""         
-   official[1] = ""  
-   symbol[1] = ""    
-   removed[1] = ""   
-   lasto = 0         
-   mastero = 0       
-   symbolo = 0       
+   master=""        # master file
+   official[1] = "" # defined symbols from master file
+   symbol[1] = ""   # defined symbols from png.h
+   removed[1] = ""  # removed symbols from png.h
+   lasto = 0        # last ordinal value from png.h
+   mastero = 0      # highest ordinal in master file
+   symbolo = 0      # highest ordinal in png.h
    missing = "error"# log an error on missing symbols
-   of="symbols.new"  
+   of="symbols.new" # default to a fixed name
 }
 
-
-
-
-
-
-
+# Read existing definitions from the master file (the first
+# file on the command line.)  This must be a def file and it
+# has definition lines (others are ignored) of the form:
+#
+#   symbol @ordinal
+#
 master == "" {
    master = FILENAME
 }
@@ -48,26 +48,26 @@ FILENAME==master && NF==2 && $2~/^@/ && $1!~/^;/ {
    err = 1
 }
 FILENAME==master && $1==";missing" && NF==2{
-
-
-
-
+   # This allows the master file to control how missing symbols
+   # are handled; symbols that aren't in either the master or
+   # the new file.  Valid values are 'ignore', 'warning' and
+   # 'error'
    missing = $2
 }
 FILENAME==master {
    next
 }
 
-
-
-
-
-
-
-
-
-
-NF==2 && $1 == ";" && $2 ~ /^@[1-9][0-9]*$/ {  
+# Read new definitions, these are free form but the lines must
+# just be symbol definitions.  Lines will be commented out for
+# 'removed' symbols, introduced in png.h using PNG_REMOVED rather
+# than PNG_EXPORT.  Use symbols.dfn or pngwin.dfn to generate the
+# input file.
+#
+#  symbol @ordinal   # two fields, exported symbol
+#  ; symbol @ordinal # three fields, removed symbol
+#  ; @ordinal        # two fields, the last ordinal
+NF==2 && $1 == ";" && $2 ~ /^@[1-9][0-9]*$/ { # last ordinal
    o=0+substr($2,2)
    if (lasto == 0 || lasto == o)
       lasto=o
@@ -77,7 +77,7 @@ NF==2 && $1 == ";" && $2 ~ /^@[1-9][0-9]*$/ {
    }
    next
 }
-NF==3 && $1 == ";" && $3 ~ /^@[1-9][0-9]*$/ {  
+NF==3 && $1 == ";" && $3 ~ /^@[1-9][0-9]*$/ { # removed symbol
    o=0+substr($3,2)
    if (removed[o] == "" || removed[o] == $2) {
       removed[o] = $2
@@ -88,7 +88,7 @@ NF==3 && $1 == ";" && $3 ~ /^@[1-9][0-9]*$/ {
    }
    next
 }
-NF==2 && $2 ~ /^@[1-9][0-9]*$/ {  
+NF==2 && $2 ~ /^@[1-9][0-9]*$/ { # exported symbol
    o=0+substr($2,2)
    if (symbol[o] == "" || symbol[o] == $1) {
       symbol[o] = $1
@@ -99,10 +99,10 @@ NF==2 && $2 ~ /^@[1-9][0-9]*$/ {
    }
 }
 {
-   next  
+   next # skip all other lines
 }
 
-
+# At the end check for symbols marked as both duplicated and removed
 END{
    if (symbolo > lasto) {
       print "highest symbol ordinal in png.h,", symbolo ", exceeds last ordinal from png.h", lasto
@@ -113,7 +113,7 @@ END{
       err = 1
    }
    unexported=0
-
+   # Add a standard header to symbols.new:
    print ";Version INSERT-VERSION-HERE" >of
    print ";--------------------------------------------------------------" >of
    print "; LIBPNG symbol list as a Win32 DEF file" >of
@@ -127,16 +127,16 @@ END{
       if (symbol[o] == "" && removed[o] == "") {
          if (unexported == 0) unexported = o
          if (official[o] == "") {
-
+            # missing in export list too, so ok
             if (o < lasto) continue
          }
       }
       if (unexported != 0) {
-
-
-
-
-
+         # Symbols in the .def but not in the new file are errors, but
+         # the 'unexported' symbols aren't in either.  By default this
+         # is an error too (see the setting of 'missing' at the start),
+         # but this can be reset on the command line or by stuff in the
+         # file - see the comments above.
          if (missing != "ignore") {
             if (o-1 > unexported)
                print "png.h:", missing ": missing symbols:", unexported "-" o-1
@@ -151,7 +151,7 @@ END{
          print "png.h: symbol", o, "both exported as '" symbol[o] "' and removed as '" removed[o] "'"
          err = 1
       } else if (symbol[o] != official[o]) {
-
+         # either the symbol is missing somewhere or it changed
          err = 1
          if (symbol[o] == "")
             print "png.h: symbol", o, "is exported as '" official[o] "' in", master
@@ -161,7 +161,7 @@ END{
             print "png.h: exported symbol", o, "'" symbol[o] "' exists as '" official[o] "' in", master
       }
 
-
+      # Finally generate symbols.new
       if (symbol[o] != "")
          print " " symbol[o], "@" o > of
    }

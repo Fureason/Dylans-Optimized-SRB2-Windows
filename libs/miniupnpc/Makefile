@@ -1,15 +1,15 @@
-
-
-
-
-
-
-
-
-
-
-
-
+# $Id: Makefile,v 1.148 2022/10/19 22:46:06 nanard Exp $
+# MiniUPnP Project
+# http://miniupnp.free.fr/
+# https://miniupnp.tuxfamily.org/
+# https://github.com/miniupnp/miniupnp
+# (c) 2005-2022 Thomas Bernard
+# to install use :
+# $ make DESTDIR=/tmp/dummylocation install
+# or
+# $ INSTALLPREFIX=/usr/local make install
+# or
+# $ make install (default INSTALLPREFIX is /usr)
 OS = $(shell $(CC) -dumpmachine)
 VERSION = $(shell cat VERSION)
 
@@ -27,19 +27,19 @@ endif
 HAVE_IPV6 ?= yes
 export HAVE_IPV6
 
-
+# directories
 INCDIR = include
 SRCDIR = src
 BUILD = build
 
 CC ?= gcc
-
-
-
+#AR = gar
+#CFLAGS = -O -g
+# to debug :
 ASANFLAGS = -fsanitize=address -fsanitize=undefined -fsanitize=leak
-
-
-
+#CFLAGS = -g -ggdb -O0 $(ASANFLAGS) -fno-omit-frame-pointer
+#CPPFLAGS += -DDEBUG
+#LDFLAGS += $(ASANFLAGS)
 CFLAGS ?= -O
 CFLAGS += -Wall
 CFLAGS += -W -Wstrict-prototypes
@@ -53,11 +53,11 @@ ifneq (, $(findstring netbsd, $(OS)))
 CPPFLAGS += -D_NETBSD_SOURCE
 endif
 ifeq (, $(findstring freebsd, $(OS))$(findstring darwin, $(OS)))
-
+#CPPFLAGS += -D_POSIX_C_SOURCE=200112L
 CPPFLAGS += -D_XOPEN_SOURCE=600
 endif
-
-
+#CFLAGS += -ansi
+#CPPFLAGS += -DNO_GETADDRINFO
 
 DEPFLAGS = -MM -MG
 
@@ -65,16 +65,16 @@ MKDIR = mkdir -p
 INSTALL = install
 SH = /bin/sh
 JAVA = java
-
-
-
-
-
-
-
+# see http://code.google.com/p/jnaerator/
+#JNAERATOR = jnaerator-0.9.7.jar
+#JNAERATOR = jnaerator-0.9.8-shaded.jar
+#JNAERATORARGS = -library miniupnpc
+#JNAERATOR = jnaerator-0.10-shaded.jar
+#JNAERATOR = jnaerator-0.11-shaded.jar
+# https://repo1.maven.org/maven2/com/nativelibs4java/jnaerator/0.12/jnaerator-0.12-shaded.jar
 JNAERATOR = jnaerator-0.12-shaded.jar
 JNAERATORARGS = -mode StandaloneJar -runtime JNAerator -library miniupnpc
-
+#JNAERATORBASEURL = http://jnaerator.googlecode.com/files/
 JNAERATORBASEURL = https://repo1.maven.org/maven2/com/nativelibs4java/jnaerator/0.12
 
 ifneq (, $(findstring sun, $(OS))$(findstring solaris, $(OS)))
@@ -83,7 +83,7 @@ ifneq (, $(findstring sun, $(OS))$(findstring solaris, $(OS)))
   CFLAGS += -std=c99
 endif
 
-
+# APIVERSION is used to build SONAME
 APIVERSION = 17
 
 SRCS = $(wildcard $(SRCDIR)/*.c)
@@ -98,11 +98,11 @@ BUILDINCLUDES = $(addprefix $(BUILD)/, miniupnpcstrings.h)
 OBJS = $(patsubst $(SRCDIR)/%.c,$(BUILD)/%.o,$(SRCS))
 DEPS = $(patsubst $(SRCDIR)/%.c,$(BUILD)/%.d,$(SRCS))
 
-
+# HEADERS to install
 CPPFLAGS += -I$(INCDIR)
 HEADERS = $(wildcard $(INCDIR)/*.h)
 
-
+# library names
 LIBRARY = $(BUILD)/libminiupnpc.a
 ifneq (, $(findstring darwin, $(OS)))
   SHAREDLIBRARY = $(BUILD)/libminiupnpc.dylib
@@ -112,7 +112,7 @@ else
 ifeq ($(JARSUFFIX), win32)
   SHAREDLIBRARY = $(BUILD)/miniupnpc.dll
 else
-
+  # Linux/BSD/etc.
   SHAREDLIBRARY = $(BUILD)/libminiupnpc.so
   SONAME = $(notdir $(SHAREDLIBRARY)).$(APIVERSION)
 endif
@@ -148,7 +148,7 @@ LIBOBJS += $(BUILD)/minissdpc.o
 endif
 
 LIBDIR ?= lib
-
+# install directories
 ifeq ($(strip $(PREFIX)),)
 INSTALLPREFIX ?= /usr
 else
@@ -226,15 +226,15 @@ validateaddr_is_reserved:	$(BUILD)/testaddr_is_reserved
 clean:
 	$(RM) $(LIBRARY) $(SHAREDLIBRARY) $(EXECUTABLES) $(OBJS) $(BUILDINCLUDES)
 	$(RM) $(EXECUTABLES_ADDTESTS)
-
+	# clean python stuff
 	$(RM) pythonmodule pythonmodule3
 	$(RM) validateminixml validateminiwget validateupnpreplyparse
 	$(RM) validateigddescparse
 	$(RM) minihttptestserver
 	$(RM) testaddr_is_reserved
 	$(RM) -r build/ dist/
-
-
+	#python setup.py clean
+	# clean jnaerator stuff
 	$(RM) _jnaerator.* java/miniupnpc_$(OS).jar
 
 distclean: clean
@@ -309,7 +309,7 @@ endif
 
 $(SHAREDLIBRARY):	$(LIBOBJS)
 ifneq (, $(findstring darwin, $(OS)))
-
+#	$(CC) -dynamiclib $(LDFLAGS) -Wl,-install_name,$(SONAME) -o $@ $^
 	$(CC) -dynamiclib $(LDFLAGS) -Wl,-install_name,$(INSTALLDIRLIB)/$(SONAME) -o $@ $^
 else
 	$(CC) -shared $(LDFLAGS) -Wl,-soname,$(SONAME) -o $@ $^
@@ -350,7 +350,7 @@ $(BUILD)/miniupnpcstrings.h:	miniupnpcstrings.h.in updateminiupnpcstrings.sh VER
 	@$(MKDIR) $(@D)
 	$(SH) updateminiupnpcstrings.sh $@ $<
 
-
+# ftp tool supplied with OpenBSD can download files from http.
 jnaerator-%.jar:
 	wget $(JNAERATORBASEURL)/$@ || \
 	curl -o $@ $(JNAERATORBASEURL)/$@ || \
@@ -372,11 +372,11 @@ mvn_install:
 	 -DgeneratePom=true \
 	 -DcreateChecksum=true
 
-
+# make .deb packages
 deb: /usr/share/pyshared/stdeb all
 	(python setup.py --command-packages=stdeb.command bdist_deb)
 
-
+# install .deb packages
 ideb:
 	(sudo dpkg -i deb_dist/*.deb)
 

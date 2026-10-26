@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_colorlib.c
+/// \brief color and colormap libraries for Lua scripting
 
 #include "doomdef.h"
 #include "fastcmp.h"
@@ -27,9 +27,9 @@
 	#define GetNearestColor(r, g, b) NearestPaletteColor(r, g, b, pMasterPalette)
 #endif
 
-
-
-
+////////////////
+// Color library
+////////////////
 
 static int lib_colorPaletteToRgb(lua_State *L)
 {
@@ -75,7 +75,7 @@ static UINT8 ParseHTMLColor(const char *str, UINT8 *rgba, size_t numc)
 
 	if (len == 3)
 	{
-
+		// Shorthand like #09C
 		for (unsigned i = 0; i < 3; i++)
 		{
 			if (!IS_HEX_CHAR(hex[i]))
@@ -92,7 +92,7 @@ static UINT8 ParseHTMLColor(const char *str, UINT8 *rgba, size_t numc)
 		if (numc != 4)
 			len = 6;
 
-
+		// A triplet like #0099CC
 		for (unsigned i = 0; i < len; i += 2)
 		{
 			if (!ARE_HEX_CHARS(hex, i))
@@ -403,9 +403,9 @@ static luaL_Reg color_lib[] = {
 	{NULL, NULL}
 };
 
-
-
-
+/////////////////////////
+// extracolormap userdata
+/////////////////////////
 
 enum extracolormap_e {
 	extracolormap_red = 0,
@@ -528,7 +528,7 @@ static int extracolormap_set(lua_State *L)
 
 	UINT8 rgba[4];
 
-	INT32 old_rgba = exc->rgba, old_fade_rgba = exc->fadergba;  
+	INT32 old_rgba = exc->rgba, old_fade_rgba = exc->fadergba; // It's not unsigned?
 	UINT8 old_fade_start = exc->fadestart, old_fade_end = exc->fadeend;
 
 #define val luaL_checkinteger(L, 3)

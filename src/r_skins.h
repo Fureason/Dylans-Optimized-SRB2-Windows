@@ -8,40 +8,40 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_skins.h
+/// \brief Skins stuff
 
 #ifndef __R_SKINS__
 #define __R_SKINS__
 
 #include "info.h"
 #include "sounds.h"
-#include "d_player.h"  
+#include "d_player.h" // skinflags
 #include "r_patch.h"
-#include "r_picformats.h"  
-#include "r_defs.h"  
+#include "r_picformats.h" // spriteinfo_t
+#include "r_defs.h" // spritedef_t
 
-
+/// Defaults
 #define SKINNAMESIZE 16
-
+// should be all lowercase!! S_SKIN processing does a strlwr
 #define DEFAULTSKIN "sonic"
-#define DEFAULTSKIN2 "tails"  
+#define DEFAULTSKIN2 "tails" // secondary player
 #define DEFAULTNIGHTSSKIN 0
 
-
+/// The skin_t struct
 typedef struct
 {
-	char name[SKINNAMESIZE+1];  
+	char name[SKINNAMESIZE+1]; // name of the skin
 	UINT8 skinnum;
 	UINT16 wadnum;
 	skinflags_t flags;
 
-	char realname[SKINNAMESIZE+1];  
-	char hudname[SKINNAMESIZE+1];  
-	char supername[SKINNAMESIZE+7];  
+	char realname[SKINNAMESIZE+1]; // Display name for level completion
+	char hudname[SKINNAMESIZE+1]; // HUD name to display (officially exactly 5 characters long)
+	char supername[SKINNAMESIZE+7]; // Super name to display when collecting all emeralds
 
-	UINT8 ability;  
-	UINT8 ability2;  
+	UINT8 ability; // ability definition
+	UINT8 ability2; // secondary ability definition
 	INT32 thokitem;
 	INT32 spinitem;
 	INT32 revitem;
@@ -50,59 +50,59 @@ typedef struct
 	fixed_t mindash;
 	fixed_t maxdash;
 
-	fixed_t normalspeed;  
-	fixed_t runspeed;  
+	fixed_t normalspeed; // Normal ground
+	fixed_t runspeed; // Speed that you break into your run animation
 
-	UINT8 thrustfactor;  
-	UINT8 accelstart;  
-	UINT8 acceleration;  
+	UINT8 thrustfactor; // Thrust = thrustfactor * acceleration
+	UINT8 accelstart; // Acceleration if speed = 0
+	UINT8 acceleration; // Acceleration
 
-	fixed_t jumpfactor;  
+	fixed_t jumpfactor; // multiple of standard jump height
 
-	fixed_t radius;  
+	fixed_t radius; // Bounding box changes.
 	fixed_t height;
 	fixed_t spinheight;
 
-	fixed_t shieldscale;  
+	fixed_t shieldscale; // no change to bounding box, but helps set the shield's sprite size
 	fixed_t camerascale;
 
-
+	// Definable color translation table
 	UINT8 starttranscolor;
 	UINT16 prefcolor;
 	UINT16 supercolor;
-	UINT16 prefoppositecolor;  
-	UINT16 natkcolor;  
+	UINT16 prefoppositecolor; // if 0 use tables instead
+	UINT16 natkcolor; //Color for Nights Attack Menu
 
-	fixed_t highresscale;  
-	UINT8 contspeed;  
-	UINT8 contangle;  
+	fixed_t highresscale; // scale of highres, default is 0.5
+	UINT8 contspeed; // continue screen animation speed
+	UINT8 contangle; // initial angle on continue screen
 
-
-	sfxenum_t soundsid[NUMSKINSOUNDS];  
+	// specific sounds per skin
+	sfxenum_t soundsid[NUMSKINSOUNDS]; // sound # in S_sfx table
 
 	spritedef_t sprites[NUMPLAYERSPRITES];
 	spriteinfo_t sprinfo[NUMPLAYERSPRITES];
 
-
+	// contains super versions too
 	struct {
 		spritedef_t sprites[NUMPLAYERSPRITES];
 		spriteinfo_t sprinfo[NUMPLAYERSPRITES];
 	} super;
 
-
+	// TODO: 2.3: Delete
 	spritedef_t sprites_compat[NUMPLAYERSPRITES * 2];
 } skin_t;
 
-
+/// Externs
 extern INT32 numskins;
 extern skin_t **skins;
 
-
+/// Function prototypes
 void R_InitSkins(void);
 
 INT32 GetPlayerDefaultSkin(INT32 playernum);
 void SetPlayerSkin(INT32 playernum,const char *skinname);
-void SetPlayerSkinByNum(INT32 playernum,INT32 skinnum);  
+void SetPlayerSkinByNum(INT32 playernum,INT32 skinnum); // Tails 03-16-2002
 boolean R_SkinUsable(INT32 playernum, INT32 skinnum);
 UINT32 R_GetSkinAvailabilities(void);
 INT32 R_SkinAvailable(const char *name);
@@ -121,4 +121,4 @@ boolean P_IsStateSprite2Super(state_t *state);
 
 void R_RefreshSprite2(void);
 
-#endif  
+#endif //__R_SKINS__

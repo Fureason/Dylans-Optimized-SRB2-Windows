@@ -1,6 +1,6 @@
+// Super Nintendo SPC music file emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef SPC_EMU_H
 #define SPC_EMU_H
 
@@ -11,11 +11,11 @@
 
 class Spc_Emu : public Music_Emu {
 public:
-
-
+	// The Super Nintendo hardware samples at 32kHz. Other sample rates are
+	// handled by resampling the 32kHz output; emulation accuracy is not affected.
 	enum { native_sample_rate = 32000 };
 	
-
+	// SPC file header
 	enum { header_size = 0x100 };
 	struct header_t
 	{
@@ -32,26 +32,26 @@ public:
 		byte date [11];
 		byte len_secs [3];
 		byte fade_msec [4];
-		char author [32];  
+		char author [32]; // sometimes first char should be skipped (see official SPC spec)
 		byte mute_mask;
 		byte emulator;
 		byte unused2 [46];
 	};
 	
-
+	// Header for currently loaded file
 	header_t const& header() const { return *(header_t const*) file_data; }
 	
-
+	// Prevents channels and global volumes from being phase-negated
 	void disable_surround( bool disable = true );
 	
 	static gme_type_t static_type() { return gme_spc_type; }
 	
 public:
-
+	// deprecated
 	using Music_Emu::load;
-	blargg_err_t load( header_t const& h, Data_Reader& in )  
+	blargg_err_t load( header_t const& h, Data_Reader& in ) // use Remaining_Reader
 			{ return load_remaining_( &h, sizeof h, in ); }
-	byte const* trailer() const;  
+	byte const* trailer() const; // use track_info()
 	long trailer_size() const;
 
 public:

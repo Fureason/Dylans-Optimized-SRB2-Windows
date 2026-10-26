@@ -11,10 +11,10 @@
 #include "lobject.h"
 
 
-  
-                                                       
-                 
-  
+/*
+* WARNING: if you change the order of this enumeration,
+* grep "ORDER TM"
+*/
 typedef enum {
   TM_INDEX,
   TM_NEWINDEX,
@@ -22,7 +22,7 @@ typedef enum {
   TM_GC,
   TM_MODE,
   TM_LEN,
-  TM_EQ,   
+  TM_EQ,  /* last tag method with `fast' access */
   TM_ADD,
   TM_SUB,
   TM_MUL,
@@ -41,7 +41,7 @@ typedef enum {
   TM_SHL,
   TM_SHR,
   TM_NOT,
-  TM_N		 
+  TM_N		/* number of elements in the enum */
 } TMS;
 
 

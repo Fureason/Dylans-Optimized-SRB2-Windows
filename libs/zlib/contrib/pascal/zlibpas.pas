@@ -26,44 +26,44 @@ type
 
   z_streamp = ^z_stream;
   z_stream = packed record
-    next_in: PChar;        
-    avail_in: Integer;     
-    total_in: LongInt;     
+    next_in: PChar;       (* next input byte *)
+    avail_in: Integer;    (* number of bytes available at next_in *)
+    total_in: LongInt;    (* total nb of input bytes read so far *)
 
-    next_out: PChar;       
-    avail_out: Integer;    
-    total_out: LongInt;    
+    next_out: PChar;      (* next output byte should be put there *)
+    avail_out: Integer;   (* remaining free space at next_out *)
+    total_out: LongInt;   (* total nb of bytes output so far *)
 
-    msg: PChar;            
-    state: Pointer;        
+    msg: PChar;           (* last error message, NULL if no error *)
+    state: Pointer;       (* not visible by applications *)
 
-    zalloc: alloc_func;    
-    zfree: free_func;      
-    opaque: Pointer;       
+    zalloc: alloc_func;   (* used to allocate the internal state *)
+    zfree: free_func;     (* used to free the internal state *)
+    opaque: Pointer;      (* private data object passed to zalloc and zfree *)
 
-    data_type: Integer;    
-    adler: LongInt;        
-    reserved: LongInt;     
+    data_type: Integer;   (* best guess about the data type: ascii or binary *)
+    adler: LongInt;       (* adler32 value of the uncompressed data *)
+    reserved: LongInt;    (* reserved for future use *)
   end;
 
   gz_headerp = ^gz_header;
   gz_header = packed record
-    text: Integer;         
-    time: LongInt;         
-    xflags: Integer;       
-    os: Integer;           
-    extra: PChar;          
-    extra_len: Integer;    
-    extra_max: Integer;    
-    name: PChar;           
-    name_max: Integer;     
-    comment: PChar;        
-    comm_max: Integer;     
-    hcrc: Integer;         
-    done: Integer;         
+    text: Integer;        (* true if compressed data believed to be text *)
+    time: LongInt;        (* modification time *)
+    xflags: Integer;      (* extra flags (not used when writing a gzip file) *)
+    os: Integer;          (* operating system *)
+    extra: PChar;         (* pointer to extra field or Z_NULL if none *)
+    extra_len: Integer;   (* extra field length (valid if extra != Z_NULL) *)
+    extra_max: Integer;   (* space at extra (only when reading header) *)
+    name: PChar;          (* pointer to zero-terminated file name or Z_NULL *)
+    name_max: Integer;    (* space at name (only when reading header) *)
+    comment: PChar;       (* pointer to zero-terminated comment or Z_NULL *)
+    comm_max: Integer;    (* space at comment (only when reading header) *)
+    hcrc: Integer;        (* true if there was or will be a header crc *)
+    done: Integer;        (* true when done reading gzip header *)
   end;
 
- 
+(* constants *)
 const
   Z_NO_FLUSH      = 0;
   Z_PARTIAL_FLUSH = 1;
@@ -101,7 +101,7 @@ const
 
   Z_DEFLATED = 8;
 
- 
+(* basic functions *)
 function zlibVersion: PChar;
 function deflateInit(var strm: z_stream; level: Integer): Integer;
 function deflate(var strm: z_stream; flush: Integer): Integer;
@@ -110,7 +110,7 @@ function inflateInit(var strm: z_stream): Integer;
 function inflate(var strm: z_stream; flush: Integer): Integer;
 function inflateEnd(var strm: z_stream): Integer;
 
- 
+(* advanced functions *)
 function deflateInit2(var strm: z_stream; level, method, windowBits,
                       memLevel, strategy: Integer): Integer;
 function deflateSetDictionary(var strm: z_stream; const dictionary: PChar;
@@ -140,7 +140,7 @@ function inflateBack(var strm: z_stream; in_fn: in_func; in_desc: Pointer;
 function inflateBackEnd(var strm: z_stream): Integer;
 function zlibCompileFlags: LongInt;
 
- 
+(* utility functions *)
 function compress(dest: PChar; var destLen: LongInt;
                   const source: PChar; sourceLen: LongInt): Integer;
 function compress2(dest: PChar; var destLen: LongInt;
@@ -150,13 +150,13 @@ function compressBound(sourceLen: LongInt): LongInt;
 function uncompress(dest: PChar; var destLen: LongInt;
                     const source: PChar; sourceLen: LongInt): Integer;
 
- 
+(* checksum functions *)
 function adler32(adler: LongInt; const buf: PChar; len: Integer): LongInt;
 function adler32_combine(adler1, adler2, len2: LongInt): LongInt;
 function crc32(crc: LongInt; const buf: PChar; len: Integer): LongInt;
 function crc32_combine(crc1, crc2, len2: LongInt): LongInt;
 
- 
+(* various hacks, don't look :) *)
 function deflateInit_(var strm: z_stream; level: Integer;
                       const version: PChar; stream_size: Integer): Integer;
 function inflateInit_(var strm: z_stream; const version: PChar;
@@ -173,17 +173,17 @@ function inflateBackInit_(var strm: z_stream;
 
 implementation
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
+{$L adler32.obj}
+{$L compress.obj}
+{$L crc32.obj}
+{$L deflate.obj}
+{$L infback.obj}
+{$L inffast.obj}
+{$L inflate.obj}
+{$L inftrees.obj}
+{$L trees.obj}
+{$L uncompr.obj}
+{$L zutil.obj}
 
 function adler32; external;
 function adler32_combine; external;

@@ -43,7 +43,7 @@ read_one_file(FILE *ip, const char *name)
    if (ferror(ip))
       return 0;
 
-    
+   /* Success */
    printf("PNG_ICC_CHECKSUM(0x%8.8lx, 0x%8.8lx,\n   PNG_MD5("
       "0x%2.2x%2.2x%2.2x%2.2x, 0x%2.2x%2.2x%2.2x%2.2x, 0x%2.2x%2.2x%2.2x%2.2x,"
       " 0x%2.2x%2.2x%2.2x%2.2x), %d,\n"

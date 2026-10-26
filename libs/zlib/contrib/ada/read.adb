@@ -6,9 +6,9 @@
 --  Open source license information is in the zlib.ads file.  --
 ----------------------------------------------------------------
 
+--  $Id: read.adb,v 1.8 2004/05/31 10:53:40 vagul Exp $
 
-
-
+--  Test/demo program for the generic read interface.
 
 with Ada.Numerics.Discrete_Random;
 with Ada.Streams;
@@ -20,24 +20,24 @@ procedure Read is
 
    use Ada.Streams;
 
-
-
-
+   ------------------------------------
+   --  Test configuration parameters --
+   ------------------------------------
 
    File_Size   : Stream_Element_Offset := 100_000;
 
    Continuous  : constant Boolean          := False;
-
-
+   --  If this constant is True, the test would be repeated again and again,
+   --  with increment File_Size for every iteration.
 
    Header      : constant ZLib.Header_Type := ZLib.Default;
-
+   --  Do not use Header other than Default in ZLib versions 1.1.4 and older.
 
    Init_Random : constant := 8;
+   --  We are using the same random sequence, in case of we catch bug,
+   --  so we would be able to reproduce it.
 
-
-
-
+   -- End --
 
    Pack_Size : Stream_Element_Offset;
    Offset    : Stream_Element_Offset;
@@ -52,8 +52,8 @@ procedure Read is
 
    Gen : Random_Elements.Generator;
    Period  : constant Stream_Element_Offset := 200;
-
-
+   --  Period constant variable for random generator not to be very random.
+   --  Bigger period, harder random.
 
    Read_Buffer : Stream_Element_Array (1 .. 2048);
    Read_First  : Stream_Element_Offset;
@@ -64,9 +64,9 @@ procedure Read is
    procedure Read
      (Item : out Stream_Element_Array;
       Last : out Stream_Element_Offset);
-
-
-
+   --  this procedure is for generic instantiation of
+   --  ZLib.Read
+   --  reading data from the File_In.
 
    procedure Read is new ZLib.Read
                            (Read,
@@ -74,9 +74,9 @@ procedure Read is
                             Rest_First => Read_First,
                             Rest_Last  => Read_Last);
 
-
-
-
+   ----------
+   -- Read --
+   ----------
 
    procedure Read
      (Item : out Stream_Element_Array;

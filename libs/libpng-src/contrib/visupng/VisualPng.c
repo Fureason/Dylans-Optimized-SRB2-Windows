@@ -9,19 +9,19 @@
  * and license in png.h
  */
 
- 
+/* switches */
 
- 
+/* defines */
 
 #define PROGNAME  "VisualPng"
 #define LONGNAME  "Win32 Viewer for PNG-files"
 #define VERSION   "1.0 of 2000 June 07"
 
- 
+/* constants */
 
 #define MARGIN 8
 
- 
+/* standard includes */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,15 +29,15 @@
 #include <windows.h>
 #include <zlib.h>
 
- 
+/* application includes */
 
 #include "png.h"
 #include "pngfile.h"
 #include "resource.h"
 
- 
+/* macros */
 
- 
+/* function prototypes */
 
 LRESULT CALLBACK WndProc (HWND, UINT, WPARAM, LPARAM);
 BOOL    CALLBACK AboutDlgProc (HWND, UINT, WPARAM, LPARAM) ;
@@ -67,14 +67,14 @@ BOOL FillBitmap (
         BYTE *pbImage, int cxImgSize, int cyImgSize, int cImgChannels,
         BOOL bStretched);
 
- 
+/* a few global variables */
 
 static char *szProgName = PROGNAME;
 static char *szAppName = LONGNAME;
 static char *szIconName = PROGNAME;
 static char szCmdFileName [MAX_PATH];
 
- 
+/* MAIN routine */
 
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     PSTR szCmdLine, int iCmdShow)
@@ -92,7 +92,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
     wndclass.hInstance     = hInstance;
     wndclass.hIcon         = LoadIcon (hInstance, szIconName) ;
     wndclass.hCursor       = LoadCursor (NULL, IDC_ARROW);
-    wndclass.hbrBackground = NULL;  
+    wndclass.hbrBackground = NULL; /* (HBRUSH) GetStockObject (GRAY_BRUSH); */
     wndclass.lpszMenuName  = szProgName;
     wndclass.lpszClassName = szProgName;
 
@@ -103,7 +103,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
         return 0;
     }
 
-     
+    /* if filename given on commandline, store it */
     if ((szCmdLine != NULL) && (*szCmdLine != '\0'))
         if (szCmdLine[0] == '"')
             strncpy (szCmdFileName, szCmdLine + 1, strlen(szCmdLine) - 2);
@@ -112,20 +112,20 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
     else
         strcpy (szCmdFileName, "");
 
-     
+    /* calculate size of window-borders */
     ixBorders = 2 * (GetSystemMetrics (SM_CXBORDER) +
                      GetSystemMetrics (SM_CXDLGFRAME));
     iyBorders = 2 * (GetSystemMetrics (SM_CYBORDER) +
                      GetSystemMetrics (SM_CYDLGFRAME)) +
                      GetSystemMetrics (SM_CYCAPTION) +
                      GetSystemMetrics (SM_CYMENUSIZE) +
-                     1;  
+                     1; /* WvS: don't ask me why?  */
 
     hwnd = CreateWindow (szProgName, szAppName,
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
         512 + 2 * MARGIN + ixBorders, 384 + 2 * MARGIN + iyBorders,
- 
+/*      CW_USEDEFAULT, CW_USEDEFAULT, */
         NULL, NULL, hInstance, NULL);
 
     ShowWindow (hwnd, iCmdShow);
@@ -182,29 +182,29 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
 
         strcpy (szImgPathName, "");
 
-         
+        /* in case we process file given on command-line */
 
         if (szCmdFileName[0] != '\0')
         {
             strcpy (szImgPathName, szCmdFileName);
 
-             
-             
+            /* read the other png-files in the directory for later */
+            /* next/previous commands */
 
             BuildPngList (szImgPathName, &pPngFileList, &iPngFileCount,
                           &iPngFileIndex);
 
-             
+            /* load the image from file */
 
             if (!LoadImageFile (hwnd, szImgPathName,
                 &pbImage, &cxImgSize, &cyImgSize, &cImgChannels, &bkgColor))
                 return 0;
 
-             
+            /* invalidate the client area for later update */
 
             InvalidateRect (hwnd, NULL, TRUE);
 
-             
+            /* display the PNG into the DIBitmap */
 
             DisplayImage (hwnd, &pDib, &pDiData, cxWinSize, cyWinSize,
                 pbImage, cxImgSize, cyImgSize, cImgChannels, bStretched);
@@ -216,11 +216,11 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
         cxWinSize = LOWORD (lParam);
         cyWinSize = HIWORD (lParam);
 
-         
+        /* invalidate the client area for later update */
 
         InvalidateRect (hwnd, NULL, TRUE);
 
-         
+        /* display the PNG into the DIBitmap */
 
         DisplayImage (hwnd, &pDib, &pDiData, cxWinSize, cyWinSize,
             pbImage, cxImgSize, cyImgSize, cImgChannels, bStretched);
@@ -244,28 +244,28 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
         {
         case IDM_FILE_OPEN:
 
-             
+            /* show the File Open dialog box */
 
             if (!PngFileOpenDlg (hwnd, szImgPathName, szTitleName))
                 return 0;
 
-             
-             
+            /* read the other png-files in the directory for later */
+            /* next/previous commands */
 
             BuildPngList (szImgPathName, &pPngFileList, &iPngFileCount,
                           &iPngFileIndex);
 
-             
+            /* load the image from file */
 
             if (!LoadImageFile (hwnd, szImgPathName,
                 &pbImage, &cxImgSize, &cyImgSize, &cImgChannels, &bkgColor))
                 return 0;
 
-             
+            /* invalidate the client area for later update */
 
             InvalidateRect (hwnd, NULL, TRUE);
 
-             
+            /* display the PNG into the DIBitmap */
 
             DisplayImage (hwnd, &pDib, &pDiData, cxWinSize, cyWinSize,
                 pbImage, cxImgSize, cyImgSize, cImgChannels, bStretched);
@@ -274,12 +274,12 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
 
         case IDM_FILE_SAVE:
 
-             
+            /* show the File Save dialog box */
 
             if (!PngFileSaveDlg (hwnd, szImgPathName, szTitleName))
                 return 0;
 
-             
+            /* save the PNG to a disk file */
 
             SetCursor (LoadCursor (NULL, IDC_WAIT));
             ShowCursor (TRUE);
@@ -297,7 +297,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
 
         case IDM_FILE_NEXT:
 
-             
+            /* read next entry in the directory */
 
             if (SearchPngList (pPngFileList, iPngFileCount, &iPngFileIndex,
                 NULL, szImgPathName))
@@ -305,17 +305,17 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
                 if (strcmp (szImgPathName, "") == 0)
                     return 0;
 
-                 
+                /* load the image from file */
 
                 if (!LoadImageFile (hwnd, szImgPathName, &pbImage,
                         &cxImgSize, &cyImgSize, &cImgChannels, &bkgColor))
                     return 0;
 
-                 
+                /* invalidate the client area for later update */
 
                 InvalidateRect (hwnd, NULL, TRUE);
 
-                 
+                /* display the PNG into the DIBitmap */
 
                 DisplayImage (hwnd, &pDib, &pDiData, cxWinSize, cyWinSize,
                     pbImage, cxImgSize, cyImgSize, cImgChannels, bStretched);
@@ -325,7 +325,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
 
         case IDM_FILE_PREVIOUS:
 
-             
+            /* read previous entry in the directory */
 
             if (SearchPngList (pPngFileList, iPngFileCount, &iPngFileIndex,
                 szImgPathName, NULL))
@@ -334,17 +334,17 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
                 if (strcmp (szImgPathName, "") == 0)
                     return 0;
 
-                 
+                /* load the image from file */
 
                 if (!LoadImageFile (hwnd, szImgPathName, &pbImage, &cxImgSize,
                     &cyImgSize, &cImgChannels, &bkgColor))
                     return 0;
 
-                 
+                /* invalidate the client area for later update */
 
                 InvalidateRect (hwnd, NULL, TRUE);
 
-                 
+                /* display the PNG into the DIBitmap */
 
                 DisplayImage (hwnd, &pDib, &pDiData, cxWinSize, cyWinSize,
                     pbImage, cxImgSize, cyImgSize, cImgChannels, bStretched);
@@ -354,9 +354,9 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
 
         case IDM_FILE_EXIT:
 
-             
+            /* more cleanup needed... */
 
-             
+            /* free image buffer */
 
             if (pDib != NULL)
             {
@@ -364,7 +364,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
                 pDib = NULL;
             }
 
-             
+            /* free file-list */
 
             if (pPngFileList != NULL)
             {
@@ -372,7 +372,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
                 pPngFileList = NULL;
             }
 
-             
+            /* let's go ... */
 
             exit (0);
 
@@ -385,11 +385,11 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
             else
                 CheckMenuItem (hMenu, IDM_OPTIONS_STRETCH, MF_UNCHECKED);
 
-             
+            /* invalidate the client area for later update */
 
             InvalidateRect (hwnd, NULL, TRUE);
 
-             
+            /* display the PNG into the DIBitmap */
 
             DisplayImage (hwnd, &pDib, &pDiData, cxWinSize, cyWinSize,
                 pbImage, cxImgSize, cyImgSize, cImgChannels, bStretched);
@@ -400,7 +400,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam,
             DialogBox (hInstance, TEXT ("AboutBox"), hwnd, AboutDlgProc) ;
             return 0;
 
-        }  
+        } /* end switch */
 
         break;
 
@@ -452,10 +452,10 @@ BOOL CALLBACK AboutDlgProc (HWND hDlg, UINT message,
      return FALSE ;
 }
 
-                 
-               
-                 
-   
+/*---------------
+ *  CenterAbout
+ *---------------
+ */
 BOOL CenterAbout (HWND hwndChild, HWND hwndParent)
 {
    RECT    rChild, rParent, rWorkArea;
@@ -463,19 +463,19 @@ BOOL CenterAbout (HWND hwndChild, HWND hwndParent)
    int     xNew, yNew;
    BOOL  bResult;
 
-    
+   /* Get the Height and Width of the child window */
    GetWindowRect (hwndChild, &rChild);
    wChild = rChild.right - rChild.left;
    hChild = rChild.bottom - rChild.top;
 
-    
+   /* Get the Height and Width of the parent window */
    GetWindowRect (hwndParent, &rParent);
    wParent = rParent.right - rParent.left;
    hParent = rParent.bottom - rParent.top;
 
-    
+   /* Get the limits of the 'workarea' */
    bResult = SystemParametersInfo(
-      SPI_GETWORKAREA,   
+      SPI_GETWORKAREA,  /* system parameter to query or set */
       sizeof(RECT),
       &rWorkArea,
       0);
@@ -485,7 +485,7 @@ BOOL CenterAbout (HWND hwndChild, HWND hwndParent)
       rWorkArea.bottom = GetSystemMetrics(SM_CYSCREEN);
    }
 
-    
+   /* Calculate new X position, then adjust for workarea */
    xNew = rParent.left + ((wParent - wChild) /2);
    if (xNew < rWorkArea.left) {
       xNew = rWorkArea.left;
@@ -493,7 +493,7 @@ BOOL CenterAbout (HWND hwndChild, HWND hwndParent)
       xNew = rWorkArea.right - wChild;
    }
 
-    
+   /* Calculate new Y position, then adjust for workarea */
    yNew = rParent.top  + ((hParent - hChild) /2);
    if (yNew < rWorkArea.top) {
       yNew = rWorkArea.top;
@@ -501,15 +501,15 @@ BOOL CenterAbout (HWND hwndChild, HWND hwndParent)
       yNew = rWorkArea.bottom - hChild;
    }
 
-    
+   /* Set it, and return */
    return SetWindowPos (hwndChild, NULL, xNew, yNew, 0, 0, SWP_NOSIZE |
           SWP_NOZORDER);
 }
 
-                  
-                
-                  
-   
+/*----------------
+ *  BuildPngList
+ *----------------
+ */
 BOOL BuildPngList (PTSTR pstrPathName, TCHAR **ppFileList, int *pFileCount,
      int *pFileIndex)
 {
@@ -525,7 +525,7 @@ BOOL BuildPngList (PTSTR pstrPathName, TCHAR **ppFileList, int *pFileCount,
     int                       i, ii;
     int                       j, jj;
 
-     
+    /* free previous file-list */
 
     if (*ppFileList != NULL)
     {
@@ -533,7 +533,7 @@ BOOL BuildPngList (PTSTR pstrPathName, TCHAR **ppFileList, int *pFileCount,
         *ppFileList = NULL;
     }
 
-     
+    /* extract foldername, filename and search-name */
 
     strcpy (szImgPathName, pstrPathName);
     strcpy (szImgFileName, strrchr (pstrPathName, '\\') + 1);
@@ -542,7 +542,7 @@ BOOL BuildPngList (PTSTR pstrPathName, TCHAR **ppFileList, int *pFileCount,
     *(strrchr (szImgFindName, '\\') + 1) = '\0';
     strcat (szImgFindName, "*.png");
 
-     
+    /* first cycle: count number of files in directory for memory allocation */
 
     *pFileCount = 0;
 
@@ -556,11 +556,11 @@ BOOL BuildPngList (PTSTR pstrPathName, TCHAR **ppFileList, int *pFileCount,
     }
     FindClose(hFind);
 
-     
+    /* allocation memory for file-list */
 
     *ppFileList = (TCHAR *) malloc (*pFileCount * MAX_PATH);
 
-     
+    /* second cycle: read directory and store filenames in file-list */
 
     hFind = FindFirstFile(szImgFindName, &finddata);
     bOk = (hFind != (HANDLE) -1);
@@ -582,7 +582,7 @@ BOOL BuildPngList (PTSTR pstrPathName, TCHAR **ppFileList, int *pFileCount,
     }
     FindClose(hFind);
 
-     
+    /* finally we must sort the file-list */
 
     for (i = 0; i < *pFileCount - 1; i++)
     {
@@ -596,7 +596,7 @@ BOOL BuildPngList (PTSTR pstrPathName, TCHAR **ppFileList, int *pFileCount,
                 strcpy (*ppFileList + jj, *ppFileList + ii);
                 strcpy (*ppFileList + ii, szTmp);
 
-                 
+                /* check if this was the current image that we moved */
 
                 if (*pFileIndex == i)
                     *pFileIndex = j;
@@ -610,10 +610,10 @@ BOOL BuildPngList (PTSTR pstrPathName, TCHAR **ppFileList, int *pFileCount,
     return TRUE;
 }
 
-                  
-                 
-                  
-   
+/*----------------
+ *  SearchPngList
+ *----------------
+ */
 
 BOOL SearchPngList (
         TCHAR *pFileList, int FileCount, int *pFileIndex,
@@ -621,7 +621,7 @@ BOOL SearchPngList (
 {
     if (FileCount > 0)
     {
-         
+        /* get previous entry */
 
         if (pstrPrevName != NULL)
         {
@@ -633,7 +633,7 @@ BOOL SearchPngList (
             strcpy (pstrPrevName, pFileList + (*pFileIndex * MAX_PATH));
         }
 
-         
+        /* get next entry */
 
         if (pstrNextName != NULL)
         {
@@ -653,10 +653,10 @@ BOOL SearchPngList (
     }
 }
 
-                   
-                 
-                   
-   
+/*-----------------
+ *  LoadImageFile
+ *-----------------
+ */
 
 BOOL LoadImageFile (HWND hwnd, PTSTR pstrPathName,
                 png_byte **ppbImage, int *pxImgSize, int *pyImgSize,
@@ -664,7 +664,7 @@ BOOL LoadImageFile (HWND hwnd, PTSTR pstrPathName,
 {
     static TCHAR szTmp [MAX_PATH];
 
-     
+    /* if there's an existing PNG, free the memory */
 
     if (*ppbImage)
     {
@@ -672,7 +672,7 @@ BOOL LoadImageFile (HWND hwnd, PTSTR pstrPathName,
         *ppbImage = NULL;
     }
 
-     
+    /* Load the entire PNG into memory */
 
     SetCursor (LoadCursor (NULL, IDC_WAIT));
     ShowCursor (TRUE);
@@ -698,10 +698,10 @@ BOOL LoadImageFile (HWND hwnd, PTSTR pstrPathName,
     return TRUE;
 }
 
-                  
-                
-                  
-   
+/*----------------
+ *  DisplayImage
+ *----------------
+ */
 BOOL DisplayImage (HWND hwnd, BYTE **ppDib,
         BYTE **ppDiData, int cxWinSize, int cyWinSize,
         BYTE *pbImage, int cxImgSize, int cyImgSize, int cImgChannels,
@@ -709,14 +709,14 @@ BOOL DisplayImage (HWND hwnd, BYTE **ppDib,
 {
     BYTE                       *pDib = *ppDib;
     BYTE                       *pDiData = *ppDiData;
-     
+    /* BITMAPFILEHEADER        *pbmfh; */
     BITMAPINFOHEADER           *pbmih;
     WORD                        wDIRowBytes;
     png_color                   bkgBlack = {0, 0, 0};
     png_color                   bkgGray  = {127, 127, 127};
     png_color                   bkgWhite = {255, 255, 255};
 
-     
+    /* allocate memory for the Device Independent bitmap */
 
     wDIRowBytes = (WORD) ((3 * cxWinSize + 3L) >> 2) << 2;
 
@@ -741,7 +741,7 @@ BOOL DisplayImage (HWND hwnd, BYTE **ppDib,
     *ppDib = pDib;
     memset (pDib, 0, sizeof(BITMAPINFOHEADER));
 
-     
+    /* initialize the dib-structure */
 
     pbmih = (BITMAPINFOHEADER *) pDib;
     pbmih->biSize = sizeof(BITMAPINFOHEADER);
@@ -753,11 +753,11 @@ BOOL DisplayImage (HWND hwnd, BYTE **ppDib,
     pDiData = pDib + sizeof(BITMAPINFOHEADER);
     *ppDiData = pDiData;
 
-     
+    /* first fill bitmap with gray and image border */
 
     InitBitmap (pDiData, cxWinSize, cyWinSize);
 
-     
+    /* then fill bitmap with image */
 
     if (pbImage)
     {
@@ -770,16 +770,16 @@ BOOL DisplayImage (HWND hwnd, BYTE **ppDib,
     return TRUE;
 }
 
-                
-              
-                
-   
+/*--------------
+ *  InitBitmap
+ *--------------
+ */
 BOOL InitBitmap (BYTE *pDiData, int cxWinSize, int cyWinSize)
 {
     BYTE *dst;
     int x, y, col;
 
-     
+    /* initialize the background with gray */
 
     dst = pDiData;
     for (y = 0; y < cyWinSize; y++)
@@ -787,13 +787,13 @@ BOOL InitBitmap (BYTE *pDiData, int cxWinSize, int cyWinSize)
         col = 0;
         for (x = 0; x < cxWinSize; x++)
         {
-             
+            /* fill with GRAY */
             *dst++ = 127;
             *dst++ = 127;
             *dst++ = 127;
             col += 3;
         }
-         
+        /* rows start on 4 byte boundaries */
         while ((col % 4) != 0)
         {
             dst++;
@@ -804,10 +804,10 @@ BOOL InitBitmap (BYTE *pDiData, int cxWinSize, int cyWinSize)
     return TRUE;
 }
 
-                
-              
-                
-   
+/*--------------
+ *  FillBitmap
+ *--------------
+ */
 BOOL FillBitmap (
         BYTE *pDiData, int cxWinSize, int cyWinSize,
         BYTE *pbImage, int cxImgSize, int cyImgSize, int cImgChannels,
@@ -832,12 +832,12 @@ BOOL FillBitmap (
         cxNewSize = cxWinSize - 2 * MARGIN;
         cyNewSize = cyWinSize - 2 * MARGIN;
 
-         
+        /* stretch the image to it's window determined size */
 
-                                                                       
-                                               
-           
- 
+        /* the following two are mathematically the same, but the first
+         * has side-effects because of rounding
+         */
+/*      if ((cyNewSize / cxNewSize) > (cyImgSize / cxImgSize)) */
         if ((cyNewSize * cxImgSize) > (cyImgSize * cxNewSize))
         {
             cyNewSize = cxNewSize * cyImgSize / cxImgSize;
@@ -880,12 +880,12 @@ BOOL FillBitmap (
             }
         }
 
-         
+        /* calculate row-bytes */
 
         wImgRowBytes = cImgChannels * cxNewSize;
         wDIRowBytes = (WORD) ((cDIChannels * cxWinSize + 3L) >> 2) << 2;
 
-         
+        /* copy image to screen */
 
         for (yImg = 0, yWin = cyImgPos; yImg < cyNewSize; yImg++, yWin++)
         {
@@ -901,7 +901,7 @@ BOOL FillBitmap (
                 r = *src++;
                 g = *src++;
                 b = *src++;
-                *dst++ = b;  
+                *dst++ = b; /* note the reverse order  */
                 *dst++ = g;
                 *dst++ = r;
                 if (cImgChannels == 4)
@@ -911,7 +911,7 @@ BOOL FillBitmap (
             }
         }
 
-         
+        /* free memory */
 
         if (pStretchedImage != NULL)
         {
@@ -921,28 +921,28 @@ BOOL FillBitmap (
 
     }
 
-     
+    /* process the image not-stretched */
 
     else
     {
-         
+        /* calculate the central position */
 
         cxImgPos = (cxWinSize - cxImgSize) / 2;
         cyImgPos = (cyWinSize - cyImgSize) / 2;
 
-         
+        /* check for image larger than window */
 
         if (cxImgPos < MARGIN)
             cxImgPos = MARGIN;
         if (cyImgPos < MARGIN)
             cyImgPos = MARGIN;
 
-         
+        /* calculate both row-bytes */
 
         wImgRowBytes = cImgChannels * cxImgSize;
         wDIRowBytes = (WORD) ((cDIChannels * cxWinSize + 3L) >> 2) << 2;
 
-         
+        /* copy image to screen */
 
         for (yImg = 0, yWin = cyImgPos; yImg < cyImgSize; yImg++, yWin++)
         {
@@ -958,7 +958,7 @@ BOOL FillBitmap (
                 r = *src++;
                 g = *src++;
                 b = *src++;
-                *dst++ = b;  
+                *dst++ = b; /* note the reverse order  */
                 *dst++ = g;
                 *dst++ = r;
                 if (cImgChannels == 4)
@@ -972,7 +972,7 @@ BOOL FillBitmap (
     return TRUE;
 }
 
-                   
-                 
-                   
-   
+/*-----------------
+ *  end of source
+ *-----------------
+ */

@@ -1,12 +1,12 @@
 #! /usr/bin/env python
-
-
-
-
-
-
-
-
+# vim: tabstop=8 shiftwidth=8 expandtab
+# $Id: setup.py,v 1.15 2021/09/28 21:10:11 nanard Exp $
+# the MiniUPnP Project (c) 2007-2021 Thomas Bernard
+# https://miniupnp.tuxfamily.org/ or http://miniupnp.free.fr/
+#
+# python script to build the miniupnpc module under unix
+#
+# Uses MAKE environment variable (defaulting to 'make')
 
 from setuptools import setup, Extension
 from setuptools.command import build_ext

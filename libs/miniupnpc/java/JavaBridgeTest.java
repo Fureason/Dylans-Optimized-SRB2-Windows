@@ -3,10 +3,10 @@ import java.nio.IntBuffer;
 
 import fr.free.miniupnp.*;
 
-   
-  
-               
-   
+/**
+ *
+ * @author syuu
+ */
 public class JavaBridgeTest {
     public static void main(String[] args) {
         int UPNP_DELAY = 2000;
@@ -59,15 +59,15 @@ public class JavaBridgeTest {
                         new String(data.first.servicetype), externalAddress);
                 System.out.println("ExternalIPAddress = " + new String(externalAddress.array()));
                 ret = miniupnpc.UPNP_AddPortMapping(
-                        urls.controlURL.getString(0),  
-                        new String(data.first.servicetype),  
-                        args[0],  
-                        args[0],  
-                        new String(lanaddr.array()),  
-                        "added via miniupnpc/JAVA !",  
-                        args[1],  
-                        null,  
-                        "0");  
+                        urls.controlURL.getString(0), // controlURL
+                        new String(data.first.servicetype), // servicetype
+                        args[0], // external Port
+                        args[0], // internal Port
+                        new String(lanaddr.array()), // internal client
+                        "added via miniupnpc/JAVA !", // description
+                        args[1], // protocol UDP or TCP
+                        null, // remote host (useless)
+                        "0"); // leaseDuration
                 if (ret != MiniupnpcLibrary.UPNPCOMMAND_SUCCESS)
                     System.out.println("AddPortMapping() failed with code " + ret);
                 ret = miniupnpc.UPNP_GetSpecificPortMappingEntry(

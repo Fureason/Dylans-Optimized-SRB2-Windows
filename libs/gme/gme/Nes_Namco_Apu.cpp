@@ -1,4 +1,4 @@
-
+// Nes_Snd_Emu 0.1.8. http://www.slack.net/~ant/
 
 #include "Nes_Namco_Apu.h"
 
@@ -46,23 +46,23 @@ void Nes_Namco_Apu::output( Blip_Buffer* buf )
 		osc_output( i, buf );
 }
 
-  
-                                                      
- 
-                                                                 
- 
-                                                 
-       
-                                  
-                                                                                  
- 
-                                  
-  
-                                                                            
-                                                                               
-  
- 
-  
+/*
+void Nes_Namco_Apu::reflect_state( Tagged_Data& data )
+{
+	reflect_int16( data, BLARGG_4CHAR('A','D','D','R'), &addr_reg );
+	
+	static const char hex [17] = "0123456789ABCDEF";
+	int i;
+	for ( i = 0; i < reg_count; i++ )
+		reflect_int16( data, 'RG\0\0' + hex [i >> 4] * 0x100 + hex [i & 15], &reg [i] );
+	
+	for ( i = 0; i < osc_count; i++ )
+	{
+		reflect_int32( data, BLARGG_4CHAR('D','L','Y','0') + i, &oscs [i].delay );
+		reflect_int16( data, BLARGG_4CHAR('P','O','S','0') + i, &oscs [i].wave_pos );
+	}
+}
+*/
 
 void Nes_Namco_Apu::end_frame( blip_time_t time )
 {
@@ -100,7 +100,7 @@ void Nes_Namco_Apu::run_until( blip_time_t nes_end_time )
 			
 			blargg_long freq = (osc_reg [4] & 3) * 0x10000 + osc_reg [2] * 0x100L + osc_reg [0];
 			if ( freq < 64 * active_oscs )
-				continue;  
+				continue; // prevent low frequencies from excessively delaying freq changes
 			blip_resampled_time_t period =
 					output->resampled_duration( 983040 ) / freq * active_oscs;
 			
@@ -113,13 +113,13 @@ void Nes_Namco_Apu::run_until( blip_time_t nes_end_time )
 			
 			do
 			{
-
+				// read wave sample
 				int addr = wave_pos + osc_reg [6];
 				int sample = reg [addr >> 1] >> (addr << 2 & 4);
 				wave_pos++;
 				sample = (sample & 15) * volume;
 				
-
+				// output impulse if amplitude changed
 				int delta = sample - last_amp;
 				if ( delta )
 				{
@@ -127,7 +127,7 @@ void Nes_Namco_Apu::run_until( blip_time_t nes_end_time )
 					synth.offset_resampled( time, delta, output );
 				}
 				
-
+				// next sample
 				time += period;
 				if ( wave_pos >= wave_size )
 					wave_pos = 0;

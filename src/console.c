@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  console.c
+/// \brief Console drawing and input
 
 #ifdef __GNUC__
 #include <unistd.h>
@@ -54,57 +54,57 @@ I_mutex con_mutex;
 
 #  define Lock_state()    I_lock_mutex(&con_mutex)
 #  define Unlock_state() I_unlock_mutex(con_mutex)
-#else 
+#else/*HAVE_THREADS*/
 #  define Lock_state()
 #  define Unlock_state()
-#endif 
+#endif/*HAVE_THREADS*/
 
-static boolean con_started = false;  
-       boolean con_startup = false;  
-       boolean con_refresh = false;  
-static boolean con_forcepic = true;  
-       boolean con_recalc;           
+static boolean con_started = false; // console has been initialised
+       boolean con_startup = false; // true at game startup
+       boolean con_refresh = false; // screen needs refreshing
+static boolean con_forcepic = true; // at startup toggle console translucency when first off
+       boolean con_recalc;          // set true when screen size has changed
 
-static tic_t con_tick;  
+static tic_t con_tick; // console ticker for blinking prompt cursor
+                        // con_scrollup should use time (currenttime - lasttime)..
 
+static boolean consoletoggle; // true when console key pushed, ticker will handle
+static boolean consoleready;  // console prompt is ready
 
-static boolean consoletoggle;  
-static boolean consoleready;   
+       INT32 con_destlines; // vid lines used by console at final position
+static INT32 con_curlines;  // vid lines currently used by console
 
-       INT32 con_destlines;  
-static INT32 con_curlines;   
+static UINT8  con_hudlines;             // number of console heads up message lines
+static UINT32 con_hudtime[MAXHUDLINES]; // remaining time of display for hud msg lines
 
-static UINT8  con_hudlines;              
-static UINT32 con_hudtime[MAXHUDLINES];  
+// console text output
+static char *con_line;          // console text output current line
+static size_t con_cx;           // cursor position in current line
+static size_t con_cy;           // cursor line number in con_buffer, is always
+                                // increasing, and wrapped around in the text
+                                // buffer using modulo.
 
+static size_t con_totallines;      // lines of console text into the console buffer
+static size_t con_width;           // columns of chars, depend on vid mode width
+static size_t con_historylines;    // valid lines retained, including the current line
 
-static char *con_line;           
-static size_t con_cx;            
-static size_t con_cy;            
+static size_t con_scrollup;        // how many rows of text to scroll up (pgup/pgdn)
+UINT32 con_scalefactor;            // text size scale factor
 
-
-
-static size_t con_totallines;       
-static size_t con_width;            
-static size_t con_historylines;     
-
-static size_t con_scrollup;         
-UINT32 con_scalefactor;             
-
-
+// hold 32 last lines of input for history
 #define CON_MAXPROMPTCHARS 256
 #define CON_PROMPTCHAR '$'
 
-static char inputlines[32][CON_MAXPROMPTCHARS];  
+static char inputlines[32][CON_MAXPROMPTCHARS]; // hold last 32 prompt lines
 
-static INT32 inputline;     
-static INT32 inputhist;     
-static size_t input_cur;  
-static size_t input_sel;  
-static size_t input_len;  
+static INT32 inputline;    // current input line number
+static INT32 inputhist;    // line number of history input line to restore
+static size_t input_cur; // position of cursor in line
+static size_t input_sel; // position of selection marker (I.E.: anything between this and input_cur is "selected")
+static size_t input_len; // length of current line, used to bound cursor and such
+// notice: input does NOT include the "$" at the start of the line. - 11/3/16
 
-
-
+// protos.
 static void CON_InputInit(void);
 static void CON_RecalcSize(void);
 static void CON_ChangeHeight(void);
@@ -115,43 +115,43 @@ static void CONS_height_Change(void);
 static void CONS_hudlines_Change(void);
 static void CONS_backcolor_Change(void);
 
-
-
-
+//======================================================================
+//                   CONSOLE VARS AND COMMANDS
+//======================================================================
 #ifdef macintosh
-#define CON_BUFFERSIZE 4096  
+#define CON_BUFFERSIZE 4096 // my compiler can't handle local vars >32k
 #else
-                                                                            
-                                                                       
+/* Keep a session-sized history without adding work to the per-frame drawer.
+ * At common console widths this retains tens of thousands of lines. */
 #define CON_BUFFERSIZE (8*1024*1024)
 #endif
 
 static char con_buffer[CON_BUFFERSIZE];
 
-
-
+// how many seconds the hud messages lasts on the screen
+// CV_Unsigned can overflow when multiplied by TICRATE later, so let's use a 3-year limit instead
 static CV_PossibleValue_t hudtime_cons_t[] = {{0, "MIN"}, {99999999, "MAX"}, {0, NULL}};
 static consvar_t cons_hudtime = CVAR_INIT ("con_hudtime", "5", CV_SAVE, hudtime_cons_t, NULL);
 
-
+// number of lines displayed on the HUD
 static CV_PossibleValue_t hudlines_cons_t[] = {{0, "MIN"}, {MAXHUDLINES, "MAX"}, {0, NULL}};
 static consvar_t cons_hudlines = CVAR_INIT ("con_hudlines", "5", CV_CALL|CV_SAVE, hudlines_cons_t, CONS_hudlines_Change);
 
-
-
+// number of lines console move per frame
+// (con_speed needs a limit, apparently)
 static CV_PossibleValue_t speed_cons_t[] = {{0, "MIN"}, {64, "MAX"}, {0, NULL}};
 static consvar_t cons_speed = CVAR_INIT ("con_speed", "8", CV_SAVE, speed_cons_t, NULL);
 
-
+// percentage of screen height to use for console
 static consvar_t cons_height = CVAR_INIT ("con_height", "50", CV_CALL|CV_SAVE, CV_Unsigned, CONS_height_Change);
 
-
-
+// -1 preserves the traditional percentage height, 0 disables the console,
+// and 1-64 selects the exact number of output rows to display.
 static CV_PossibleValue_t lines_cons_t[] = {{-1, "MIN"}, {64, "MAX"}, {0, NULL}};
 consvar_t cons_lines = CVAR_INIT ("con_lines", "-1", CV_CALL|CV_SAVE, lines_cons_t, CONS_height_Change);
 
 static CV_PossibleValue_t backpic_cons_t[] = {{0, "Translucent"}, {1, "Picture"}, {2, "None"}, {0, NULL}};
-
+// Whether to use the console picture, translucent tint, or no background.
 consvar_t cons_backpic = CVAR_INIT ("con_backpic", "Translucent", CV_SAVE, backpic_cons_t, NULL);
 
 static CV_PossibleValue_t backcolor_cons_t[] = {{0, "White"}, 		{1, "Black"},		{2, "Sepia"},
@@ -168,27 +168,27 @@ consvar_t cons_backcolor = CVAR_INIT ("con_backcolor", "Green", CV_CALL|CV_SAVE,
 
 static void CON_Print(char *msg);
 
-
-
+// Change the console height on demand
+//
 static void CONS_height_Change(void)
 {
 	Lock_state();
 
-	if (con_destlines > 0 && !con_startup)  
-		CON_ChangeHeight();  
+	if (con_destlines > 0 && !con_startup) // If the console is open (as in, not using "bind")...
+		CON_ChangeHeight(); // ...update its height now, not only when it's closed and re-opened
 
 	Unlock_state();
 }
 
-
-
+//
+//
 static void CONS_hudlines_Change(void)
 {
 	INT32 i;
 
 	Lock_state();
 
-
+	// Clear the currently displayed lines
 	for (i = 0; i < con_hudlines; i++)
 		con_hudtime[i] = 0;
 
@@ -199,8 +199,8 @@ static void CONS_hudlines_Change(void)
 	CONS_Printf(M_GetText("Number of console HUD lines is now %d\n"), con_hudlines);
 }
 
-
-
+// Clear console text buffer
+//
 static void CONS_Clear_f(void)
 {
 	Lock_state();
@@ -216,13 +216,13 @@ static void CONS_Clear_f(void)
 	Unlock_state();
 }
 
-
-
-                                  
- 
-                                 
-                                                              
-   
+// Choose english keymap
+//
+/*static void CONS_English_f(void)
+{
+	shiftxform = english_shiftxform;
+	CONS_Printf(M_GetText("%s keymap.\n"), M_GetText("English"));
+}*/
 
 static char *bindtable[NUMINPUTS];
 
@@ -230,7 +230,7 @@ static void CONS_Bind_f(void)
 {
 	size_t na;
 	char *newcmd = NULL;
-
+	//size_t newlen = 0;
 	unsigned int i;
 	INT32 key;
 
@@ -269,43 +269,43 @@ static void CONS_Bind_f(void)
 	{
 		const char *arg = COM_Argv(i);
 
-
+		// on the second iteration, and after
 		if (i > 2)
 		{
-			size_t newlen = strlen(bindtable[key]) + strlen(arg) + 1;  
-			size_t curpos = newcmd - bindtable[key];  
+			size_t newlen = strlen(bindtable[key]) + strlen(arg) + 1; // new length, allow space for ' ' and '\0'
+			size_t curpos = newcmd - bindtable[key]; // offset from newcmd to original pointer
 
 			newcmd = bindtable[key] = Z_Realloc(bindtable[key], newlen, PU_STATIC, NULL);
-			newcmd += curpos;  
+			newcmd += curpos; // reapply offset
 
-			newcmd[0] = ' ';  
-			++newcmd;  
+			newcmd[0] = ' '; // replace previous '\0' w/ ' '
+			++newcmd; // make sure later strcpy doesnt overwrite ' '
 		}
-
+		// first iteration
 		else
-
+			// allocate space for argument and a ' ' or '\0'
 			newcmd = bindtable[key] = Z_Calloc(strlen(arg) + 1, PU_STATIC, NULL);
 
-
+		// the copy
 		strcpy(newcmd, arg);
 
-
+		// move window past copied argument for next iteration
 		newcmd += strlen(arg);
 	}
 }
 
+//======================================================================
+//                          CONSOLE SETUP
+//======================================================================
 
-
-
-
-
-
-
-
-
+// Font colormap colors
+// TODO: This could probably be improved somehow...
+// These colormaps are 99% identical, with just a few changed bytes
+// This could EASILY be handled by modifying a centralised colormap
+// for software depending on the prior state - but yknow, OpenGL...
 UINT8 *yellowmap, *magentamap, *lgreenmap, *bluemap, *graymap, *redmap, *orangemap, *skymap, *purplemap, *aquamap, *peridotmap, *azuremap, *brownmap, *rosymap, *invertmap;
 
-
+// Console BG color
 UINT8 *consolebgmap = NULL;
 UINT8 *promptbgmap = NULL;
 static UINT8 promptbgcolor = UINT8_MAX;
@@ -320,30 +320,30 @@ void CON_SetupBackColormapEx(INT32 color, boolean prompt)
 	if (color == INT32_MAX)
 		color = cons_backcolor.value;
 
-	shift = 6;  
+	shift = 6; // 12 colors -- shift of 7 means 6 colors
 
 	switch (color)
 	{
-		case 0:		palindex = 15; 	break; 	 
-		case 1:		palindex = 31;	break; 	 
-		case 2:		palindex = 251;	break;	 
-		case 3:		palindex = 239;	break; 	 
-		case 4:		palindex = 215; shift = 7; 	break; 	 
-		case 5:		palindex = 37; shift = 7;	break; 	 
-		case 6:		palindex = 47; shift = 7;	break; 	 
-		case 7:		palindex = 53;	shift = 7;	break;	 
-		case 8:		palindex = 63;	break; 	 
-		case 9:		palindex = 56; shift = 7;	break; 	 
-		case 10:	palindex = 79; shift = 7;	break; 	 
-		case 11:	palindex = 119; shift = 7; 	break; 	 
-		case 12:	palindex = 111;	break; 	 
-		case 13:	palindex = 136;	shift = 7; break; 	 
-		case 14:	palindex = 175; shift = 7;	break; 	 
-		case 15:	palindex = 166;	shift = 7; 	break; 	 
-		case 16:	palindex = 159;	break; 	 
-		case 17:	palindex = 187; shift = 7; 	break; 	 
-		case 18:	palindex = 199; shift = 7; 	break; 	 
-
+		case 0:		palindex = 15; 	break; 	// White
+		case 1:		palindex = 31;	break; 	// Black
+		case 2:		palindex = 251;	break;	// Sepia
+		case 3:		palindex = 239;	break; 	// Brown
+		case 4:		palindex = 215; shift = 7; 	break; 	// Pink
+		case 5:		palindex = 37; shift = 7;	break; 	// Raspberry
+		case 6:		palindex = 47; shift = 7;	break; 	// Red
+		case 7:		palindex = 53;	shift = 7;	break;	// Creamsicle
+		case 8:		palindex = 63;	break; 	// Orange
+		case 9:		palindex = 56; shift = 7;	break; 	// Gold
+		case 10:	palindex = 79; shift = 7;	break; 	// Yellow
+		case 11:	palindex = 119; shift = 7; 	break; 	// Emerald
+		case 12:	palindex = 111;	break; 	// Green
+		case 13:	palindex = 136;	shift = 7; break; 	// Cyan
+		case 14:	palindex = 175; shift = 7;	break; 	// Steel
+		case 15:	palindex = 166;	shift = 7; 	break; 	// Periwinkle
+		case 16:	palindex = 159;	break; 	// Blue
+		case 17:	palindex = 187; shift = 7; 	break; 	// Purple
+		case 18:	palindex = 199; shift = 7; 	break; 	// Lavender
+		// Default green
 		default:	palindex = 111; break;
 	}
 
@@ -360,7 +360,7 @@ void CON_SetupBackColormapEx(INT32 color, boolean prompt)
 	else if (!consolebgmap)
 		consolebgmap = (UINT8 *)Z_Malloc(256, PU_STATIC, NULL);
 
-
+	// setup background colormap
 	for (i = 0, j = 0; i < 768; i += 3, j++)
 	{
 		palsum = (pal[i] + pal[i+1] + pal[i+2]) >> shift;
@@ -374,7 +374,7 @@ void CON_SetupBackColormapEx(INT32 color, boolean prompt)
 void CON_SetupBackColormap(void)
 {
 	CON_SetupBackColormapEx(cons_backcolor.value, false);
-	CON_SetupBackColormapEx(1, true);  
+	CON_SetupBackColormapEx(1, true); // default to gray
 }
 
 static void CONS_backcolor_Change(void)
@@ -403,13 +403,13 @@ static void CON_SetupColormaps(void)
 	rosymap    = (brownmap+256);
 	invertmap  = (rosymap+256);
 
+	// setup the other colormaps, for console text
 
-
-
-
+	// these don't need to be aligned, unless you convert the
+	// V_DrawMappedPatch() into optimised asm.
 
 	for (i = 0; i < (256*15); i++, ++memorysrc)
-		*memorysrc = (UINT8)(i & 0xFF);  
+		*memorysrc = (UINT8)(i & 0xFF); // remap each color to itself...
 
 #define colset(map, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
 	map[0x0] = (UINT8)a;\
@@ -429,9 +429,9 @@ static void CON_SetupColormaps(void)
 	map[0xE] = (UINT8)o;\
 	map[0xF] = (UINT8)p;
 
+	// Tried to keep the colors vanilla while adding some shades in between them ~SonicX8000
 
-
-
+	//                      0x1       0x3                           0x9                           0xF
 	colset(magentamap, 177, 177, 178, 178, 178, 180, 180, 180, 182, 182, 182, 182, 184, 184, 184, 185);
 	colset(yellowmap,   82,  82,  73,  73,  73,  74,  74,  74,  66,  66,  66,  66,  67,  67,  67,  68);
 	colset(lgreenmap,   96,  96,  98,  98,  98, 100, 100, 100, 103, 103, 103, 103, 105, 105, 105, 107);
@@ -449,16 +449,16 @@ static void CON_SetupColormaps(void)
 
 #undef colset
 
-
+	// Yeah just straight up invert it like a normal person
 	for (i = 0x00; i <= 0x1F; i++)
 		invertmap[0x1F - i] = i;
 
-
+	// Init back colormap
 	CON_SetupBackColormap();
 }
 
-
-
+// Setup the console text buffer
+//
 void CON_Init(void)
 {
 	INT32 i;
@@ -468,10 +468,10 @@ void CON_Init(void)
 
 	Lock_state();
 
-
+	// clear all lines
 	memset(con_buffer, 0, CON_BUFFERSIZE);
 
-
+	// make sure it is ready for the loading screen
 	con_width = 0;
 
 	Unlock_state();
@@ -486,14 +486,14 @@ void CON_Init(void)
 
 	Unlock_state();
 
-
+	// setup console input filtering
 	CON_InputInit();
 
-
-
+	// register our commands
+	//
 	COM_AddCommand("cls", CONS_Clear_f, 0);
-
-
+	//COM_AddCommand("english", CONS_English_f);
+	// set console full screen for game startup MAKE SURE VID_Init() done !!!
 	Lock_state();
 
 	con_destlines = vid.height;
@@ -507,7 +507,7 @@ void CON_Init(void)
 
 		con_started = true;
 		con_startup = true;
-		con_refresh = true;  
+		con_refresh = true; // needs explicit screen refresh until we are in the main game loop
 		consoletoggle = false;
 
 		Unlock_state();
@@ -527,7 +527,7 @@ void CON_Init(void)
 
 		con_started = true;
 		con_startup = false;
-		con_refresh = false;  
+		con_refresh = false; // disable explicit screen refresh
 		consoletoggle = true;
 
 		Unlock_state();
@@ -548,13 +548,13 @@ void CON_StopRefresh(void)
 		con_refresh = false;
 }
 
-
-
+// Console input initialization
+//
 static void CON_InputInit(void)
 {
 	Lock_state();
 
-
+	// prepare the first prompt line
 	memset(inputlines, 0, sizeof (inputlines));
 	inputline = 0;
 	input_cur = input_sel = input_len = 0;
@@ -562,13 +562,13 @@ static void CON_InputInit(void)
 	Unlock_state();
 }
 
+//======================================================================
+//                        CONSOLE EXECUTION
+//======================================================================
 
-
-
-
-
-
-
+// Called at screen size change to set the rows and line size of the
+// console text buffer.
+//
 static void CON_RecalcSize(void)
 {
 	size_t conw, oldcon_width, oldnumlines, oldhistorylines, i, oldcon_cy;
@@ -588,7 +588,7 @@ static void CON_RecalcSize(void)
 	case V_MEDSCALEPATCH:
 		con_scalefactor = vid.meddup;
 		break;
-	default:	 
+	default:	// Full scaling
 		con_scalefactor = vid.dup;
 		break;
 	}
@@ -600,29 +600,29 @@ static void CON_RecalcSize(void)
 	else
 		conw = (vid.width>>3) / con_scalefactor - 2;
 
-	if (con_curlines == vid.height)  
+	if (con_curlines == vid.height) // first init
 	{
 		con_curlines = vid.height;
 		con_destlines = vid.height;
 	}
 
-	if (con_destlines > 0)  
+	if (con_destlines > 0) // Resize console if already open
 	{
 		CON_ChangeHeight();
 		con_curlines = con_destlines;
 	}
 
-
+	// check for change of video width
 	if (conw == con_width)
 	{
 		Unlock_state();
-		return;  
+		return; // didn't change
 	}
 
 	Unlock_state();
 
 	tmp_buffer = Z_Malloc(CON_BUFFERSIZE, PU_STATIC, NULL);
-	string = Z_Malloc(CON_BUFFERSIZE, PU_STATIC, NULL);  
+	string = Z_Malloc(CON_BUFFERSIZE, PU_STATIC, NULL); // BP: it is a line but who know
 
 	Lock_state();
 
@@ -637,7 +637,7 @@ static void CON_RecalcSize(void)
 	else
 		con_width = conw;
 
-	con_width += 11;  
+	con_width += 11; // Graue 06-19-2004 up to 11 control chars per line
 
 	con_totallines = CON_BUFFERSIZE / con_width;
 	memset(con_buffer, ' ', CON_BUFFERSIZE);
@@ -650,12 +650,12 @@ static void CON_RecalcSize(void)
 
 	Unlock_state();
 
-
-	if (oldcon_width && oldhistorylines > 1)  
+	// re-arrange console text buffer to keep text
+	if (oldcon_width && oldhistorylines > 1) // not the first time, and there is completed text
 	{
-		                                                                       
-                                                                        
-                                                           
+		/* Walk only the lines that have actually been written. With the larger
+		 * history this keeps a resolution or text-size change proportional to
+		 * real console output instead of the buffer capacity. */
 		for (i = oldcon_cy + 1 - oldhistorylines; i < oldcon_cy; i++)
 		{
 			if (tmp_buffer[(i%oldnumlines)*oldcon_width])
@@ -675,8 +675,8 @@ static void CON_RecalcSize(void)
 	Z_Free(tmp_buffer);
 }
 
-                                                                            
-                                               
+/* Furthest useful scroll position: put the oldest retained line at the top,
+ * never a screenful of unused buffer space. */
 static size_t CON_MaxScroll(void)
 {
 	size_t visiblelines;
@@ -700,10 +700,10 @@ static void CON_ChangeHeight(void)
 
 	Lock_state();
 
-	minheight = 20 * con_scalefactor;	 
+	minheight = 20 * con_scalefactor;	// 20 = 8+8+4
 	charheight = 8 * con_scalefactor;
 
-
+	// toggle console in
 	if (cons_lines.value == 0)
 		con_destlines = 0;
 	else if (cons_lines.value > 0)
@@ -726,20 +726,20 @@ static void CON_ChangeHeight(void)
 	else if (con_destlines > vid.height)
 		con_destlines = vid.height;
 
-	con_destlines &= ~0x3;  
+	con_destlines &= ~0x3; // multiple of text row height
 
 	Unlock_state();
 }
 
-
-
+// Handles Console moves in/out of screen (per frame)
+//
 static void CON_MoveConsole(void)
 {
 	static fixed_t fracmovement = 0;
 
 	Lock_state();
 
-
+	// instant
 	if (!cons_speed.value)
 	{
 		con_curlines = con_destlines;
@@ -747,32 +747,32 @@ static void CON_MoveConsole(void)
 		return;
 	}
 
-
+	// Not instant - Increment fracmovement fractionally
 	fracmovement += FixedMul(cons_speed.value*vid.fdup, renderdeltatics);
 
-	if (con_curlines < con_destlines)  
+	if (con_curlines < con_destlines) // Move the console downwards
 	{
-		con_curlines += FixedInt(fracmovement);  
-		if (con_curlines > con_destlines)  
-			con_curlines = con_destlines;  
+		con_curlines += FixedInt(fracmovement); // Move by fracmovement's integer value
+		if (con_curlines > con_destlines) // If we surpassed the destination...
+			con_curlines = con_destlines; // ...clamp to it!
 	}
-	else  
+	else // Move the console upwards
 	{
 		con_curlines -= FixedInt(fracmovement);
 		if (con_curlines < con_destlines)
 			con_curlines = con_destlines;
 
-		if (con_destlines == 0)  
-			con_tick = 0;  
+		if (con_destlines == 0) // If the console is being closed, not just moved up...
+			con_tick = 0; // ...don't show the blinking cursor
 	}
 
-	fracmovement %= FRACUNIT;  
+	fracmovement %= FRACUNIT; // Reset fracmovement's integer value, but keep the fraction
 
 	Unlock_state();
 }
 
-
-
+// Clear time of console heads up messages
+//
 void CON_ClearHUD(void)
 {
 	INT32 i;
@@ -785,8 +785,8 @@ void CON_ClearHUD(void)
 	Unlock_state();
 }
 
-
-
+// Force console to move out immediately
+// note: con_ticker will set consoleready false
 void CON_ToggleOff(void)
 {
 	Lock_state();
@@ -818,8 +818,8 @@ boolean CON_Ready(void)
 	return ready;
 }
 
-
-
+// Console ticker: handles console move in/out, cursor blinking
+//
 void CON_Ticker(void)
 {
 	INT32 i;
@@ -827,18 +827,18 @@ void CON_Ticker(void)
 
 	Lock_state();
 
-	minheight = 20 * con_scalefactor;	 
+	minheight = 20 * con_scalefactor;	// 20 = 8+8+4
 
-
+	// cursor blinking
 	con_tick++;
 	con_tick &= 7;
 
-
+	// console key was pushed
 	if (consoletoggle)
 	{
 		consoletoggle = false;
 
-
+		// toggle off console
 		if (con_destlines > 0)
 		{
 			con_destlines = 0;
@@ -847,20 +847,20 @@ void CON_Ticker(void)
 		}
 		else
 		{
-			 
+			/* Reopening explicitly returns to the newest output. */
 			con_scrollup = 0;
 			CON_ChangeHeight();
 			I_SetMouseGrab(false);
 		}
 	}
 
-
+	// check if console ready for prompt
 	if (con_destlines >= minheight)
 		consoleready = true;
 	else
 		consoleready = false;
 
-
+	// make overlay messages disappear after a while
 	for (i = 0; i < con_hudlines; i++)
 	{
 		if (con_hudtime[i])
@@ -870,12 +870,12 @@ void CON_Ticker(void)
 	Unlock_state();
 }
 
-
-
-
-
-
-
+//
+// ----
+//
+// Shortcuts for adding and deleting characters, strings, and sections
+// Necessary due to moving cursor
+//
 
 static void CON_InputClear(void)
 {
@@ -893,9 +893,9 @@ static void CON_InputSetString(const char *c)
 
 	Lock_state();
 
-	                                                                          
-                                                                            
-                                                  
+	/* c may point inside the current input line (history/autocomplete edits).
+	 * Copying with strcpy after clearing the destination destroys that source,
+	 * and strcpy itself is undefined for overlap. */
 	newlen = strlen(c);
 	if (newlen >= CON_MAXPROMPTCHARS)
 		newlen = CON_MAXPROMPTCHARS - 1;
@@ -985,14 +985,14 @@ static void CON_InputDelChar(void)
 	Unlock_state();
 }
 
-                                                                              
-                                                                        
-                                                                  
+/* Open the web address under the mouse in the expanded console. Only explicit
+ * HTTP(S) links are accepted. If Windows cannot open it, keep it on the
+ * clipboard so the player can paste it into a browser instead. */
 static boolean CON_OpenURLAtCursor(void)
 {
-	                                                                          
-                                                                      
-                                                                  
+	/* Only the clicked display row is inspected here.  Do not size this local
+	 * scratch buffer from the entire scrollback allocation: the expanded
+	 * history is several MiB and would overflow the thread stack. */
 	char line[1024];
 	char url[1024];
 	UINT8 *source;
@@ -1063,15 +1063,15 @@ static boolean CON_OpenURLAtCursor(void)
 	return false;
 }
 
+//
+// ----
+//
 
-
-
-
-
-
+// Handles console key input
+//
 boolean CON_Responder(event_t *ev)
 {
-
+	// sequential completions a la 4dos
 	static char completioncmd[80 + sizeof("find ")] = "find ";
 	static char *completion = &completioncmd[sizeof("find ")-1];
 
@@ -1087,7 +1087,7 @@ boolean CON_Responder(event_t *ev)
 	if (chat_on)
 		return false;
 
-
+	// let go keyup events, don't eat them
 	if (ev->type != ev_keydown && ev->type != ev_text && ev->type != ev_console)
 	{
 		return false;
@@ -1095,7 +1095,7 @@ boolean CON_Responder(event_t *ev)
 
 	key = ev->key;
 
-
+	// check for console toggle key
 	if (ev->type == ev_keydown)
 	{
 		if (modeattacking || metalrecording || marathonmode)
@@ -1103,13 +1103,13 @@ boolean CON_Responder(event_t *ev)
 
 		if ((key == gamecontrol[GC_CONSOLE][0] || key == gamecontrol[GC_CONSOLE][1]) && !shiftdown)
 		{
-			I_SetTextInputMode(con_destlines == 0);  
+			I_SetTextInputMode(con_destlines == 0); // inverse, since this is changed next tic.
 			consoletoggle = true;
 			return true;
 		}
 
-
-		if (!consoleready && key < NUMINPUTS)  
+		// check other keys only if console prompt is active
+		if (!consoleready && key < NUMINPUTS) // metzgermeister: boundary check!!
 		{
 			if (!menuactive && bindtable[key])
 			{
@@ -1120,7 +1120,7 @@ boolean CON_Responder(event_t *ev)
 			return false;
 		}
 
-
+		// escape key toggle off console
 		if (key == KEY_ESCAPE)
 		{
 			I_SetTextInputMode(false);
@@ -1135,7 +1135,7 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-
+	// Always eat ctrl/shift/alt if console open, so the menu doesn't get ideas
 	if (key == KEY_LSHIFT || key == KEY_RSHIFT
 	 || key == KEY_LCTRL || key == KEY_RCTRL
 	 || key == KEY_LALT || key == KEY_RALT)
@@ -1174,7 +1174,7 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-
+	// backspace and delete command prompt
 	if (input_sel != input_cur)
 	{
 		if (key == KEY_BACKSPACE || key == KEY_DEL)
@@ -1212,10 +1212,10 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-
+	// ctrl modifier -- changes behavior, adds shortcuts
 	if (ctrldown)
 	{
-
+		// show all cvars/commands that match what we have inputted
 		if (key == KEY_TAB)
 		{
 			if (!completion[0])
@@ -1228,14 +1228,14 @@ boolean CON_Responder(event_t *ev)
 			completion[0] = 0;
 			return true;
 		}
+		// ---
 
-
-		if (key == KEY_HOME)  
+		if (key == KEY_HOME) // oldest text in buffer
 		{
 			con_scrollup = CON_MaxScroll();
 			return true;
 		}
-		else if (key == KEY_END)  
+		else if (key == KEY_END) // most recent text in buffer
 		{
 			con_scrollup = 0;
 			return true;
@@ -1243,7 +1243,7 @@ boolean CON_Responder(event_t *ev)
 
 		if (key == 'x' || key == 'X')
 		{
-			if (input_sel == input_cur)  
+			if (input_sel == input_cur) // Don't replace the clipboard without a text selection
 				return true;
 			else if (input_sel > input_cur)
 				I_ClipboardCopy(&inputlines[inputline][input_cur], input_sel-input_cur);
@@ -1255,7 +1255,7 @@ boolean CON_Responder(event_t *ev)
 		}
 		else if (key == 'c' || key == 'C')
 		{
-			if (input_sel == input_cur)  
+			if (input_sel == input_cur) // Don't replace the clipboard without a text selection
 				return true;
 			else if (input_sel > input_cur)
 				I_ClipboardCopy(&inputlines[inputline][input_cur], input_sel-input_cur);
@@ -1274,7 +1274,7 @@ boolean CON_Responder(event_t *ev)
 			return true;
 		}
 
-
+		// Select all
 		if (key == 'a' || key == 'A')
 		{
 			input_sel = 0;
@@ -1282,17 +1282,17 @@ boolean CON_Responder(event_t *ev)
 			return true;
 		}
 
-
-
-		return true; 
+		// ...why shouldn't it eat the key? if it doesn't, it just means you
+		// can control Sonic from the console, which is silly
+		return true;//return false;
 	}
 
-
+	// command completion forward (tab) and backward (shift-tab)
 	if (key == KEY_TAB)
 	{
+		// sequential command completion forward and backward
 
-
-
+		// remember typing for several completions (a-la-4dos)
 		if (!completion[0])
 		{
 			if (!input_len || input_len >= 40 || strchr(inputlines[inputline], ' '))
@@ -1361,7 +1361,7 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-
+	// move up (backward) in console textbuffer
 	if (key == KEY_PGUP)
 	{
 		if (con_scrollup < CON_MaxScroll())
@@ -1389,17 +1389,17 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-
-
+	// At this point we're messing with input
+	// Clear completion
 	completion[0] = 0;
 
-
+	// command enter
 	if (key == KEY_ENTER)
 	{
 		if (!input_len)
 			return true;
 
-
+		// push the command
 		COM_BufAddText(inputlines[inputline]);
 		COM_BufAddText("\n");
 
@@ -1412,16 +1412,16 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-
+	// move back in input history
 	if (key == KEY_UPARROW)
 	{
-
+		// copy one of the previous inputlines to the current
 		do
-			inputhist = (inputhist - 1) & 31;  
+			inputhist = (inputhist - 1) & 31; // cycle back
 		while (inputhist != inputline && !inputlines[inputhist][0]);
 
-
-
+		// stop at the last history input line, which is the
+		// current line + 1 because we cycle through the 32 input lines
 		if (inputhist == inputline)
 			inputhist = (inputline + 1) & 31;
 
@@ -1429,7 +1429,7 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-
+	// move forward in input history
 	if (key == KEY_DOWNARROW)
 	{
 		if (inputhist == inputline)
@@ -1438,7 +1438,7 @@ boolean CON_Responder(event_t *ev)
 			inputhist = (inputhist + 1) & 31;
 		while (inputhist != inputline && !inputlines[inputhist][0]);
 
-
+		// back to currentline
 		if (inputhist == inputline)
 			CON_InputClear();
 		else
@@ -1446,7 +1446,7 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-
+	// allow people to use keypad in console (good for typing IP addresses) - Calum
 	if (key >= KEY_KEYPAD7 && key <= KEY_KPADDEL)
 	{
 		char keypad_translation[] = {'7','8','9','-',
@@ -1459,7 +1459,7 @@ boolean CON_Responder(event_t *ev)
 	else if (key == KEY_KPADSLASH)
 		key = '/';
 
-
+	// enter a char into the command prompt
 	if (key < 32 || key > 127)
 		return true;
 
@@ -1471,11 +1471,11 @@ boolean CON_Responder(event_t *ev)
 	return true;
 }
 
-
-
+// Insert a new line in the console text buffer
+//
 static void CON_Linefeed(void)
 {
-
+	// set time for heads up messages
 	if (con_hudlines)
 		con_hudtime[con_cy%con_hudlines] = cons_hudtime.value*TICRATE;
 
@@ -1488,24 +1488,24 @@ static void CON_Linefeed(void)
 	memset(con_line, ' ', con_width);
 }
 
-
+// Outputs text into the console text buffer
 static void CON_Print(char *msg)
 {
 	size_t l;
 	size_t oldscroll;
 	size_t maxscroll;
 	size_t oldcy;
-	INT32 controlchars = 0;  
-	char color = '\x80';   
+	INT32 controlchars = 0; // for color changing
+	char color = '\x80';  // keep color across lines
 
 	if (msg == NULL)
 		return;
 
-	if (*msg == '\3')  
+	if (*msg == '\3') // chat text, makes ding sound
 		S_StartSound(NULL, sfx_radio);
-	else if (*msg == '\4')  
+	else if (*msg == '\4') // chat action, dings and is in yellow
 	{
-		*msg = '\x82';  
+		*msg = '\x82'; // yellow
 		S_StartSound(NULL, sfx_radio);
 	}
 
@@ -1521,7 +1521,7 @@ static void CON_Print(char *msg)
 
 	while (*msg)
 	{
-
+		// skip non-printable characters and white spaces
 		while (*msg && *msg <= ' ')
 		{
 			if (*msg & 0x80)
@@ -1530,7 +1530,7 @@ static void CON_Print(char *msg)
 				controlchars++;
 				continue;
 			}
-			else if (*msg == '\r')  
+			else if (*msg == '\r') // carriage return
 			{
 				if (con_historylines > 1)
 					con_historylines--;
@@ -1539,13 +1539,13 @@ static void CON_Print(char *msg)
 				color = '\x80';
 				controlchars = 0;
 			}
-			else if (*msg == '\n')  
+			else if (*msg == '\n') // linefeed
 			{
 				CON_Linefeed();
 				con_line[con_cx++] = color;
 				controlchars = 1;
 			}
-			else if (*msg == ' ')  
+			else if (*msg == ' ') // space
 			{
 				con_line[con_cx++] = ' ';
 				if (con_cx - controlchars >= con_width-11)
@@ -1557,7 +1557,7 @@ static void CON_Print(char *msg)
 			}
 			else if (*msg == '\t')
 			{
-
+				// adds tab spaces for nice layout in console
 
 				do
 				{
@@ -1577,11 +1577,11 @@ static void CON_Print(char *msg)
 		if (*msg == '\0')
 			break;
 
-
+		// printable character
 		for (l = 0; l < (con_width-11) && msg[l] > ' '; l++)
 			;
 
-
+		// word wrap
 		if ((con_cx - controlchars) + l > con_width-11)
 		{
 			CON_Linefeed();
@@ -1589,13 +1589,13 @@ static void CON_Print(char *msg)
 			controlchars = 1;
 		}
 
-
+		// a word at a time
 		for (; l > 0; l--)
 			con_line[con_cx++] = *(msg++);
 	}
 
-	                                                                          
-                                                                          
+	/* Keep the same text under the reader's eyes while they are reviewing old
+	 * output. New output follows only if they were already at the bottom. */
 	if (oldscroll && con_cy > oldcy)
 	{
 		maxscroll = CON_MaxScroll();
@@ -1612,23 +1612,23 @@ void CON_LogMessage(const char *msg)
 
 	for (t = txt; *p != '\0'; p++)
 	{
-		if (*p == '\n' || *p >= ' ')  
+		if (*p == '\n' || *p >= ' ') // don't log or console print CON_Print's control characters
 			*t++ = *p;
 
 		if (t >= e)
 		{
-			*t = '\0';  
-			I_OutputMsg("%s", txt);  
-			t = txt;  
-			memset(txt,'\0', sizeof (txt));  
+			*t = '\0'; //end of string
+			I_OutputMsg("%s", txt); //print string
+			t = txt; //reset t pointer
+			memset(txt,'\0', sizeof (txt)); //reset txt
 		}
 	}
-	*t = '\0';  
+	*t = '\0'; //end of string
 	I_OutputMsg("%s", txt);
 }
 
-
-
+// Console print! Wahooo! Lots o fun!
+//
 
 void CONS_Printf(const char *fmt, ...)
 {
@@ -1645,10 +1645,10 @@ void CONS_Printf(const char *fmt, ...)
 	vsnprintf(txt, 8192, fmt, argptr);
 	va_end(argptr);
 
-
+	// echo console prints to log file
 	DEBFILE(txt);
 
-
+	// write message in con text buffer
 	if (con_started)
 		CON_Print(txt);
 
@@ -1660,11 +1660,11 @@ void CONS_Printf(const char *fmt, ...)
 
 	Unlock_state();
 
-
+	// if not in display loop, force screen update
 	if (refresh)
 	{
-		CON_Drawer();  
-		I_FinishUpdate();  
+		CON_Drawer(); // here we display the console text
+		I_FinishUpdate(); // page flip or blit buffer
 	}
 }
 
@@ -1685,7 +1685,7 @@ void CONS_Alert(alerttype_t level, const char *fmt, ...)
 	switch (level)
 	{
 		case CONS_NOTICE:
-
+			// no notice for notices, hehe
 			CONS_Printf("\x83" "%s" "\x80 ", M_GetText("NOTICE:"));
 			break;
 		case CONS_WARNING:
@@ -1698,8 +1698,8 @@ void CONS_Alert(alerttype_t level, const char *fmt, ...)
 			break;
 	}
 
-
-
+	// I am lazy and I feel like just letting CONS_Printf take care of things.
+	// Is that okay?
 	CONS_Printf("%s", txt);
 }
 
@@ -1720,14 +1720,14 @@ void CONS_Debug(INT32 debugflags, const char *fmt, ...)
 	vsnprintf(txt, 8192, fmt, argptr);
 	va_end(argptr);
 
-
+	// Again I am lazy, oh well
 	CONS_Printf("%s", txt);
 }
 
 
-
-
-
+// Print an error message, and wait for ENTER key to continue.
+// To make sure the user has seen the message
+//
 void CONS_Error(const char *msg)
 {
 #if defined(RPC_NO_WINDOWS_H) && defined(_WINDOWS)
@@ -1737,20 +1737,20 @@ void CONS_Error(const char *msg)
 		return;
 	}
 #endif
-	CONS_Printf("\x82%s", msg);  
+	CONS_Printf("\x82%s", msg); // write error msg in different colour
 	CONS_Printf(M_GetText("Press ENTER to continue\n"));
 
-
+	// dirty quick hack, but for the good cause
 	while (I_GetKey() != KEY_ENTER)
 		I_OsPolling();
 }
 
+//======================================================================
+//                          CONSOLE DRAW
+//======================================================================
 
-
-
-
-
-
+// draw console prompt line
+//
 static void CON_DrawInput(void)
 {
 	INT32 charwidth = (INT32)con_scalefactor << 3;
@@ -1769,34 +1769,34 @@ static void CON_DrawInput(void)
 		c = 0;
 		clen = input_len;
 	}
-	else  
+	else // input line scrolls left if it gets too long
 	{
-		clen -= 2;  
+		clen -= 2; // There will always be some extra truncation -- but where is what we'll find out
 
 		if (input_cur <= clen/2)
 		{
-
+			// Close enough to right edge to show all
 			c = 0;
-
+			// Always will truncate right side from this position, so always draw right ellipsis
 			rellip = 1;
 		}
 		else
 		{
-
-
+			// Cursor in the middle (or right side) of input
+			// Move over for the ellipsis
 			c = input_cur - (clen/2) + 2;
 			x += charwidth*2;
 			lellip = 1;
 
 			if (c + clen >= input_len)
 			{
-
-
+				// Cursor in the right side of input
+				// We were too far over, so move back
 				c = input_len - clen;
 			}
 			else
 			{
-
+				// Cursor in the middle -- ellipses on both sides
 				clen -= 2;
 				rellip = 1;
 			}
@@ -1838,7 +1838,7 @@ static void CON_DrawInput(void)
 	}
 }
 
-
+// draw the last lines of console text to the top of the screen
 static void CON_DrawHudlines(void)
 {
 	UINT8 *p;
@@ -1852,7 +1852,7 @@ static void CON_DrawHudlines(void)
 		return;
 
 	if (chat_on && OLDCHAT)
-		y = charheight;  
+		y = charheight; // leave place for chat input in the first row of text (only do it if consolechat is on.)
 	else
 		y = 0;
 
@@ -1870,7 +1870,7 @@ static void CON_DrawHudlines(void)
 
 		for (c = 0, x = 0; c < con_width; c++, x += charwidth, p++)
 		{
-			while (*p & 0x80)  
+			while (*p & 0x80) // Graue 06-19-2004
 			{
 				charflags = (*p & 0x7f) << V_CHARCOLORSHIFT;
 				p++;
@@ -1879,27 +1879,27 @@ static void CON_DrawHudlines(void)
 			if (c >= con_width)
 				break;
 			if (*p < FONTSTART)
-				; 
+				;//charwidth = 4 * con_scalefactor;
 			else
 			{
-
+				//charwidth = (hu_font.chars['A'-FONTSTART]->width) * con_scalefactor;
 				V_DrawCharacter(x, y, (INT32)(*p) | charflags | cv_constextsize.value | V_NOSCALESTART, true);
 			}
 		}
 
-
+		//V_DrawCharacter(x, y, (p[c]&0xff) | cv_constextsize.value | V_NOSCALESTART, true);
 		y += charheight;
 	}
 }
 
-
+// Lactozilla: Draws the console's background picture.
 static void CON_DrawBackpic(void)
 {
 	patch_t *con_backpic;
 	lumpnum_t piclump;
 	int x, w, h;
 
-
+	// Get the lumpnum for CONSBACK, STARTUP (Only during game startup) or fallback into MISSING.
 	if (con_startup)
 		piclump = W_CheckNumForPatchName("STARTUP");
 	else
@@ -1908,18 +1908,18 @@ static void CON_DrawBackpic(void)
 	if (piclump == LUMPERROR)
 		piclump = W_GetNumForPatchName("MISSING");
 
-
+	// Cache the patch.
 	con_backpic = W_CachePatchNum(piclump, PU_PATCH);
 	if (con_backpic == NULL)
 		return;
 
-
+	// Center the backpic, and draw a vertically cropped patch.
 	w = con_backpic->width * vid.dup;
 	x = (vid.width / 2) - (w / 2);
 	h = con_curlines/vid.dup;
 
-
-
+	// If the patch doesn't fill the entire screen,
+	// then fill the sides with a solid color.
 	if (x > 0)
 	{
 		column_t *column = &con_backpic->columns[0];
@@ -1927,23 +1927,23 @@ static void CON_DrawBackpic(void)
 		{
 			UINT8 *source = column->pixels;
 			INT32 color = (source[0] | V_NOSCALESTART);
-
+			// left side
 			V_DrawFill(0, 0, x, con_curlines, color);
-
+			// right side
 			V_DrawFill((x + w), 0, (vid.width - w), con_curlines, color);
 		}
 	}
 
-
+	// Draw the patch.
 	V_DrawCroppedPatch(x << FRACBITS, 0, FRACUNIT, FRACUNIT, V_NOSCALESTART, con_backpic, NULL,
 			0, (BASEVIDHEIGHT - h) << FRACBITS, BASEVIDWIDTH << FRACBITS, h << FRACBITS);
 
-
+	// Unlock the cached patch.
 	W_UnlockCachedPatch(con_backpic);
 }
 
-
-
+// draw the console background, text, and prompt if enough place
+//
 static void CON_DrawConsole(void)
 {
 	UINT8 *p;
@@ -1952,27 +1952,27 @@ static void CON_DrawConsole(void)
 	INT32 charflags = 0;
 	INT32 charwidth = (INT32)con_scalefactor << 3;
 	INT32 charheight = charwidth;
-	INT32 minheight = 20 * con_scalefactor;	 
+	INT32 minheight = 20 * con_scalefactor;	// 20 = 8+8+4
 
 	if (con_curlines <= 0)
 		return;
 
-
+	// draw console background
 	if (cons_backpic.value == 1 || con_forcepic)
 		CON_DrawBackpic();
 	else if (cons_backpic.value == 0)
 	{
-
+		// inu: no more width (was always 0 and vid.width)
 		if (rendermode != render_none)
-			V_DrawFadeConsBack(con_curlines);  
+			V_DrawFadeConsBack(con_curlines); // translucent background
 	}
 
-
+	// draw console text lines from top to bottom
 	if (con_curlines >= minheight)
 	{
 		i = con_cy - con_scrollup;
 
-
+		// skip the last empty line due to the cursor being at the start of a new line
 		i--;
 
 		i -= (con_curlines - minheight) / charheight;
@@ -2005,13 +2005,13 @@ static void CON_DrawConsole(void)
 		}
 	}
 
-
+	// draw prompt if enough place (not while game startup)
 	if ((con_curlines >= (minheight-charheight)) && !con_startup)
 		CON_DrawInput();
 }
 
-
-
+// Console refresh drawer, call each frame
+//
 void CON_Drawer(void)
 {
 	Lock_state();
@@ -2029,7 +2029,7 @@ void CON_Drawer(void)
 			CON_ClearHUD();
 	}
 
-
+	// console movement
 	if (con_curlines != con_destlines)
 		CON_MoveConsole();
 

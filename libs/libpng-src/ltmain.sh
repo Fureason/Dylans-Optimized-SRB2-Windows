@@ -1,10 +1,10 @@
 #! /bin/sh
+## DO NOT EDIT - This file generated from ./build-aux/ltmain.in
+##               by inline-source v2014-01-03.01
 
-
-
-
-
-
+# libtool (GNU libtool) 2.4.6
+# Provide generalized library-building support services.
+# Written by Gordon Matzigkeit <gord@gnu.ai.mit.edu>, 1996
 
 # Copyright (C) 1996-2015 Free Software Foundation, Inc.
 # This is free software; see the source for copying conditions.  There is NO
@@ -35,39 +35,39 @@ VERSION=2.4.6
 package_revision=2.4.6
 
 
+## ------ ##
+## Usage. ##
+## ------ ##
+
+# Run './libtool --help' for help with using this script from the
+# command line.
 
 
+## ------------------------------- ##
+## User overridable command paths. ##
+## ------------------------------- ##
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+# After configure completes, it has a better idea of some of the
+# shell tools we need than the defaults used by the functions shared
+# with bootstrap, so set those here where they can still be over-
+# ridden by the user, but otherwise take precedence.
 
 : ${AUTOCONF="autoconf"}
 : ${AUTOMAKE="automake"}
 
 
+## -------------------------- ##
+## Source external libraries. ##
+## -------------------------- ##
 
+# Much of our low-level functionality needs to be sourced from external
+# libraries, which are installed to $pkgauxdir.
 
+# Set a version string for this script.
+scriptversion=2015-01-20.17; # UTC
 
-
-
-
-
-
-scriptversion=2015-01-20.17;  
-
-
-
+# General shell script boiler plate, and helper functions.
+# Written by Gary V. Vaughan, 2004
 
 # Copyright (C) 2004-2015 Free Software Foundation, Inc.
 # This is free software; see the source for copying conditions.  There is NO
@@ -91,42 +91,42 @@ scriptversion=2015-01-20.17;
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+# Please report bugs or propose patches to gary@gnu.org.
 
 
+## ------ ##
+## Usage. ##
+## ------ ##
+
+# Evaluate this file near the top of your script to gain access to
+# the functions and variables defined here:
+#
+#   . `echo "$0" | ${SED-sed} 's|[^/]*$||'`/build-aux/funclib.sh
+#
+# If you need to override any of the default environment variable
+# settings, do that before evaluating this file.
 
 
+## -------------------- ##
+## Shell normalisation. ##
+## -------------------- ##
 
+# Some shells need a little help to be as Bourne compatible as possible.
+# Before doing anything else, make sure all that help has been provided!
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-DUALCASE=1; export DUALCASE  
+DUALCASE=1; export DUALCASE # for MKS sh
 if test -n "${ZSH_VERSION+set}" && (emulate sh) >/dev/null 2>&1; then :
   emulate sh
   NULLCMD=:
-
-
+  # Pre-4.2 versions of Zsh do word splitting on ${1+"$@"}, which
+  # is contrary to our usage.  Disable this feature.
   alias -g '${1+"$@"}'='"$@"'
   setopt NO_GLOB_SUBST
 else
   case `(set -o) 2>/dev/null` in *posix*) set -o posix ;; esac
 fi
 
-
+# NLS nuisances: We save the old values in case they are required later.
 _G_user_locale=
 _G_safe_locale=
 for _G_var in LANG LANGUAGE LC_ALL LC_CTYPE LC_COLLATE LC_MESSAGES
@@ -140,16 +140,16 @@ do
 	fi"
 done
 
-
+# CDPATH.
 (unset CDPATH) >/dev/null 2>&1 && unset CDPATH
 
-
+# Make sure IFS has a sensible default
 sp=' '
 nl='
 '
 IFS="$sp	$nl"
 
-
+# There are apparently some retarded systems that use ';' as a PATH separator!
 if test "${PATH_SEPARATOR+set}" != set; then
   PATH_SEPARATOR=:
   (PATH='/bin;/bin'; FPATH=$PATH; sh -c :) >/dev/null 2>&1 && {
@@ -160,30 +160,30 @@ fi
 
 
 
+## ------------------------- ##
+## Locate command utilities. ##
+## ------------------------- ##
 
 
-
-
-
-
-
-
+# func_executable_p FILE
+# ----------------------
+# Check that FILE is an executable regular file.
 func_executable_p ()
 {
     test -f "$1" && test -x "$1"
 }
 
 
-
-
-
-
-
-
-
-
-
-
+# func_path_progs PROGS_LIST CHECK_FUNC [PATH]
+# --------------------------------------------
+# Search for either a program that responds to --version with output
+# containing "GNU", or else returned by CHECK_FUNC otherwise, by
+# trying all the directories in PATH with each of the elements of
+# PROGS_LIST.
+#
+# CHECK_FUNC should accept the path to a candidate program, and
+# set $func_check_prog_result if it truncates its output less than
+# $_G_path_prog_max characters.
 func_path_progs ()
 {
     _G_progs_list=$1
@@ -218,13 +218,13 @@ func_path_progs ()
 }
 
 
+# We want to be able to use the functions in this file before configure
+# has figured out where the best binaries are kept, which means we have
+# to search for them ourselves - except when the results are already set
+# where we skip the searches.
 
-
-
-
-
-
-
+# Unless the user overrides by setting SED, search the path for either GNU
+# sed, or the sed that truncates its output the least.
 test -z "$SED" && {
   _G_sed_script=s/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/
   for _G_i in 1 2 3 4 5 6 7; do
@@ -249,11 +249,11 @@ test -z "$SED" && {
       diff conftest.out conftest.nl >/dev/null 2>&1 || break
       _G_count=`expr $_G_count + 1`
       if test "$_G_count" -gt "$_G_path_prog_max"; then
-
+        # Best one so far, save it but keep looking for a better one
         func_check_prog_result=$_G_path_prog
         _G_path_prog_max=$_G_count
       fi
-
+      # 10*(2^10) chars as input seems more than enough
       test 10 -lt "$_G_count" && break
     done
     rm -f conftest.in conftest.tmp conftest.nl conftest.out
@@ -265,8 +265,8 @@ test -z "$SED" && {
 }
 
 
-
-
+# Unless the user overrides by setting GREP, search the path for either GNU
+# grep, or the grep that truncates its output the least.
 test -z "$GREP" && {
   func_check_prog_grep ()
   {
@@ -285,11 +285,11 @@ test -z "$GREP" && {
       diff conftest.out conftest.nl >/dev/null 2>&1 || break
       _G_count=`expr $_G_count + 1`
       if test "$_G_count" -gt "$_G_path_prog_max"; then
-
+        # Best one so far, save it but keep looking for a better one
         func_check_prog_result=$_G_path_prog
         _G_path_prog_max=$_G_count
       fi
-
+      # 10*(2^10) chars as input seems more than enough
       test 10 -lt "$_G_count" && break
     done
     rm -f conftest.in conftest.tmp conftest.nl conftest.out
@@ -300,14 +300,14 @@ test -z "$GREP" && {
 }
 
 
+## ------------------------------- ##
+## User overridable command paths. ##
+## ------------------------------- ##
 
-
-
-
-
-
-
-
+# All uppercase variable names are used for environment variables.  These
+# variables can be overridden by the user before calling a script that
+# uses them if a suitable command of that name is not already available
+# in the command search PATH.
 
 : ${CP="cp -f"}
 : ${ECHO="printf %s\n"}
@@ -321,34 +321,34 @@ test -z "$GREP" && {
 : ${SHELL="${CONFIG_SHELL-/bin/sh}"}
 
 
-
-
-
+## -------------------- ##
+## Useful sed snippets. ##
+## -------------------- ##
 
 sed_dirname='s|/[^/]*$||'
 sed_basename='s|^.*/||'
 
-
-
+# Sed substitution that helps us do robust quoting.  It backslashifies
+# metacharacters that are still active within double-quoted strings.
 sed_quote_subst='s|\([`"$\\]\)|\\\1|g'
 
-
+# Same as above, but do not quote variable references.
 sed_double_quote_subst='s/\(["`\\]\)/\\\1/g'
 
-
-
+# Sed substitution that turns a string into a regex matching for the
+# string literally.
 sed_make_literal_regex='s|[].[^$\\*\/]|\\&|g'
 
-
-
-
+# Sed substitution that converts a w32 file name or path
+# that contains forward slashes, into one that contains
+# (escaped) backslashes.  A very naive implementation.
 sed_naive_backslashify='s|\\\\*|\\|g;s|/|\\|g;s|\\|\\\\|g'
 
-
-
-
-
-
+# Re-'\' parameter expansions in output of sed_double_quote_subst that
+# were '\'-ed in input to the same.  If an odd number of '\' preceded a
+# '$' in input to sed_double_quote_subst, that '$' was protected from
+# expansion.  Since each input '\' is now two '\'s, look for any number
+# of runs of four '\'s followed by two '\'s and then a '$'.  '\' that '$'.
 _G_bs='\\'
 _G_bs2='\\\\'
 _G_bs4='\\\\\\\\'
@@ -361,56 +361,56 @@ sed_double_backslash="\
   s/\n//g"
 
 
+## ----------------- ##
+## Global variables. ##
+## ----------------- ##
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Except for the global variables explicitly listed below, the following
+# functions in the '^func_' namespace, and the '^require_' namespace
+# variables initialised in the 'Resource management' section, sourcing
+# this file will not pollute your global namespace with anything
+# else. There's no portable way to scope variables in Bourne shell
+# though, so actually running these functions will sometimes place
+# results into a variable named after the function, and often use
+# temporary variables in the '^_G_' namespace. If you are careful to
+# avoid using those namespaces casually in your sourcing script, things
+# should continue to work as you expect. And, of course, you can freely
+# overwrite any of the functions or variables defined here before
+# calling anything to customize them.
 
 EXIT_SUCCESS=0
 EXIT_FAILURE=1
-EXIT_MISMATCH=63   
-EXIT_SKIP=77	   
+EXIT_MISMATCH=63  # $? = 63 is used to indicate version mismatch to missing.
+EXIT_SKIP=77	  # $? = 77 is used to indicate a skipped test to automake.
 
-
-
-
-
-
+# Allow overriding, eg assuming that you follow the convention of
+# putting '$debug_cmd' at the start of all your functions, you can get
+# bash to show function call trace with:
+#
+#    debug_cmd='eval echo "${FUNCNAME[0]} $*" >&2' bash your-script-name
 debug_cmd=${debug_cmd-":"}
 exit_cmd=:
 
-
-
-
-
-
-
-
+# By convention, finish your script with:
+#
+#    exit $exit_status
+#
+# so that you can set exit_status to non-zero if you want to indicate
+# something went wrong during execution without actually bailing out at
+# the point of failure.
 exit_status=$EXIT_SUCCESS
 
-
-
-
-
-
+# Work around backward compatibility issue on IRIX 6.5. On IRIX 6.4+, sh
+# is ksh but when the shell is invoked as "sh" and the current value of
+# the _XPG environment variable is not equal to 1 (one), the special
+# positional parameter $0, within a function call, is the name of the
+# function.
 progpath=$0
 
-
+# The name of this program.
 progname=`$ECHO "$progpath" |$SED "$sed_basename"`
 
-
+# Make sure we have an absolute progpath for reexecution:
 case $progpath in
   [\\/]*|[A-Za-z]:\\*) ;;
   *[\\/]*)
@@ -432,72 +432,72 @@ case $progpath in
 esac
 
 
+## ----------------- ##
+## Standard options. ##
+## ----------------- ##
 
-
-
-
-
-
-
+# The following options affect the operation of the functions defined
+# below, and should be set appropriately depending on run-time para-
+# meters passed on the command line.
 
 opt_dry_run=false
 opt_quiet=false
 opt_verbose=false
 
-
-
-
+# Categories 'all' and 'none' are always available.  Append any others
+# you will pass as the first argument to func_warning from your own
+# code.
 warning_categories=
 
-
-
-
+# By default, display warnings according to 'opt_warning_types'.  Set
+# 'warning_func'  to ':' to elide all warnings, or func_fatal_error to
+# treat the next displayed warning as a fatal error.
 warning_func=func_warn_and_continue
 
-
-
-
+# Set to 'all' to display all warnings, 'none' to suppress all
+# warnings, or a space delimited list of some subset of
+# 'warning_categories' to display only the listed warnings.
 opt_warning_types=all
 
 
+## -------------------- ##
+## Resource management. ##
+## -------------------- ##
+
+# This section contains definitions for functions that each ensure a
+# particular resource (a file, or a non-empty configuration variable for
+# example) is available, and if appropriate to extract default values
+# from pertinent package files. Call them using their associated
+# 'require_*' variable to ensure that they are executed, at most, once.
+#
+# It's entirely deliberate that calling these functions can set
+# variables that don't obey the namespace limitations obeyed by the rest
+# of this file, in order that that they be as useful as possible to
+# callers.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# require_term_colors
+# -------------------
+# Allow display of bold text on terminals that support it.
 require_term_colors=func_require_term_colors
 func_require_term_colors ()
 {
     $debug_cmd
 
     test -t 1 && {
-
-
-
+      # COLORTERM and USE_ANSI_COLORS environment variables take
+      # precedence, because most terminfo databases neglect to describe
+      # whether color sequences are supported.
       test -n "${COLORTERM+set}" && : ${USE_ANSI_COLORS="1"}
 
       if test 1 = "$USE_ANSI_COLORS"; then
-
+        # Standard ANSI escape sequences
         tc_reset='[0m'
         tc_bold='[1m';   tc_standout='[7m'
         tc_red='[31m';   tc_green='[32m'
         tc_blue='[34m';  tc_cyan='[36m'
       else
-
+        # Otherwise trust the terminfo database after all.
         test -n "`tput sgr0 2>/dev/null`" && {
           tc_reset=`tput sgr0`
           test -n "`tput bold 2>/dev/null`" && tc_bold=`tput bold`
@@ -515,27 +515,27 @@ func_require_term_colors ()
 }
 
 
+## ----------------- ##
+## Function library. ##
+## ----------------- ##
+
+# This section contains a variety of useful functions to call in your
+# scripts. Take note of the portable wrappers for features provided by
+# some modern shells, which will fall back to slower equivalents on
+# less featureful shells.
 
 
+# func_append VAR VALUE
+# ---------------------
+# Append VALUE onto the existing contents of VAR.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  # We should try to minimise forks, especially on Windows where they are
+  # unreasonably slow, so skip the feature probes when bash or zsh are
+  # being used:
   if test set = "${BASH_VERSION+set}${ZSH_VERSION+set}"; then
     : ${_G_HAVE_ARITH_OP="yes"}
     : ${_G_HAVE_XSI_OPS="yes"}
-
+    # The += operator was introduced in bash 3.1
     case $BASH_VERSION in
       [12].* | 3.0 | 3.0*) ;;
       *)
@@ -544,16 +544,16 @@ func_require_term_colors ()
     esac
   fi
 
-
-
-
+  # _G_HAVE_PLUSEQ_OP
+  # Can be empty, in which case the shell is probed, "yes" if += is
+  # useable or anything else if it does not work.
   test -z "$_G_HAVE_PLUSEQ_OP" \
     && (eval 'x=a; x+=" b"; test "a b" = "$x"') 2>/dev/null \
     && _G_HAVE_PLUSEQ_OP=yes
 
 if test yes = "$_G_HAVE_PLUSEQ_OP"
 then
-
+  # This is an XSI compatible shell, allowing a faster implementation...
   eval 'func_append ()
   {
     $debug_cmd
@@ -561,7 +561,7 @@ then
     eval "$1+=\$2"
   }'
 else
-
+  # ...otherwise fall back to using expr, which is often a shell builtin.
   func_append ()
   {
     $debug_cmd
@@ -571,10 +571,10 @@ else
 fi
 
 
-
-
-
-
+# func_append_quoted VAR VALUE
+# ----------------------------
+# Quote VALUE and append to the end of shell variable VAR, separated
+# by a space.
 if test yes = "$_G_HAVE_PLUSEQ_OP"; then
   eval 'func_append_quoted ()
   {
@@ -594,16 +594,16 @@ else
 fi
 
 
-
-
-
-
-
-
-
-
-
-
+# func_append_uniq VAR VALUE
+# --------------------------
+# Append unique VALUE onto the existing contents of VAR, assuming
+# entries are delimited by the first character of VALUE.  For example:
+#
+#   func_append_uniq options " --another-option option-argument"
+#
+# will only append to $options if " --another-option option-argument "
+# is not already present somewhere in $options already (note spaces at
+# each end implied by leading space in second argument).
 func_append_uniq ()
 {
     $debug_cmd
@@ -618,9 +618,9 @@ func_append_uniq ()
 }
 
 
-
-
-
+# func_arith TERM...
+# ------------------
+# Set func_arith_result to the result of evaluating TERMs.
   test -z "$_G_HAVE_ARITH_OP" \
     && (eval 'test 2 = $(( 1 + 1 ))') 2>/dev/null \
     && _G_HAVE_ARITH_OP=yes
@@ -642,14 +642,14 @@ else
 fi
 
 
-
-
-
-
+# func_basename FILE
+# ------------------
+# Set func_basename_result to FILE with everything up to and including
+# the last / stripped.
 if test yes = "$_G_HAVE_XSI_OPS"; then
-
-
-
+  # If this shell supports suffix pattern removal, then use it to avoid
+  # forking. Hide the definitions single quotes in case the shell chokes
+  # on unsupported syntax...
   _b='func_basename_result=${1##*/}'
   _d='case $1 in
         */*) func_dirname_result=${1%/*}$2 ;;
@@ -657,7 +657,7 @@ if test yes = "$_G_HAVE_XSI_OPS"; then
       esac'
 
 else
-
+  # ...otherwise fall back to using sed.
   _b='func_basename_result=`$ECHO "$1" |$SED "$sed_basename"`'
   _d='func_dirname_result=`$ECHO "$1"  |$SED "$sed_dirname"`
       if test "X$func_dirname_result" = "X$1"; then
@@ -675,10 +675,10 @@ eval 'func_basename ()
 }'
 
 
-
-
-
-
+# func_dirname FILE APPEND NONDIR_REPLACEMENT
+# -------------------------------------------
+# Compute the dirname of FILE.  If nonempty, add APPEND to the result,
+# otherwise set result to NONDIR_REPLACEMENT.
 eval 'func_dirname ()
 {
     $debug_cmd
@@ -687,18 +687,18 @@ eval 'func_dirname ()
 }'
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+# func_dirname_and_basename FILE APPEND NONDIR_REPLACEMENT
+# --------------------------------------------------------
+# Perform func_basename and func_dirname in a single function
+# call:
+#   dirname:  Compute the dirname of FILE.  If nonempty,
+#             add APPEND to the result, otherwise set result
+#             to NONDIR_REPLACEMENT.
+#             value returned in "$func_dirname_result"
+#   basename: Compute filename of FILE.
+#             value retuned in "$func_basename_result"
+# For efficiency, we do not delegate to the functions above but instead
+# duplicate the functionality here.
 eval 'func_dirname_and_basename ()
 {
     $debug_cmd
@@ -708,9 +708,9 @@ eval 'func_dirname_and_basename ()
 }'
 
 
-
-
-
+# func_echo ARG...
+# ----------------
+# Echo program name prefixed message.
 func_echo ()
 {
     $debug_cmd
@@ -727,19 +727,19 @@ func_echo ()
 }
 
 
-
-
-
+# func_echo_all ARG...
+# --------------------
+# Invoke $ECHO with all args, space-separated.
 func_echo_all ()
 {
     $ECHO "$*"
 }
 
 
-
-
-
-
+# func_echo_infix_1 INFIX ARG...
+# ------------------------------
+# Echo program name, followed by INFIX on the first line, with any
+# additional lines not showing INFIX.
 func_echo_infix_1 ()
 {
     $debug_cmd
@@ -751,7 +751,7 @@ func_echo_infix_1 ()
     _G_prefix="$progname: $_G_infix: "
     _G_message=$*
 
-
+    # Strip color escape sequences before counting printable length
     for _G_tc in "$tc_reset" "$tc_bold" "$tc_standout" "$tc_red" "$tc_green" "$tc_blue" "$tc_cyan"
     do
       test -n "$_G_tc" && {
@@ -759,7 +759,7 @@ func_echo_infix_1 ()
         _G_indent=`$ECHO "$_G_indent" | $SED "s|$_G_esc_tc||g"`
       }
     done
-    _G_indent="$progname: "`echo "$_G_indent" | $SED 's|.| |g'`"  "  
+    _G_indent="$progname: "`echo "$_G_indent" | $SED 's|.| |g'`"  " ## exclude from sc_prohibit_nested_quotes
 
     func_echo_infix_1_IFS=$IFS
     IFS=$nl
@@ -772,9 +772,9 @@ func_echo_infix_1 ()
 }
 
 
-
-
-
+# func_error ARG...
+# -----------------
+# Echo program name prefixed message to standard error.
 func_error ()
 {
     $debug_cmd
@@ -785,9 +785,9 @@ func_error ()
 }
 
 
-
-
-
+# func_fatal_error ARG...
+# -----------------------
+# Echo program name prefixed message to standard error, and exit.
 func_fatal_error ()
 {
     $debug_cmd
@@ -797,9 +797,9 @@ func_fatal_error ()
 }
 
 
-
-
-
+# func_grep EXPRESSION FILENAME
+# -----------------------------
+# Check whether EXPRESSION matches any line of FILENAME, without output.
 func_grep ()
 {
     $debug_cmd
@@ -808,10 +808,10 @@ func_grep ()
 }
 
 
-
-
-
-
+# func_len STRING
+# ---------------
+# Set func_len_result to the length of STRING. STRING may not
+# start with a hyphen.
   test -z "$_G_HAVE_XSI_OPS" \
     && (eval 'x=a/b/c;
       test 5aa/bb/cc = "${#x}${x%%/*}${x%/*}${x#*/}${x##*/}"') 2>/dev/null \
@@ -834,9 +834,9 @@ else
 fi
 
 
-
-
-
+# func_mkdir_p DIRECTORY-PATH
+# ---------------------------
+# Make sure the entire path to DIRECTORY-PATH is available.
 func_mkdir_p ()
 {
     $debug_cmd
@@ -846,21 +846,21 @@ func_mkdir_p ()
 
     if test -n "$_G_directory_path" && test : != "$opt_dry_run"; then
 
-
+      # Protect directory names starting with '-'
       case $_G_directory_path in
         -*) _G_directory_path=./$_G_directory_path ;;
       esac
 
-
+      # While some portion of DIR does not yet exist...
       while test ! -d "$_G_directory_path"; do
-
-
+        # ...make a list in topmost first order.  Use a colon delimited
+	# list incase some portion of path contains whitespace.
         _G_dir_list=$_G_directory_path:$_G_dir_list
 
-
+        # If the last portion added has no slash in it, the list is done
         case $_G_directory_path in */*) ;; *) break ;; esac
 
-
+        # ...otherwise throw away the child directory and loop
         _G_directory_path=`$ECHO "$_G_directory_path" | $SED -e "$sed_dirname"`
       done
       _G_dir_list=`$ECHO "$_G_dir_list" | $SED 's|:*$||'`
@@ -868,25 +868,25 @@ func_mkdir_p ()
       func_mkdir_p_IFS=$IFS; IFS=:
       for _G_dir in $_G_dir_list; do
 	IFS=$func_mkdir_p_IFS
-
-
-
+        # mkdir can fail with a 'File exist' error if two processes
+        # try to create one of the directories concurrently.  Don't
+        # stop in that case!
         $MKDIR "$_G_dir" 2>/dev/null || :
       done
       IFS=$func_mkdir_p_IFS
 
-
+      # Bail out if we (or some other process) failed to create a directory.
       test -d "$_G_directory_path" || \
         func_fatal_error "Failed to create '$1'"
     fi
 }
 
 
-
-
-
-
-
+# func_mktempdir [BASENAME]
+# -------------------------
+# Make a temporary directory that won't clash with other running
+# libtool processes, and avoids race conditions if possible.  If
+# given, BASENAME is the basename for that directory.
 func_mktempdir ()
 {
     $debug_cmd
@@ -894,15 +894,15 @@ func_mktempdir ()
     _G_template=${TMPDIR-/tmp}/${1-$progname}
 
     if test : = "$opt_dry_run"; then
-
+      # Return a directory name, but don't create it in dry-run mode
       _G_tmpdir=$_G_template-$$
     else
 
-
+      # If mktemp works, use that first and foremost
       _G_tmpdir=`mktemp -d "$_G_template-XXXXXXXX" 2>/dev/null`
 
       if test ! -d "$_G_tmpdir"; then
-
+        # Failing that, at least try and use $RANDOM to avoid a race
         _G_tmpdir=$_G_template-${RANDOM-0}$$
 
         func_mktempdir_umask=`umask`
@@ -911,7 +911,7 @@ func_mktempdir ()
         umask $func_mktempdir_umask
       fi
 
-
+      # If we're not in dry-run mode, bomb out on failure
       test -d "$_G_tmpdir" || \
         func_fatal_error "cannot create temporary directory '$_G_tmpdir'"
     fi
@@ -920,16 +920,16 @@ func_mktempdir ()
 }
 
 
-
-
-
-
-
+# func_normal_abspath PATH
+# ------------------------
+# Remove doubled-up and trailing slashes, "." path components,
+# and cancel out any ".." path components in PATH after making
+# it an absolute path.
 func_normal_abspath ()
 {
     $debug_cmd
 
-
+    # These SED scripts presuppose an absolute path with a trailing slash.
     _G_pathcar='s|^/\([^/]*\).*$|\1|'
     _G_pathcdr='s|^/[^/]*||'
     _G_removedotparts=':dotsl
@@ -939,47 +939,47 @@ func_normal_abspath ()
     _G_collapseslashes='s|/\{1,\}|/|g'
     _G_finalslash='s|/*$|/|'
 
-
+    # Start from root dir and reassemble the path.
     func_normal_abspath_result=
     func_normal_abspath_tpath=$1
     func_normal_abspath_altnamespace=
     case $func_normal_abspath_tpath in
       "")
-
+        # Empty path, that just means $cwd.
         func_stripname '' '/' "`pwd`"
         func_normal_abspath_result=$func_stripname_result
         return
         ;;
-
-
-
+      # The next three entries are used to spot a run of precisely
+      # two leading slashes without using negated character classes;
+      # we take advantage of case's first-match behaviour.
       ///*)
-
+        # Unusual form of absolute path, do nothing.
         ;;
       //*)
-
-
-
+        # Not necessarily an ordinary path; POSIX reserves leading '//'
+        # and for example Cygwin uses it to access remote file shares
+        # over CIFS/SMB, so we conserve a leading double slash if found.
         func_normal_abspath_altnamespace=/
         ;;
       /*)
-
+        # Absolute path, do nothing.
         ;;
       *)
-
+        # Relative path, prepend $cwd.
         func_normal_abspath_tpath=`pwd`/$func_normal_abspath_tpath
         ;;
     esac
 
-
-
-
+    # Cancel out all the simple stuff to save iterations.  We also want
+    # the path to end with a slash for ease of parsing, so make sure
+    # there is one (and only one) here.
     func_normal_abspath_tpath=`$ECHO "$func_normal_abspath_tpath" | $SED \
           -e "$_G_removedotparts" -e "$_G_collapseslashes" -e "$_G_finalslash"`
     while :; do
-
+      # Processed it all yet?
       if test / = "$func_normal_abspath_tpath"; then
-
+        # If we ascended to the root using ".." the result may be empty now.
         if test -z "$func_normal_abspath_result"; then
           func_normal_abspath_result=/
         fi
@@ -989,46 +989,46 @@ func_normal_abspath ()
           -e "$_G_pathcar"`
       func_normal_abspath_tpath=`$ECHO "$func_normal_abspath_tpath" | $SED \
           -e "$_G_pathcdr"`
-
+      # Figure out what to do with it
       case $func_normal_abspath_tcomponent in
         "")
-
+          # Trailing empty path component, ignore it.
           ;;
         ..)
-
+          # Parent dir; strip last assembled component from result.
           func_dirname "$func_normal_abspath_result"
           func_normal_abspath_result=$func_dirname_result
           ;;
         *)
-
+          # Actual path component, append it.
           func_append func_normal_abspath_result "/$func_normal_abspath_tcomponent"
           ;;
       esac
     done
-
+    # Restore leading double-slash if one was found on entry.
     func_normal_abspath_result=$func_normal_abspath_altnamespace$func_normal_abspath_result
 }
 
 
-
-
-
+# func_notquiet ARG...
+# --------------------
+# Echo program name prefixed message only when not in quiet mode.
 func_notquiet ()
 {
     $debug_cmd
 
     $opt_quiet || func_echo ${1+"$@"}
 
-
-
-
+    # A bug in bash halts the script if the last line of a function
+    # fails when set -e is in force, so we need another command to
+    # work around that:
     :
 }
 
 
-
-
-
+# func_relative_path SRCDIR DSTDIR
+# --------------------------------
+# Set func_relative_path_result to the relative path from SRCDIR to DSTDIR.
 func_relative_path ()
 {
     $debug_cmd
@@ -1039,17 +1039,17 @@ func_relative_path ()
     func_normal_abspath "$2"
     func_relative_path_tbindir=$func_normal_abspath_result
 
-
+    # Ascend the tree starting from libdir
     while :; do
-
+      # check if we have found a prefix of bindir
       case $func_relative_path_tbindir in
         $func_relative_path_tlibdir)
-
+          # found an exact match
           func_relative_path_tcancelled=
           break
           ;;
         $func_relative_path_tlibdir*)
-
+          # found a matching prefix
           func_stripname "$func_relative_path_tlibdir" '' "$func_relative_path_tbindir"
           func_relative_path_tcancelled=$func_stripname_result
           if test -z "$func_relative_path_result"; then
@@ -1061,7 +1061,7 @@ func_relative_path ()
           func_dirname $func_relative_path_tlibdir
           func_relative_path_tlibdir=$func_dirname_result
           if test -z "$func_relative_path_tlibdir"; then
-
+            # Have to descend all the way to the root!
             func_relative_path_result=../$func_relative_path_result
             func_relative_path_tcancelled=$func_relative_path_tbindir
             break
@@ -1071,7 +1071,7 @@ func_relative_path ()
       esac
     done
 
-
+    # Now calculate path; take care to avoid doubling-up slashes.
     func_stripname '' '/' "$func_relative_path_result"
     func_relative_path_result=$func_stripname_result
     func_stripname '/' '/' "$func_relative_path_tcancelled"
@@ -1079,7 +1079,7 @@ func_relative_path ()
       func_append func_relative_path_result "/$func_stripname_result"
     fi
 
-
+    # Normalisation. If bindir is libdir, return '.' else relative path.
     if test -n "$func_relative_path_result"; then
       func_stripname './' '' "$func_relative_path_result"
       func_relative_path_result=$func_stripname_result
@@ -1091,15 +1091,15 @@ func_relative_path ()
 }
 
 
-
-
-
-
-
-
-
-
-
+# func_quote_for_eval ARG...
+# --------------------------
+# Aesthetically quote ARGs to be evaled later.
+# This function returns two values:
+#   i) func_quote_for_eval_result
+#      double-quoted, suitable for a subsequent eval
+#  ii) func_quote_for_eval_unquoted_result
+#      has all characters that are still active within double
+#      quotes backslashified.
 func_quote_for_eval ()
 {
     $debug_cmd
@@ -3444,12 +3444,12 @@ func_mode_compile ()
       ;;
     esac
     if test no = "$pic_mode" && test pass_all != "$deplibs_check_method"; then
-
+      # non-PIC code in shared libraries is not supported
       pic_mode=default
     fi
 
-
-
+    # Calculate the filename of the output object if compiler does
+    # not support -o with -c
     if test no = "$compiler_c_o"; then
       output_obj=`$ECHO "$srcfile" | $SED 's%^.*/%%; s%\.[^.]*$%%'`.$objext
       lockfile=$output_obj.lock
@@ -3459,8 +3459,8 @@ func_mode_compile ()
       lockfile=
     fi
 
-
-
+    # Lock this critical section if it is needed
+    # We use this script file to make the link, it avoids creating a new file
     if test yes = "$need_locks"; then
       until $opt_dry_run || ln "$progpath" "$lockfile" 2>/dev/null; do
 	func_echo "Waiting for $lockfile to be removed"
@@ -3495,22 +3495,22 @@ compiler."
     func_quote_for_eval "$srcfile"
     qsrcfile=$func_quote_for_eval_result
 
-
+    # Only build a PIC object if we are building libtool libraries.
     if test yes = "$build_libtool_libs"; then
-
+      # Without this assignment, base_compile gets emptied.
       fbsd_hideous_sh_bug=$base_compile
 
       if test no != "$pic_mode"; then
 	command="$base_compile $qsrcfile $pic_flag"
       else
-
+	# Don't build PIC code
 	command="$base_compile $qsrcfile"
       fi
 
       func_mkdir_p "$xdir$objdir"
 
       if test -z "$output_obj"; then
-
+	# Place PIC objects in $objdir
 	func_append command " -o $lobj"
       fi
 
@@ -3537,22 +3537,22 @@ compiler."
 	exit $EXIT_FAILURE
       fi
 
-
+      # Just move the object if needed, then go on to compile the next one
       if test -n "$output_obj" && test "X$output_obj" != "X$lobj"; then
 	func_show_eval '$MV "$output_obj" "$lobj"' \
 	  'error=$?; $opt_dry_run || $RM $removelist; exit $error'
       fi
 
-
+      # Allow error messages only from the first compilation.
       if test yes = "$suppress_opt"; then
 	suppress_output=' >/dev/null 2>&1'
       fi
     fi
 
-
+    # Only build a position-dependent object if we build old libraries.
     if test yes = "$build_old_libs"; then
       if test yes != "$pic_mode"; then
-
+	# Don't build PIC code
 	command="$base_compile $qsrcfile$pie_flag"
       else
 	command="$base_compile $qsrcfile $pic_flag"
@@ -3561,7 +3561,7 @@ compiler."
 	func_append command " -o $obj"
       fi
 
-
+      # Suppress compiler output if we already did a PIC compilation.
       func_append command "$suppress_output"
       func_show_eval_locale "$command" \
         '$opt_dry_run || $RM $removelist; exit $EXIT_FAILURE'
@@ -3586,7 +3586,7 @@ compiler."
 	exit $EXIT_FAILURE
       fi
 
-
+      # Just move the object if needed
       if test -n "$output_obj" && test "X$output_obj" != "X$obj"; then
 	func_show_eval '$MV "$output_obj" "$obj"' \
 	  'error=$?; $opt_dry_run || $RM $removelist; exit $error'
@@ -3596,7 +3596,7 @@ compiler."
     $opt_dry_run || {
       func_write_libtool_object "$libobj" "$objdir/$objname" "$objname"
 
-
+      # Unlock the critical section if it was locked
       if test no != "$need_locks"; then
 	removelist=$lockfile
         $RM "$lockfile"
@@ -3612,11 +3612,11 @@ $opt_help || {
 
 func_mode_help ()
 {
-
+    # We need to display help for each of the modes.
     case $opt_mode in
       "")
-
-
+        # Generic help is extracted from the usage comments
+        # at the start of this file.
         func_help
         ;;
 
@@ -3798,7 +3798,7 @@ Otherwise, only FILE itself is deleted using RM."
     $ECHO "Try '$progname --help' for more information about other modes."
 }
 
-
+# Now that we've collected a possible --mode arg, show help if necessary
 if $opt_help; then
   if test : = "$opt_help"; then
     func_mode_help
@@ -3830,17 +3830,17 @@ if $opt_help; then
 fi
 
 
-
+# func_mode_execute arg...
 func_mode_execute ()
 {
     $debug_cmd
 
-
+    # The first argument is the command name.
     cmd=$nonopt
     test -z "$cmd" && \
       func_fatal_help "you must specify a COMMAND"
 
-
+    # Handle -dlopen flags immediately.
     for file in $opt_dlopen; do
       test -f "$file" \
 	|| func_fatal_help "'$file' is not a file"
@@ -3851,18 +3851,18 @@ func_mode_execute ()
 	func_resolve_sysroot "$file"
 	file=$func_resolve_sysroot_result
 
-
+	# Check to see that this really is a libtool archive.
 	func_lalib_unsafe_p "$file" \
 	  || func_fatal_help "'$lib' is not a valid libtool archive"
 
-
+	# Read the libtool library.
 	dlname=
 	library_names=
 	func_source "$file"
 
-
+	# Skip this library if it cannot be dlopened.
 	if test -z "$dlname"; then
-
+	  # Warn if it was a shared library.
 	  test -n "$library_names" && \
 	    func_warning "'$file' was not linked with '-export-dynamic'"
 	  continue
@@ -3881,7 +3881,7 @@ func_mode_execute ()
 	;;
 
       *.lo)
-
+	# Just add the directory containing the .lo file.
 	func_dirname "$file" "" "."
 	dir=$func_dirname_result
 	;;
@@ -3892,11 +3892,11 @@ func_mode_execute ()
 	;;
       esac
 
-
+      # Get the absolute pathname.
       absdir=`cd "$dir" && pwd`
       test -n "$absdir" && dir=$absdir
 
-
+      # Now add the directory to shlibpath_var.
       if eval "test -z \"\$$shlibpath_var\""; then
 	eval "$shlibpath_var=\"\$dir\""
       else
@@ -3904,36 +3904,36 @@ func_mode_execute ()
       fi
     done
 
-
-
+    # This variable tells wrapper scripts just to set shlibpath_var
+    # rather than running their programs.
     libtool_execute_magic=$magic
 
-
+    # Check if any of the arguments is a wrapper script.
     args=
     for file
     do
       case $file in
       -* | *.la | *.lo ) ;;
       *)
-
+	# Do a test to see if this is really a libtool program.
 	if func_ltwrapper_script_p "$file"; then
 	  func_source "$file"
-
+	  # Transform arg to wrapped name.
 	  file=$progdir/$program
 	elif func_ltwrapper_executable_p "$file"; then
 	  func_ltwrapper_scriptname "$file"
 	  func_source "$func_ltwrapper_scriptname_result"
-
+	  # Transform arg to wrapped name.
 	  file=$progdir/$program
 	fi
 	;;
       esac
-
+      # Quote arguments (to preserve shell metacharacters).
       func_append_quoted args "$file"
     done
 
     if $opt_dry_run; then
-
+      # Display what would be done.
       if test -n "$shlibpath_var"; then
 	eval "\$ECHO \"\$shlibpath_var=\$$shlibpath_var\""
 	echo "export $shlibpath_var"
@@ -3942,11 +3942,11 @@ func_mode_execute ()
       exit $EXIT_SUCCESS
     else
       if test -n "$shlibpath_var"; then
-
+	# Export the shlibpath_var.
 	eval "export $shlibpath_var"
       fi
 
-
+      # Restore saved environment variables
       for lt_var in LANG LANGUAGE LC_ALL LC_CTYPE LC_COLLATE LC_MESSAGES
       do
 	eval "if test \"\${save_$lt_var+set}\" = set; then
@@ -3956,7 +3956,7 @@ func_mode_execute ()
 	      fi"
       done
 
-
+      # Now prepare to actually exec the command.
       exec_cmd=\$cmd$args
     fi
 }
@@ -3964,7 +3964,7 @@ func_mode_execute ()
 test execute = "$opt_mode" && func_mode_execute ${1+"$@"}
 
 
-
+# func_mode_finish arg...
 func_mode_finish ()
 {
     $debug_cmd
@@ -3998,7 +3998,7 @@ func_mode_finish ()
         sysroot_cmd=
       fi
 
-
+      # Remove sysroot references
       if $opt_dry_run; then
         for lib in $libs; do
           echo "removing references to $lt_sysroot and '=' prefixes from $lib"
@@ -4017,12 +4017,12 @@ func_mode_finish ()
     if test -n "$finish_cmds$finish_eval" && test -n "$libdirs"; then
       for libdir in $libdirs; do
 	if test -n "$finish_cmds"; then
-
+	  # Do each command in the finish commands.
 	  func_execute_cmds "$finish_cmds" 'admincmds="$admincmds
 '"$cmd"'"'
 	fi
 	if test -n "$finish_eval"; then
-
+	  # Do the single finish_eval.
 	  eval cmds=\"$finish_eval\"
 	  $opt_dry_run || eval "$cmds" || func_append admincmds "
        $cmds"
@@ -4595,7 +4595,7 @@ func_generate_dlsyms ()
 /* $my_dlsyms - symbol resolution table for '$my_outputname' dlsym emulation. */
 /* Generated by $PROGRAM (GNU $PACKAGE) $VERSION */
 
-
+#ifdef __cplusplus
 extern \"C\" {
 #endif
 
@@ -4625,7 +4625,7 @@ extern \"C\" {
 
 	  $opt_dry_run || echo ': @PROGRAM@ ' > "$nlist"
 
-
+	  # Add our own program objects to the symbol list.
 	  progfiles=`$ECHO "$objs$old_deplibs" | $SP2NL | $SED "$lo2o" | $NL2SP`
 	  for progfile in $progfiles; do
 	    func_to_tool_file "$progfile" func_convert_file_msys_to_w32
@@ -4647,7 +4647,7 @@ extern \"C\" {
 	    }
 	  fi
 
-
+	  # Prepare the list of exported symbols
 	  if test -z "$export_symbols"; then
 	    export_symbols=$output_objdir/$outputname.exp
 	    $opt_dry_run || {
@@ -4681,19 +4681,19 @@ extern \"C\" {
 	  name=$func_basename_result
           case $host in
 	    *cygwin* | *mingw* | *cegcc* )
-
+	      # if an import library, we need to obtain dlname
 	      if func_win32_import_lib_p "$dlprefile"; then
 	        func_tr_sh "$dlprefile"
 	        eval "curr_lafile=\$libfile_$func_tr_sh_result"
 	        dlprefile_dlbasename=
 	        if test -n "$curr_lafile" && func_lalib_p "$curr_lafile"; then
-
+	          # Use subshell, to avoid clobbering current variable values
 	          dlprefile_dlname=`source "$curr_lafile" && echo "$dlname"`
 	          if test -n "$dlprefile_dlname"; then
 	            func_basename "$dlprefile_dlname"
 	            dlprefile_dlbasename=$func_basename_result
 	          else
-
+	            # no lafile. user explicitly requested -dlpreopen <import library>.
 	            $sharedlib_from_linklib_cmd "$dlprefile"
 	            dlprefile_dlbasename=$sharedlib_from_linklib_result
 	          fi
@@ -4709,7 +4709,7 @@ extern \"C\" {
 	          eval "$NM \"$func_to_tool_file_result\" 2>/dev/null | $global_symbol_pipe |
 	            $SED -e '/I __imp/d' -e 's/I __nm_/D /;s/_nm__//' >> '$nlist'"
 	        }
-	      else  
+	      else # not an import lib
 	        $opt_dry_run || {
 	          eval '$ECHO ": $name " >> "$nlist"'
 	          func_to_tool_file "$dlprefile" func_convert_file_msys_to_w32
@@ -4728,7 +4728,7 @@ extern \"C\" {
 	done
 
 	$opt_dry_run || {
-
+	  # Make sure we have at least an empty file.
 	  test -f "$nlist" || : > "$nlist"
 
 	  if test -n "$exclude_expsyms"; then
@@ -4736,7 +4736,7 @@ extern \"C\" {
 	    $MV "$nlist"T "$nlist"
 	  fi
 
-
+	  # Try sorting and uniquifying the output.
 	  if $GREP -v "^: " < "$nlist" |
 	      if sort -k 3 </dev/null >/dev/null 2>&1; then
 		sort -k 3
@@ -4816,18 +4816,18 @@ static const void *lt_preloaded_setup() {
 }
 #endif\
 "
-	}  
+	} # !$opt_dry_run
 
 	pic_flag_for_symtable=
 	case "$compile_command " in
 	*" -static "*) ;;
 	*)
 	  case $host in
-
-
-
-
-
+	  # compiling the symbol table file with pic_flag works around
+	  # a FreeBSD bug that causes programs to crash when -lm is
+	  # linked before any other PIC object.  But we must not use
+	  # pic_flag when linking with -static.  The problem exists in
+	  # FreeBSD 2.2.6 and is fixed in FreeBSD 3.1.
 	  *-*-freebsd2.*|*-*-freebsd3.0*|*-*-freebsdelf3.0*)
 	    pic_flag_for_symtable=" $pic_flag -DFREEBSD_WORKAROUND" ;;
 	  *-*-hpux*)
@@ -4846,13 +4846,13 @@ static const void *lt_preloaded_setup() {
 	  esac
 	done
 
-
+	# Now compile the dynamic symbol file.
 	func_show_eval '(cd $output_objdir && $LTCC$symtab_cflags -c$no_builtin_flag$pic_flag_for_symtable "$my_dlsyms")' 'exit $?'
 
-
+	# Clean up the generated files.
 	func_show_eval '$RM "$output_objdir/$my_dlsyms" "$nlist" "${nlist}S" "${nlist}T" "${nlist}I"'
 
-
+	# Transform the symbol file into the correct name.
 	symfileobj=$output_objdir/${my_outputname}S.$objext
 	case $host in
 	*cygwin* | *mingw* | *cegcc* )
@@ -4875,20 +4875,20 @@ static const void *lt_preloaded_setup() {
 	;;
       esac
     else
+      # We keep going just in case the user didn't refer to
+      # lt_preloaded_symbols.  The linker will fail if global_symbol_pipe
+      # really was required.
 
-
-
-
-
+      # Nullify the symbol file.
       compile_command=`$ECHO "$compile_command" | $SED "s% @SYMFILE@%%"`
       finalize_command=`$ECHO "$finalize_command" | $SED "s% @SYMFILE@%%"`
     fi
 }
 
-
-
-
-
+# func_cygming_gnu_implib_p ARG
+# This predicate returns with zero status (TRUE) if
+# ARG is a GNU/binutils-style import library. Returns
+# with nonzero status (FALSE) otherwise.
 func_cygming_gnu_implib_p ()
 {
   $debug_cmd
@@ -4898,10 +4898,10 @@ func_cygming_gnu_implib_p ()
   test -n "$func_cygming_gnu_implib_tmp"
 }
 
-
-
-
-
+# func_cygming_ms_implib_p ARG
+# This predicate returns with zero status (TRUE) if
+# ARG is an MS-style import library. Returns
+# with nonzero status (FALSE) otherwise.
 func_cygming_ms_implib_p ()
 {
   $debug_cmd
@@ -4911,13 +4911,13 @@ func_cygming_ms_implib_p ()
   test -n "$func_cygming_ms_implib_tmp"
 }
 
-
-
-
-
-
-
-
+# func_win32_libid arg
+# return the library type of file 'arg'
+#
+# Need a lot of goo to handle *both* DLLs and import libs
+# Has to be a shell function in order to 'eat' the argument
+# that is supplied when $file_magic_command is called.
+# Despite the name, also deal with 64 bit binaries.
 func_win32_libid ()
 {
   $debug_cmd
@@ -4925,11 +4925,11 @@ func_win32_libid ()
   win32_libid_type=unknown
   win32_fileres=`file -L $1 2>/dev/null`
   case $win32_fileres in
-  *ar\ archive\ import\ library*)  
+  *ar\ archive\ import\ library*) # definitely import
     win32_libid_type="x86 archive import"
     ;;
-  *ar\ archive*)  
-
+  *ar\ archive*) # could be an import, or static
+    # Keep the egrep pattern in sync with the one in _LT_CHECK_MAGIC_METHOD.
     if eval $OBJDUMP -f $1 | $SED -e '10q' 2>/dev/null |
        $EGREP 'file format (pei*-i386(.*architecture: i386)?|pe-arm-wince|pe-x86-64)' >/dev/null; then
       case $nm_interface in
@@ -4964,7 +4964,7 @@ func_win32_libid ()
   *DLL*)
     win32_libid_type="x86 DLL"
     ;;
-  *executable*)  
+  *executable*) # but shell scripts are "executable" too...
     case $win32_fileres in
     *MS\ Windows\ PE\ Intel*)
       win32_libid_type="x86 DLL"
@@ -4975,15 +4975,15 @@ func_win32_libid ()
   $ECHO "$win32_libid_type"
 }
 
-
-
-
-
-
-
-
-
-
+# func_cygming_dll_for_implib ARG
+#
+# Platform-specific function to extract the
+# name of the DLL associated with the specified
+# import library ARG.
+# Invoked by eval'ing the libtool variable
+#    $sharedlib_from_linklib_cmd
+# Result is available in the variable
+#    $sharedlib_from_linklib_result
 func_cygming_dll_for_implib ()
 {
   $debug_cmd
@@ -4991,17 +4991,17 @@ func_cygming_dll_for_implib ()
   sharedlib_from_linklib_result=`$DLLTOOL --identify-strict --identify "$1"`
 }
 
-
-
-
-
-
-
-
-
-
-
-
+# func_cygming_dll_for_implib_fallback_core SECTION_NAME LIBNAMEs
+#
+# The is the core of a fallback implementation of a
+# platform-specific function to extract the name of the
+# DLL associated with the specified import library LIBNAME.
+#
+# SECTION_NAME is either .idata$6 or .idata$7, depending
+# on the platform and compiler that created the implib.
+#
+# Echos the name of the DLL associated with the
+# specified import library.
 func_cygming_dll_for_implib_fallback_core ()
 {
   $debug_cmd
@@ -5039,49 +5039,49 @@ func_cygming_dll_for_implib_fallback_core ()
       s/[\. \t]*$//
       # Print
       /./p' |
-
-
-
-
-
-
-
-
-
-
-
+    # we now have a list, one entry per line, of the stringified
+    # contents of the appropriate section of all members of the
+    # archive that possess that section. Heuristic: eliminate
+    # all those that have a first or second character that is
+    # a '.' (that is, objdump's representation of an unprintable
+    # character.) This should work for all archives with less than
+    # 0x302f exports -- but will fail for DLLs whose name actually
+    # begins with a literal '.' or a single character followed by
+    # a '.'.
+    #
+    # Of those that remain, print the first one.
     $SED -e '/^\./d;/^.\./d;q'
 }
 
-
-
-
-
-
-
-
-
-
-
-
+# func_cygming_dll_for_implib_fallback ARG
+# Platform-specific function to extract the
+# name of the DLL associated with the specified
+# import library ARG.
+#
+# This fallback implementation is for use when $DLLTOOL
+# does not support the --identify-strict option.
+# Invoked by eval'ing the libtool variable
+#    $sharedlib_from_linklib_cmd
+# Result is available in the variable
+#    $sharedlib_from_linklib_result
 func_cygming_dll_for_implib_fallback ()
 {
   $debug_cmd
 
   if func_cygming_gnu_implib_p "$1"; then
-
+    # binutils import library
     sharedlib_from_linklib_result=`func_cygming_dll_for_implib_fallback_core '.idata$7' "$1"`
   elif func_cygming_ms_implib_p "$1"; then
-
+    # ms-generated import library
     sharedlib_from_linklib_result=`func_cygming_dll_for_implib_fallback_core '.idata$6' "$1"`
   else
-
+    # unknown
     sharedlib_from_linklib_result=
   fi
 }
 
 
-
+# func_extract_an_archive dir oldlib
 func_extract_an_archive ()
 {
     $debug_cmd
@@ -5108,7 +5108,7 @@ func_extract_an_archive ()
 }
 
 
-
+# func_extract_archives gentop oldlib ...
 func_extract_archives ()
 {
     $debug_cmd
@@ -5121,7 +5121,7 @@ func_extract_archives ()
     my_xdir=
 
     for my_xlib in $my_oldlibs; do
-
+      # Extract the objects.
       case $my_xlib in
 	[\\/]* | [A-Za-z]:[\\/]*) my_xabs=$my_xlib ;;
 	*) my_xabs=`pwd`"/$my_xlib" ;;
@@ -5146,7 +5146,7 @@ func_extract_archives ()
       case $host in
       *-darwin*)
 	func_verbose "Extracting $my_xabs"
-
+	# Do not bother doing anything if just a dry run
 	$opt_dry_run || {
 	  darwin_orig_dir=`pwd`
 	  cd $my_xdir || exit $?
@@ -5166,22 +5166,22 @@ func_extract_archives ()
 	      func_extract_an_archive "`pwd`" "$darwin_base_archive"
 	      cd "$darwin_curdir"
 	      $RM "unfat-$$/$darwin_base_archive-$darwin_arch/$darwin_base_archive"
-	    done  
-
+	    done # $darwin_arches
+            ## Okay now we've a bunch of thin objects, gotta fatten them up :)
 	    darwin_filelist=`find unfat-$$ -type f -name \*.o -print -o -name \*.lo -print | $SED -e "$sed_basename" | sort -u`
 	    darwin_file=
 	    darwin_files=
 	    for darwin_file in $darwin_filelist; do
 	      darwin_files=`find unfat-$$ -name $darwin_file -print | sort | $NL2SP`
 	      $LIPO -create -output "$darwin_file" $darwin_files
-	    done  
+	    done # $darwin_filelist
 	    $RM -rf unfat-$$
 	    cd "$darwin_orig_dir"
 	  else
 	    cd $darwin_orig_dir
 	    func_extract_an_archive "$my_xdir" "$my_xabs"
-	  fi  
-	}  
+	  fi # $darwin_arches
+	} # !$opt_dry_run
 	;;
       *)
         func_extract_an_archive "$my_xdir" "$my_xabs"
@@ -5194,20 +5194,20 @@ func_extract_archives ()
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# func_emit_wrapper [arg=no]
+#
+# Emit a libtool wrapper script on stdout.
+# Don't directly open a file because we may want to
+# incorporate the script contents within a cygwin/mingw
+# wrapper executable.  Must ONLY be called from within
+# func_mode_link because it depends on a number of variables
+# set therein.
+#
+# ARG is the value that the WRAPPER_SCRIPT_BELONGS_IN_OBJDIR
+# variable will take.  If 'yes', then the emitted script
+# will assume that the directory where it is stored is
+# the $objdir directory.  This is a cygwin/mingw-specific
+# behavior.
 func_emit_wrapper ()
 {
 	func_emit_wrapper_arg1=${1-no}
@@ -5329,7 +5329,7 @@ func_exec_program_core ()
 {
 "
   case $host in
-
+  # Backslashes separate directories on plain windows
   *-*-mingw | *-*-os2* | *-cegcc*)
     $ECHO "\
       if test -n \"\$lt_option_debug\"; then
@@ -5463,11 +5463,11 @@ func_exec_program ()
 
   if test -f \"\$progdir/\$program\"; then"
 
-
-
-
-
-
+	# fixup the dll searchpath if we need to.
+	#
+	# Fix the DLL searchpath if we need to.  Do this before prepending
+	# to shlibpath, because on Windows, both are PATH and uninstalled
+	# libraries must come first.
 	if test -n "$dllsearchpath"; then
 	  $ECHO "\
     # Add the dll search path components to the executable PATH
@@ -5475,7 +5475,7 @@ func_exec_program ()
 "
 	fi
 
-
+	# Export our shlibpath_var if we have one.
 	if test yes = "$shlibpath_overrides_runpath" && test -n "$shlibpath_var" && test -n "$temp_rpath"; then
 	  $ECHO "\
     # Add our own library path to $shlibpath_var
@@ -5506,10 +5506,10 @@ fi\
 }
 
 
-
-
-
-
+# func_emit_cwrapperexe_src
+# emit the source code for a wrapper executable on stdout
+# Must ONLY be called from within func_mode_link because
+# it depends on a number of variable set therein.
 func_emit_cwrapperexe_src ()
 {
 	cat <<EOF
@@ -5525,130 +5525,130 @@ func_emit_cwrapperexe_src ()
 */
 EOF
 	    cat <<"EOF"
+#ifdef _MSC_VER
+# define _CRT_SECURE_NO_DEPRECATE 1
+#endif
+#include <stdio.h>
+#include <stdlib.h>
+#ifdef _MSC_VER
+# include <direct.h>
+# include <process.h>
+# include <io.h>
+#else
+# include <unistd.h>
+# include <stdint.h>
+# ifdef __CYGWIN__
+#  include <io.h>
+# endif
+#endif
+#include <malloc.h>
+#include <stdarg.h>
+#include <assert.h>
+#include <string.h>
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#define STREQ(s1, s2) (strcmp ((s1), (s2)) == 0)
 
 /* declarations of non-ANSI functions */
-
-
+#if defined __MINGW32__
+# ifdef __STRICT_ANSI__
 int _putenv (const char *);
-
-
-
+# endif
+#elif defined __CYGWIN__
+# ifdef __STRICT_ANSI__
 char *realpath (const char *, char *);
 int putenv (char *);
 int setenv (const char *, const char *, int);
-
-/*  
-
+# endif
+/* #elif defined other_platform || defined ... */
+#endif
 
 /* portability defines, excluding path handling macros */
+#if defined _MSC_VER
+# define setmode _setmode
+# define stat    _stat
+# define chmod   _chmod
+# define getcwd  _getcwd
+# define putenv  _putenv
+# define S_IXUSR _S_IEXEC
+#elif defined __MINGW32__
+# define setmode _setmode
+# define stat    _stat
+# define chmod   _chmod
+# define getcwd  _getcwd
+# define putenv  _putenv
+#elif defined __CYGWIN__
+# define HAVE_SETENV
+# define FOPEN_WB "wb"
+/* #elif defined other platforms ... */
+#endif
 
+#if defined PATH_MAX
+# define LT_PATHMAX PATH_MAX
+#elif defined MAXPATHLEN
+# define LT_PATHMAX MAXPATHLEN
+#else
+# define LT_PATHMAX 1024
+#endif
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#ifndef S_IXOTH
+# define S_IXOTH 0
+#endif
+#ifndef S_IXGRP
+# define S_IXGRP 0
+#endif
 
 /* path handling portability macros */
+#ifndef DIR_SEPARATOR
+# define DIR_SEPARATOR '/'
+# define PATH_SEPARATOR ':'
+#endif
 
-
-
-
-
-
+#if defined _WIN32 || defined __MSDOS__ || defined __DJGPP__ || \
   defined __OS2__
+# define HAVE_DOS_BASED_FILE_SYSTEM
+# define FOPEN_WB "wb"
+# ifndef DIR_SEPARATOR_2
+#  define DIR_SEPARATOR_2 '\\'
+# endif
+# ifndef PATH_SEPARATOR_2
+#  define PATH_SEPARATOR_2 ';'
+# endif
+#endif
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+#ifndef DIR_SEPARATOR_2
+# define IS_DIR_SEPARATOR(ch) ((ch) == DIR_SEPARATOR)
+#else /* DIR_SEPARATOR_2 */
+# define IS_DIR_SEPARATOR(ch) \
 	(((ch) == DIR_SEPARATOR) || ((ch) == DIR_SEPARATOR_2))
+#endif /* DIR_SEPARATOR_2 */
 
+#ifndef PATH_SEPARATOR_2
+# define IS_PATH_SEPARATOR(ch) ((ch) == PATH_SEPARATOR)
+#else /* PATH_SEPARATOR_2 */
+# define IS_PATH_SEPARATOR(ch) ((ch) == PATH_SEPARATOR_2)
+#endif /* PATH_SEPARATOR_2 */
 
+#ifndef FOPEN_WB
+# define FOPEN_WB "w"
+#endif
+#ifndef _O_BINARY
+# define _O_BINARY 0
+#endif
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#define XMALLOC(type, num)      ((type *) xmalloc ((num) * sizeof(type)))
+#define XFREE(stale) do { \
   if (stale) { free (stale); stale = 0; } \
 } while (0)
 
-
+#if defined LT_DEBUGWRAPPER
 static int lt_debug = 1;
-
+#else
 static int lt_debug = 0;
-
+#endif
 
 const char *program_name = "libtool-wrapper"; /* in case xstrdup fails */
 
@@ -5673,11 +5673,11 @@ void lt_dump_script (FILE *f);
 EOF
 
 	    cat <<EOF
-
-
-
-
-
+#if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 5)
+# define externally_visible volatile
+#else
+# define externally_visible __attribute__((externally_visible)) volatile
+#endif
 externally_visible const char * MAGIC_EXE = "$magic_exe";
 const char * LIB_PATH_VARNAME = "$shlibpath_var";
 EOF
@@ -5719,7 +5719,7 @@ EOF
 
 	    cat <<"EOF"
 
-
+#define LTWRAPPER_OPTION_PREFIX         "--lt-"
 
 static const char *ltwrapper_option_prefix = LTWRAPPER_OPTION_PREFIX;
 static const char *dumpscript_opt       = LTWRAPPER_OPTION_PREFIX "dump-script";
@@ -5947,11 +5947,11 @@ base_name (const char *name)
 {
   const char *base;
 
-
+#if defined HAVE_DOS_BASED_FILE_SYSTEM
   /* Skip over the disk name in MSDOS pathnames. */
   if (isalpha ((unsigned char) name[0]) && name[1] == ':')
     name += 2;
-
+#endif
 
   for (base = name; *name; name++)
     if (IS_DIR_SEPARATOR (*name))
@@ -6016,7 +6016,7 @@ find_executable (const char *wrapper)
     return NULL;
 
   /* Absolute path? */
-
+#if defined HAVE_DOS_BASED_FILE_SYSTEM
   if (isalpha ((unsigned char) wrapper[0]) && wrapper[1] == ':')
     {
       concat_name = xstrdup (wrapper);
@@ -6026,7 +6026,7 @@ find_executable (const char *wrapper)
     }
   else
     {
-
+#endif
       if (IS_DIR_SEPARATOR (wrapper[0]))
 	{
 	  concat_name = xstrdup (wrapper);
@@ -6034,9 +6034,9 @@ find_executable (const char *wrapper)
 	    return concat_name;
 	  XFREE (concat_name);
 	}
-
+#if defined HAVE_DOS_BASED_FILE_SYSTEM
     }
-
+#endif
 
   for (p = wrapper; *p; p++)
     if (*p == '/')
@@ -6106,9 +6106,9 @@ find_executable (const char *wrapper)
 char *
 chase_symlinks (const char *pathspec)
 {
-
+#ifndef S_ISLNK
   return xstrdup (pathspec);
-
+#else
   char buf[LT_PATHMAX];
   struct stat s;
   char *tmp_pathspec = xstrdup (pathspec);
@@ -6159,7 +6159,7 @@ chase_symlinks (const char *pathspec)
 		"could not follow symlinks for %s", pathspec);
     }
   return xstrdup (tmp_pathspec);
-
+#endif
 }
 
 char *
@@ -6236,11 +6236,11 @@ lt_setenv (const char *name, const char *value)
 		  "(lt_setenv) setting '%s' to '%s'\n",
                   nonnull (name), nonnull (value));
   {
-
+#ifdef HAVE_SETENV
     /* always make a copy, for consistency with !HAVE_SETENV */
     char *str = xstrdup (value);
     setenv (name, str, 1);
-
+#else
     size_t len = strlen (name) + 1 + strlen (value) + 1;
     char *str = XMALLOC (char, len);
     sprintf (str, "%s=%s", name, value);
@@ -6248,7 +6248,7 @@ lt_setenv (const char *name, const char *value)
       {
         XFREE (str);
       }
-
+#endif
   }
 }
 
@@ -6343,8 +6343,8 @@ EOF
        \\\" -> \"
        \\\\\" -> \\"
  */
-
-
+#define SHELL_SPECIAL_CHARS "\"\\ \001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037"
+#define SHELL_SPACE_CHARS " \001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037"
 char **
 prepare_spawn (char **argv)
 {
@@ -6454,10 +6454,10 @@ D'
 }
 EOF
 }
+# end: func_emit_cwrapperexe_src
 
-
-
-
+# func_win32_import_lib_p ARG
+# True if ARG is an import lib, as indicated by $file_magic_cmd
 func_win32_import_lib_p ()
 {
     $debug_cmd
@@ -6468,10 +6468,10 @@ func_win32_import_lib_p ()
     esac
 }
 
-
-
-
-
+# func_suncc_cstd_abi
+# !!ONLY CALL THIS FOR SUN CC AFTER $compile_command IS FULLY EXPANDED!!
+# Several compiler flags select an ABI that is incompatible with the
+# Cstd library. Avoid specifying it if any are in CXXFLAGS.
 func_suncc_cstd_abi ()
 {
     $debug_cmd
@@ -6486,24 +6486,24 @@ func_suncc_cstd_abi ()
     esac
 }
 
-
+# func_mode_link arg...
 func_mode_link ()
 {
     $debug_cmd
 
     case $host in
     *-*-cygwin* | *-*-mingw* | *-*-pw32* | *-*-os2* | *-cegcc*)
+      # It is impossible to link a dll without this setting, and
+      # we shouldn't force the makefile maintainer to figure out
+      # what system we are compiling for in order to pass an extra
+      # flag for every libtool invocation.
+      # allow_undefined=no
 
-
-
-
-
-
-
-
-
-
-
+      # FIXME: Unfortunately, there are problems with the above when trying
+      # to make a dll that has undefined symbols, in which case not
+      # even a static library is built.  For now, we need to specify
+      # -no-undefined on the libtool link line when we can be certain
+      # that all symbols are satisfied, otherwise we get a static library.
       allow_undefined=yes
       ;;
     *)
@@ -6563,7 +6563,7 @@ func_mode_link ()
     single_module=$wl-single_module
     func_infer_tag $base_compile
 
-
+    # We need to know -static, to get the right output filenames.
     for arg
     do
       case $arg in
@@ -6604,10 +6604,10 @@ func_mode_link ()
       esac
     done
 
-
+    # See if our shared archives depend on static archives.
     test -n "$old_archive_from_new_cmds" && build_old_libs=yes
 
-
+    # Go through the arguments, transforming them on the way.
     while test "$#" -gt 0; do
       arg=$1
       shift
@@ -6615,7 +6615,7 @@ func_mode_link ()
       qarg=$func_quote_for_eval_unquoted_result
       func_append libtool_args " $func_quote_for_eval_result"
 
-
+      # If the previous option needs an argument, assign it.
       if test -n "$prev"; then
 	case $prev in
 	output)
@@ -6632,13 +6632,13 @@ func_mode_link ()
 	  ;;
 	dlfiles|dlprefiles)
 	  $preload || {
-
+	    # Add the symbol object into the linking commands.
 	    func_append compile_command " @SYMFILE@"
 	    func_append finalize_command " @SYMFILE@"
 	    preload=:
 	  }
 	  case $arg in
-	  *.la | *.lo) ;;   
+	  *.la | *.lo) ;;  # We handle these cases below.
 	  force)
 	    if test no = "$dlself"; then
 	      dlself=needless
@@ -6687,7 +6687,7 @@ func_mode_link ()
 	    *-*-darwin*)
 	      case "$deplibs " in
 		*" $qarg.ltframework "*) ;;
-		*) func_append deplibs " $qarg.ltframework"  
+		*) func_append deplibs " $qarg.ltframework" # this is fixed later
 		   ;;
 	      esac
 	      ;;
@@ -6701,8 +6701,8 @@ func_mode_link ()
 	  continue
 	  ;;
 	mllvm)
-
-
+	  # Clang does not use LLVM to link, so we can simply discard any
+	  # '-mllvm $arg' options when doing the link step.
 	  prev=
 	  continue
 	  ;;
@@ -6712,16 +6712,16 @@ func_mode_link ()
 	    moreargs=
 	    for fil in `cat "$save_arg"`
 	    do
-
+#	      func_append moreargs " $fil"
 	      arg=$fil
+	      # A libtool-controlled object.
 
-
-
+	      # Check to see that this really is a libtool object.
 	      if func_lalib_unsafe_p "$arg"; then
 		pic_object=
 		non_pic_object=
 
-
+		# Read the .lo file
 		func_source "$arg"
 
 		if test -z "$pic_object" ||
@@ -6731,12 +6731,12 @@ func_mode_link ()
 		  func_fatal_error "cannot find name of object for '$arg'"
 		fi
 
-
+		# Extract subdirectory from the argument.
 		func_dirname "$arg" "/" ""
 		xdir=$func_dirname_result
 
 		if test none != "$pic_object"; then
-
+		  # Prepend the subdirectory the object is found in.
 		  pic_object=$xdir$pic_object
 
 		  if test dlfiles = "$prev"; then
@@ -6745,43 +6745,43 @@ func_mode_link ()
 		      prev=
 		      continue
 		    else
-
+		      # If libtool objects are unsupported, then we need to preload.
 		      prev=dlprefiles
 		    fi
 		  fi
 
-
+		  # CHECK ME:  I think I busted this.  -Ossama
 		  if test dlprefiles = "$prev"; then
-
+		    # Preload the old-style object.
 		    func_append dlprefiles " $pic_object"
 		    prev=
 		  fi
 
-
+		  # A PIC object.
 		  func_append libobjs " $pic_object"
 		  arg=$pic_object
 		fi
 
-
+		# Non-PIC object.
 		if test none != "$non_pic_object"; then
-
+		  # Prepend the subdirectory the object is found in.
 		  non_pic_object=$xdir$non_pic_object
 
-
+		  # A standard non-PIC object
 		  func_append non_pic_objects " $non_pic_object"
 		  if test -z "$pic_object" || test none = "$pic_object"; then
 		    arg=$non_pic_object
 		  fi
 		else
-
-
+		  # If the PIC object exists, use it instead.
+		  # $xdir was prepended to $pic_object above.
 		  non_pic_object=$pic_object
 		  func_append non_pic_objects " $non_pic_object"
 		fi
 	      else
-
+		# Only an error if not doing a dry-run.
 		if $opt_dry_run; then
-
+		  # Extract subdirectory from the argument.
 		  func_dirname "$arg" "/" ""
 		  xdir=$func_dirname_result
 
@@ -6818,7 +6818,7 @@ func_mode_link ()
 	  continue
 	  ;;
 	rpath | xrpath)
-
+	  # We need an absolute path.
 	  case $arg in
 	  [\\/]* | [A-Za-z]:[\\/]*) ;;
 	  *)
@@ -6878,14 +6878,14 @@ func_mode_link ()
 	  continue
 	  ;;
 	esac
-      fi  
+      fi # test -n "$prev"
 
       prevarg=$arg
 
       case $arg in
       -all-static)
 	if test -n "$link_static_flag"; then
-
+	  # See comment for -static flag below, for more details.
 	  func_append compile_command " $link_static_flag"
 	  func_append finalize_command " $link_static_flag"
 	fi
@@ -6893,7 +6893,7 @@ func_mode_link ()
 	;;
 
       -allow-undefined)
-
+	# FIXME: remove this flag sometime in the future.
 	func_fatal_error "'-allow-undefined' must not be used because it is the default"
 	;;
 
@@ -6944,8 +6944,8 @@ func_mode_link ()
 	continue
 	;;
 
-
-
+      # The native IRIX linker understands -LANG:*, -LIST:* and -LNO:*
+      # so, if we see these flags be careful not to treat them like -L
       -L[A-Z][A-Z]*:*)
 	case $with_gcc/$host in
 	no/*-*-irix* | /*-*-irix*)
@@ -6967,7 +6967,7 @@ func_mode_link ()
 	fi
 	func_resolve_sysroot "$func_stripname_result"
 	dir=$func_resolve_sysroot_result
-
+	# We need an absolute path.
 	case $dir in
 	[\\/]* | [A-Za-z]:[\\/]*) ;;
 	*)
@@ -6979,10 +6979,10 @@ func_mode_link ()
 	esac
 	case "$deplibs " in
 	*" -L$dir "* | *" $arg "*)
-
+	  # Will only happen for absolute or sysroot arguments
 	  ;;
 	*)
-
+	  # Preserve sysroot, but never include relative directories
 	  case $dir in
 	    [\\/]* | [A-Za-z]:[\\/]* | =*) func_append deplibs " $arg" ;;
 	    *) func_append deplibs " -L$dir" ;;
@@ -7012,35 +7012,35 @@ func_mode_link ()
 	if test X-lc = "X$arg" || test X-lm = "X$arg"; then
 	  case $host in
 	  *-*-cygwin* | *-*-mingw* | *-*-pw32* | *-*-beos* | *-cegcc* | *-*-haiku*)
-
+	    # These systems don't actually have a C or math library (as such)
 	    continue
 	    ;;
 	  *-*-os2*)
-
+	    # These systems don't actually have a C library (as such)
 	    test X-lc = "X$arg" && continue
 	    ;;
 	  *-*-openbsd* | *-*-freebsd* | *-*-dragonfly* | *-*-bitrig*)
-
+	    # Do not include libc due to us having libc/libc_r.
 	    test X-lc = "X$arg" && continue
 	    ;;
 	  *-*-rhapsody* | *-*-darwin1.[012])
-
+	    # Rhapsody C and math libraries are in the System framework
 	    func_append deplibs " System.ltframework"
 	    continue
 	    ;;
 	  *-*-sco3.2v5* | *-*-sco5v6*)
-
+	    # Causes problems with __ctype
 	    test X-lc = "X$arg" && continue
 	    ;;
 	  *-*-sysv4.2uw2* | *-*-sysv5* | *-*-unixware* | *-*-OpenUNIX*)
-
+	    # Compiler inserts libc in the correct place for threads to work
 	    test X-lc = "X$arg" && continue
 	    ;;
 	  esac
 	elif test X-lc_r = "X$arg"; then
 	 case $host in
 	 *-*-openbsd* | *-*-freebsd* | *-*-dragonfly* | *-*-bitrig*)
-
+	   # Do not include libc_r directly, use -pthread flag.
 	   continue
 	   ;;
 	 esac
@@ -7059,9 +7059,9 @@ func_mode_link ()
 	continue
 	;;
 
-
-
-
+      # Tru64 UNIX uses -model [arg] to determine the layout of C++
+      # classes, name mangling, and exception handling.
+      # Darwin uses the -arch flag to determine output architecture.
       -model|-arch|-isysroot|--sysroot)
 	func_append compiler_flags " $arg"
 	func_append compile_command " $arg"
@@ -7095,8 +7095,8 @@ func_mode_link ()
       -no-install)
 	case $host in
 	*-*-cygwin* | *-*-mingw* | *-*-pw32* | *-*-os2* | *-*-darwin* | *-cegcc*)
-
-
+	  # The PATH hackery in wrapper scripts is required on Windows
+	  # and Darwin in order for the loader to find any dlls it needs.
 	  func_warning "'-no-install' is ignored for $host"
 	  func_warning "assuming '-no-fast-install' instead"
 	  fast_install=no
@@ -7146,7 +7146,7 @@ func_mode_link ()
       -R*)
 	func_stripname '-R' '' "$arg"
 	dir=$func_stripname_result
-
+	# We need an absolute path.
 	case $dir in
 	[\\/]* | [A-Za-z]:[\\/]*) ;;
 	=*)
@@ -7165,7 +7165,7 @@ func_mode_link ()
 	;;
 
       -shared)
-
+	# The effects of -shared are defined in a previous loop.
 	continue
 	;;
 
@@ -7175,11 +7175,11 @@ func_mode_link ()
 	;;
 
       -static | -static-libtool-libs)
-
-
-
-
-
+	# The effects of -static are defined in a previous loop.
+	# We used to do the same as -all-static on platforms that
+	# didn't have a PIC flag, but the assumption that the effects
+	# would be equivalent was wrong.  It would break on at least
+	# Digital Unix and AIX.
 	continue
 	;;
 
@@ -7252,27 +7252,27 @@ func_mode_link ()
 	continue
 	;;
 
-
+      # -msg_* for osf cc
       -msg_*)
 	func_quote_for_eval "$arg"
 	arg=$func_quote_for_eval_result
 	;;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      # Flags to be passed through unchanged, with rationale:
+      # -64, -mips[0-9]      enable 64-bit mode for the SGI compiler
+      # -r[0-9][0-9]*        specify processor for the SGI compiler
+      # -xarch=*, -xtarget=* enable 64-bit mode for the Sun compiler
+      # +DA*, +DD*           enable 64-bit mode for the HP compiler
+      # -q*                  compiler args for the IBM compiler
+      # -m*, -t[45]*, -txscale* architecture-specific flags for GCC
+      # -F/path              path to uninstalled frameworks, gcc on darwin
+      # -p, -pg, --coverage, -fprofile-*  profiling flags for GCC
+      # -fstack-protector*   stack protector flags for GCC
+      # @file                GCC response files
+      # -tp=*                Portland pgcc target processor selection
+      # --sysroot=*          for sysroot support
+      # -O*, -g*, -flto*, -fwhopr*, -fuse-linker-plugin GCC link-time optimization
+      # -stdlib=*            select c++ std lib with clang
       -64|-mips[0-9]|-r[0-9][0-9]*|-xarch=*|-xtarget=*|+DA*|+DD*|-q*|-m*| \
       -t[45]*|-txscale*|-p|-pg|--coverage|-fprofile-*|-F*|@*|-tp=*|--sysroot=*| \
       -O*|-g*|-flto*|-fwhopr*|-fuse-linker-plugin|-fstack-protector*|-stdlib=*)
@@ -7286,7 +7286,7 @@ func_mode_link ()
 
       -Z*)
         if test os2 = "`expr $host : '.*\(os2\)'`"; then
-
+          # OS/2 uses -Zxxx to specify OS/2-specific options
 	  compiler_flags="$compiler_flags $arg"
 	  func_append compile_command " $arg"
 	  func_append finalize_command " $arg"
@@ -7297,32 +7297,32 @@ func_mode_link ()
 	  esac
 	  continue
         else
-
+	  # Otherwise treat like 'Some other compiler flag' below
 	  func_quote_for_eval "$arg"
 	  arg=$func_quote_for_eval_result
         fi
 	;;
 
-
+      # Some other compiler flag.
       -* | +*)
         func_quote_for_eval "$arg"
 	arg=$func_quote_for_eval_result
 	;;
 
       *.$objext)
-
+	# A standard object.
 	func_append objs " $arg"
 	;;
 
       *.lo)
+	# A libtool-controlled object.
 
-
-
+	# Check to see that this really is a libtool object.
 	if func_lalib_unsafe_p "$arg"; then
 	  pic_object=
 	  non_pic_object=
 
-
+	  # Read the .lo file
 	  func_source "$arg"
 
 	  if test -z "$pic_object" ||
@@ -7332,12 +7332,12 @@ func_mode_link ()
 	    func_fatal_error "cannot find name of object for '$arg'"
 	  fi
 
-
+	  # Extract subdirectory from the argument.
 	  func_dirname "$arg" "/" ""
 	  xdir=$func_dirname_result
 
 	  test none = "$pic_object" || {
-
+	    # Prepend the subdirectory the object is found in.
 	    pic_object=$xdir$pic_object
 
 	    if test dlfiles = "$prev"; then
@@ -7346,43 +7346,43 @@ func_mode_link ()
 		prev=
 		continue
 	      else
-
+		# If libtool objects are unsupported, then we need to preload.
 		prev=dlprefiles
 	      fi
 	    fi
 
-
+	    # CHECK ME:  I think I busted this.  -Ossama
 	    if test dlprefiles = "$prev"; then
-
+	      # Preload the old-style object.
 	      func_append dlprefiles " $pic_object"
 	      prev=
 	    fi
 
-
+	    # A PIC object.
 	    func_append libobjs " $pic_object"
 	    arg=$pic_object
 	  }
 
-
+	  # Non-PIC object.
 	  if test none != "$non_pic_object"; then
-
+	    # Prepend the subdirectory the object is found in.
 	    non_pic_object=$xdir$non_pic_object
 
-
+	    # A standard non-PIC object
 	    func_append non_pic_objects " $non_pic_object"
 	    if test -z "$pic_object" || test none = "$pic_object"; then
 	      arg=$non_pic_object
 	    fi
 	  else
-
-
+	    # If the PIC object exists, use it instead.
+	    # $xdir was prepended to $pic_object above.
 	    non_pic_object=$pic_object
 	    func_append non_pic_objects " $non_pic_object"
 	  fi
 	else
-
+	  # Only an error if not doing a dry-run.
 	  if $opt_dry_run; then
-
+	    # Extract subdirectory from the argument.
 	    func_dirname "$arg" "/" ""
 	    xdir=$func_dirname_result
 
@@ -7398,22 +7398,22 @@ func_mode_link ()
 	;;
 
       *.$libext)
-
+	# An archive.
 	func_append deplibs " $arg"
 	func_append old_deplibs " $arg"
 	continue
 	;;
 
       *.la)
-
+	# A libtool-controlled library.
 
 	func_resolve_sysroot "$arg"
 	if test dlfiles = "$prev"; then
-
+	  # This library was specified with -dlopen.
 	  func_append dlfiles " $func_resolve_sysroot_result"
 	  prev=
 	elif test dlprefiles = "$prev"; then
-
+	  # The library was specified with -dlpreopen.
 	  func_append dlprefiles " $func_resolve_sysroot_result"
 	  prev=
 	else
@@ -7422,21 +7422,21 @@ func_mode_link ()
 	continue
 	;;
 
-
+      # Some other compiler argument.
       *)
-
-
+	# Unknown arguments in both finalize_command and compile_command need
+	# to be aesthetically quoted because they are evaled later.
 	func_quote_for_eval "$arg"
 	arg=$func_quote_for_eval_result
 	;;
-      esac  
+      esac # arg
 
-
+      # Now actually substitute the argument into the commands.
       if test -n "$arg"; then
 	func_append compile_command " $arg"
 	func_append finalize_command " $arg"
       fi
-    done  
+    done # argument parsing loop
 
     test -n "$prev" && \
       func_fatal_help "the '$prevarg' option requires an argument"
@@ -7808,15 +7808,15 @@ func_mode_link ()
 	    fi
 	    continue
 	    ;;
-	  esac  
-	  ;;  
+	  esac # linkmode
+	  ;; # *.$libext
 	*.lo | *.$objext)
 	  if test conv = "$pass"; then
 	    deplibs="$deplib $deplibs"
 	  elif test prog = "$linkmode"; then
 	    if test dlpreopen = "$pass" || test yes != "$dlopen_support" || test no = "$build_libtool_libs"; then
-
-
+	      # If there is no dlopen support or we're linking statically,
+	      # we need to preload.
 	      func_append newdlprefiles " $deplib"
 	      compile_deplibs="$deplib $compile_deplibs"
 	      finalize_deplibs="$deplib $finalize_deplibs"
@@ -7830,12 +7830,12 @@ func_mode_link ()
 	  alldeplibs=:
 	  continue
 	  ;;
-	esac  
+	esac # case $deplib
 
 	$found || test -f "$lib" \
 	  || func_fatal_error "cannot find the library '$lib' or unhandled argument '$deplib'"
 
-
+	# Check to see that this really is a libtool archive.
 	func_lalib_unsafe_p "$lib" \
 	  || func_fatal_error "'$lib' is not a valid libtool archive"
 
@@ -7849,17 +7849,17 @@ func_mode_link ()
 	library_names=
 	old_library=
 	inherited_linker_flags=
-
-
+	# If the library was installed with an old release of libtool,
+	# it will not redefine variables installed, or shouldnotlink
 	installed=yes
 	shouldnotlink=no
 	avoidtemprpath=
 
 
-
+	# Read the .la file
 	func_source "$lib"
 
-
+	# Convert "-framework foo" to "foo.ltframework"
 	if test -n "$inherited_linker_flags"; then
 	  tmp_inherited_linker_flags=`$ECHO "$inherited_linker_flags" | $SED 's/-framework \([^ $]*\)/\1.ltframework/g'`
 	  for tmp_inherited_linker_flag in $tmp_inherited_linker_flags; do
@@ -7878,13 +7878,13 @@ func_mode_link ()
 	fi
 
 	if test conv = "$pass"; then
-
+	  # Only check for convenience libraries
 	  deplibs="$lib $deplibs"
 	  if test -z "$libdir"; then
 	    if test -z "$old_library"; then
 	      func_fatal_error "cannot find name of link library for '$lib'"
 	    fi
-
+	    # It is a libtool convenience library, so add in its objects.
 	    func_append convenience " $ladir/$objdir/$old_library"
 	    func_append old_convenience " $ladir/$objdir/$old_library"
 	  elif test prog != "$linkmode" && test lib != "$linkmode"; then
@@ -7901,10 +7901,10 @@ func_mode_link ()
 	    func_append tmp_libs " $deplib"
 	  done
 	  continue
-	fi  
+	fi # $pass = conv
 
 
-
+	# Get the name of the library we link against.
 	linklib=
 	if test -n "$old_library" &&
 	   { test yes = "$prefer_static_libs" ||
@@ -7919,7 +7919,7 @@ func_mode_link ()
 	  func_fatal_error "cannot find name of link library for '$lib'"
 	fi
 
-
+	# This library was specified with -dlopen.
 	if test dlopen = "$pass"; then
 	  test -z "$libdir" \
 	    && func_fatal_error "cannot -dlopen a convenience library: '$lib'"
@@ -7927,18 +7927,18 @@ func_mode_link ()
 	     test yes != "$dlopen_support" ||
 	     test no = "$build_libtool_libs"
 	  then
-
-
-
-
+	    # If there is no dlname, no dlopen support or we're linking
+	    # statically, we need to preload.  We also need to preload any
+	    # dependent libraries so libltdl's deplib preloader doesn't
+	    # bomb out in the load deplibs phase.
 	    func_append dlprefiles " $lib $dependency_libs"
 	  else
 	    func_append newdlfiles " $lib"
 	  fi
 	  continue
-	fi  
+	fi # $pass = dlopen
 
-
+	# We need an absolute path.
 	case $ladir in
 	[\\/]* | [A-Za-z]:[\\/]*) abs_ladir=$ladir ;;
 	*)
@@ -7953,7 +7953,7 @@ func_mode_link ()
 	func_basename "$lib"
 	laname=$func_basename_result
 
-
+	# Find the relevant object directory and library name.
 	if test yes = "$installed"; then
 	  if test ! -f "$lt_sysroot$libdir/$linklib" && test -f "$abs_ladir/$linklib"; then
 	    func_warning "library '$lib' was moved."
@@ -7969,56 +7969,56 @@ func_mode_link ()
 	  if test ! -f "$ladir/$objdir/$linklib" && test -f "$abs_ladir/$linklib"; then
 	    dir=$ladir
 	    absdir=$abs_ladir
-
+	    # Remove this search path later
 	    func_append notinst_path " $abs_ladir"
 	  else
 	    dir=$ladir/$objdir
 	    absdir=$abs_ladir/$objdir
-
+	    # Remove this search path later
 	    func_append notinst_path " $abs_ladir"
 	  fi
-	fi  
+	fi # $installed = yes
 	func_stripname 'lib' '.la' "$laname"
 	name=$func_stripname_result
 
-
+	# This library was specified with -dlpreopen.
 	if test dlpreopen = "$pass"; then
 	  if test -z "$libdir" && test prog = "$linkmode"; then
 	    func_fatal_error "only libraries may -dlpreopen a convenience library: '$lib'"
 	  fi
 	  case $host in
-
+	    # special handling for platforms with PE-DLLs.
 	    *cygwin* | *mingw* | *cegcc* )
-
-
-
-
-
-
-
-
+	      # Linker will automatically link against shared library if both
+	      # static and shared are present.  Therefore, ensure we extract
+	      # symbols from the import library if a shared library is present
+	      # (otherwise, the dlopen module name will be incorrect).  We do
+	      # this by putting the import library name into $newdlprefiles.
+	      # We recover the dlopen module name by 'saving' the la file
+	      # name in a special purpose variable, and (later) extracting the
+	      # dlname from the la file.
 	      if test -n "$dlname"; then
 	        func_tr_sh "$dir/$linklib"
 	        eval "libfile_$func_tr_sh_result=\$abs_ladir/\$laname"
 	        func_append newdlprefiles " $dir/$linklib"
 	      else
 	        func_append newdlprefiles " $dir/$old_library"
-
-
+	        # Keep a list of preopened convenience libraries to check
+	        # that they are being used correctly in the link pass.
 	        test -z "$libdir" && \
 	          func_append dlpreconveniencelibs " $dir/$old_library"
 	      fi
 	    ;;
 	    * )
-
-
+	      # Prefer using a static library (so that no silly _DYNAMIC symbols
+	      # are required to link).
 	      if test -n "$old_library"; then
 	        func_append newdlprefiles " $dir/$old_library"
-
-
+	        # Keep a list of preopened convenience libraries to check
+	        # that they are being used correctly in the link pass.
 	        test -z "$libdir" && \
 	          func_append dlpreconveniencelibs " $dir/$old_library"
-
+	      # Otherwise, use the dlname, so that lt_dlopen finds it.
 	      elif test -n "$dlname"; then
 	        func_append newdlprefiles " $dir/$dlname"
 	      else
@@ -8026,17 +8026,17 @@ func_mode_link ()
 	      fi
 	    ;;
 	  esac
-	fi  
+	fi # $pass = dlpreopen
 
 	if test -z "$libdir"; then
-
+	  # Link the convenience library
 	  if test lib = "$linkmode"; then
 	    deplibs="$dir/$old_library $deplibs"
 	  elif test prog,link = "$linkmode,$pass"; then
 	    compile_deplibs="$dir/$old_library $compile_deplibs"
 	    finalize_deplibs="$dir/$old_library $finalize_deplibs"
 	  else
-	    deplibs="$lib $deplibs"  
+	    deplibs="$lib $deplibs" # used for prog,scan pass
 	  fi
 	  continue
 	fi
@@ -8060,12 +8060,12 @@ func_mode_link ()
 	         func_append newlib_search_path " $func_resolve_sysroot_result"
 		 ;;
 	    esac
-
+	    # Need to link against all dependency_libs?
 	    if $linkalldeplibs; then
 	      deplibs="$deplib $deplibs"
 	    else
-
-
+	      # Need to hardcode shared library paths
+	      # or/and link against static libraries
 	      newdependency_libs="$deplib $newdependency_libs"
 	    fi
 	    if $opt_preserve_dup_deps; then
@@ -8074,27 +8074,27 @@ func_mode_link ()
 	      esac
 	    fi
 	    func_append tmp_libs " $deplib"
-	  done  
+	  done # for deplib
 	  continue
-	fi  
+	fi # $linkmode = prog...
 
 	if test prog,link = "$linkmode,$pass"; then
 	  if test -n "$library_names" &&
 	     { { test no = "$prefer_static_libs" ||
 	         test built,yes = "$prefer_static_libs,$installed"; } ||
 	       test -z "$old_library"; }; then
-
+	    # We need to hardcode the library path
 	    if test -n "$shlibpath_var" && test -z "$avoidtemprpath"; then
-
+	      # Make sure the rpath contains only unique directories.
 	      case $temp_rpath: in
 	      *"$absdir:"*) ;;
 	      *) func_append temp_rpath "$absdir:" ;;
 	      esac
 	    fi
 
-
-
-
+	    # Hardcode the library path.
+	    # Skip directories that are in the system default run-time
+	    # search path.
 	    case " $sys_lib_dlsearch_path " in
 	    *" $absdir "*) ;;
 	    *)
@@ -8113,18 +8113,18 @@ func_mode_link ()
 	      esac
 	      ;;
 	    esac
-	  fi  
+	  fi # $linkmode,$pass = prog,link...
 
 	  if $alldeplibs &&
 	     { test pass_all = "$deplibs_check_method" ||
 	       { test yes = "$build_libtool_libs" &&
 		 test -n "$library_names"; }; }; then
-
+	    # We only need to search for static libraries
 	    continue
 	  fi
 	fi
 
-	link_static=no  
+	link_static=no # Whether the deplib will be linked statically
 	use_static_libs=$prefer_static_libs
 	if test built = "$use_static_libs" && test yes = "$installed"; then
 	  use_static_libs=no
@@ -8133,7 +8133,7 @@ func_mode_link ()
 	   { test no = "$use_static_libs" || test -z "$old_library"; }; then
 	  case $host in
 	  *cygwin* | *mingw* | *cegcc* | *os2*)
-
+	      # No point in relinking DLLs because paths are not encoded
 	      func_append notinst_deplibs " $lib"
 	      need_relink=no
 	    ;;
@@ -8144,10 +8144,10 @@ func_mode_link ()
 	    fi
 	    ;;
 	  esac
+	  # This is a shared library
 
-
-
-
+	  # Warn about portability, can't link against -module's on some
+	  # systems (darwin).  Don't bleat about dlopened modules though!
 	  dlopenmodule=
 	  for dlpremoduletest in $dlprefiles; do
 	    if test "X$dlpremoduletest" = "X$lib"; then
@@ -8166,9 +8166,9 @@ func_mode_link ()
 	  fi
 	  if test lib = "$linkmode" &&
 	     test yes = "$hardcode_into_libs"; then
-
-
-
+	    # Hardcode the library path.
+	    # Skip directories that are in the system default run-time
+	    # search path.
 	    case " $sys_lib_dlsearch_path " in
 	    *" $absdir "*) ;;
 	    *)
@@ -8190,17 +8190,17 @@ func_mode_link ()
 	  fi
 
 	  if test -n "$old_archive_from_expsyms_cmds"; then
-
+	    # figure out the soname
 	    set dummy $library_names
 	    shift
 	    realname=$1
 	    shift
 	    libname=`eval "\\$ECHO \"$libname_spec\""`
-
+	    # use dlname if we got it. it's perfectly good, no?
 	    if test -n "$dlname"; then
 	      soname=$dlname
 	    elif test -n "$soname_spec"; then
-
+	      # bleh windows
 	      case $host in
 	      *cygwin* | mingw* | *cegcc* | *os2*)
 	        func_arith $current - $age
@@ -8339,7 +8339,7 @@ func_mode_link ()
 	    add_shlibpath=
 	    add_dir=
 	    add=
-
+	    # Finalize command for both is simple: just hardcode it.
 	    if test yes = "$hardcode_direct" &&
 	       test no = "$hardcode_direct_absolute"; then
 	      add=$libdir/$linklib
@@ -8360,9 +8360,9 @@ func_mode_link ()
 		add=$libdir/$linklib
 	      fi
 	    else
-
+	      # We cannot seem to hardcode it, guess we'll fake it.
 	      add_dir=-L$libdir
-
+	      # Try looking first in the location we're being installed to.
 	      if test -n "$inst_prefix_dir"; then
 		case $libdir in
 		  [\\/]*)
@@ -8382,9 +8382,9 @@ func_mode_link ()
 	    fi
 	  fi
 	elif test prog = "$linkmode"; then
-
-
-
+	  # Here we assume that one of hardcode_direct or hardcode_minus_L
+	  # is not unsupported.  This is valid on all known static and
+	  # shared platforms.
 	  if test unsupported != "$hardcode_direct"; then
 	    test -n "$old_library" && linklib=$old_library
 	    compile_deplibs="$dir/$linklib $compile_deplibs"
@@ -8394,13 +8394,13 @@ func_mode_link ()
 	    finalize_deplibs="-l$name -L$dir $finalize_deplibs"
 	  fi
 	elif test yes = "$build_libtool_libs"; then
-
+	  # Not a shared library
 	  if test pass_all != "$deplibs_check_method"; then
+	    # We're trying link a shared library against a static one
+	    # but the system doesn't support it.
 
-
-
-
-
+	    # Just print a warning and add the library to dependency_libs so
+	    # that the program can be linked against the static library.
 	    echo
 	    $ECHO "*** Warning: This system cannot link to static lib archive $lib."
 	    echo "*** I have the capability to make that library automatically link in when"
@@ -8428,14 +8428,14 @@ func_mode_link ()
 	    deplibs="$dir/$old_library $deplibs"
 	    link_static=yes
 	  fi
-	fi  
+	fi # link shared/static library?
 
 	if test lib = "$linkmode"; then
 	  if test -n "$dependency_libs" &&
 	     { test yes != "$hardcode_into_libs" ||
 	       test yes = "$build_old_libs" ||
 	       test yes = "$link_static"; }; then
-
+	    # Extract -R from dependency_libs
 	    temp_deplibs=
 	    for libdir in $dependency_libs; do
 	      case $libdir in
@@ -8452,9 +8452,9 @@ func_mode_link ()
 	  fi
 
 	  func_append newlib_search_path " $absdir"
-
+	  # Link against this library
 	  test no = "$link_static" && newdependency_libs="$abs_ladir/$laname $newdependency_libs"
-
+	  # ... and its dependency_libs
 	  tmp_libs=
 	  for deplib in $dependency_libs; do
 	    newdependency_libs="$deplib $newdependency_libs"
@@ -8473,7 +8473,7 @@ func_mode_link ()
 	  done
 
 	  if test no != "$link_all_deplibs"; then
-
+	    # Add the search paths of all dependency libraries
 	    for deplib in $dependency_libs; do
 	      path=
 	      case $deplib in
@@ -8483,7 +8483,7 @@ func_mode_link ()
 	        deplib=$func_resolve_sysroot_result
 	        func_dirname "$deplib" "" "."
 		dir=$func_dirname_result
-
+		# We need an absolute path.
 		case $dir in
 		[\\/]* | [A-Za-z]:[\\/]*) absdir=$dir ;;
 		*)
@@ -8535,9 +8535,9 @@ func_mode_link ()
 	      *) deplibs="$path $deplibs" ;;
 	      esac
 	    done
-	  fi  
-	fi  
-      done  
+	  fi # link_all_deplibs != no
+	fi # linkmode = lib
+      done # for deplib in $libs
       if test link = "$pass"; then
 	if test prog = "$linkmode"; then
 	  compile_deplibs="$new_inherited_linker_flags $compile_deplibs"
@@ -8548,14 +8548,14 @@ func_mode_link ()
       fi
       dependency_libs=$newdependency_libs
       if test dlpreopen = "$pass"; then
-
+	# Link the dlpreopened libraries before other libraries
 	for deplib in $save_deplibs; do
 	  deplibs="$deplib $deplibs"
 	done
       fi
       if test dlopen != "$pass"; then
 	test conv = "$pass" || {
-
+	  # Make sure lib_search_path contains only unique directories.
 	  lib_search_path=
 	  for dir in $newlib_search_path; do
 	    case "$lib_search_path " in
@@ -8572,7 +8572,7 @@ func_mode_link ()
 	  vars=deplibs
 	fi
 	for var in $vars dependency_libs; do
-
+	  # Add libraries to $var in reverse order
 	  eval tmp_libs=\"\$$var\"
 	  new_libs=
 	  for deplib in $tmp_libs; do
@@ -9034,8 +9034,8 @@ func_mode_link ()
       test " " = "$libobjs" && libobjs=
 
       if test relink != "$opt_mode"; then
-
-
+	# Remove our outputs, but don't remove object files since they
+	# may have been created when compiling PIC objects.
 	removelist=
 	tempremovelist=`$ECHO "$output_objdir/*"`
 	for p in $tempremovelist; do
@@ -9058,23 +9058,23 @@ func_mode_link ()
 	  func_show_eval "${RM}r \$removelist"
       fi
 
-
+      # Now set the variables for building old libraries.
       if test yes = "$build_old_libs" && test convenience != "$build_libtool_libs"; then
 	func_append oldlibs " $output_objdir/$libname.$libext"
 
-
+	# Transform .lo files to .o files.
 	oldobjs="$objs "`$ECHO "$libobjs" | $SP2NL | $SED "/\.$libext$/d; $lo2o" | $NL2SP`
       fi
 
-
-
-
-
-
-
+      # Eliminate all temporary directories.
+      #for path in $notinst_path; do
+      #	lib_search_path=`$ECHO "$lib_search_path " | $SED "s% $path % %g"`
+      #	deplibs=`$ECHO "$deplibs " | $SED "s% -L$path % %g"`
+      #	dependency_libs=`$ECHO "$dependency_libs " | $SED "s% -L$path % %g"`
+      #done
 
       if test -n "$xrpath"; then
-
+	# If the user specified any rpath flags, then add them.
 	temp_xrpath=
 	for libdir in $xrpath; do
 	  func_replace_sysroot "$libdir"
@@ -9089,7 +9089,7 @@ func_mode_link ()
 	fi
       fi
 
-
+      # Make sure dlfiles contains only unique files that won't be dlpreopened
       old_dlfiles=$dlfiles
       dlfiles=
       for lib in $old_dlfiles; do
@@ -9099,7 +9099,7 @@ func_mode_link ()
 	esac
       done
 
-
+      # Make sure dlprefiles contains only unique files
       old_dlprefiles=$dlprefiles
       dlprefiles=
       for lib in $old_dlprefiles; do
@@ -9113,26 +9113,26 @@ func_mode_link ()
 	if test -n "$rpath"; then
 	  case $host in
 	  *-*-cygwin* | *-*-mingw* | *-*-pw32* | *-*-os2* | *-*-beos* | *-cegcc* | *-*-haiku*)
-
+	    # these systems don't actually have a c library (as such)!
 	    ;;
 	  *-*-rhapsody* | *-*-darwin1.[012])
-
+	    # Rhapsody C library is in the System framework
 	    func_append deplibs " System.ltframework"
 	    ;;
 	  *-*-netbsd*)
-
+	    # Don't link with libc until the a.out ld.so is fixed.
 	    ;;
 	  *-*-openbsd* | *-*-freebsd* | *-*-dragonfly*)
-
+	    # Do not include libc due to us having libc/libc_r.
 	    ;;
 	  *-*-sco3.2v5* | *-*-sco5v6*)
-
+	    # Causes problems with __ctype
 	    ;;
 	  *-*-sysv4.2uw2* | *-*-sysv5* | *-*-unixware* | *-*-OpenUNIX*)
-
+	    # Compiler inserts libc in the correct place for threads to work
 	    ;;
 	  *)
-
+	    # Add libc to deplibs on all other systems if necessary.
 	    if test yes = "$build_libtool_need_lc"; then
 	      func_append deplibs " -lc"
 	    fi
@@ -9140,15 +9140,15 @@ func_mode_link ()
 	  esac
 	fi
 
-
+	# Transform deplibs into only deplibs that can be linked in shared.
 	name_save=$name
 	libname_save=$libname
 	release_save=$release
 	versuffix_save=$versuffix
 	major_save=$major
-
-
-
+	# I'm not sure if I'm treating the release correctly.  I think
+	# release should show up in the -l (ie -lgmp5) so we don't want to
+	# add it in twice.  Is that correct?
 	release=
 	versuffix=
 	major=
@@ -9156,18 +9156,18 @@ func_mode_link ()
 	droppeddeps=no
 	case $deplibs_check_method in
 	pass_all)
-
-
-
-
-
+	  # Don't check for shared/static.  Everything works.
+	  # This might be a little naive.  We might want to check
+	  # whether the library exists or not.  But this is on
+	  # osf3 & osf4 and I'm not really sure... Just
+	  # implementing what was already the behavior.
 	  newdeplibs=$deplibs
 	  ;;
 	test_compile)
-
-
-
-
+	  # This code stresses the "libraries are programs" paradigm to its
+	  # limits. Maybe even breaks it.  We compile a program, linking it
+	  # against the deplibs as a proxy for the library.  Then we can check
+	  # whether they linked in statically or dynamically with ldd.
 	  $opt_dry_run || $RM conftest.c
 	  cat > conftest.c <<EOF
 	  int main() { return 0; }
@@ -9213,8 +9213,8 @@ EOF
 	      esac
 	    done
 	  else
-
-
+	    # Error occurred in the first compile.  Let's try to salvage
+	    # the situation: Compile a separate program for each library.
 	    for i in $deplibs; do
 	      case $i in
 	      -l*)
@@ -9298,16 +9298,16 @@ EOF
 		    potential_libs=`ls $i/$libnameglob[.-]* 2>/dev/null`
 		  fi
 		  for potent_lib in $potential_libs; do
-
+		      # Follow soft links.
 		      if ls -lLd "$potent_lib" 2>/dev/null |
 			 $GREP " -> " >/dev/null; then
 			continue
 		      fi
-
-
-
-
-
+		      # The statement above tries to avoid entering an
+		      # endless loop below, in case of cyclic links.
+		      # We might still enter an endless loop, since a link
+		      # loop can be closed while we follow links,
+		      # but so what?
 		      potlib=$potent_lib
 		      while test -h "$potlib" 2>/dev/null; do
 			potliblink=`ls -ld $potlib | $SED 's/.* -> //'`

@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_easing.h
+/// \brief Easing functions
 
 #ifndef __M_EASING_H__
 #define __M_EASING_H__
@@ -56,35 +56,35 @@ extern easingfunc_t easing_funclist[EASE_MAX];
 extern const char *easing_funcnames[EASE_MAX];
 
 #define EASINGFUNCLIST(sep) \
-	EASINGFUNC(Linear) sep   \
+	EASINGFUNC(Linear) sep /* Easing_Linear */ \
  \
-	EASINGFUNC(InSine) sep   \
-	EASINGFUNC(OutSine) sep   \
-	EASINGFUNC(InOutSine) sep   \
+	EASINGFUNC(InSine) sep /* Easing_InSine */ \
+	EASINGFUNC(OutSine) sep /* Easing_OutSine */ \
+	EASINGFUNC(InOutSine) sep /* Easing_InOutSine */ \
  \
-	EASINGFUNC(InQuad) sep   \
-	EASINGFUNC(OutQuad) sep   \
-	EASINGFUNC(InOutQuad) sep   \
+	EASINGFUNC(InQuad) sep /* Easing_InQuad */ \
+	EASINGFUNC(OutQuad) sep /* Easing_OutQuad */ \
+	EASINGFUNC(InOutQuad) sep /* Easing_InOutQuad */ \
  \
-	EASINGFUNC(InCubic) sep   \
-	EASINGFUNC(OutCubic) sep   \
-	EASINGFUNC(InOutCubic) sep   \
+	EASINGFUNC(InCubic) sep /* Easing_InCubic */ \
+	EASINGFUNC(OutCubic) sep /* Easing_OutCubic */ \
+	EASINGFUNC(InOutCubic) sep /* Easing_InOutCubic */ \
  \
-	EASINGFUNC(InQuart) sep   \
-	EASINGFUNC(OutQuart) sep   \
-	EASINGFUNC(InOutQuart) sep   \
+	EASINGFUNC(InQuart) sep /* Easing_InQuart */ \
+	EASINGFUNC(OutQuart) sep /* Easing_OutQuart */ \
+	EASINGFUNC(InOutQuart) sep /* Easing_InOutQuart */ \
  \
-	EASINGFUNC(InQuint) sep   \
-	EASINGFUNC(OutQuint) sep   \
-	EASINGFUNC(InOutQuint) sep   \
+	EASINGFUNC(InQuint) sep /* Easing_InQuint */ \
+	EASINGFUNC(OutQuint) sep /* Easing_OutQuint */ \
+	EASINGFUNC(InOutQuint) sep /* Easing_InOutQuint */ \
  \
-	EASINGFUNC(InExpo) sep   \
-	EASINGFUNC(OutExpo) sep   \
-	EASINGFUNC(InOutExpo) sep   \
+	EASINGFUNC(InExpo) sep /* Easing_InExpo */ \
+	EASINGFUNC(OutExpo) sep /* Easing_OutExpo */ \
+	EASINGFUNC(InOutExpo) sep /* Easing_InOutExpo */ \
  \
-	EASINGFUNC(InBack) sep   \
-	EASINGFUNC(OutBack) sep   \
-	EASINGFUNC(InOutBack) sep  
+	EASINGFUNC(InBack) sep /* Easing_InBack */ \
+	EASINGFUNC(OutBack) sep /* Easing_OutBack */ \
+	EASINGFUNC(InOutBack) sep /* Easing_InOutBack */
 
 #define EASINGFUNC(type) fixed_t Easing_ ## type (fixed_t t, fixed_t start, fixed_t end);
 
@@ -93,9 +93,9 @@ EASINGFUNCLIST()
 #undef EASINGFUNC
 #define EASINGFUNC(type) fixed_t Easing_ ## type (fixed_t t, fixed_t start, fixed_t end, fixed_t param);
 
-EASINGFUNC(InBackParameterized)  
-EASINGFUNC(OutBackParameterized)  
-EASINGFUNC(InOutBackParameterized)  
+EASINGFUNC(InBackParameterized) /* Easing_InBackParameterized */
+EASINGFUNC(OutBackParameterized) /* Easing_OutBackParameterized */
+EASINGFUNC(InOutBackParameterized) /* Easing_InOutBackParameterized */
 
 #undef EASINGFUNC
 #endif

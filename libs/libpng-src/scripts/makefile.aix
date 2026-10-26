@@ -8,11 +8,11 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
+# Location of the zlib library and include files
 ZLIBINC = ../zlib
 ZLIBLIB = ../zlib
 
-
+# Compiler, linker, lib and other tools
 CC = gcc
 LD = $(CC)
 AR_RC = ar rcs
@@ -28,30 +28,30 @@ prefix=/usr/local
 INCPATH=$(prefix)/include
 LIBPATH=$(prefix)/lib
 
-
-
-
-
-
-
-
-
+# override DESTDIR= on the make install command line to easily support
+# installing into a temporary location.  Example:
+#
+#    make install DESTDIR=/tmp/build/libpng
+#
+# If you're going to install into a temporary location
+# via DESTDIR, $(DESTDIR)$(prefix) must already exist before
+# you execute make install.
 DESTDIR=
 
 DI=$(DESTDIR)$(INCPATH)
 DL=$(DESTDIR)$(LIBPATH)
 
 WARNMORE =
-CPPFLAGS = -I$(ZLIBINC)  
-CFLAGS = -W -Wall -O2  
+CPPFLAGS = -I$(ZLIBINC) # -DPNG_DEBUG=5
+CFLAGS = -W -Wall -O2 # $(WARNMORE) -g
 LDFLAGS = -L. -L$(ZLIBLIB) -lpng16 -lz -lm
 
-
+# Variables
 OBJS =  png.o pngerror.o pngget.o pngmem.o pngpread.o \
 	pngread.o pngrio.o pngrtran.o pngrutil.o pngset.o \
 	pngtrans.o pngwio.o pngwrite.o pngwtran.o pngwutil.o
 
-
+# Targets
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(CFLAGS) -o $@ $<
 

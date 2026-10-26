@@ -1,11 +1,11 @@
 #! /usr/bin/env python
-
-
-
-
-
-
-
+# vim: tabstop=8 shiftwidth=8 expandtab
+# $Id: setupmingw32.py,v 1.14 2021/09/28 21:10:11 nanard Exp $
+# the MiniUPnP Project (c) 2007-2021 Thomas Bernard
+# https://miniupnp.tuxfamily.org/ or http://miniupnp.free.fr/
+#
+# python script to build the miniupnpc module under windows (using mingw32)
+#
 import sys
 
 if (sys.version_info.major * 10 +  sys.version_info.minor) >= 35:

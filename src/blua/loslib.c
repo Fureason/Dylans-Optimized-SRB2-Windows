@@ -26,13 +26,13 @@ static int os_clock (lua_State *L) {
 }
 
 
-  
-                                                          
-                       
-                                                        
-                                  
-                                                          
-  
+/*
+** {======================================================
+** Time/Date operations
+** { year=%Y, month=%m, day=%d, hour=%H, min=%M, sec=%S,
+**   wday=%w+1, yday=%j, isdst=? }
+** =======================================================
+*/
 
 static void setfield (lua_State *L, const char *key, int value) {
   lua_pushinteger(L, value);
@@ -40,8 +40,8 @@ static void setfield (lua_State *L, const char *key, int value) {
 }
 
 static void setboolfield (lua_State *L, const char *key, int value) {
-  if (value < 0)   
-    return;   
+  if (value < 0)  /* undefined? */
+    return;  /* does not set field */
   lua_pushboolean(L, value);
   lua_setfield(L, -2, key);
 }
@@ -74,16 +74,16 @@ static int os_date (lua_State *L) {
   const char *s = luaL_optstring(L, 1, "%c");
   time_t t = luaL_opt(L, (time_t)luaL_checknumber, 2, time(NULL));
   struct tm *stm;
-  if (*s == '!') {   
+  if (*s == '!') {  /* UTC? */
     stm = gmtime(&t);
-    s++;   
+    s++;  /* skip `!' */
   }
   else
     stm = localtime(&t);
-  if (stm == NULL)   
+  if (stm == NULL)  /* invalid date? */
     lua_pushnil(L);
   else if (strcmp(s, "*t") == 0) {
-    lua_createtable(L, 0, 9);   
+    lua_createtable(L, 0, 9);  /* 9 = number of fields */
     setfield(L, "sec", stm->tm_sec);
     setfield(L, "min", stm->tm_min);
     setfield(L, "hour", stm->tm_hour);
@@ -100,11 +100,11 @@ static int os_date (lua_State *L) {
     cc[0] = '%'; cc[2] = '\0';
     luaL_buffinit(L, &b);
     for (; *s; s++) {
-      if (*s != '%' || *(s + 1) == '\0')   
+      if (*s != '%' || *(s + 1) == '\0')  /* no conversion specifier? */
         luaL_addchar(&b, *s);
       else {
         size_t reslen;
-        char buff[200];   
+        char buff[200];  /* should be big enough for any conversion result */
         cc[1] = *(++s);
         reslen = strftime(buff, sizeof(buff), cc, stm);
         luaL_addlstring(&b, buff, reslen);
@@ -118,12 +118,12 @@ static int os_date (lua_State *L) {
 
 static int os_time (lua_State *L) {
   time_t t;
-  if (lua_isnoneornil(L, 1))   
-    t = time(NULL);   
+  if (lua_isnoneornil(L, 1))  /* called without args? */
+    t = time(NULL);  /* get current time */
   else {
     struct tm ts;
     luaL_checktype(L, 1, LUA_TTABLE);
-    lua_settop(L, 1);   
+    lua_settop(L, 1);  /* make sure table is at the top */
     ts.tm_sec = getfield(L, "sec", 0);
     ts.tm_min = getfield(L, "min", 0);
     ts.tm_hour = getfield(L, "hour", 12);
@@ -147,7 +147,7 @@ static int os_difftime (lua_State *L) {
   return 1;
 }
 
- 
+/* }====================================================== */
 
 static const luaL_Reg syslib[] = {
   {"clock",     os_clock},
@@ -157,7 +157,7 @@ static const luaL_Reg syslib[] = {
   {NULL, NULL}
 };
 
- 
+/* }====================================================== */
 
 
 

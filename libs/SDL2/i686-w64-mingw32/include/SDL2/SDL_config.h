@@ -25,9 +25,9 @@
 
 #include "SDL_platform.h"
 
-                                                                                                               
-                                                                                                         
-                                                                                                          
+/* winsdkver.h defines _WIN32_MAXVER for SDK version detection. It is present since at least the Windows 7 SDK,
+ * but out of caution we'll only use it if the compiler supports __has_include() to confirm its presence.
+ * If your compiler doesn't support __has_include() but you have winsdkver.h, define HAVE_WINSDKVER_H.  */
 #if !defined(HAVE_WINSDKVER_H) && defined(__has_include)
 #if __has_include(<winsdkver.h>)
 #define HAVE_WINSDKVER_H 1
@@ -38,8 +38,8 @@
 #include <winsdkver.h>
 #endif
 
-                                                                                                      
-                                                                           
+/* sdkddkver.h defines more specific SDK version numbers. This is needed because older versions of the
+ * Windows 10 SDK have broken declarations for the C API for DirectX 12. */
 #if !defined(HAVE_SDKDDKVER_H) && defined(__has_include)
 #if __has_include(<sdkddkver.h>)
 #define HAVE_SDKDDKVER_H 1
@@ -50,10 +50,10 @@
 #include <sdkddkver.h>
 #endif
 
- 
+/* This is a set of defines to configure the SDL features */
 
 #if !defined(HAVE_STDINT_H) && !defined(_STDINT_H_)
- 
+/* Most everything except Visual Studio 2008 and earlier has stdint.h now */
 #if defined(_MSC_VER) && (_MSC_VER < 1600)
 typedef signed __int8 int8_t;
 typedef unsigned __int8 uint8_t;
@@ -73,8 +73,8 @@ typedef unsigned int uintptr_t;
 #endif
 #else
 #define HAVE_STDINT_H 1
-#endif  
-#endif  
+#endif /* Visual Studio 2008 */
+#endif /* !_STDINT_H_ && !HAVE_STDINT_H */
 
 #ifdef _WIN64
 # define SIZEOF_VOIDP 8
@@ -92,17 +92,17 @@ typedef unsigned int uintptr_t;
 #ifndef __WATCOMC__
 #define HAVE_DXGI_H 1
 #define HAVE_XINPUT_H 1
-#if defined(_WIN32_MAXVER) && _WIN32_MAXVER >= 0x0A00   
+#if defined(_WIN32_MAXVER) && _WIN32_MAXVER >= 0x0A00  /* Windows 10 SDK */
 #define HAVE_WINDOWS_GAMING_INPUT_H 1
 #endif
-#if defined(_WIN32_MAXVER) && _WIN32_MAXVER >= 0x0602   
+#if defined(_WIN32_MAXVER) && _WIN32_MAXVER >= 0x0602  /* Windows 8 SDK */
 #define HAVE_D3D11_H 1
 #define HAVE_ROAPI_H 1
 #endif
-#if defined(WDK_NTDDI_VERSION) && WDK_NTDDI_VERSION > 0x0A000008  
+#if defined(WDK_NTDDI_VERSION) && WDK_NTDDI_VERSION > 0x0A000008 /* 10.0.19041.0 */
 #define HAVE_D3D12_H 1
 #endif
-#if defined(_WIN32_MAXVER) && _WIN32_MAXVER >= 0x0603   
+#if defined(_WIN32_MAXVER) && _WIN32_MAXVER >= 0x0603  /* Windows 8.1 SDK */
 #define HAVE_SHELLSCALINGAPI_H 1
 #endif
 #define HAVE_MMDEVICEAPI_H 1
@@ -118,9 +118,9 @@ typedef unsigned int uintptr_t;
 # endif
 #endif
 
- 
+/* This is disabled by default to avoid C runtime dependencies and manifest requirements */
 #ifdef HAVE_LIBC
- 
+/* Useful headers */
 #define STDC_HEADERS 1
 #define HAVE_CTYPE_H 1
 #define HAVE_FLOAT_H 1
@@ -130,13 +130,13 @@ typedef unsigned int uintptr_t;
 #define HAVE_STDIO_H 1
 #define HAVE_STRING_H 1
 
- 
+/* C library functions */
 #define HAVE_MALLOC 1
 #define HAVE_CALLOC 1
 #define HAVE_REALLOC 1
 #define HAVE_FREE 1
 #define HAVE_ALLOCA 1
- 
+/* OpenWatcom requires specific calling conventions for qsort and bsearch */
 #ifndef __WATCOMC__
 #define HAVE_QSORT 1
 #define HAVE_BSEARCH 1
@@ -148,16 +148,16 @@ typedef unsigned int uintptr_t;
 #define HAVE_MEMCMP 1
 #define HAVE_STRLEN 1
 #define HAVE__STRREV 1
- 
- 
- 
+/* These functions have security warnings, so we won't use them */
+/* #undef HAVE__STRUPR */
+/* #undef HAVE__STRLWR */
 #define HAVE_STRCHR 1
 #define HAVE_STRRCHR 1
 #define HAVE_STRSTR 1
- 
- 
- 
- 
+/* #undef HAVE_STRTOK_R */
+/* These functions have security warnings, so we won't use them */
+/* #undef HAVE__LTOA */
+/* #undef HAVE__ULTOA */
 #define HAVE_STRTOL 1
 #define HAVE_STRTOUL 1
 #define HAVE_STRTOD 1
@@ -206,7 +206,7 @@ typedef unsigned int uintptr_t;
 #define HAVE_TANF   1
 #endif
 #if defined(_MSC_VER)
- 
+/* These functions were added with the VC++ 2013 C runtime library */
 #if _MSC_VER >= 1800
 #define HAVE_STRTOLL 1
 #define HAVE_STRTOULL 1
@@ -220,7 +220,7 @@ typedef unsigned int uintptr_t;
 #define HAVE_TRUNC  1
 #define HAVE_TRUNCF 1
 #endif
- 
+/* This function is available with at least the VC++ 2008 C runtime library */
 #if _MSC_VER >= 1400
 #define HAVE__FSEEKI64 1
 #endif
@@ -243,7 +243,7 @@ typedef unsigned int uintptr_t;
 #define HAVE_STDDEF_H   1
 #endif
 
- 
+/* Enable various audio drivers */
 #if defined(HAVE_MMDEVICEAPI_H) && defined(HAVE_AUDIOCLIENT_H)
 #define SDL_AUDIO_DRIVER_WASAPI 1
 #endif
@@ -252,7 +252,7 @@ typedef unsigned int uintptr_t;
 #define SDL_AUDIO_DRIVER_DISK   1
 #define SDL_AUDIO_DRIVER_DUMMY  1
 
- 
+/* Enable various input drivers */
 #define SDL_JOYSTICK_DINPUT 1
 #define SDL_JOYSTICK_HIDAPI 1
 #ifndef __WINRT__
@@ -266,24 +266,24 @@ typedef unsigned int uintptr_t;
 #define SDL_HAPTIC_DINPUT   1
 #define SDL_HAPTIC_XINPUT   1
 
- 
+/* Enable the sensor driver */
 #ifdef HAVE_SENSORSAPI_H
 #define SDL_SENSOR_WINDOWS  1
 #else
 #define SDL_SENSOR_DUMMY    1
 #endif
 
- 
+/* Enable various shared object loading systems */
 #define SDL_LOADSO_WINDOWS  1
 
- 
+/* Enable various threading systems */
 #define SDL_THREAD_GENERIC_COND_SUFFIX 1
 #define SDL_THREAD_WINDOWS  1
 
- 
+/* Enable various timer systems */
 #define SDL_TIMER_WINDOWS   1
 
- 
+/* Enable various video drivers */
 #define SDL_VIDEO_DRIVER_DUMMY  1
 #define SDL_VIDEO_DRIVER_WINDOWS    1
 
@@ -297,7 +297,7 @@ typedef unsigned int uintptr_t;
 #define SDL_VIDEO_RENDER_D3D12  1
 #endif
 
- 
+/* Enable OpenGL support */
 #ifndef SDL_VIDEO_OPENGL
 #define SDL_VIDEO_OPENGL    1
 #endif
@@ -317,15 +317,15 @@ typedef unsigned int uintptr_t;
 #define SDL_VIDEO_OPENGL_EGL    1
 #endif
 
- 
+/* Enable Vulkan support */
 #define SDL_VIDEO_VULKAN 1
 
- 
+/* Enable system power support */
 #define SDL_POWER_WINDOWS 1
 
- 
+/* Enable filesystem support */
 #define SDL_FILESYSTEM_WINDOWS  1
 
-#endif  
+#endif /* SDL_config_windows_h_ */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

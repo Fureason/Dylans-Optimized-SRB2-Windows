@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  am_map.c
+/// \brief Code for the 'automap', former Doom feature used for DEVMODE testing
 
 #include "am_map.h"
 #include "g_game.h"
@@ -25,7 +25,7 @@
 #include "hardware/hw_main.h"
 #endif
 
-
+// For use if I do walls with outsides/insides
 static const UINT8 REDS        = (8*16);
 static const UINT8 REDRANGE    = 16;
 static const UINT8 GRAYS       = (1*16);
@@ -43,7 +43,7 @@ static const UINT8 NOCLIMBBROWNS      = (2*16);
 static const UINT8 NOCLIMBYELLOWS     = (11*16);
 
 
-
+// Automap colors
 #define BACKGROUND            DBLACK
 #define WALLCOLORS            (REDS + REDRANGE/2)
 #define WALLRANGE             (REDRANGE/2)
@@ -64,7 +64,7 @@ static const UINT8 NOCLIMBYELLOWS     = (11*16);
 #define GRIDCOLORS            (GRAYS + GRAYSRANGE/2)
 #define XHAIRCOLORS           DWHITE
 
-
+// controls
 #define AM_PANUPKEY     KEY_UPARROW
 #define AM_PANDOWNKEY   KEY_DOWNARROW
 #define AM_PANLEFTKEY   KEY_LEFTARROW
@@ -79,22 +79,22 @@ static const UINT8 NOCLIMBYELLOWS     = (11*16);
 
 #define AM_TOGGLEKEY    KEY_TAB
 
-
+// scale on entry
 #define INITSCALEMTOF (FRACUNIT/5)
-
-
+// how much the automap moves window per tic in frame-buffer coordinates
+// moves 140 pixels in 1 second
 #define F_PANINC 4
-
-
+// how much zoom-in per tic
+// goes to 2x in 1 second
 #define M_ZOOMIN ((51*FRACUNIT)/50)
-
-
+// how much zoom-out per tic
+// pulls out to 0.5x in 1 second
 #define M_ZOOMOUT ((50*FRACUNIT)/51)
 
-
+// translates between frame-buffer and map distances
 #define FTOM(x) FixedMul(((x)<<FRACBITS),scale_ftom)
 #define MTOF(x) (FixedMul((x),scale_mtof)>>FRACBITS)
-
+// translates between frame-buffer and map coordinates
 #define CXMTOF(x) (f_x + MTOF((x)-m_x))
 #define CYMTOF(y) (f_y + (f_h - MTOF((y)-m_y)))
 
@@ -111,22 +111,22 @@ typedef struct
 	mpoint_t a, b;
 } mline_t;
 
-
-
-
-
-
+//
+// The vector graphics for the automap.
+// A line drawing of the player pointing right,
+//   starting from the middle.
+//
 
 #define PLAYERRADIUS (16*(1<<MAPBITS))
 #define R ((8*PLAYERRADIUS)/7)
 
 static const mline_t player_arrow[] = {
-	{ { -R+R/8, 0 }, { R, 0 } },  
-	{ { R, 0 }, { R-R/2, R/4 } },  
+	{ { -R+R/8, 0 }, { R, 0 } }, // -----
+	{ { R, 0 }, { R-R/2, R/4 } }, // ----->
 	{ { R, 0 }, { R-R/2, -R/4 } },
-	{ { -R+R/8, 0 }, { -R-R/8, R/4 } },  
+	{ { -R+R/8, 0 }, { -R-R/8, R/4 } }, // >---->
 	{ { -R+R/8, 0 }, { -R-R/8, -R/4 } },
-	{ { -R+3*R/8, 0 }, { -R+R/8, R/4 } },  
+	{ { -R+3*R/8, 0 }, { -R+R/8, R/4 } }, // >>--->
 	{ { -R+3*R/8, 0 }, { -R+R/8, -R/4 } }
 };
 #undef R
@@ -150,59 +150,59 @@ static const mline_t thintriangle_guy[] = {
 #undef R
 #define NUMTHINTRIANGLEGUYLINES (sizeof (thintriangle_guy)/sizeof (mline_t))
 
-static boolean bigstate;	 
+static boolean bigstate;	// user view and large view (full map view)
 static boolean draw_grid = false;
 
 boolean automapactive = false;
-boolean am_recalc = false;  
+boolean am_recalc = false; //added : 05-02-98 : true when screen size changes
 static boolean am_stopped = true;
 
-static INT32 f_x, f_y;	 
-static INT32 f_w, f_h;	 
+static INT32 f_x, f_y;	// location of window on screen (always zero for both)
+static INT32 f_w, f_h;	// size of window on screen (always the screen width and height respectively)
 
-static boolean m_keydown[4];  
-static mpoint_t m_paninc;  
-static fixed_t mtof_zoommul;  
-static fixed_t ftom_zoommul;  
+static boolean m_keydown[4]; // which window panning keys are being pressed down?
+static mpoint_t m_paninc; // how far the window pans each tic (map coords)
+static fixed_t mtof_zoommul; // how far the window zooms in each tic (map coords)
+static fixed_t ftom_zoommul; // how far the window zooms in each tic (fb coords)
 
-static fixed_t m_x, m_y;    
-static fixed_t m_x2, m_y2;  
+static fixed_t m_x, m_y;   // LL x,y where the window is on the map (map coords)
+static fixed_t m_x2, m_y2; // UR x,y where the window is on the map (map coords)
 
-
-
-
+//
+// width/height of window on map (map coords)
+//
 static fixed_t m_w;
 static fixed_t m_h;
 
-
+// based on level size
 static fixed_t min_x;
 static fixed_t min_y;
 static fixed_t max_x;
 static fixed_t max_y;
 
-static fixed_t max_w;  
-static fixed_t max_h;  
+static fixed_t max_w; // max_x-min_x,
+static fixed_t max_h; // max_y-min_y
 
-static fixed_t min_scale_mtof;  
-static fixed_t max_scale_mtof;  
+static fixed_t min_scale_mtof; // used to tell when to stop zooming out
+static fixed_t max_scale_mtof; // used to tell when to stop zooming in
 
-
+// old stuff for recovery later
 static fixed_t old_m_w, old_m_h;
 static fixed_t old_m_x, old_m_y;
 
-
+// old location used by the Follower routine
 static mpoint_t f_oldloc;
 
-
+// used by MTOF to scale from map-to-frame-buffer coords
 static fixed_t scale_mtof = (fixed_t)INITSCALEMTOF;
-
+// used by FTOM to scale from frame-buffer-to-map coords (=1/scale_mtof)
 static fixed_t scale_ftom;
 
-static player_t *plr;  
+static player_t *plr; // the player represented by an arrow
 
-static boolean followplayer = true;  
+static boolean followplayer = true; // specifies whether to follow the player around
 
-
+// function for drawing lines, depends on rendermode
 typedef void (*AMDRAWFLINEFUNC) (const fline_t *fl, INT32 color);
 static AMDRAWFLINEFUNC AM_drawFline;
 
@@ -246,14 +246,14 @@ static inline void AM_restoreScaleAndLoc(void)
 	m_x2 = m_x + m_w;
 	m_y2 = m_y + m_h;
 
-
+	// Change the scaling multipliers
 	scale_mtof = FixedDiv(f_w<<FRACBITS, m_w);
 	scale_ftom = FixedDiv(FRACUNIT, scale_mtof);
 }
 
-                                                    
-                                                                    
-    
+/** Determines the bounding box around all vertices.
+  * This is used to set global variables controlling the zoom range.
+  */
 static void AM_findMinMaxBoundaries(void)
 {
 	size_t i;
@@ -325,7 +325,7 @@ static void AM_initVariables(void)
 	m_w = FTOM(f_w);
 	m_h = FTOM(f_h);
 
-
+	// find player to center on initially
 	if (!playeringame[pnum = consoleplayer])
 		for (pnum = 0; pnum < MAXPLAYERS; pnum++)
 			if (playeringame[pnum])
@@ -339,16 +339,16 @@ static void AM_initVariables(void)
 	}
 	AM_changeWindowLoc();
 
-
+	// for saving & restoring
 	old_m_x = m_x;
 	old_m_y = m_y;
 	old_m_w = m_w;
 	old_m_h = m_h;
 }
 
-
-
-
+//
+// Called when the screen size changes.
+//
 static void AM_FrameBufferInit(void)
 {
 	f_x = f_y = 0;
@@ -356,10 +356,10 @@ static void AM_FrameBufferInit(void)
 	f_h = vid.height;
 }
 
-
-
-
-
+//
+// should be called at the start of every level
+// right now, i figure it out myself
+//
 static void AM_LevelInit(void)
 {
 	AM_findMinMaxBoundaries();
@@ -369,20 +369,20 @@ static void AM_LevelInit(void)
 	scale_ftom = FixedDiv(FRACUNIT, scale_mtof);
 }
 
-                     
-   
-                
-    
+/** Disables automap.
+  *
+  * \sa AM_Start
+  */
 void AM_Stop(void)
 {
 	automapactive = false;
 	am_stopped = true;
 }
 
-                    
-   
-               
-    
+/** Enables automap.
+  *
+  * \sa AM_Stop
+  */
 void AM_Start(void)
 {
 	static INT32 lastlevel = -1;
@@ -390,7 +390,7 @@ void AM_Start(void)
 	if (!am_stopped)
 		AM_Stop();
 	am_stopped = false;
-	if (lastlevel != gamemap || am_recalc)  
+	if (lastlevel != gamemap || am_recalc) // screen size changed
 	{
 		AM_FrameBufferInit();
 		if (lastlevel != gamemap)
@@ -403,9 +403,9 @@ void AM_Start(void)
 	AM_initVariables();
 }
 
-
-
-
+//
+// set the window scale to the maximum size
+//
 static void AM_minOutWindowScale(void)
 {
 	scale_mtof = min_scale_mtof;
@@ -413,9 +413,9 @@ static void AM_minOutWindowScale(void)
 	AM_activateNewScale();
 }
 
-
-
-
+//
+// set the window scale to the minimum size
+//
 static void AM_maxOutWindowScale(void)
 {
 	scale_mtof = max_scale_mtof;
@@ -423,48 +423,48 @@ static void AM_maxOutWindowScale(void)
 	AM_activateNewScale();
 }
 
-
-
-
+//
+// set window panning
+//
 static void AM_setWindowPanning(void)
 {
-
-	if (m_keydown[2])  
+	// up and down
+	if (m_keydown[2]) // pan up
 		m_paninc.y = FTOM(F_PANINC);
-	else if (m_keydown[3])  
+	else if (m_keydown[3]) // pan down
 		m_paninc.y = -FTOM(F_PANINC);
 	else
 		m_paninc.y = 0;
 
-
-	if (m_keydown[0])  
+	// left and right
+	if (m_keydown[0]) // pan right
 		m_paninc.x = FTOM(F_PANINC);
-	else if (m_keydown[1])  
+	else if (m_keydown[1]) // pan left
 		m_paninc.x = -FTOM(F_PANINC);
 	else
 		m_paninc.x = 0;
 }
 
-                                            
-   
-                                           
-                                                        
-    
+/** Responds to user inputs in automap mode.
+  *
+  * \param ev Event to possibly respond to.
+  * \return True if the automap responder ate the event.
+  */
 boolean AM_Responder(event_t *ev)
 {
 	INT32 rc = false;
 
-	if (devparm || cv_debug)  
+	if (devparm || cv_debug) // only automap in Debug Tails 01-19-2001
 	{
 		if (!automapactive)
 		{
 			if (ev->type == ev_keydown && ev->key == AM_TOGGLEKEY)
 			{
-
-
+				//faB: prevent alt-tab in win32 version to activate automap just before
+				//     minimizing the app; doesn't do any harm to the DOS version
 				if (!gamekeydown[KEY_LALT]  && !gamekeydown[KEY_RALT])
 				{
-					bigstate = 0;  
+					bigstate = 0; //added : 24-01-98 : toggle off large view
 					AM_Start();
 					rc = true;
 				}
@@ -475,7 +475,7 @@ boolean AM_Responder(event_t *ev)
 			rc = true;
 			switch (ev->key)
 			{
-				case AM_PANRIGHTKEY:  
+				case AM_PANRIGHTKEY: // pan right
 					if (!followplayer)
 					{
 						m_keydown[0] = true;
@@ -484,7 +484,7 @@ boolean AM_Responder(event_t *ev)
 					else
 						rc = false;
 					break;
-				case AM_PANLEFTKEY:  
+				case AM_PANLEFTKEY: // pan left
 					if (!followplayer)
 					{
 						m_keydown[1] = true;
@@ -493,7 +493,7 @@ boolean AM_Responder(event_t *ev)
 					else
 						rc = false;
 					break;
-				case AM_PANUPKEY:  
+				case AM_PANUPKEY: // pan up
 					if (!followplayer)
 					{
 						m_keydown[2] = true;
@@ -502,7 +502,7 @@ boolean AM_Responder(event_t *ev)
 					else
 						rc = false;
 					break;
-				case AM_PANDOWNKEY:  
+				case AM_PANDOWNKEY: // pan down
 					if (!followplayer)
 					{
 						m_keydown[3] = true;
@@ -511,12 +511,12 @@ boolean AM_Responder(event_t *ev)
 					else
 						rc = false;
 					break;
-				case AM_ZOOMOUTKEY:  
+				case AM_ZOOMOUTKEY: // zoom out
 					mtof_zoommul = M_ZOOMOUT;
 					ftom_zoommul = M_ZOOMIN;
 					AM_setWindowPanning();
 					break;
-				case AM_ZOOMINKEY:  
+				case AM_ZOOMINKEY: // zoom in
 					mtof_zoommul = M_ZOOMIN;
 					ftom_zoommul = M_ZOOMOUT;
 					AM_setWindowPanning();
@@ -592,11 +592,11 @@ boolean AM_Responder(event_t *ev)
 	return rc;
 }
 
-                                       
-    
+/** Makes a zooming change take effect.
+  */
 static inline void AM_changeWindowScale(void)
 {
-
+	// Change the scaling multipliers
 	scale_mtof = FixedMul(scale_mtof, mtof_zoommul);
 	scale_ftom = FixedDiv(FRACUNIT, scale_mtof);
 
@@ -621,8 +621,8 @@ static inline void AM_doFollowPlayer(void)
 	}
 }
 
-                                                                
-    
+/** Updates automap on a game tic, while the automap is enabled.
+  */
 void AM_Ticker(void)
 {
 	if (!cv_debug)
@@ -634,33 +634,33 @@ void AM_Ticker(void)
 	if (followplayer)
 		AM_doFollowPlayer();
 
-
+	// Change the zoom if necessary
 	if (ftom_zoommul != FRACUNIT)
 		AM_changeWindowScale();
 
-
+	// Change x,y location
 	if (m_paninc.x || m_paninc.y)
 		AM_changeWindowLoc();
 }
 
-                                   
-   
-                                   
-    
+/** Clears the automap framebuffer.
+  *
+  * \param color Color to erase to.
+  */
 static void AM_clearFB(INT32 color)
 {
 	V_DrawFill(f_x, f_y, f_w, f_h, color|V_NOSCALESTART);
 }
 
-                                       
-                                                                    
-                                                                   
-                                                    
-   
-                           
-                                                
-                                                      
-    
+/** Performs automap clipping of lines.
+  * Based on Cohen-Sutherland clipping algorithm but with a slightly
+  * faster reject and precalculated slopes. If the speed is needed,
+  * use a hash algorithm to handle the common cases.
+  *
+  * \param ml Line to clip.
+  * \param fl Resulting framebuffer coordinates?
+  * \return True if the line is inside the boundaries.
+  */
 static boolean AM_clipMline(const mline_t *ml, fline_t *fl)
 {
 	enum
@@ -682,7 +682,7 @@ static boolean AM_clipMline(const mline_t *ml, fline_t *fl)
 	if ((mx) < 0) (oc) |= LEFT; \
 	else if ((mx) >= f_w) (oc) |= RIGHT;
 
-
+	// do trivial rejects and outcodes
 	if (ml->a.y > m_y2)
 		outcode1 = TOP;
 	else if (ml->a.y < m_y)
@@ -694,7 +694,7 @@ static boolean AM_clipMline(const mline_t *ml, fline_t *fl)
 		outcode2 = BOTTOM;
 
 	if (outcode1 & outcode2)
-		return false;  
+		return false; // trivially outside
 
 	if (ml->a.x < m_x)
 		outcode1 |= LEFT;
@@ -707,9 +707,9 @@ static boolean AM_clipMline(const mline_t *ml, fline_t *fl)
 		outcode2 |= RIGHT;
 
 	if (outcode1 & outcode2)
-		return false;  
+		return false; // trivially outside
 
-
+	// transform to frame-buffer coordinates.
 	fl->a.x = CXMTOF(ml->a.x);
 	fl->a.y = CYMTOF(ml->a.y);
 	fl->b.x = CXMTOF(ml->b.x);
@@ -723,14 +723,14 @@ static boolean AM_clipMline(const mline_t *ml, fline_t *fl)
 
 	while (outcode1 | outcode2)
 	{
-
-
+		// may be partially inside box
+		// find an outside point
 		if (outcode1)
 			outside = outcode1;
 		else
 			outside = outcode2;
 
-
+		// clip to each side
 		if (outside & TOP)
 		{
 			dy = fl->a.y - fl->b.y;
@@ -772,27 +772,27 @@ static boolean AM_clipMline(const mline_t *ml, fline_t *fl)
 		}
 
 		if (outcode1 & outcode2)
-			return false;  
+			return false; // trivially outside
 	}
 
 	return true;
 }
 #undef DOOUTCODE
 
-
-
-
+//
+// Draws a pixel.
+//
 static void AM_drawPixel(INT32 xx, INT32 yy, INT32 cc)
 {
 	UINT8 *dest = screens[0];
 	if (xx < 0 || yy < 0 || xx >= vid.width || yy >= vid.height)
-		return;  
+		return; // off the screen
 	dest[(yy*vid.width) + xx] = cc;
 }
 
-
-
-
+//
+// Classic Bresenham w/ whatever optimizations needed for speed
+//
 static void AM_drawFline_soft(const fline_t *fl, INT32 color)
 {
 	INT32 x, y, dx, dy, sx, sy, ax, ay, d;
@@ -800,7 +800,7 @@ static void AM_drawFline_soft(const fline_t *fl, INT32 color)
 #ifdef _DEBUG
 	static INT32 num = 0;
 
-
+	// For debugging only
 	if (fl->a.x < 0 || fl->a.x >= f_w
 	|| fl->a.y < 0 || fl->a.y >= f_h
 	|| fl->b.x < 0 || fl->b.x >= f_w
@@ -858,20 +858,20 @@ static void AM_drawFline_soft(const fline_t *fl, INT32 color)
 	}
 }
 
-
-
-
+//
+// Clip lines, draw visible parts of lines.
+//
 static void AM_drawMline(const mline_t *ml, INT32 color)
 {
 	static fline_t fl;
 
 	if (AM_clipMline(ml, &fl))
-		AM_drawFline(&fl, color);  
+		AM_drawFline(&fl, color); // draws it on frame buffer using fb coords
 }
 
-
-
-
+//
+// Draws flat (floor/ceiling tile) aligned grid lines.
+//
 static void AM_drawGrid(INT32 color)
 {
 	fixed_t x, y;
@@ -879,13 +879,13 @@ static void AM_drawGrid(INT32 color)
 	mline_t ml;
 	fixed_t gridsize = (MAPBLOCKUNITS<<MAPBITS);
 
-
+	// Figure out start of vertical gridlines
 	start = m_x;
 	if ((start - (bmaporgx>>FRACTOMAPBITS)) % gridsize)
 		start += gridsize - ((start - (bmaporgx>>FRACTOMAPBITS)) % gridsize);
 	end = m_x + m_w;
 
-
+	// draw vertical gridlines
 	ml.a.y = m_y;
 	ml.b.y = m_y + m_h;
 	for (x = start; x < end; x += gridsize)
@@ -895,13 +895,13 @@ static void AM_drawGrid(INT32 color)
 		AM_drawMline(&ml, color);
 	}
 
-
+	// Figure out start of horizontal gridlines
 	start = m_y;
 	if ((start - (bmaporgy>>FRACTOMAPBITS)) % gridsize)
 		start += gridsize - ((start - (bmaporgy>>FRACTOMAPBITS)) % gridsize);
 	end = m_y + m_h;
 
-
+	// draw horizontal gridlines
 	ml.a.x = m_x;
 	ml.b.x = m_x + m_w;
 	for (y = start; y < end; y += gridsize)
@@ -912,16 +912,16 @@ static void AM_drawGrid(INT32 color)
 	}
 }
 
-
-
-
-
+//
+// Determines visible lines, draws them.
+// This is LineDef based, not LineSeg based.
+//
 static inline void AM_drawWalls(void)
 {
 	size_t i;
 	static mline_t l;
-	fixed_t frontf1,frontf2, frontc1, frontc2;  
-	fixed_t backf1 = 0, backf2 = 0, backc1 = 0, backc2 = 0;  
+	fixed_t frontf1,frontf2, frontc1, frontc2; // front floor/ceiling ends
+	fixed_t backf1 = 0, backf2 = 0, backc1 = 0, backc2 = 0; // back floor ceiling ends
 
 	for (i = 0; i < numlines; i++)
 	{
@@ -947,18 +947,18 @@ static inline void AM_drawWalls(void)
 		}
 #undef SLOPEPARAMS
 
-		if (!lines[i].backsector)  
+		if (!lines[i].backsector) // 1-sided
 		{
 			if (lines[i].flags & ML_NOCLIMB)
 				AM_drawMline(&l, NOCLIMBWALLCOLORS);
 			else
 				AM_drawMline(&l, WALLCOLORS);
 		}
-		else if ((backf1 == backc1 && backf2 == backc2)  
-				 || (frontf1 == frontc1 && frontf2 == frontc2))  
+		else if ((backf1 == backc1 && backf2 == backc2) // Back is thok barrier
+				 || (frontf1 == frontc1 && frontf2 == frontc2)) // Front is thok barrier
 		{
 			if (backf1 == backc1 && backf2 == backc2
-				&& frontf1 == frontc1 && frontf2 == frontc2)  
+				&& frontf1 == frontc1 && frontf2 == frontc2) // BOTH are thok barriers
 			{
 				if (lines[i].flags & ML_NOCLIMB)
 					AM_drawMline(&l, NOCLIMBTSWALLCOLORS);
@@ -977,10 +977,10 @@ static inline void AM_drawWalls(void)
 		{
 			if (lines[i].flags & ML_NOCLIMB) {
 				if (backf1 != frontf1 || backf2 != frontf2) {
-					AM_drawMline(&l, NOCLIMBFDWALLCOLORS);  
+					AM_drawMline(&l, NOCLIMBFDWALLCOLORS); // floor level change
 				}
 				else if (backc1 != frontc1 || backc2 != frontc2) {
-					AM_drawMline(&l, NOCLIMBCDWALLCOLORS);  
+					AM_drawMline(&l, NOCLIMBCDWALLCOLORS); // ceiling level change
 				}
 				else
 					AM_drawMline(&l, NOCLIMBTSWALLCOLORS);
@@ -988,10 +988,10 @@ static inline void AM_drawWalls(void)
 			else
 			{
 				if (backf1 != frontf1 || backf2 != frontf2) {
-					AM_drawMline(&l, FDWALLCOLORS);  
+					AM_drawMline(&l, FDWALLCOLORS); // floor level change
 				}
 				else if (backc1 != frontc1 || backc2 != frontc2) {
-					AM_drawMline(&l, CDWALLCOLORS);  
+					AM_drawMline(&l, CDWALLCOLORS); // ceiling level change
 				}
 				else
 					AM_drawMline(&l, TSWALLCOLORS);
@@ -1000,10 +1000,10 @@ static inline void AM_drawWalls(void)
 	}
 }
 
-
-
-
-
+//
+// Rotation in 2D.
+// Used to rotate player arrow line character.
+//
 static void AM_rotate(fixed_t *x, fixed_t *y, angle_t a)
 {
 	fixed_t tmpx;
@@ -1114,10 +1114,10 @@ static inline void AM_drawThings(UINT8 colors)
 	}
 }
 
-                        
-   
-                                         
-    
+/** Draws the crosshair.
+  *
+  * \param color Color for the crosshair.
+  */
 static inline void AM_drawCrosshair(UINT8 color)
 {
 	const fixed_t scale = 4<<FRACBITS;
@@ -1140,8 +1140,8 @@ static inline void AM_drawCrosshair(UINT8 color)
 	}
 }
 
-                      
-    
+/** Draws the automap.
+  */
 void AM_Drawer(void)
 {
 	if (!automapactive)

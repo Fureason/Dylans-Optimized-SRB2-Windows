@@ -1,7 +1,7 @@
-
+# use GNU Patch from any platform
 
 if(WIN32)
-
+  # prioritize Git Patch on Windows as other Patches may be very old and incompatible.
   find_package(Git)
   if(Git_FOUND)
     get_filename_component(GIT_DIR ${GIT_EXECUTABLE} DIRECTORY)

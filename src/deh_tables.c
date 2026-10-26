@@ -7,73 +7,73 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
+/// \file  deh_tables.c
+/// \brief Define DeHackEd tables.
 
-
-
-#include "doomdef.h"  
-#include "s_sound.h"  
-#include "info.h"  
-#include "m_menu.h"  
-#include "y_inter.h"  
-#include "p_local.h"  
-#include "r_draw.h"  
-#include "lua_script.h"  
-#include "m_cond.h"  
-#include "v_video.h"  
-#include "i_sound.h"  
-#include "g_state.h"  
-#include "g_game.h"  
+#include "doomdef.h" // Constants
+#include "s_sound.h" // Sound constants
+#include "info.h" // Mobj, state, sprite, etc constants
+#include "m_menu.h" // Menu constants
+#include "y_inter.h" // Intermission constants
+#include "p_local.h" // some more constants
+#include "r_draw.h" // Colormap constants
+#include "lua_script.h" // Lua stuff
+#include "m_cond.h" // Emblem constants
+#include "v_video.h" // video flags (for lua)
+#include "i_sound.h" // musictype_t (for lua)
+#include "g_state.h" // gamestate_t (for lua)
+#include "g_game.h" // Joystick axes (for lua)
 #include "i_joy.h"
-#include "g_input.h"  
+#include "g_input.h" // Game controls (for lua)
 
 #include "deh_tables.h"
 
 char *FREE_STATES[NUMSTATEFREESLOTS];
 char *FREE_MOBJS[NUMMOBJFREESLOTS];
 char *FREE_SKINCOLORS[NUMCOLORFREESLOTS];
-bitarray_t used_spr[BIT_ARRAY_SIZE(NUMSPRITEFREESLOTS)];  
+bitarray_t used_spr[BIT_ARRAY_SIZE(NUMSPRITEFREESLOTS)]; // Sprite freeslots in use
 
 const char NIGHTSGRADE_LIST[] = {
-	'F',  
-	'E',  
-	'D',  
-	'C',  
-	'B',  
-	'A',  
-	'S',  
+	'F', // GRADE_F
+	'E', // GRADE_E
+	'D', // GRADE_D
+	'C', // GRADE_C
+	'B', // GRADE_B
+	'A', // GRADE_A
+	'S', // GRADE_S
 	'\0'
 };
 
 struct flickytypes_s FLICKYTYPES[] = {
-	{"BLUEBIRD", MT_FLICKY_01},  
-	{"RABBIT",   MT_FLICKY_02},  
-	{"CHICKEN",  MT_FLICKY_03},  
-	{"SEAL",     MT_FLICKY_04},  
-	{"PIG",      MT_FLICKY_05},  
-	{"CHIPMUNK", MT_FLICKY_06},  
-	{"PENGUIN",  MT_FLICKY_07},  
-	{"FISH",     MT_FLICKY_08},  
-	{"RAM",      MT_FLICKY_09},  
-	{"PUFFIN",   MT_FLICKY_10},  
-	{"COW",      MT_FLICKY_11},  
-	{"RAT",      MT_FLICKY_12},  
-	{"BEAR",     MT_FLICKY_13},  
-	{"DOVE",     MT_FLICKY_14},  
-	{"CAT",      MT_FLICKY_15},  
-	{"CANARY",   MT_FLICKY_16},  
-	{"a", 0},  
-
-	{"SPIDER",   MT_SECRETFLICKY_01},  
-	{"BAT",      MT_SECRETFLICKY_02},  
-	{"SEED",                MT_SEED},  
+	{"BLUEBIRD", MT_FLICKY_01}, // Flicky (Flicky)
+	{"RABBIT",   MT_FLICKY_02}, // Pocky (1)
+	{"CHICKEN",  MT_FLICKY_03}, // Cucky (1)
+	{"SEAL",     MT_FLICKY_04}, // Rocky (1)
+	{"PIG",      MT_FLICKY_05}, // Picky (1)
+	{"CHIPMUNK", MT_FLICKY_06}, // Ricky (1)
+	{"PENGUIN",  MT_FLICKY_07}, // Pecky (1)
+	{"FISH",     MT_FLICKY_08}, // Nicky (CD)
+	{"RAM",      MT_FLICKY_09}, // Flocky (CD)
+	{"PUFFIN",   MT_FLICKY_10}, // Wicky (CD)
+	{"COW",      MT_FLICKY_11}, // Macky (SRB2)
+	{"RAT",      MT_FLICKY_12}, // Micky (2)
+	{"BEAR",     MT_FLICKY_13}, // Becky (2)
+	{"DOVE",     MT_FLICKY_14}, // Docky (CD)
+	{"CAT",      MT_FLICKY_15}, // Nyannyan (Flicky)
+	{"CANARY",   MT_FLICKY_16}, // Lucky (CD)
+	{"a", 0}, // End of normal flickies - a lower case character so will never fastcmp valid with uppercase tmp
+	//{"FLICKER",          MT_FLICKER}, // Flacky (SRB2)
+	{"SPIDER",   MT_SECRETFLICKY_01}, // Sticky (SRB2)
+	{"BAT",      MT_SECRETFLICKY_02}, // Backy (SRB2)
+	{"SEED",                MT_SEED}, // Seed (CD)
 	{NULL, 0}
 };
 
-
-
+// IMPORTANT!
+// DO NOT FORGET TO SYNC THIS LIST WITH THE ACTIONNUM ENUM IN INFO.H
 #if defined(__GNUC__)
-
-
+// GCC 14+ diagnoses the historical actionf_t union initializer as a hard
+// error. Every non-NULL entry below intentionally has the acp1 signature.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
 #endif
@@ -349,28 +349,28 @@ actionpointer_t actionpointers[] =
 	{{A_ChangeHeight},           "A_CHANGEHEIGHT"},
 	{{NULL},                     "NONE"},
 
-
+	// This NULL entry must be the last in the list
 	{{NULL},                   NULL},
 };
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
 
+////////////////////////////////////////////////////////////////////////////////
+// CRAZY LIST OF STATE NAMES AND ALL FROM HERE DOWN
+// TODO: Make this all a seperate file or something, like part of info.c??
+// TODO: Read the list from a text lump in a WAD as necessary instead
+// or something, don't just keep it all in memory like this.
+// TODO: Make the lists public so we can start using actual mobj
+// and state names in warning and error messages! :D
 
-
-
-
-
-
-
-
-
-
-
-const char *const STATE_LIST[] = {  
+// RegEx to generate this from info.h: ^\tS_([^,]+), --> \t"S_\1",
+// I am leaving the prefixes solely for clarity to programmers,
+// because sadly no one remembers this place while searching for full state names.
+const char *const STATE_LIST[] = { // array length left dynamic for sanity testing later.
 	"S_NULL",
 	"S_UNKNOWN",
-	"S_INVISIBLE",  
+	"S_INVISIBLE", // state for invisible sprite
 
 	"S_SPAWNSTATE",
 	"S_SEESTATE",
@@ -380,10 +380,10 @@ const char *const STATE_LIST[] = {
 	"S_XDEATHSTATE",
 	"S_RAISESTATE",
 
-
+	// Thok
 	"S_THOK",
 
-
+	// Player
 	"S_PLAY_STND",
 	"S_PLAY_WAIT",
 	"S_PLAY_WALK",
@@ -402,41 +402,41 @@ const char *const STATE_LIST[] = {
 	"S_PLAY_EDGE",
 	"S_PLAY_RIDE",
 
-
+	// CA2_SPINDASH
 	"S_PLAY_SPINDASH",
 
-
+	// CA_FLY/SWIM
 	"S_PLAY_FLY",
 	"S_PLAY_SWIM",
 	"S_PLAY_FLY_TIRED",
 
-
+	// CA_GLIDEANDCLIMB
 	"S_PLAY_GLIDE",
 	"S_PLAY_GLIDE_LANDING",
 	"S_PLAY_CLING",
 	"S_PLAY_CLIMB",
 
-
+	// CA_FLOAT/CA_SLOWFALL
 	"S_PLAY_FLOAT",
 	"S_PLAY_FLOAT_RUN",
 
-
+	// CA_BOUNCE
 	"S_PLAY_BOUNCE",
 	"S_PLAY_BOUNCE_LANDING",
 
-
+	// CA2_GUNSLINGER
 	"S_PLAY_FIRE",
 	"S_PLAY_FIRE_FINISH",
 
-
+	// CA_TWINSPIN
 	"S_PLAY_TWINSPIN",
 
-
+	// CA2_MELEE
 	"S_PLAY_MELEE",
 	"S_PLAY_MELEE_FINISH",
 	"S_PLAY_MELEE_LANDING",
 
-
+	// SF_SUPER
 	"S_PLAY_SUPER_TRANS1",
 	"S_PLAY_SUPER_TRANS2",
 	"S_PLAY_SUPER_TRANS3",
@@ -444,20 +444,20 @@ const char *const STATE_LIST[] = {
 	"S_PLAY_SUPER_TRANS5",
 	"S_PLAY_SUPER_TRANS6",
 
-
+	// technically the player goes here but it's an infinite tic state
 	"S_OBJPLACE_DUMMY",
 
-
+	// 1-Up Box Sprites overlay (uses player sprite)
 	"S_PLAY_BOX1",
 	"S_PLAY_BOX2",
 	"S_PLAY_ICON1",
 	"S_PLAY_ICON2",
 	"S_PLAY_ICON3",
 
-
+	// Level end sign overlay (uses player sprite)
 	"S_PLAY_SIGN",
 
-
+	// NiGHTS character (uses player sprite)
 	"S_PLAY_NIGHTS_TRANS1",
 	"S_PLAY_NIGHTS_TRANS2",
 	"S_PLAY_NIGHTS_TRANS3",
@@ -472,7 +472,7 @@ const char *const STATE_LIST[] = {
 	"S_PLAY_NIGHTS_PULL",
 	"S_PLAY_NIGHTS_ATTACK",
 
-
+	// c:
 	"S_TAILSOVERLAY_STAND",
 	"S_TAILSOVERLAY_0DEGREES",
 	"S_TAILSOVERLAY_PLUS30DEGREES",
@@ -487,10 +487,10 @@ const char *const STATE_LIST[] = {
 	"S_TAILSOVERLAY_EDGE",
 	"S_TAILSOVERLAY_DASH",
 
-
+	// [:
 	"S_JETFUMEFLASH",
 
-
+	// Blue Crawla
 	"S_POSS_STND",
 	"S_POSS_RUN1",
 	"S_POSS_RUN2",
@@ -499,7 +499,7 @@ const char *const STATE_LIST[] = {
 	"S_POSS_RUN5",
 	"S_POSS_RUN6",
 
-
+	// Red Crawla
 	"S_SPOS_STND",
 	"S_SPOS_RUN1",
 	"S_SPOS_RUN2",
@@ -508,31 +508,31 @@ const char *const STATE_LIST[] = {
 	"S_SPOS_RUN5",
 	"S_SPOS_RUN6",
 
-
+	// Greenflower Fish
 	"S_FISH1",
 	"S_FISH2",
 	"S_FISH3",
 	"S_FISH4",
 
-
+	// Buzz (Gold)
 	"S_BUZZLOOK1",
 	"S_BUZZLOOK2",
 	"S_BUZZFLY1",
 	"S_BUZZFLY2",
 
-
+	// Buzz (Red)
 	"S_RBUZZLOOK1",
 	"S_RBUZZLOOK2",
 	"S_RBUZZFLY1",
 	"S_RBUZZFLY2",
 
-
+	// Jetty-Syn Bomber
 	"S_JETBLOOK1",
 	"S_JETBLOOK2",
 	"S_JETBZOOM1",
 	"S_JETBZOOM2",
 
-
+	// Jetty-Syn Gunner
 	"S_JETGLOOK1",
 	"S_JETGLOOK2",
 	"S_JETGZOOM1",
@@ -540,13 +540,13 @@ const char *const STATE_LIST[] = {
 	"S_JETGSHOOT1",
 	"S_JETGSHOOT2",
 
-
+	// Crawla Commander
 	"S_CCOMMAND1",
 	"S_CCOMMAND2",
 	"S_CCOMMAND3",
 	"S_CCOMMAND4",
 
-
+	// Deton
 	"S_DETON1",
 	"S_DETON2",
 	"S_DETON3",
@@ -563,13 +563,13 @@ const char *const STATE_LIST[] = {
 	"S_DETON14",
 	"S_DETON15",
 
-
+	// Skim Mine Dropper
 	"S_SKIM1",
 	"S_SKIM2",
 	"S_SKIM3",
 	"S_SKIM4",
 
-
+	// THZ Turret
 	"S_TURRET",
 	"S_TURRETFIRE",
 	"S_TURRETSHOCK1",
@@ -582,7 +582,7 @@ const char *const STATE_LIST[] = {
 	"S_TURRETSHOCK8",
 	"S_TURRETSHOCK9",
 
-
+	// Popup Turret
 	"S_TURRETLOOK",
 	"S_TURRETSEE",
 	"S_TURRETPOPUP1",
@@ -603,7 +603,7 @@ const char *const STATE_LIST[] = {
 	"S_TURRETPOPDOWN7",
 	"S_TURRETPOPDOWN8",
 
-
+	// Spincushion
 	"S_SPINCUSHION_LOOK",
 	"S_SPINCUSHION_CHASE1",
 	"S_SPINCUSHION_CHASE2",
@@ -623,7 +623,7 @@ const char *const STATE_LIST[] = {
 	"S_SPINCUSHION_STOP3",
 	"S_SPINCUSHION_STOP4",
 
-
+	// Crushstacean
 	"S_CRUSHSTACEAN_ROAM1",
 	"S_CRUSHSTACEAN_ROAM2",
 	"S_CRUSHSTACEAN_ROAM3",
@@ -638,7 +638,7 @@ const char *const STATE_LIST[] = {
 	"S_CRUSHCLAW_WAIT",
 	"S_CRUSHCHAIN",
 
-
+	// Banpyura
 	"S_BANPYURA_ROAM1",
 	"S_BANPYURA_ROAM2",
 	"S_BANPYURA_ROAM3",
@@ -653,7 +653,7 @@ const char *const STATE_LIST[] = {
 	"S_CDIAG7",
 	"S_CDIAG8",
 
-
+	// Jet Jaw
 	"S_JETJAW_ROAM1",
 	"S_JETJAW_ROAM2",
 	"S_JETJAW_ROAM3",
@@ -680,22 +680,22 @@ const char *const STATE_LIST[] = {
 	"S_JETJAW_CHOMP16",
 	"S_JETJAW_SOUND",
 
-
+	// Snailer
 	"S_SNAILER1",
 	"S_SNAILER_FLICKY",
 
-
+	// Vulture
 	"S_VULTURE_STND",
 	"S_VULTURE_DRIFT",
 	"S_VULTURE_ZOOM1",
 	"S_VULTURE_ZOOM2",
 	"S_VULTURE_STUNNED",
 
-
+	// Pointy
 	"S_POINTY1",
 	"S_POINTYBALL1",
 
-
+	// Robo-Hood
 	"S_ROBOHOOD_LOOK",
 	"S_ROBOHOOD_STAND",
 	"S_ROBOHOOD_FIRE1",
@@ -704,7 +704,7 @@ const char *const STATE_LIST[] = {
 	"S_ROBOHOOD_JUMP2",
 	"S_ROBOHOOD_JUMP3",
 
-
+	// Castlebot Facestabber
 	"S_FACESTABBER_STND1",
 	"S_FACESTABBER_STND2",
 	"S_FACESTABBER_STND3",
@@ -721,7 +721,7 @@ const char *const STATE_LIST[] = {
 	"S_FACESTABBER_DIE3",
 	"S_FACESTABBERSPEAR",
 
-
+	// Egg Guard
 	"S_EGGGUARD_STND",
 	"S_EGGGUARD_WALK1",
 	"S_EGGGUARD_WALK2",
@@ -735,11 +735,11 @@ const char *const STATE_LIST[] = {
 	"S_EGGGUARD_RUN3",
 	"S_EGGGUARD_RUN4",
 
-
+	// Egg Shield for Egg Guard
 	"S_EGGSHIELD",
 	"S_EGGSHIELDBREAK",
 
-
+	// Green Snapper
 	"S_SNAPPER_SPAWN",
 	"S_SNAPPER_SPAWN2",
 	"S_GSNAPPER_STND",
@@ -752,7 +752,7 @@ const char *const STATE_LIST[] = {
 	"S_SNAPPER_LEGRAISE",
 	"S_SNAPPER_HEAD",
 
-
+	// Minus
 	"S_MINUS_INIT",
 	"S_MINUS_STND",
 	"S_MINUS_DIGGING1",
@@ -771,7 +771,7 @@ const char *const STATE_LIST[] = {
 	"S_MINUS_AERIAL3",
 	"S_MINUS_AERIAL4",
 
-
+	// Minus dirt
 	"S_MINUSDIRT1",
 	"S_MINUSDIRT2",
 	"S_MINUSDIRT3",
@@ -780,7 +780,7 @@ const char *const STATE_LIST[] = {
 	"S_MINUSDIRT6",
 	"S_MINUSDIRT7",
 
-
+	// Spring Shell
 	"S_SSHELL_STND",
 	"S_SSHELL_RUN1",
 	"S_SSHELL_RUN2",
@@ -791,7 +791,7 @@ const char *const STATE_LIST[] = {
 	"S_SSHELL_SPRING3",
 	"S_SSHELL_SPRING4",
 
-
+	// Spring Shell (yellow)
 	"S_YSHELL_STND",
 	"S_YSHELL_RUN1",
 	"S_YSHELL_RUN2",
@@ -802,12 +802,12 @@ const char *const STATE_LIST[] = {
 	"S_YSHELL_SPRING3",
 	"S_YSHELL_SPRING4",
 
-
+	// Unidus
 	"S_UNIDUS_STND",
 	"S_UNIDUS_RUN",
 	"S_UNIDUS_BALL",
 
-
+	// Canarivore
 	"S_CANARIVORE_LOOK",
 	"S_CANARIVORE_AWAKEN1",
 	"S_CANARIVORE_AWAKEN2",
@@ -829,13 +829,13 @@ const char *const STATE_LIST[] = {
 	"S_CANARIVOREGAS_7",
 	"S_CANARIVOREGAS_8",
 
-
+	// Pyre Fly
 	"S_PYREFLY_FLY",
 	"S_PYREFLY_BURN",
 	"S_PYREFIRE1",
 	"S_PYREFIRE2",
 
-
+	// Pterabyte
 	"S_PTERABYTESPAWNER",
 	"S_PTERABYTEWAYPOINT",
 	"S_PTERABYTE_FLY1",
@@ -845,7 +845,7 @@ const char *const STATE_LIST[] = {
 	"S_PTERABYTE_SWOOPDOWN",
 	"S_PTERABYTE_SWOOPUP",
 
-
+	// Dragonbomber
 	"S_DRAGONBOMBER",
 	"S_DRAGONWING1",
 	"S_DRAGONWING2",
@@ -865,10 +865,10 @@ const char *const STATE_LIST[] = {
 	"S_DRAGONMINE_FASTFLASH2",
 	"S_DRAGONMINE_FASTLOOP",
 
-
+	// Boss Explosion
 	"S_BOSSEXPLODE",
 
-
+	// S3&K Boss Explosion
 	"S_SONIC3KBOSSEXPLOSION1",
 	"S_SONIC3KBOSSEXPLOSION2",
 	"S_SONIC3KBOSSEXPLOSION3",
@@ -878,7 +878,7 @@ const char *const STATE_LIST[] = {
 
 	"S_JETFUME1",
 
-
+	// Boss 1
 	"S_EGGMOBILE_STND",
 	"S_EGGMOBILE_ROFL",
 	"S_EGGMOBILE_LATK1",
@@ -928,7 +928,7 @@ const char *const STATE_LIST[] = {
 	"S_BOSSEGLZ1",
 	"S_BOSSEGLZ2",
 
-
+	// Boss 2
 	"S_EGGMOBILE2_STND",
 	"S_EGGMOBILE2_POGO1",
 	"S_EGGMOBILE2_POGO2",
@@ -950,13 +950,13 @@ const char *const STATE_LIST[] = {
 	"S_BOSSTANK2",
 	"S_BOSSSPIGOT",
 
-
+	// Boss 2 Goop
 	"S_GOOP1",
 	"S_GOOP2",
 	"S_GOOP3",
 	"S_GOOPTRAIL",
 
-
+	// Boss 3
 	"S_EGGMOBILE3_STND",
 	"S_EGGMOBILE3_SHOCK",
 	"S_EGGMOBILE3_ATK1",
@@ -977,7 +977,7 @@ const char *const STATE_LIST[] = {
 	"S_EGGMOBILE3_FLEE1",
 	"S_EGGMOBILE3_FLEE2",
 
-
+	// Boss 3 Pinch
 	"S_FAKEMOBILE_INIT",
 	"S_FAKEMOBILE",
 	"S_FAKEMOBILE_ATK1",
@@ -992,11 +992,11 @@ const char *const STATE_LIST[] = {
 	"S_BOSSSEBH1",
 	"S_BOSSSEBH2",
 
-
+	// Boss 3 Shockwave
 	"S_SHOCKWAVE1",
 	"S_SHOCKWAVE2",
 
-
+	// Boss 4
 	"S_EGGMOBILE4_STND",
 	"S_EGGMOBILE4_LATK1",
 	"S_EGGMOBILE4_LATK2",
@@ -1025,19 +1025,19 @@ const char *const STATE_LIST[] = {
 	"S_EGGMOBILE4_MACE_DIE2",
 	"S_EGGMOBILE4_MACE_DIE3",
 
-
+	// Boss 4 jet flame
 	"S_JETFLAME",
 
-
+	// Boss 4 Spectator Eggrobo
 	"S_EGGROBO1_STND",
 	"S_EGGROBO1_BSLAP1",
 	"S_EGGROBO1_BSLAP2",
 	"S_EGGROBO1_PISSED",
 
-
+	// Boss 4 Spectator Eggrobo jet flame
 	"S_EGGROBOJET",
 
-
+	// Boss 5
 	"S_FANG_SETUP",
 	"S_FANG_INTRO0",
 	"S_FANG_INTRO1",
@@ -1172,7 +1172,7 @@ const char *const STATE_LIST[] = {
 	"S_FSGNC",
 	"S_FSGND",
 
-
+	// Black Eggman (Boss 7)
 	"S_BLACKEGG_STND",
 	"S_BLACKEGG_STND2",
 	"S_BLACKEGG_WALK1",
@@ -1237,7 +1237,7 @@ const char *const STATE_LIST[] = {
 	"S_BLACKEGG_DESTROYPLAT2",
 	"S_BLACKEGG_DESTROYPLAT3",
 
-	"S_BLACKEGG_HELPER",  
+	"S_BLACKEGG_HELPER", // Collision helper
 
 	"S_BLACKEGG_GOOP1",
 	"S_BLACKEGG_GOOP2",
@@ -1249,7 +1249,7 @@ const char *const STATE_LIST[] = {
 
 	"S_BLACKEGG_MISSILE",
 
-
+	// New Very-Last-Minute 2.1 Brak Eggman (Cy-Brak-demon)
 	"S_CYBRAKDEMON_IDLE",
 	"S_CYBRAKDEMON_WALK1",
 	"S_CYBRAKDEMON_WALK2",
@@ -1258,16 +1258,16 @@ const char *const STATE_LIST[] = {
 	"S_CYBRAKDEMON_WALK5",
 	"S_CYBRAKDEMON_WALK6",
 	"S_CYBRAKDEMON_CHOOSE_ATTACK1",
-	"S_CYBRAKDEMON_MISSILE_ATTACK1",  
-	"S_CYBRAKDEMON_MISSILE_ATTACK2",  
-	"S_CYBRAKDEMON_MISSILE_ATTACK3",  
-	"S_CYBRAKDEMON_MISSILE_ATTACK4",  
-	"S_CYBRAKDEMON_MISSILE_ATTACK5",  
-	"S_CYBRAKDEMON_MISSILE_ATTACK6",  
-	"S_CYBRAKDEMON_FLAME_ATTACK1",  
-	"S_CYBRAKDEMON_FLAME_ATTACK2",  
-	"S_CYBRAKDEMON_FLAME_ATTACK3",  
-	"S_CYBRAKDEMON_FLAME_ATTACK4",  
+	"S_CYBRAKDEMON_MISSILE_ATTACK1", // Aim
+	"S_CYBRAKDEMON_MISSILE_ATTACK2", // Fire
+	"S_CYBRAKDEMON_MISSILE_ATTACK3", // Aim
+	"S_CYBRAKDEMON_MISSILE_ATTACK4", // Fire
+	"S_CYBRAKDEMON_MISSILE_ATTACK5", // Aim
+	"S_CYBRAKDEMON_MISSILE_ATTACK6", // Fire
+	"S_CYBRAKDEMON_FLAME_ATTACK1", // Reset
+	"S_CYBRAKDEMON_FLAME_ATTACK2", // Aim
+	"S_CYBRAKDEMON_FLAME_ATTACK3", // Fire
+	"S_CYBRAKDEMON_FLAME_ATTACK4", // Loop
 	"S_CYBRAKDEMON_CHOOSE_ATTACK2",
 	"S_CYBRAKDEMON_VILE_ATTACK1",
 	"S_CYBRAKDEMON_VILE_ATTACK2",
@@ -1278,8 +1278,8 @@ const char *const STATE_LIST[] = {
 	"S_CYBRAKDEMON_NAPALM_ATTACK1",
 	"S_CYBRAKDEMON_NAPALM_ATTACK2",
 	"S_CYBRAKDEMON_NAPALM_ATTACK3",
-	"S_CYBRAKDEMON_FINISH_ATTACK1",  
-	"S_CYBRAKDEMON_FINISH_ATTACK2",  
+	"S_CYBRAKDEMON_FINISH_ATTACK1", // If just attacked, remove MF2_FRET w/out going back to spawnstate
+	"S_CYBRAKDEMON_FINISH_ATTACK2", // Force a delay between attacks so you don't get bombarded with them back-to-back
 	"S_CYBRAKDEMON_PAIN1",
 	"S_CYBRAKDEMON_PAIN2",
 	"S_CYBRAKDEMON_PAIN3",
@@ -1378,17 +1378,17 @@ const char *const STATE_LIST[] = {
 	"S_CYBRAKDEMONNAPALMBOMBLARGE_FLY2",
 	"S_CYBRAKDEMONNAPALMBOMBLARGE_FLY3",
 	"S_CYBRAKDEMONNAPALMBOMBLARGE_FLY4",
-	"S_CYBRAKDEMONNAPALMBOMBLARGE_DIE1",  
-	"S_CYBRAKDEMONNAPALMBOMBLARGE_DIE2",  
-	"S_CYBRAKDEMONNAPALMBOMBLARGE_DIE3",  
-	"S_CYBRAKDEMONNAPALMBOMBLARGE_DIE4",  
+	"S_CYBRAKDEMONNAPALMBOMBLARGE_DIE1", // Explode
+	"S_CYBRAKDEMONNAPALMBOMBLARGE_DIE2", // Outer ring
+	"S_CYBRAKDEMONNAPALMBOMBLARGE_DIE3", // Center
+	"S_CYBRAKDEMONNAPALMBOMBLARGE_DIE4", // Sound
 
 	"S_CYBRAKDEMONNAPALMBOMBSMALL",
-	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE1",  
-	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE2",  
-	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE3",  
-	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE4",  
-	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE5",  
+	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE1", // Explode
+	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE2", // Outer ring
+	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE3", // Inner ring
+	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE4", // Center
+	"S_CYBRAKDEMONNAPALMBOMBSMALL_DIE5", // Sound
 
 	"S_CYBRAKDEMONNAPALMFLAME_FLY1",
 	"S_CYBRAKDEMONNAPALMFLAME_FLY2",
@@ -1402,9 +1402,9 @@ const char *const STATE_LIST[] = {
 	"S_CYBRAKDEMONVILEEXPLOSION2",
 	"S_CYBRAKDEMONVILEEXPLOSION3",
 
-
+	// Metal Sonic (Race)
 	"S_METALSONIC_RACE",
-
+	// Metal Sonic (Battle)
 	"S_METALSONIC_FLOAT",
 	"S_METALSONIC_VECTOR",
 	"S_METALSONIC_STUN",
@@ -1425,43 +1425,43 @@ const char *const STATE_LIST[] = {
 	"S_MSSHIELD_F1",
 	"S_MSSHIELD_F2",
 
-
+	// Ring
 	"S_RING",
 
-
+	// Blue Sphere for special stages
 	"S_BLUESPHERE",
 	"S_BLUESPHEREBONUS",
 	"S_BLUESPHERESPARK",
 
-
+	// Bomb Sphere
 	"S_BOMBSPHERE1",
 	"S_BOMBSPHERE2",
 	"S_BOMBSPHERE3",
 	"S_BOMBSPHERE4",
 
-
+	// NiGHTS Chip
 	"S_NIGHTSCHIP",
 	"S_NIGHTSCHIPBONUS",
 
-
+	// NiGHTS Star
 	"S_NIGHTSSTAR",
 	"S_NIGHTSSTARXMAS",
 
-
+	// Gravity Wells for special stages
 	"S_GRAVWELLGREEN",
 	"S_GRAVWELLRED",
 
-
+	// Individual Team Rings
 	"S_TEAMRING",
 
-
+	// Special Stage Token
 	"S_TOKEN",
 
-
+	// CTF Flags
 	"S_REDFLAG",
 	"S_BLUEFLAG",
 
-
+	// Emblem
 	"S_EMBLEM1",
 	"S_EMBLEM2",
 	"S_EMBLEM3",
@@ -1489,7 +1489,7 @@ const char *const STATE_LIST[] = {
 	"S_EMBLEM25",
 	"S_EMBLEM26",
 
-
+	// Chaos Emeralds
 	"S_CEMG1",
 	"S_CEMG2",
 	"S_CEMG3",
@@ -1498,18 +1498,18 @@ const char *const STATE_LIST[] = {
 	"S_CEMG6",
 	"S_CEMG7",
 
-
+	// Emerald hunt shards
 	"S_SHRD1",
 	"S_SHRD2",
 	"S_SHRD3",
 
-
+	// Bubble Source
 	"S_BUBBLES1",
 	"S_BUBBLES2",
 	"S_BUBBLES3",
 	"S_BUBBLES4",
 
-
+	// Level End Sign
 	"S_SIGN",
 	"S_SIGNSPIN1",
 	"S_SIGNSPIN2",
@@ -1524,7 +1524,7 @@ const char *const STATE_LIST[] = {
 	"S_EGGMANSIGN",
 	"S_CLEARSIGN",
 
-
+	// Spike Ball
 	"S_SPIKEBALL1",
 	"S_SPIKEBALL2",
 	"S_SPIKEBALL3",
@@ -1534,7 +1534,7 @@ const char *const STATE_LIST[] = {
 	"S_SPIKEBALL7",
 	"S_SPIKEBALL8",
 
-
+	// Elemental Shield's Spawn
 	"S_SPINFIRE1",
 	"S_SPINFIRE2",
 	"S_SPINFIRE3",
@@ -1549,7 +1549,7 @@ const char *const STATE_LIST[] = {
 	"S_TEAM_SPINFIRE5",
 	"S_TEAM_SPINFIRE6",
 
-
+	// Spikes
 	"S_SPIKE1",
 	"S_SPIKE2",
 	"S_SPIKE3",
@@ -1559,7 +1559,7 @@ const char *const STATE_LIST[] = {
 	"S_SPIKED1",
 	"S_SPIKED2",
 
-
+	// Wall spikes
 	"S_WALLSPIKE1",
 	"S_WALLSPIKE2",
 	"S_WALLSPIKE3",
@@ -1570,14 +1570,14 @@ const char *const STATE_LIST[] = {
 	"S_WALLSPIKED1",
 	"S_WALLSPIKED2",
 
-
+	// Starpost
 	"S_STARPOST_IDLE",
 	"S_STARPOST_FLASH",
 	"S_STARPOST_STARTSPIN",
 	"S_STARPOST_SPIN",
 	"S_STARPOST_ENDSPIN",
 
-
+	// Big floating mine
 	"S_BIGMINE_IDLE",
 	"S_BIGMINE_ALERT1",
 	"S_BIGMINE_ALERT2",
@@ -1591,12 +1591,12 @@ const char *const STATE_LIST[] = {
 	"S_BIGMINE_BLAST4",
 	"S_BIGMINE_BLAST5",
 
-
+	// Cannon Launcher
 	"S_CANNONLAUNCHER1",
 	"S_CANNONLAUNCHER2",
 	"S_CANNONLAUNCHER3",
 
-
+	// Monitor Miscellany
 	"S_BOXSPARKLE1",
 	"S_BOXSPARKLE2",
 	"S_BOXSPARKLE3",
@@ -1615,7 +1615,7 @@ const char *const STATE_LIST[] = {
 	"S_GOLDBOX_OFF6",
 	"S_GOLDBOX_OFF7",
 
-
+	// Monitor States (one per box)
 	"S_MYSTERY_BOX",
 	"S_RING_BOX",
 	"S_PITY_BOX",
@@ -1637,7 +1637,7 @@ const char *const STATE_LIST[] = {
 	"S_BUBBLEWRAP_BOX",
 	"S_THUNDERCOIN_BOX",
 
-
+	// Gold Repeat Monitor States (one per box)
 	"S_PITY_GOLDBOX",
 	"S_ATTRACT_GOLDBOX",
 	"S_FORCE_GOLDBOX",
@@ -1652,7 +1652,7 @@ const char *const STATE_LIST[] = {
 	"S_BUBBLEWRAP_GOLDBOX",
 	"S_THUNDERCOIN_GOLDBOX",
 
-
+	// Team Ring Boxes (these are special)
 	"S_RING_REDBOX1",
 	"S_RING_REDBOX2",
 	"S_REDBOX_POP1",
@@ -1663,7 +1663,7 @@ const char *const STATE_LIST[] = {
 	"S_BLUEBOX_POP1",
 	"S_BLUEBOX_POP2",
 
-
+	// Box Icons -- 2 states each, animation and action
 	"S_RING_ICON1",
 	"S_RING_ICON2",
 
@@ -1721,7 +1721,7 @@ const char *const STATE_LIST[] = {
 	"S_THUNDERCOIN_ICON1",
 	"S_THUNDERCOIN_ICON2",
 
-
+	// ---
 
 	"S_ROCKET",
 
@@ -1740,14 +1740,14 @@ const char *const STATE_LIST[] = {
 	"S_ENERGYBALL1",
 	"S_ENERGYBALL2",
 
-
+	// Skim Mine, also used by Jetty-Syn bomber
 	"S_MINE1",
 	"S_MINE_BOOM1",
 	"S_MINE_BOOM2",
 	"S_MINE_BOOM3",
 	"S_MINE_BOOM4",
 
-
+	// Jetty-Syn Bullet
 	"S_JETBULLET1",
 	"S_JETBULLET2",
 
@@ -1755,20 +1755,20 @@ const char *const STATE_LIST[] = {
 	"S_TURRETLASEREXPLODE1",
 	"S_TURRETLASEREXPLODE2",
 
-
+	// Cannonball
 	"S_CANNONBALL1",
 
-
+	// Arrow
 	"S_ARROW",
 	"S_ARROWBONK",
 
-
+	// Glaregoyle Demon fire
 	"S_DEMONFIRE",
 
-
+	// The letter
 	"S_LETTER",
 
-
+	// Tutorial Scenery
 	"S_TUTORIALLEAF1",
 	"S_TUTORIALLEAF2",
 	"S_TUTORIALLEAF3",
@@ -1818,7 +1818,7 @@ const char *const STATE_LIST[] = {
 	"S_TUTORIALFLOWERF15",
 	"S_TUTORIALFLOWERF16",
 
-
+	// GFZ flowers
 	"S_GFZFLOWERA",
 	"S_GFZFLOWERB",
 	"S_GFZFLOWERC",
@@ -1827,25 +1827,25 @@ const char *const STATE_LIST[] = {
 	"S_BERRYBUSH",
 	"S_BUSH",
 
-
+	// Trees (both GFZ and misc)
 	"S_GFZTREE",
 	"S_GFZBERRYTREE",
 	"S_GFZCHERRYTREE",
 	"S_CHECKERTREE",
 	"S_CHECKERSUNSETTREE",
-	"S_FHZTREE",  
+	"S_FHZTREE", // Frozen Hillside
 	"S_FHZPINKTREE",
 	"S_POLYGONTREE",
 	"S_BUSHTREE",
 	"S_BUSHREDTREE",
 	"S_SPRINGTREE",
 
+	// THZ flowers
+	"S_THZFLOWERA", // THZ1 Steam flower
+	"S_THZFLOWERB", // THZ1 Spin flower (red)
+	"S_THZFLOWERC", // THZ1 Spin flower (yellow)
 
-	"S_THZFLOWERA",  
-	"S_THZFLOWERB",  
-	"S_THZFLOWERC",  
-
-
+	// THZ Steam Whistle tree/bush
 	"S_THZTREE",
 	"S_THZTREEBRANCH1",
 	"S_THZTREEBRANCH2",
@@ -1861,14 +1861,14 @@ const char *const STATE_LIST[] = {
 	"S_THZTREEBRANCH12",
 	"S_THZTREEBRANCH13",
 
-
+	// THZ Alarm
 	"S_ALARM1",
 
-
+	// Deep Sea Gargoyle
 	"S_GARGOYLE",
 	"S_BIGGARGOYLE",
 
-
+	// DSZ Seaweed
 	"S_SEAWEED1",
 	"S_SEAWEED2",
 	"S_SEAWEED3",
@@ -1876,7 +1876,7 @@ const char *const STATE_LIST[] = {
 	"S_SEAWEED5",
 	"S_SEAWEED6",
 
-
+	// Dripping Water
 	"S_DRIPA1",
 	"S_DRIPA2",
 	"S_DRIPA3",
@@ -1885,29 +1885,29 @@ const char *const STATE_LIST[] = {
 	"S_DRIPC1",
 	"S_DRIPC2",
 
-
+	// Coral
 	"S_CORAL1",
 	"S_CORAL2",
 	"S_CORAL3",
 	"S_CORAL4",
 	"S_CORAL5",
 
-
+	// Blue Crystal
 	"S_BLUECRYSTAL1",
 
-
+	// Kelp,
 	"S_KELP",
 
-
+	// Animated algae
 	"S_ANIMALGAETOP1",
 	"S_ANIMALGAETOP2",
 	"S_ANIMALGAESEG",
 
-
+	// DSZ Stalagmites
 	"S_DSZSTALAGMITE",
 	"S_DSZ2STALAGMITE",
 
-
+	// DSZ Light beam
 	"S_LIGHTBEAM1",
 	"S_LIGHTBEAM2",
 	"S_LIGHTBEAM3",
@@ -1921,22 +1921,22 @@ const char *const STATE_LIST[] = {
 	"S_LIGHTBEAM11",
 	"S_LIGHTBEAM12",
 
-
+	// CEZ Chain
 	"S_CEZCHAIN",
 
-
+	// Flame
 	"S_FLAME",
 	"S_FLAMEPARTICLE",
 	"S_FLAMEREST",
 
-
+	// Eggman Statue
 	"S_EGGSTATUE1",
 
-
+	// CEZ hidden sling
 	"S_SLING1",
 	"S_SLING2",
 
-
+	// CEZ maces and chains
 	"S_SMALLMACECHAIN",
 	"S_BIGMACECHAIN",
 	"S_SMALLMACE",
@@ -1944,28 +1944,28 @@ const char *const STATE_LIST[] = {
 	"S_SMALLGRABCHAIN",
 	"S_BIGGRABCHAIN",
 
-
+	// Blue spring on a ball
 	"S_BLUESPRINGBALL",
 	"S_BLUESPRINGBALL2",
 	"S_BLUESPRINGBALL3",
 	"S_BLUESPRINGBALL4",
 	"S_BLUESPRINGBALL5",
 
-
+	// Yellow spring on a ball
 	"S_YELLOWSPRINGBALL",
 	"S_YELLOWSPRINGBALL2",
 	"S_YELLOWSPRINGBALL3",
 	"S_YELLOWSPRINGBALL4",
 	"S_YELLOWSPRINGBALL5",
 
-
+	// Red spring on a ball
 	"S_REDSPRINGBALL",
 	"S_REDSPRINGBALL2",
 	"S_REDSPRINGBALL3",
 	"S_REDSPRINGBALL4",
 	"S_REDSPRINGBALL5",
 
-
+	// Small Firebar
 	"S_SMALLFIREBAR1",
 	"S_SMALLFIREBAR2",
 	"S_SMALLFIREBAR3",
@@ -1983,7 +1983,7 @@ const char *const STATE_LIST[] = {
 	"S_SMALLFIREBAR15",
 	"S_SMALLFIREBAR16",
 
-
+	// Big Firebar
 	"S_BIGFIREBAR1",
 	"S_BIGFIREBAR2",
 	"S_BIGFIREBAR3",
@@ -2022,7 +2022,7 @@ const char *const STATE_LIST[] = {
 	"S_SUSPICIOUSFACESTABBERSTATUE_BURST2",
 	"S_BRAMBLES",
 
-
+	// Big Tumbleweed
 	"S_BIGTUMBLEWEED",
 	"S_BIGTUMBLEWEED_ROLL1",
 	"S_BIGTUMBLEWEED_ROLL2",
@@ -2033,7 +2033,7 @@ const char *const STATE_LIST[] = {
 	"S_BIGTUMBLEWEED_ROLL7",
 	"S_BIGTUMBLEWEED_ROLL8",
 
-
+	// Little Tumbleweed
 	"S_LITTLETUMBLEWEED",
 	"S_LITTLETUMBLEWEED_ROLL1",
 	"S_LITTLETUMBLEWEED_ROLL2",
@@ -2044,7 +2044,7 @@ const char *const STATE_LIST[] = {
 	"S_LITTLETUMBLEWEED_ROLL7",
 	"S_LITTLETUMBLEWEED_ROLL8",
 
-
+	// Cacti
 	"S_CACTI1",
 	"S_CACTI2",
 	"S_CACTI3",
@@ -2059,16 +2059,16 @@ const char *const STATE_LIST[] = {
 	"S_CACTITINYSEG",
 	"S_CACTISMALLSEG",
 
-
+	// Warning signs
 	"S_ARIDSIGN_CAUTION",
 	"S_ARIDSIGN_CACTI",
 	"S_ARIDSIGN_SHARPTURN",
 
-
+	// Oil lamp
 	"S_OILLAMP",
 	"S_OILLAMPFLARE",
 
-
+	// TNT barrel
 	"S_TNTBARREL_STND1",
 	"S_TNTBARREL_EXPL1",
 	"S_TNTBARREL_EXPL2",
@@ -2079,7 +2079,7 @@ const char *const STATE_LIST[] = {
 	"S_TNTBARREL_EXPL7",
 	"S_TNTBARREL_FLYING",
 
-
+	// TNT proximity shell
 	"S_PROXIMITY_TNT",
 	"S_PROXIMITY_TNT_TRIGGER1",
 	"S_PROXIMITY_TNT_TRIGGER2",
@@ -2105,7 +2105,7 @@ const char *const STATE_LIST[] = {
 	"S_PROXIMITY_TNT_TRIGGER22",
 	"S_PROXIMITY_TNT_TRIGGER23",
 
-
+	// Dust devil
 	"S_DUSTDEVIL",
 	"S_DUSTLAYER1",
 	"S_DUSTLAYER2",
@@ -2116,7 +2116,7 @@ const char *const STATE_LIST[] = {
 	"S_ARIDDUST2",
 	"S_ARIDDUST3",
 
-
+	// Minecart
 	"S_MINECART_IDLE",
 	"S_MINECART_DTH1",
 	"S_MINECARTEND",
@@ -2128,11 +2128,11 @@ const char *const STATE_LIST[] = {
 	"S_MINECARTSIDEMARK2",
 	"S_MINECARTSPARK",
 
-
+	// Saloon door
 	"S_SALOONDOOR",
 	"S_SALOONDOORCENTER",
 
-
+	// Train cameo
 	"S_TRAINCAMEOSPAWNER_1",
 	"S_TRAINCAMEOSPAWNER_2",
 	"S_TRAINCAMEOSPAWNER_3",
@@ -2140,11 +2140,11 @@ const char *const STATE_LIST[] = {
 	"S_TRAINCAMEOSPAWNER_5",
 	"S_TRAINPUFFMAKER",
 
-
+	// Train
 	"S_TRAINDUST",
 	"S_TRAINSTEAM",
 
-
+	// Flame jet
 	"S_FLAMEJETSTND",
 	"S_FLAMEJETSTART",
 	"S_FLAMEJETSTOP",
@@ -2158,18 +2158,18 @@ const char *const STATE_LIST[] = {
 	"S_FLAMEJETFLAME8",
 	"S_FLAMEJETFLAME9",
 
-
-	"S_FJSPINAXISA1",  
+	// Spinning flame jets
+	"S_FJSPINAXISA1", // Counter-clockwise
 	"S_FJSPINAXISA2",
-	"S_FJSPINAXISB1",  
+	"S_FJSPINAXISB1", // Clockwise
 	"S_FJSPINAXISB2",
 
-
+	// Blade's flame
 	"S_FLAMEJETFLAMEB1",
 	"S_FLAMEJETFLAMEB2",
 	"S_FLAMEJETFLAMEB3",
 
-
+	// Lavafall
 	"S_LAVAFALL_DORMANT",
 	"S_LAVAFALL_TELL",
 	"S_LAVAFALL_SHOOT",
@@ -2178,11 +2178,11 @@ const char *const STATE_LIST[] = {
 	"S_LAVAFALL_LAVA3",
 	"S_LAVAFALLROCK",
 
-
+	// Rollout Rock
 	"S_ROLLOUTSPAWN",
 	"S_ROLLOUTROCK",
 
-
+	// RVZ scenery
 	"S_BIGFERNLEAF",
 	"S_BIGFERN1",
 	"S_BIGFERN2",
@@ -2191,7 +2191,7 @@ const char *const STATE_LIST[] = {
 	"S_WALLVINE_LONG",
 	"S_WALLVINE_SHORT",
 
-
+	// Glaregoyles
 	"S_GLAREGOYLE",
 	"S_GLAREGOYLE_CHARGE",
 	"S_GLAREGOYLE_BLINK",
@@ -2221,20 +2221,20 @@ const char *const STATE_LIST[] = {
 	"S_GLAREGOYLELONG_LOOP",
 	"S_GLAREGOYLELONG_COOLDOWN",
 
-
+	// ATZ's Red Crystal/Target
 	"S_TARGET_IDLE",
 	"S_TARGET_HIT1",
 	"S_TARGET_HIT2",
 	"S_TARGET_RESPAWN",
 	"S_TARGET_ALLDONE",
 
-
+	// ATZ's green flame
 	"S_GREENFLAME",
 
-
+	// ATZ Blue Gargoyle
 	"S_BLUEGARGOYLE",
 
-
+	// Stalagmites
 	"S_STG0",
 	"S_STG1",
 	"S_STG2",
@@ -2246,24 +2246,24 @@ const char *const STATE_LIST[] = {
 	"S_STG8",
 	"S_STG9",
 
-
+	// Xmas-specific stuff
 	"S_XMASPOLE",
 	"S_CANDYCANE",
-	"S_SNOWMAN",     
-	"S_SNOWMANHAT",  
-	"S_LAMPPOST1",   
-	"S_LAMPPOST2",   
+	"S_SNOWMAN",    // normal
+	"S_SNOWMANHAT", // with hat + scarf
+	"S_LAMPPOST1",  // normal
+	"S_LAMPPOST2",  // with snow
 	"S_HANGSTAR",
 	"S_MISTLETOE",
 	"S_SSZTREE",
 	"S_SSZTREE_BRANCH",
 	"S_SSZTREE2",
 	"S_SSZTREE2_BRANCH",
-
+	// Xmas GFZ bushes
 	"S_XMASBLUEBERRYBUSH",
 	"S_XMASBERRYBUSH",
 	"S_XMASBUSH",
-
+	// FHZ
 	"S_FHZICE1",
 	"S_FHZICE2",
 	"S_ROSY_IDLE",
@@ -2275,8 +2275,8 @@ const char *const STATE_LIST[] = {
 	"S_ROSY_STND",
 	"S_ROSY_UNHAPPY",
 
-
-
+	// Halloween Scenery
+	// Pumpkins
 	"S_JACKO1",
 	"S_JACKO1OVERLAY_1",
 	"S_JACKO1OVERLAY_2",
@@ -2292,11 +2292,11 @@ const char *const STATE_LIST[] = {
 	"S_JACKO3OVERLAY_2",
 	"S_JACKO3OVERLAY_3",
 	"S_JACKO3OVERLAY_4",
-
+	// Dr Seuss Trees
 	"S_HHZTREE_TOP",
 	"S_HHZTREE_TRUNK",
 	"S_HHZTREE_LEAF",
-
+	// Mushroom
 	"S_HHZSHROOM_1",
 	"S_HHZSHROOM_2",
 	"S_HHZSHROOM_3",
@@ -2313,14 +2313,14 @@ const char *const STATE_LIST[] = {
 	"S_HHZSHROOM_14",
 	"S_HHZSHROOM_15",
 	"S_HHZSHROOM_16",
-
+	// Misc
 	"S_HHZGRASS",
 	"S_HHZTENT1",
 	"S_HHZTENT2",
 	"S_HHZSTALAGMITE_TALL",
 	"S_HHZSTALAGMITE_SHORT",
 
-
+	// Botanic Serenity's loads of scenery states
 	"S_BSZTALLFLOWER_RED",
 	"S_BSZTALLFLOWER_PURPLE",
 	"S_BSZTALLFLOWER_BLUE",
@@ -2381,7 +2381,7 @@ const char *const STATE_LIST[] = {
 	"S_PPAL",
 	"S_PPEL",
 
-
+	// Shield Orb
 	"S_ARMA1",
 	"S_ARMA2",
 	"S_ARMA3",
@@ -2610,12 +2610,12 @@ const char *const STATE_LIST[] = {
 	"S_ZAPS10",
 	"S_ZAPS11",
 	"S_ZAPS12",
-	"S_ZAPS13",  
+	"S_ZAPS13", // blank frame
 	"S_ZAPS14",
 	"S_ZAPS15",
 	"S_ZAPS16",
 
-	"S_ZAPSB1",  
+	"S_ZAPSB1", // blank frame
 	"S_ZAPSB2",
 	"S_ZAPSB3",
 	"S_ZAPSB4",
@@ -2625,25 +2625,25 @@ const char *const STATE_LIST[] = {
 	"S_ZAPSB8",
 	"S_ZAPSB9",
 	"S_ZAPSB10",
-	"S_ZAPSB11",  
+	"S_ZAPSB11", // blank frame
 
-
+	//Thunder spark
 	"S_THUNDERCOIN_SPARK",
 
-
+	// Invincibility Sparkles
 	"S_IVSP",
 
-
+	// Super Sonic Spark
 	"S_SSPK1",
 	"S_SSPK2",
 	"S_SSPK3",
 	"S_SSPK4",
 	"S_SSPK5",
 
-
+	// Flicky-sized bubble
 	"S_FLICKY_BUBBLE",
 
-
+	// Bluebird
 	"S_FLICKY_01_OUT",
 	"S_FLICKY_01_FLAP1",
 	"S_FLICKY_01_FLAP2",
@@ -2651,7 +2651,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_01_STAND",
 	"S_FLICKY_01_CENTER",
 
-
+	// Rabbit
 	"S_FLICKY_02_OUT",
 	"S_FLICKY_02_AIM",
 	"S_FLICKY_02_HOP",
@@ -2660,7 +2660,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_02_STAND",
 	"S_FLICKY_02_CENTER",
 
-
+	// Chicken
 	"S_FLICKY_03_OUT",
 	"S_FLICKY_03_AIM",
 	"S_FLICKY_03_HOP",
@@ -2670,7 +2670,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_03_STAND",
 	"S_FLICKY_03_CENTER",
 
-
+	// Seal
 	"S_FLICKY_04_OUT",
 	"S_FLICKY_04_AIM",
 	"S_FLICKY_04_HOP",
@@ -2683,7 +2683,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_04_STAND",
 	"S_FLICKY_04_CENTER",
 
-
+	// Pig
 	"S_FLICKY_05_OUT",
 	"S_FLICKY_05_AIM",
 	"S_FLICKY_05_HOP",
@@ -2692,7 +2692,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_05_STAND",
 	"S_FLICKY_05_CENTER",
 
-
+	// Chipmunk
 	"S_FLICKY_06_OUT",
 	"S_FLICKY_06_AIM",
 	"S_FLICKY_06_HOP",
@@ -2701,7 +2701,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_06_STAND",
 	"S_FLICKY_06_CENTER",
 
-
+	// Penguin
 	"S_FLICKY_07_OUT",
 	"S_FLICKY_07_AIML",
 	"S_FLICKY_07_HOPL",
@@ -2717,7 +2717,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_07_STAND",
 	"S_FLICKY_07_CENTER",
 
-
+	// Fish
 	"S_FLICKY_08_OUT",
 	"S_FLICKY_08_AIM",
 	"S_FLICKY_08_HOP",
@@ -2732,7 +2732,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_08_STAND",
 	"S_FLICKY_08_CENTER",
 
-
+	// Ram
 	"S_FLICKY_09_OUT",
 	"S_FLICKY_09_AIM",
 	"S_FLICKY_09_HOP",
@@ -2741,14 +2741,14 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_09_STAND",
 	"S_FLICKY_09_CENTER",
 
-
+	// Puffin
 	"S_FLICKY_10_OUT",
 	"S_FLICKY_10_FLAP1",
 	"S_FLICKY_10_FLAP2",
 	"S_FLICKY_10_STAND",
 	"S_FLICKY_10_CENTER",
 
-
+	// Cow
 	"S_FLICKY_11_OUT",
 	"S_FLICKY_11_AIM",
 	"S_FLICKY_11_RUN1",
@@ -2757,7 +2757,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_11_STAND",
 	"S_FLICKY_11_CENTER",
 
-
+	// Rat
 	"S_FLICKY_12_OUT",
 	"S_FLICKY_12_AIM",
 	"S_FLICKY_12_RUN1",
@@ -2766,7 +2766,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_12_STAND",
 	"S_FLICKY_12_CENTER",
 
-
+	// Bear
 	"S_FLICKY_13_OUT",
 	"S_FLICKY_13_AIM",
 	"S_FLICKY_13_HOP",
@@ -2775,7 +2775,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_13_STAND",
 	"S_FLICKY_13_CENTER",
 
-
+	// Dove
 	"S_FLICKY_14_OUT",
 	"S_FLICKY_14_FLAP1",
 	"S_FLICKY_14_FLAP2",
@@ -2783,7 +2783,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_14_STAND",
 	"S_FLICKY_14_CENTER",
 
-
+	// Cat
 	"S_FLICKY_15_OUT",
 	"S_FLICKY_15_AIM",
 	"S_FLICKY_15_HOP",
@@ -2792,7 +2792,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_15_STAND",
 	"S_FLICKY_15_CENTER",
 
-
+	// Canary
 	"S_FLICKY_16_OUT",
 	"S_FLICKY_16_FLAP1",
 	"S_FLICKY_16_FLAP2",
@@ -2800,7 +2800,7 @@ const char *const STATE_LIST[] = {
 	"S_FLICKY_16_STAND",
 	"S_FLICKY_16_CENTER",
 
-
+	// Spider
 	"S_SECRETFLICKY_01_OUT",
 	"S_SECRETFLICKY_01_AIM",
 	"S_SECRETFLICKY_01_HOP",
@@ -2809,7 +2809,7 @@ const char *const STATE_LIST[] = {
 	"S_SECRETFLICKY_01_STAND",
 	"S_SECRETFLICKY_01_CENTER",
 
-
+	// Bat
 	"S_SECRETFLICKY_02_OUT",
 	"S_SECRETFLICKY_02_FLAP1",
 	"S_SECRETFLICKY_02_FLAP2",
@@ -2817,14 +2817,14 @@ const char *const STATE_LIST[] = {
 	"S_SECRETFLICKY_02_STAND",
 	"S_SECRETFLICKY_02_CENTER",
 
-
+	// Fan
 	"S_FAN",
 	"S_FAN2",
 	"S_FAN3",
 	"S_FAN4",
 	"S_FAN5",
 
-
+	// Steam Riser
 	"S_STEAM1",
 	"S_STEAM2",
 	"S_STEAM3",
@@ -2834,11 +2834,11 @@ const char *const STATE_LIST[] = {
 	"S_STEAM7",
 	"S_STEAM8",
 
-
+	// Bumpers
 	"S_BUMPER",
 	"S_BUMPERHIT",
 
-
+	// Balloons
 	"S_BALLOON",
 	"S_BALLOONPOP1",
 	"S_BALLOONPOP2",
@@ -2847,28 +2847,28 @@ const char *const STATE_LIST[] = {
 	"S_BALLOONPOP5",
 	"S_BALLOONPOP6",
 
-
+	// Yellow Spring
 	"S_YELLOWSPRING",
 	"S_YELLOWSPRING2",
 	"S_YELLOWSPRING3",
 	"S_YELLOWSPRING4",
 	"S_YELLOWSPRING5",
 
-
+	// Red Spring
 	"S_REDSPRING",
 	"S_REDSPRING2",
 	"S_REDSPRING3",
 	"S_REDSPRING4",
 	"S_REDSPRING5",
 
-
+	// Blue Spring
 	"S_BLUESPRING",
 	"S_BLUESPRING2",
 	"S_BLUESPRING3",
 	"S_BLUESPRING4",
 	"S_BLUESPRING5",
 
-
+	// Yellow Diagonal Spring
 	"S_YDIAG1",
 	"S_YDIAG2",
 	"S_YDIAG3",
@@ -2878,7 +2878,7 @@ const char *const STATE_LIST[] = {
 	"S_YDIAG7",
 	"S_YDIAG8",
 
-
+	// Red Diagonal Spring
 	"S_RDIAG1",
 	"S_RDIAG2",
 	"S_RDIAG3",
@@ -2888,7 +2888,7 @@ const char *const STATE_LIST[] = {
 	"S_RDIAG7",
 	"S_RDIAG8",
 
-
+	// Blue Diagonal Spring
 	"S_BDIAG1",
 	"S_BDIAG2",
 	"S_BDIAG3",
@@ -2898,7 +2898,7 @@ const char *const STATE_LIST[] = {
 	"S_BDIAG7",
 	"S_BDIAG8",
 
-
+	// Yellow Side Spring
 	"S_YHORIZ1",
 	"S_YHORIZ2",
 	"S_YHORIZ3",
@@ -2908,7 +2908,7 @@ const char *const STATE_LIST[] = {
 	"S_YHORIZ7",
 	"S_YHORIZ8",
 
-
+	// Red Side Spring
 	"S_RHORIZ1",
 	"S_RHORIZ2",
 	"S_RHORIZ3",
@@ -2918,7 +2918,7 @@ const char *const STATE_LIST[] = {
 	"S_RHORIZ7",
 	"S_RHORIZ8",
 
-
+	// Blue Side Spring
 	"S_BHORIZ1",
 	"S_BHORIZ2",
 	"S_BHORIZ3",
@@ -2928,7 +2928,7 @@ const char *const STATE_LIST[] = {
 	"S_BHORIZ7",
 	"S_BHORIZ8",
 
-
+	// Booster
 	"S_BOOSTERSOUND",
 	"S_YELLOWBOOSTERROLLER",
 	"S_YELLOWBOOSTERSEG_LEFT",
@@ -2939,16 +2939,16 @@ const char *const STATE_LIST[] = {
 	"S_REDBOOSTERSEG_RIGHT",
 	"S_REDBOOSTERSEG_FACE",
 
-
+	// Rain
 	"S_RAIN1",
 	"S_RAINRETURN",
 
-
+	// Snowflake
 	"S_SNOW1",
 	"S_SNOW2",
 	"S_SNOW3",
 
-
+	// Water Splish
 	"S_SPLISH1",
 	"S_SPLISH2",
 	"S_SPLISH3",
@@ -2959,33 +2959,33 @@ const char *const STATE_LIST[] = {
 	"S_SPLISH8",
 	"S_SPLISH9",
 
-
+	// Lava Splish
 	"S_LAVASPLISH",
 
-
+	// added water splash
 	"S_SPLASH1",
 	"S_SPLASH2",
 	"S_SPLASH3",
 
-
+	// lava/slime damage burn smoke
 	"S_SMOKE1",
 	"S_SMOKE2",
 	"S_SMOKE3",
 	"S_SMOKE4",
 	"S_SMOKE5",
 
-
+	// Bubbles
 	"S_SMALLBUBBLE",
 	"S_MEDIUMBUBBLE",
 	"S_LARGEBUBBLE1",
 	"S_LARGEBUBBLE2",
-	"S_EXTRALARGEBUBBLE",  
+	"S_EXTRALARGEBUBBLE", // breathable
 
-	"S_POP1",  
+	"S_POP1", // Extra Large bubble goes POP!
 
 	"S_WATERZAP",
 
-
+	// Spindash dust
 	"S_SPINDUST1",
 	"S_SPINDUST2",
 	"S_SPINDUST3",
@@ -3018,21 +3018,21 @@ const char *const STATE_LIST[] = {
 
 	"S_PARTICLE",
 
+	// Score Logos
+	"S_SCRA", // 100
+	"S_SCRB", // 200
+	"S_SCRC", // 500
+	"S_SCRD", // 1000
+	"S_SCRE", // 10000
+	"S_SCRF", // 400 (mario)
+	"S_SCRG", // 800 (mario)
+	"S_SCRH", // 2000 (mario)
+	"S_SCRI", // 4000 (mario)
+	"S_SCRJ", // 8000 (mario)
+	"S_SCRK", // 1UP (mario)
+	"S_SCRL", // 10
 
-	"S_SCRA",  
-	"S_SCRB",  
-	"S_SCRC",  
-	"S_SCRD",  
-	"S_SCRE",  
-	"S_SCRF",  
-	"S_SCRG",  
-	"S_SCRH",  
-	"S_SCRI",  
-	"S_SCRJ",  
-	"S_SCRK",  
-	"S_SCRL",  
-
-
+	// Drowning Timer Numbers
 	"S_ZERO1",
 	"S_ONE1",
 	"S_TWO1",
@@ -3058,19 +3058,19 @@ const char *const STATE_LIST[] = {
 	"S_LOCKONINF3",
 	"S_LOCKONINF4",
 
-
+	// Tag Sign
 	"S_TTAG",
 
-
+	// Got Flag Sign
 	"S_GOTFLAG",
 
-
+	// Finish flag
 	"S_FINISHFLAG",
 
 	"S_CORK",
 	"S_LHRT",
 
-
+	// Red Ring
 	"S_RRNG1",
 	"S_RRNG2",
 	"S_RRNG3",
@@ -3079,7 +3079,7 @@ const char *const STATE_LIST[] = {
 	"S_RRNG6",
 	"S_RRNG7",
 
-
+	// Weapon Ring Ammo
 	"S_BOUNCERINGAMMO",
 	"S_RAILRINGAMMO",
 	"S_INFINITYRINGAMMO",
@@ -3088,7 +3088,7 @@ const char *const STATE_LIST[] = {
 	"S_SCATTERRINGAMMO",
 	"S_GRENADERINGAMMO",
 
-
+	// Weapon pickup
 	"S_BOUNCEPICKUP",
 	"S_BOUNCEPICKUPFADE1",
 	"S_BOUNCEPICKUPFADE2",
@@ -3149,7 +3149,7 @@ const char *const STATE_LIST[] = {
 	"S_GRENADEPICKUPFADE7",
 	"S_GRENADEPICKUPFADE8",
 
-
+	// Thrown Weapon Rings
 	"S_THROWNBOUNCE1",
 	"S_THROWNBOUNCE2",
 	"S_THROWNBOUNCE3",
@@ -3230,7 +3230,7 @@ const char *const STATE_LIST[] = {
 	"S_BLUEGOOMBA9",
 	"S_BLUEGOOMBA_DEAD",
 
-
+	// Mario-specific stuff
 	"S_FIREFLOWER1",
 	"S_FIREFLOWER2",
 	"S_FIREFLOWER3",
@@ -3265,7 +3265,7 @@ const char *const STATE_LIST[] = {
 	"S_TOAD",
 
 
-
+	// Nights-specific stuff
 	"S_NIGHTSDRONE_MAN1",
 	"S_NIGHTSDRONE_MAN2",
 	"S_NIGHTSDRONE_SPARKLING1",
@@ -3299,7 +3299,7 @@ const char *const STATE_LIST[] = {
 	"S_NIGHTSPARKLESUPER4",
 	"S_NIGHTSLOOPHELPER",
 
-
+	// NiGHTS bumper
 	"S_NIGHTSBUMPER1",
 	"S_NIGHTSBUMPER2",
 	"S_NIGHTSBUMPER3",
@@ -3338,7 +3338,7 @@ const char *const STATE_LIST[] = {
 	"S_NIGHTSCORE90_2",
 	"S_NIGHTSCORE100_2",
 
-
+	// NiGHTS Paraloop Powerups
 	"S_NIGHTSSUPERLOOP",
 	"S_NIGHTSDRILLREFILL",
 	"S_NIGHTSHELPER",
@@ -3346,7 +3346,7 @@ const char *const STATE_LIST[] = {
 	"S_NIGHTSLINKFREEZE",
 	"S_EGGCAPSULE",
 
-
+	// Orbiting Chaos Emeralds
 	"S_ORBITEM1",
 	"S_ORBITEM2",
 	"S_ORBITEM3",
@@ -3361,7 +3361,7 @@ const char *const STATE_LIST[] = {
 	"S_ORBIDYA4",
 	"S_ORBIDYA5",
 
-
+	// "Flicky" helper
 	"S_NIGHTOPIANHELPER1",
 	"S_NIGHTOPIANHELPER2",
 	"S_NIGHTOPIANHELPER3",
@@ -3372,7 +3372,7 @@ const char *const STATE_LIST[] = {
 	"S_NIGHTOPIANHELPER8",
 	"S_NIGHTOPIANHELPER9",
 
-
+	// Nightopian
 	"S_PIAN_LOOK1",
 	"S_PIAN_LOOK2",
 	"S_PIAN_LOOK3",
@@ -3381,7 +3381,7 @@ const char *const STATE_LIST[] = {
 	"S_PIAN_FLY3",
 	"S_PIAN_SING",
 
-
+	// Shleep
 	"S_SHLEEP1",
 	"S_SHLEEP2",
 	"S_SHLEEP3",
@@ -3390,7 +3390,7 @@ const char *const STATE_LIST[] = {
 	"S_SHLEEPBOUNCE2",
 	"S_SHLEEPBOUNCE3",
 
-
+	// Secret badniks and hazards, shhhh
 	"S_PENGUINATOR_LOOK",
 	"S_PENGUINATOR_WADDLE1",
 	"S_PENGUINATOR_WADDLE2",
@@ -3512,12 +3512,12 @@ const char *const STATE_LIST[] = {
 	"S_CRUMBLE1",
 	"S_CRUMBLE2",
 
-
+	// Spark
 	"S_SPRK1",
 	"S_SPRK2",
 	"S_SPRK3",
 
-
+	// Robot Explosion
 	"S_XPLD_FLICKY",
 	"S_XPLD1",
 	"S_XPLD2",
@@ -3527,7 +3527,7 @@ const char *const STATE_LIST[] = {
 	"S_XPLD6",
 	"S_XPLD_EGGTRAP",
 
-
+	// Underwater Explosion
 	"S_WPLD1",
 	"S_WPLD2",
 	"S_WPLD3",
@@ -3559,7 +3559,7 @@ const char *const STATE_LIST[] = {
 	"S_ROCKCRUMBLEO",
 	"S_ROCKCRUMBLEP",
 
-
+	// Level debris
 	"S_GFZDEBRIS",
 	"S_BRICKDEBRIS",
 	"S_WOODDEBRIS",
@@ -3569,76 +3569,76 @@ const char *const STATE_LIST[] = {
 
 	"S_NAMECHECK",
 
-
+	// LJ Knuckles
 	"S_OLDK_STND",
 	"S_OLDK_DIE0",
 	"S_OLDK_DIE1",
 	"S_OLDK_DIE2",
 };
 
-
-
-
-const char *const MOBJTYPE_LIST[] = {   
+// RegEx to generate this from info.h: ^\tMT_([^,]+), --> \t"MT_\1",
+// I am leaving the prefixes solely for clarity to programmers,
+// because sadly no one remembers this place while searching for full state names.
+const char *const MOBJTYPE_LIST[] = {  // array length left dynamic for sanity testing later.
 	"MT_NULL",
 	"MT_UNKNOWN",
 
-	"MT_THOK",  
+	"MT_THOK", // Thok! mobj
 	"MT_PLAYER",
-	"MT_TAILSOVERLAY",  
+	"MT_TAILSOVERLAY", // c:
 	"MT_METALJETFUME",
 
+	// Enemies
+	"MT_BLUECRAWLA", // Crawla (Blue)
+	"MT_REDCRAWLA", // Crawla (Red)
+	"MT_GFZFISH", // SDURF
+	"MT_GOLDBUZZ", // Buzz (Gold)
+	"MT_REDBUZZ", // Buzz (Red)
+	"MT_JETTBOMBER", // Jetty-Syn Bomber
+	"MT_JETTGUNNER", // Jetty-Syn Gunner
+	"MT_CRAWLACOMMANDER", // Crawla Commander
+	"MT_DETON", // Deton
+	"MT_SKIM", // Skim mine dropper
+	"MT_TURRET", // Industrial Turret
+	"MT_POPUPTURRET", // Pop-Up Turret
+	"MT_SPINCUSHION", // Spincushion
+	"MT_CRUSHSTACEAN", // Crushstacean
+	"MT_CRUSHCLAW", // Big meaty claw
+	"MT_CRUSHCHAIN", // Chain
+	"MT_BANPYURA", // Banpyura
+	"MT_BANPSPRING", // Banpyura spring
+	"MT_JETJAW", // Jet Jaw
+	"MT_SNAILER", // Snailer
+	"MT_VULTURE", // BASH
+	"MT_POINTY", // Pointy
+	"MT_POINTYBALL", // Pointy Ball
+	"MT_ROBOHOOD", // Robo-Hood
+	"MT_FACESTABBER", // Castlebot Facestabber
+	"MT_FACESTABBERSPEAR", // Castlebot Facestabber spear aura
+	"MT_EGGGUARD", // Egg Guard
+	"MT_EGGSHIELD", // Egg Guard's shield
+	"MT_GSNAPPER", // Green Snapper
+	"MT_SNAPPER_LEG", // Green Snapper leg
+	"MT_SNAPPER_HEAD", // Green Snapper head
+	"MT_MINUS", // Minus
+	"MT_MINUSDIRT", // Minus dirt
+	"MT_SPRINGSHELL", // Spring Shell
+	"MT_YELLOWSHELL", // Spring Shell (yellow)
+	"MT_UNIDUS", // Unidus
+	"MT_UNIBALL", // Unidus Ball
+	"MT_CANARIVORE", // Canarivore
+	"MT_CANARIVORE_GAS", // Canarivore gas
+	"MT_PYREFLY", // Pyre Fly
+	"MT_PYREFLY_FIRE", // Pyre Fly fire
+	"MT_PTERABYTESPAWNER", // Pterabyte spawner
+	"MT_PTERABYTEWAYPOINT", // Pterabyte waypoint
+	"MT_PTERABYTE", // Pterabyte
+	"MT_DRAGONBOMBER", // Dragonbomber
+	"MT_DRAGONWING", // Dragonbomber wing
+	"MT_DRAGONTAIL", // Dragonbomber tail segment
+	"MT_DRAGONMINE", // Dragonbomber mine
 
-	"MT_BLUECRAWLA",  
-	"MT_REDCRAWLA",  
-	"MT_GFZFISH",  
-	"MT_GOLDBUZZ",  
-	"MT_REDBUZZ",  
-	"MT_JETTBOMBER",  
-	"MT_JETTGUNNER",  
-	"MT_CRAWLACOMMANDER",  
-	"MT_DETON",  
-	"MT_SKIM",  
-	"MT_TURRET",  
-	"MT_POPUPTURRET",  
-	"MT_SPINCUSHION",  
-	"MT_CRUSHSTACEAN",  
-	"MT_CRUSHCLAW",  
-	"MT_CRUSHCHAIN",  
-	"MT_BANPYURA",  
-	"MT_BANPSPRING",  
-	"MT_JETJAW",  
-	"MT_SNAILER",  
-	"MT_VULTURE",  
-	"MT_POINTY",  
-	"MT_POINTYBALL",  
-	"MT_ROBOHOOD",  
-	"MT_FACESTABBER",  
-	"MT_FACESTABBERSPEAR",  
-	"MT_EGGGUARD",  
-	"MT_EGGSHIELD",  
-	"MT_GSNAPPER",  
-	"MT_SNAPPER_LEG",  
-	"MT_SNAPPER_HEAD",  
-	"MT_MINUS",  
-	"MT_MINUSDIRT",  
-	"MT_SPRINGSHELL",  
-	"MT_YELLOWSHELL",  
-	"MT_UNIDUS",  
-	"MT_UNIBALL",  
-	"MT_CANARIVORE",  
-	"MT_CANARIVORE_GAS",  
-	"MT_PYREFLY",  
-	"MT_PYREFLY_FIRE",  
-	"MT_PTERABYTESPAWNER",  
-	"MT_PTERABYTEWAYPOINT",  
-	"MT_PTERABYTE",  
-	"MT_DRAGONBOMBER",  
-	"MT_DRAGONWING",  
-	"MT_DRAGONTAIL",  
-	"MT_DRAGONMINE",  
-
-
+	// Generic Boss Items
 	"MT_BOSSEXPLODE",
 	"MT_SONIC3KBOSSEXPLODE",
 	"MT_BOSSFLYPOINT",
@@ -3647,50 +3647,50 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_BOSS9GATHERPOINT",
 	"MT_BOSSJUNK",
 
-
+	// Boss 1
 	"MT_EGGMOBILE",
 	"MT_JETFUME1",
 	"MT_EGGMOBILE_BALL",
 	"MT_EGGMOBILE_TARGET",
 	"MT_EGGMOBILE_FIRE",
 
-
+	// Boss 2
 	"MT_EGGMOBILE2",
 	"MT_EGGMOBILE2_POGO",
 	"MT_GOOP",
 	"MT_GOOPTRAIL",
 
-
+	// Boss 3
 	"MT_EGGMOBILE3",
 	"MT_FAKEMOBILE",
 	"MT_SHOCKWAVE",
 
-
+	// Boss 4
 	"MT_EGGMOBILE4",
 	"MT_EGGMOBILE4_MACE",
 	"MT_JETFLAME",
 	"MT_EGGROBO1",
 	"MT_EGGROBO1JET",
 
-
+	// Boss 5
 	"MT_FANG",
 	"MT_BROKENROBOT",
 	"MT_VWREF",
 	"MT_VWREB",
 	"MT_PROJECTORLIGHT",
 	"MT_FBOMB",
-	"MT_TNTDUST",  
+	"MT_TNTDUST", // also used by barrel
 	"MT_FSGNA",
 	"MT_FSGNB",
 	"MT_FANGWAYPOINT",
 
-
+	// Black Eggman (Boss 7)
 	"MT_BLACKEGGMAN",
 	"MT_BLACKEGGMAN_HELPER",
 	"MT_BLACKEGGMAN_GOOPFIRE",
 	"MT_BLACKEGGMAN_MISSILE",
 
-
+	// New Very-Last-Minute 2.1 Brak Eggman (Cy-Brak-demon)
 	"MT_CYBRAKDEMON",
 	"MT_CYBRAKDEMON_ELECTRIC_BARRIER",
 	"MT_CYBRAKDEMON_MISSILE",
@@ -3703,23 +3703,23 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_CYBRAKDEMON_NAPALM_FLAMES",
 	"MT_CYBRAKDEMON_VILE_EXPLOSION",
 
-
+	// Metal Sonic (Boss 9)
 	"MT_METALSONIC_RACE",
 	"MT_METALSONIC_BATTLE",
 	"MT_MSSHIELD_FRONT",
 	"MT_MSGATHER",
 
-
+	// Collectible Items
 	"MT_RING",
-	"MT_FLINGRING",  
-	"MT_BLUESPHERE",   
-	"MT_FLINGBLUESPHERE",  
+	"MT_FLINGRING", // Lost ring
+	"MT_BLUESPHERE",  // Blue sphere for special stages
+	"MT_FLINGBLUESPHERE", // Lost blue sphere
 	"MT_BOMBSPHERE",
-	"MT_REDTEAMRING",   
-	"MT_BLUETEAMRING",  
-	"MT_TOKEN",  
-	"MT_REDFLAG",  
-	"MT_BLUEFLAG",  
+	"MT_REDTEAMRING",  //Rings collectable by red team.
+	"MT_BLUETEAMRING", //Rings collectable by blue team.
+	"MT_TOKEN", // Special Stage token for special stage
+	"MT_REDFLAG", // Red CTF Flag
+	"MT_BLUEFLAG", // Blue CTF Flag
 	"MT_EMBLEM",
 	"MT_EMERALD1",
 	"MT_EMERALD2",
@@ -3728,11 +3728,11 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_EMERALD5",
 	"MT_EMERALD6",
 	"MT_EMERALD7",
-	"MT_EMERHUNT",  
-	"MT_EMERALDSPAWN",  
-	"MT_FLINGEMERALD",  
+	"MT_EMERHUNT", // Emerald Hunt
+	"MT_EMERALDSPAWN", // Emerald spawner w/ delay
+	"MT_FLINGEMERALD", // Lost emerald
 
-
+	// Springs and others
 	"MT_FAN",
 	"MT_STEAM",
 	"MT_BUMPER",
@@ -3753,10 +3753,10 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_YELLOWBOOSTER",
 	"MT_REDBOOSTER",
 
-
-	"MT_BUBBLES",  
-	"MT_SIGN",  
-	"MT_SPIKEBALL",  
+	// Interactive Objects
+	"MT_BUBBLES", // Bubble source
+	"MT_SIGN", // Level end sign
+	"MT_SPIKEBALL", // Spike Ball
 	"MT_SPINFIRE",
 	"MT_SPIKE",
 	"MT_WALLSPIKE",
@@ -3766,10 +3766,10 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_BLASTEXECUTOR",
 	"MT_CANNONLAUNCHER",
 
-
+	// Monitor miscellany
 	"MT_BOXSPARKLE",
 
-
+	// Monitor boxes -- regular
 	"MT_RING_BOX",
 	"MT_PITY_BOX",
 	"MT_ATTRACT_BOX",
@@ -3791,7 +3791,7 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_BUBBLEWRAP_BOX",
 	"MT_THUNDERCOIN_BOX",
 
-
+	// Monitor boxes -- repeating (big) boxes
 	"MT_PITY_GOLDBOX",
 	"MT_ATTRACT_GOLDBOX",
 	"MT_FORCE_GOLDBOX",
@@ -3806,11 +3806,11 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_BUBBLEWRAP_GOLDBOX",
 	"MT_THUNDERCOIN_GOLDBOX",
 
-
+	// Monitor boxes -- special
 	"MT_RING_REDBOX",
 	"MT_RING_BLUEBOX",
 
-
+	// Monitor icons
 	"MT_RING_ICON",
 	"MT_PITY_ICON",
 	"MT_ATTRACT_ICON",
@@ -3831,30 +3831,30 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_BUBBLEWRAP_ICON",
 	"MT_THUNDERCOIN_ICON",
 
-
+	// Projectiles
 	"MT_ROCKET",
 	"MT_LASER",
 	"MT_TORPEDO",
-	"MT_TORPEDO2",  
+	"MT_TORPEDO2", // silent
 	"MT_ENERGYBALL",
-	"MT_MINE",  
-	"MT_JETTBULLET",  
+	"MT_MINE", // Skim/Jetty-Syn mine
+	"MT_JETTBULLET", // Jetty-Syn Bullet
 	"MT_TURRETLASER",
-	"MT_CANNONBALL",  
-	"MT_CANNONBALLDECOR",  
-	"MT_ARROW",  
-	"MT_DEMONFIRE",  
+	"MT_CANNONBALL", // Cannonball
+	"MT_CANNONBALLDECOR", // Decorative/still cannonball
+	"MT_ARROW", // Arrow
+	"MT_DEMONFIRE", // Glaregoyle fire
 
-
+	// The letter
 	"MT_LETTER",
 
-
+	// Tutorial Scenery
 	"MT_TUTORIALPLANT",
 	"MT_TUTORIALLEAF",
 	"MT_TUTORIALFLOWER",
 	"MT_TUTORIALFLOWERF",
 
-
+	// Greenflower Scenery
 	"MT_GFZFLOWER1",
 	"MT_GFZFLOWER2",
 	"MT_GFZFLOWER3",
@@ -3863,109 +3863,109 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_BERRYBUSH",
 	"MT_BUSH",
 
-
+	// Trees (both GFZ and misc)
 	"MT_GFZTREE",
 	"MT_GFZBERRYTREE",
 	"MT_GFZCHERRYTREE",
 	"MT_CHECKERTREE",
 	"MT_CHECKERSUNSETTREE",
-	"MT_FHZTREE",  
+	"MT_FHZTREE", // Frozen Hillside
 	"MT_FHZPINKTREE",
 	"MT_POLYGONTREE",
 	"MT_BUSHTREE",
 	"MT_BUSHREDTREE",
 	"MT_SPRINGTREE",
 
-
+	// Techno Hill Scenery
 	"MT_THZFLOWER1",
 	"MT_THZFLOWER2",
 	"MT_THZFLOWER3",
-	"MT_THZTREE",  
-	"MT_THZTREEBRANCH",  
+	"MT_THZTREE", // Steam whistle tree/bush
+	"MT_THZTREEBRANCH", // branch of said tree
 	"MT_ALARM",
 
-
-	"MT_GARGOYLE",  
-	"MT_BIGGARGOYLE",  
-	"MT_SEAWEED",  
-	"MT_WATERDRIP",  
-	"MT_WATERDROP",  
-	"MT_CORAL1",  
+	// Deep Sea Scenery
+	"MT_GARGOYLE", // Deep Sea Gargoyle
+	"MT_BIGGARGOYLE", // Deep Sea Gargoyle (Big)
+	"MT_SEAWEED", // DSZ Seaweed
+	"MT_WATERDRIP", // Dripping Water source
+	"MT_WATERDROP", // Water drop from dripping water
+	"MT_CORAL1", // Coral
 	"MT_CORAL2",
 	"MT_CORAL3",
 	"MT_CORAL4",
 	"MT_CORAL5",
-	"MT_BLUECRYSTAL",  
-	"MT_KELP",  
-	"MT_ANIMALGAETOP",  
-	"MT_ANIMALGAESEG",  
-	"MT_DSZSTALAGMITE",  
-	"MT_DSZ2STALAGMITE",  
-	"MT_LIGHTBEAM",  
+	"MT_BLUECRYSTAL", // Blue Crystal
+	"MT_KELP", // Kelp
+	"MT_ANIMALGAETOP", // Animated algae top
+	"MT_ANIMALGAESEG", // Animated algae segment
+	"MT_DSZSTALAGMITE", // Deep Sea 1 Stalagmite
+	"MT_DSZ2STALAGMITE", // Deep Sea 2 Stalagmite
+	"MT_LIGHTBEAM", // DSZ Light beam
 
-
-	"MT_CHAIN",  
-	"MT_FLAME",  
+	// Castle Eggman Scenery
+	"MT_CHAIN", // CEZ Chain
+	"MT_FLAME", // Flame (has corona)
 	"MT_FLAMEPARTICLE",
-	"MT_EGGSTATUE",  
-	"MT_MACEPOINT",  
-	"MT_CHAINMACEPOINT",  
-	"MT_SPRINGBALLPOINT",  
-	"MT_CHAINPOINT",  
-	"MT_HIDDEN_SLING",  
-	"MT_FIREBARPOINT",  
-	"MT_CUSTOMMACEPOINT",  
-	"MT_SMALLMACECHAIN",  
-	"MT_BIGMACECHAIN",  
-	"MT_SMALLMACE",  
-	"MT_BIGMACE",  
-	"MT_SMALLGRABCHAIN",  
-	"MT_BIGGRABCHAIN",  
-	"MT_BLUESPRINGBALL",  
-	"MT_YELLOWSPRINGBALL",  
-	"MT_REDSPRINGBALL",  
-	"MT_SMALLFIREBAR",  
-	"MT_BIGFIREBAR",  
-	"MT_CEZFLOWER",  
-	"MT_CEZPOLE1",  
-	"MT_CEZPOLE2",  
-	"MT_CEZBANNER1",  
-	"MT_CEZBANNER2",  
-	"MT_PINETREE",  
-	"MT_CEZBUSH1",  
-	"MT_CEZBUSH2",  
-	"MT_CANDLE",  
-	"MT_CANDLEPRICKET",  
-	"MT_FLAMEHOLDER",  
-	"MT_FIRETORCH",  
-	"MT_WAVINGFLAG1",  
-	"MT_WAVINGFLAG2",  
-	"MT_WAVINGFLAGSEG1",  
-	"MT_WAVINGFLAGSEG2",  
-	"MT_CRAWLASTATUE",  
-	"MT_FACESTABBERSTATUE",  
-	"MT_SUSPICIOUSFACESTABBERSTATUE",  
-	"MT_BRAMBLES",  
+	"MT_EGGSTATUE", // Eggman Statue
+	"MT_MACEPOINT", // Mace rotation point
+	"MT_CHAINMACEPOINT", // Combination of chains and maces point
+	"MT_SPRINGBALLPOINT", // Spring ball point
+	"MT_CHAINPOINT", // Mace chain
+	"MT_HIDDEN_SLING", // Spin mace chain (activatable)
+	"MT_FIREBARPOINT", // Firebar
+	"MT_CUSTOMMACEPOINT", // Custom mace
+	"MT_SMALLMACECHAIN", // Small Mace Chain
+	"MT_BIGMACECHAIN", // Big Mace Chain
+	"MT_SMALLMACE", // Small Mace
+	"MT_BIGMACE", // Big Mace
+	"MT_SMALLGRABCHAIN", // Small Grab Chain
+	"MT_BIGGRABCHAIN", // Big Grab Chain
+	"MT_BLUESPRINGBALL", // Blue spring on a ball
+	"MT_YELLOWSPRINGBALL", // Yellow spring on a ball
+	"MT_REDSPRINGBALL", // Red spring on a ball
+	"MT_SMALLFIREBAR", // Small Firebar
+	"MT_BIGFIREBAR", // Big Firebar
+	"MT_CEZFLOWER", // Flower
+	"MT_CEZPOLE1", // Pole (with red banner)
+	"MT_CEZPOLE2", // Pole (with blue banner)
+	"MT_CEZBANNER1", // Banner (red)
+	"MT_CEZBANNER2", // Banner (blue)
+	"MT_PINETREE", // Pine Tree
+	"MT_CEZBUSH1", // Bush 1
+	"MT_CEZBUSH2", // Bush 2
+	"MT_CANDLE", // Candle
+	"MT_CANDLEPRICKET", // Candle pricket
+	"MT_FLAMEHOLDER", // Flame holder
+	"MT_FIRETORCH", // Fire torch
+	"MT_WAVINGFLAG1", // Waving flag (red)
+	"MT_WAVINGFLAG2", // Waving flag (blue)
+	"MT_WAVINGFLAGSEG1", // Waving flag segment (red)
+	"MT_WAVINGFLAGSEG2", // Waving flag segment (blue)
+	"MT_CRAWLASTATUE", // Crawla statue
+	"MT_FACESTABBERSTATUE", // Facestabber statue
+	"MT_SUSPICIOUSFACESTABBERSTATUE", // :eggthinking:
+	"MT_BRAMBLES", // Brambles
 
-
+	// Arid Canyon Scenery
 	"MT_BIGTUMBLEWEED",
 	"MT_LITTLETUMBLEWEED",
-	"MT_CACTI1",  
-	"MT_CACTI2",  
-	"MT_CACTI3",  
-	"MT_CACTI4",  
-	"MT_CACTI5",  
-	"MT_CACTI6",  
-	"MT_CACTI7",  
-	"MT_CACTI8",  
-	"MT_CACTI9",  
-	"MT_CACTI10",  
-	"MT_CACTI11",  
-	"MT_CACTITINYSEG",  
-	"MT_CACTISMALLSEG",  
-	"MT_ARIDSIGN_CAUTION",  
-	"MT_ARIDSIGN_CACTI",  
-	"MT_ARIDSIGN_SHARPTURN",  
+	"MT_CACTI1", // Tiny Red Flower Cactus
+	"MT_CACTI2", // Small Red Flower Cactus
+	"MT_CACTI3", // Tiny Blue Flower Cactus
+	"MT_CACTI4", // Small Blue Flower Cactus
+	"MT_CACTI5", // Prickly Pear
+	"MT_CACTI6", // Barrel Cactus
+	"MT_CACTI7", // Tall Barrel Cactus
+	"MT_CACTI8", // Armed Cactus
+	"MT_CACTI9", // Ball Cactus
+	"MT_CACTI10", // Tiny Cactus
+	"MT_CACTI11", // Small Cactus
+	"MT_CACTITINYSEG", // Tiny Cactus Segment
+	"MT_CACTISMALLSEG", // Small Cactus Segment
+	"MT_ARIDSIGN_CAUTION", // Caution Sign
+	"MT_ARIDSIGN_CACTI", // Cacti Sign
+	"MT_ARIDSIGN_SHARPTURN", // Sharp Turn Sign
 	"MT_OILLAMP",
 	"MT_TNTBARREL",
 	"MT_PROXIMITYTNT",
@@ -3987,15 +3987,15 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_TRAINSTEAMSPAWNER",
 	"MT_MINECARTSWITCHPOINT",
 
-
+	// Red Volcano Scenery
 	"MT_FLAMEJET",
 	"MT_VERTICALFLAMEJET",
 	"MT_FLAMEJETFLAME",
 
-	"MT_FJSPINAXISA",  
-	"MT_FJSPINAXISB",  
+	"MT_FJSPINAXISA", // Counter-clockwise
+	"MT_FJSPINAXISB", // Clockwise
 
-	"MT_FLAMEJETFLAMEB",  
+	"MT_FLAMEJETFLAMEB", // Blade's flame
 
 	"MT_LAVAFALL",
 	"MT_LAVAFALL_LAVA",
@@ -4011,20 +4011,20 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_WALLVINE_LONG",
 	"MT_WALLVINE_SHORT",
 
+	// Dark City Scenery
 
+	// Egg Rock Scenery
 
-
-
-
+	// Azure Temple Scenery
 	"MT_GLAREGOYLE",
 	"MT_GLAREGOYLEUP",
 	"MT_GLAREGOYLEDOWN",
 	"MT_GLAREGOYLELONG",
-	"MT_TARGET",  
+	"MT_TARGET", // AKA Red Crystal
 	"MT_GREENFLAME",
 	"MT_BLUEGARGOYLE",
 
-
+	// Stalagmites
 	"MT_STALAGMITE0",
 	"MT_STALAGMITE1",
 	"MT_STALAGMITE2",
@@ -4036,38 +4036,38 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_STALAGMITE8",
 	"MT_STALAGMITE9",
 
-
+	// Christmas Scenery
 	"MT_XMASPOLE",
 	"MT_CANDYCANE",
-	"MT_SNOWMAN",     
-	"MT_SNOWMANHAT",  
-	"MT_LAMPPOST1",   
-	"MT_LAMPPOST2",   
+	"MT_SNOWMAN",    // normal
+	"MT_SNOWMANHAT", // with hat + scarf
+	"MT_LAMPPOST1",  // normal
+	"MT_LAMPPOST2",  // with snow
 	"MT_HANGSTAR",
 	"MT_MISTLETOE",
 	"MT_SSZTREE",
 	"MT_SSZTREE_BRANCH",
 	"MT_SSZTREE2",
 	"MT_SSZTREE2_BRANCH",
-
+	// Xmas GFZ bushes
 	"MT_XMASBLUEBERRYBUSH",
 	"MT_XMASBERRYBUSH",
 	"MT_XMASBUSH",
-
+	// FHZ
 	"MT_FHZICE1",
 	"MT_FHZICE2",
 	"MT_ROSY",
 	"MT_CDLHRT",
 
-
-
+	// Halloween Scenery
+	// Pumpkins
 	"MT_JACKO1",
 	"MT_JACKO2",
 	"MT_JACKO3",
-
+	// Dr Seuss Trees
 	"MT_HHZTREE_TOP",
 	"MT_HHZTREE_PART",
-
+	// Misc
 	"MT_HHZSHROOM",
 	"MT_HHZGRASS",
 	"MT_HHZTENTACLE1",
@@ -4075,7 +4075,7 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_HHZSTALAGMITE_TALL",
 	"MT_HHZSTALAGMITE_SHORT",
 
-
+	// Botanic Serenity scenery
 	"MT_BSZTALLFLOWER_RED",
 	"MT_BSZTALLFLOWER_PURPLE",
 	"MT_BSZTALLFLOWER_BLUE",
@@ -4125,98 +4125,98 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_PALMTREE_TRUNK",
 	"MT_PALMTREE_TOP",
 
-
+	// Misc scenery
 	"MT_DBALL",
 	"MT_EGGSTATUE2",
 	"MT_GINE",
 	"MT_PPAL",
 	"MT_PPEL",
 
+	// Powerup Indicators
+	"MT_ELEMENTAL_ORB", // Elemental shield mobj
+	"MT_ATTRACT_ORB", // Attract shield mobj
+	"MT_FORCE_ORB", // Force shield mobj
+	"MT_ARMAGEDDON_ORB", // Armageddon shield mobj
+	"MT_WHIRLWIND_ORB", // Whirlwind shield mobj
+	"MT_PITY_ORB", // Pity shield mobj
+	"MT_FLAMEAURA_ORB", // Flame shield mobj
+	"MT_BUBBLEWRAP_ORB", // Bubble shield mobj
+	"MT_THUNDERCOIN_ORB", // Thunder shield mobj
+	"MT_THUNDERCOIN_SPARK", // Thunder spark
+	"MT_IVSP", // Invincibility sparkles
+	"MT_SUPERSPARK", // Super Sonic Spark
 
-	"MT_ELEMENTAL_ORB",  
-	"MT_ATTRACT_ORB",  
-	"MT_FORCE_ORB",  
-	"MT_ARMAGEDDON_ORB",  
-	"MT_WHIRLWIND_ORB",  
-	"MT_PITY_ORB",  
-	"MT_FLAMEAURA_ORB",  
-	"MT_BUBBLEWRAP_ORB",  
-	"MT_THUNDERCOIN_ORB",  
-	"MT_THUNDERCOIN_SPARK",  
-	"MT_IVSP",  
-	"MT_SUPERSPARK",  
-
-
-	"MT_FLICKY_01",  
+	// Flickies
+	"MT_FLICKY_01", // Bluebird
 	"MT_FLICKY_01_CENTER",
-	"MT_FLICKY_02",  
+	"MT_FLICKY_02", // Rabbit
 	"MT_FLICKY_02_CENTER",
-	"MT_FLICKY_03",  
+	"MT_FLICKY_03", // Chicken
 	"MT_FLICKY_03_CENTER",
-	"MT_FLICKY_04",  
+	"MT_FLICKY_04", // Seal
 	"MT_FLICKY_04_CENTER",
-	"MT_FLICKY_05",  
+	"MT_FLICKY_05", // Pig
 	"MT_FLICKY_05_CENTER",
-	"MT_FLICKY_06",  
+	"MT_FLICKY_06", // Chipmunk
 	"MT_FLICKY_06_CENTER",
-	"MT_FLICKY_07",  
+	"MT_FLICKY_07", // Penguin
 	"MT_FLICKY_07_CENTER",
-	"MT_FLICKY_08",  
+	"MT_FLICKY_08", // Fish
 	"MT_FLICKY_08_CENTER",
-	"MT_FLICKY_09",  
+	"MT_FLICKY_09", // Ram
 	"MT_FLICKY_09_CENTER",
-	"MT_FLICKY_10",  
+	"MT_FLICKY_10", // Puffin
 	"MT_FLICKY_10_CENTER",
-	"MT_FLICKY_11",  
+	"MT_FLICKY_11", // Cow
 	"MT_FLICKY_11_CENTER",
-	"MT_FLICKY_12",  
+	"MT_FLICKY_12", // Rat
 	"MT_FLICKY_12_CENTER",
-	"MT_FLICKY_13",  
+	"MT_FLICKY_13", // Bear
 	"MT_FLICKY_13_CENTER",
-	"MT_FLICKY_14",  
+	"MT_FLICKY_14", // Dove
 	"MT_FLICKY_14_CENTER",
-	"MT_FLICKY_15",  
+	"MT_FLICKY_15", // Cat
 	"MT_FLICKY_15_CENTER",
-	"MT_FLICKY_16",  
+	"MT_FLICKY_16", // Canary
 	"MT_FLICKY_16_CENTER",
-	"MT_SECRETFLICKY_01",  
+	"MT_SECRETFLICKY_01", // Spider
 	"MT_SECRETFLICKY_01_CENTER",
-	"MT_SECRETFLICKY_02",  
+	"MT_SECRETFLICKY_02", // Bat
 	"MT_SECRETFLICKY_02_CENTER",
 	"MT_SEED",
 
-
-	"MT_RAIN",  
-	"MT_SNOWFLAKE",  
-	"MT_SPLISH",  
-	"MT_LAVASPLISH",  
+	// Environmental Effects
+	"MT_RAIN", // Rain
+	"MT_SNOWFLAKE", // Snowflake
+	"MT_SPLISH", // Water splish!
+	"MT_LAVASPLISH", // Lava splish!
 	"MT_SMOKE",
-	"MT_SMALLBUBBLE",  
-	"MT_MEDIUMBUBBLE",  
-	"MT_EXTRALARGEBUBBLE",  
+	"MT_SMALLBUBBLE", // small bubble
+	"MT_MEDIUMBUBBLE", // medium bubble
+	"MT_EXTRALARGEBUBBLE", // extra large bubble
 	"MT_WATERZAP",
-	"MT_SPINDUST",  
+	"MT_SPINDUST", // Spindash dust
 	"MT_TFOG",
 	"MT_PARTICLE",
-	"MT_PARTICLEGEN",  
+	"MT_PARTICLEGEN", // For fans, etc.
 
+	// Game Indicators
+	"MT_SCORE", // score logo
+	"MT_DROWNNUMBERS", // Drowning Timer
+	"MT_GOTEMERALD", // Chaos Emerald (intangible)
+	"MT_LOCKON", // Target
+	"MT_LOCKONINF", // In-level Target
+	"MT_TAG", // Tag Sign
+	"MT_GOTFLAG", // Got Flag sign
+	"MT_FINISHFLAG", // Finish flag
 
-	"MT_SCORE",  
-	"MT_DROWNNUMBERS",  
-	"MT_GOTEMERALD",  
-	"MT_LOCKON",  
-	"MT_LOCKONINF",  
-	"MT_TAG",  
-	"MT_GOTFLAG",  
-	"MT_FINISHFLAG",  
-
-
+	// Ambient Sounds
 	"MT_AMBIENT",
 
 	"MT_CORK",
 	"MT_LHRT",
 
-
+	// Ring Weapons
 	"MT_REDRING",
 	"MT_BOUNCERING",
 	"MT_RAILRING",
@@ -4240,7 +4240,7 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_THROWNEXPLOSION",
 	"MT_THROWNGRENADE",
 
-
+	// Mario-specific stuff
 	"MT_COIN",
 	"MT_FLINGCOIN",
 	"MT_GOOMBA",
@@ -4259,7 +4259,7 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_MARIOBUSH2",
 	"MT_TOAD",
 
-
+	// NiGHTS Stuff
 	"MT_AXIS",
 	"MT_AXISTRANSFER",
 	"MT_AXISTRANSFERLINE",
@@ -4269,15 +4269,15 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_NIGHTSDRONE_GOAL",
 	"MT_NIGHTSPARKLE",
 	"MT_NIGHTSLOOPHELPER",
-	"MT_NIGHTSBUMPER",  
+	"MT_NIGHTSBUMPER", // NiGHTS Bumper
 	"MT_HOOP",
-	"MT_HOOPCOLLIDE",  
-	"MT_HOOPCENTER",  
+	"MT_HOOPCOLLIDE", // Collision detection for NiGHTS hoops
+	"MT_HOOPCENTER", // Center of a hoop
 	"MT_NIGHTSCORE",
-	"MT_NIGHTSCHIP",  
-	"MT_FLINGNIGHTSCHIP",  
-	"MT_NIGHTSSTAR",  
-	"MT_FLINGNIGHTSSTAR",  
+	"MT_NIGHTSCHIP", // NiGHTS Chip
+	"MT_FLINGNIGHTSCHIP", // Lost NiGHTS Chip
+	"MT_NIGHTSSTAR", // NiGHTS Star
+	"MT_FLINGNIGHTSSTAR", // Lost NiGHTS Star
 	"MT_NIGHTSSUPERLOOP",
 	"MT_NIGHTSDRILLREFILL",
 	"MT_NIGHTSHELPER",
@@ -4285,11 +4285,11 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_NIGHTSLINKFREEZE",
 	"MT_EGGCAPSULE",
 	"MT_IDEYAANCHOR",
-	"MT_NIGHTOPIANHELPER",  
-	"MT_PIAN",  
-	"MT_SHLEEP",  
+	"MT_NIGHTOPIANHELPER", // the actual helper object that orbits you
+	"MT_PIAN", // decorative singing friend
+	"MT_SHLEEP", // almost-decorative sleeping enemy
 
-
+	// Secret badniks and hazards, shhhh
 	"MT_PENGUINATOR",
 	"MT_POPHAT",
 	"MT_POPSHOT",
@@ -4309,10 +4309,10 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_SPINBOBERT_FIRE2",
 	"MT_HANGSTER",
 
-
+	// Utility Objects
 	"MT_TELEPORTMAN",
 	"MT_ALTVIEWMAN",
-	"MT_CRUMBLEOBJ",  
+	"MT_CRUMBLEOBJ", // Sound generator for crumbling platform
 	"MT_TUBEWAYPOINT",
 	"MT_PUSH",
 	"MT_GHOST",
@@ -4321,13 +4321,13 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_POLYANCHOR",
 	"MT_POLYSPAWN",
 
-
+	// Portal objects
 	"MT_SKYBOX",
 
-
-	"MT_SPARK",  
-	"MT_EXPLODE",  
-	"MT_UWEXPLODE",  
+	// Debris
+	"MT_SPARK", //spark
+	"MT_EXPLODE", // Robot Explosion
+	"MT_UWEXPLODE", // Underwater Explosion
 	"MT_DUST",
 	"MT_ROCKSPAWNER",
 	"MT_FALLINGROCK",
@@ -4348,7 +4348,7 @@ const char *const MOBJTYPE_LIST[] = {
 	"MT_ROCKCRUMBLE15",
 	"MT_ROCKCRUMBLE16",
 
-
+	// Level debris
 	"MT_GFZDEBRIS",
 	"MT_BRICKDEBRIS",
 	"MT_WOODDEBRIS",
@@ -4396,96 +4396,96 @@ const char *const MOBJFLAG_LIST[] = {
 	NULL
 };
 
-
+// \tMF2_(\S+).*// (.+) --> \t"\1", // \2
 const char *const MOBJFLAG2_LIST[] = {
-	"AXIS",			   
-	"TWOD",			   
-	"DONTRESPAWN",	   
-	"DONTDRAW",		   
-	"AUTOMATIC",	   
-	"RAILRING",		   
-	"BOUNCERING",	   
-	"EXPLOSION",	   
-	"SCATTER",		   
-	"BEYONDTHEGRAVE",  
-	"SLIDEPUSH",	   
-	"CLASSICPUSH",     
-	"INVERTAIMABLE",   
-	"INFLOAT",		   
-	"DEBRIS",		   
-	"NIGHTSPULL",	   
-	"JUSTATTACKED",	   
-	"FIRING",		   
-	"SUPERFIRE",	   
-	"SHADOW",		   
-	"STRONGBOX",	   
-	"OBJECTFLIP",	   
-	"SKULLFLY",		   
-	"FRET",			   
-	"BOSSNOTRAP",	   
-	"BOSSFLEE",		   
-	"BOSSDEAD",		   
-	"AMBUSH",          
-	"LINKDRAW",        
-	"SHIELD",          
-	"SPLAT",           
+	"AXIS",			  // It's a NiGHTS axis! (For faster checking)
+	"TWOD",			  // Moves like it's in a 2D level
+	"DONTRESPAWN",	  // Don't respawn this object!
+	"DONTDRAW",		  // Don't generate a vissprite
+	"AUTOMATIC",	  // Thrown ring has automatic properties
+	"RAILRING",		  // Thrown ring has rail properties
+	"BOUNCERING",	  // Thrown ring has bounce properties
+	"EXPLOSION",	  // Thrown ring has explosive properties
+	"SCATTER",		  // Thrown ring has scatter properties
+	"BEYONDTHEGRAVE", // Source of this missile has died and has since respawned.
+	"SLIDEPUSH",	  // MF_PUSHABLE that pushes continuously.
+	"CLASSICPUSH",    // Drops straight down when object has negative momz.
+	"INVERTAIMABLE",  // Flips whether it's targetable by A_LookForEnemies (enemies no, decoys yes)
+	"INFLOAT",		  // Floating to a height for a move, don't auto float to target's height.
+	"DEBRIS",		  // Splash ring from explosion ring
+	"NIGHTSPULL",	  // Attracted from a paraloop
+	"JUSTATTACKED",	  // can be pushed by other moving mobjs
+	"FIRING",		  // turret fire
+	"SUPERFIRE",	  // Firing something with Super Sonic-stopping properties. Or, if mobj has MF_MISSILE, this is the actual fire from it.
+	"SHADOW",		  // Fuzzy draw, makes targeting harder.
+	"STRONGBOX",	  // Flag used for "strong" random monitors.
+	"OBJECTFLIP",	  // Flag for objects that always have flipped gravity.
+	"SKULLFLY",		  // Special handling: skull in flight.
+	"FRET",			  // Flashing from a previous hit
+	"BOSSNOTRAP",	  // No Egg Trap after boss
+	"BOSSFLEE",		  // Boss is fleeing!
+	"BOSSDEAD",		  // Boss is dead! (Not necessarily fleeing, if a fleeing point doesn't exist.)
+	"AMBUSH",         // Alternate behaviour typically set by MTF_AMBUSH
+	"LINKDRAW",       // Draw vissprite of mobj immediately before/after tracer's vissprite (dependent on dispoffset and position)
+	"SHIELD",         // Thinker calls P_AddShield/P_ShieldLook (must be partnered with MF_SCENERY to use)
+	"SPLAT",          // Object is a splat
 	NULL
 };
 
 const char *const MOBJEFLAG_LIST[] = {
-	"ONGROUND",  
-	"JUSTHITFLOOR",  
-	"TOUCHWATER",  
-	"UNDERWATER",  
-	"JUSTSTEPPEDDOWN",  
-	"VERTICALFLIP",  
-	"GOOWATER",  
-	"TOUCHLAVA",  
-	"PUSHED",  
-	"SPRUNG",  
-	"APPLYPMOMZ",  
-	"TRACERANGLE",  
-	"FORCESUPER",  
-	"FORCENOSUPER",  
+	"ONGROUND", // The mobj stands on solid floor (not on another mobj or in air)
+	"JUSTHITFLOOR", // The mobj just hit the floor while falling, this is cleared on next frame
+	"TOUCHWATER", // The mobj stands in a sector with water, and touches the surface
+	"UNDERWATER", // The mobj stands in a sector with water, and his waist is BELOW the water surface
+	"JUSTSTEPPEDDOWN", // used for ramp sectors
+	"VERTICALFLIP", // Vertically flip sprite/allow upside-down physics
+	"GOOWATER", // Goo water
+	"TOUCHLAVA", // The mobj is touching a lava block
+	"PUSHED", // Mobj was already pushed this tic
+	"SPRUNG", // Mobj was already sprung this tic
+	"APPLYPMOMZ", // Platform movement
+	"TRACERANGLE", // Compute and trigger on mobj angle relative to tracer
+	"FORCESUPER", // Forces an object to use super sprites with SPR_PLAY.
+	"FORCENOSUPER", // Forces an object to NOT use super sprites with SPR_PLAY.
 	NULL
 };
 
 const char *const MAPTHINGFLAG_LIST[] = {
-	"EXTRA",  
-	"OBJECTFLIP",  
-	"OBJECTSPECIAL",  
-	"AMBUSH",  
-	"ABSOLUTEZ"  
+	"EXTRA", // Extra flag for objects.
+	"OBJECTFLIP", // Reverse gravity flag for objects.
+	"OBJECTSPECIAL", // Special flag used with certain objects.
+	"AMBUSH", // Deaf monsters/do not react to sound.
+	"ABSOLUTEZ" // Absolute spawn height flag for objects.
 };
 
 const char *const PLAYERFLAG_LIST[] = {
 
+	// Cvars
+	"FLIPCAM", // Flip camera angle with gravity flip prefrence.
+	"ANALOGMODE", // Analog mode?
+	"DIRECTIONCHAR", // Directional character sprites?
+	"AUTOBRAKE", // Autobrake?
 
-	"FLIPCAM",  
-	"ANALOGMODE",  
-	"DIRECTIONCHAR",  
-	"AUTOBRAKE",  
-
-
+	// Cheats
 	"GODMODE",
 	"NOCLIP",
 	"INVIS",
 
-
+	// True if button down last tic.
 	"ATTACKDOWN",
 	"SPINDOWN",
 	"JUMPDOWN",
 	"WPNDOWN",
 
+	// Unmoving states
+	"STASIS", // Player is not allowed to move
+	"JUMPSTASIS", // and that includes jumping.
+	// (we don't include FULLSTASIS here I guess because it's just those two together...?)
 
-	"STASIS",  
-	"JUMPSTASIS",  
-
-
-
+	// Applying autobrake?
 	"APPLYAUTOBRAKE",
 
-
+	// Character action status
 	"STARTJUMP",
 	"JUMPED",
 	"NOJUMPDAMAGE",
@@ -4498,25 +4498,25 @@ const char *const PLAYERFLAG_LIST[] = {
 	"GLIDING",
 	"BOUNCING",
 
-
+	// Sliding (usually in water) like Labyrinth/Oil Ocean
 	"SLIDING",
 
-
+	// NiGHTS stuff
 	"TRANSFERTOCLOSEST",
 	"DRILLING",
 
+	// Gametype-specific stuff
+	"GAMETYPEOVER", // Race time over, or H&S out-of-game
+	"TAGIT", // The player is it! For Tag Mode
 
-	"GAMETYPEOVER",  
-	"TAGIT",  
-
-	 
-	"FORCESTRAFE",  
-	"CANCARRY",  
+	/*** misc ***/
+	"FORCESTRAFE", // Translate turn inputs into strafe inputs
+	"CANCARRY", // Can carry?
 	"FINISHED",
 
-	"SHIELDDOWN",  
+	"SHIELDDOWN", // Shield has been pressed.
 
-	NULL  
+	NULL // stop loop here.
 };
 
 const char *const GAMETYPERULE_LIST[] = {
@@ -4555,7 +4555,7 @@ const char *const GAMETYPERULE_LIST[] = {
 	NULL
 };
 
-
+// Linedef flags
 const char *const ML_LIST[] = {
 	"IMPASSIBLE",
 	"BLOCKMONSTERS",
@@ -4576,7 +4576,7 @@ const char *const ML_LIST[] = {
 	NULL
 };
 
-
+// Sector flags
 const char *const MSF_LIST[] = {
 	"FLIPSPECIAL_FLOOR",
 	"FLIPSPECIAL_CEILING",
@@ -4590,7 +4590,7 @@ const char *const MSF_LIST[] = {
 	NULL
 };
 
-
+// Sector special flags
 const char *const SSF_LIST[] = {
 	"OUTERSPACE",
 	"DOUBLESTEPUP",
@@ -4616,7 +4616,7 @@ const char *const SSF_LIST[] = {
 	NULL
 };
 
-
+// Sector damagetypes
 const char *const SD_LIST[] = {
 	"NONE",
 	"GENERIC",
@@ -4632,7 +4632,7 @@ const char *const SD_LIST[] = {
 	NULL
 };
 
-
+// Sector triggerer
 const char *const TO_LIST[] = {
 	"PLAYER",
 	"ALLPLAYERS",
@@ -4641,181 +4641,181 @@ const char *const TO_LIST[] = {
 };
 
 const char *COLOR_ENUMS[] = {
-	"NONE",			 
+	"NONE",			// SKINCOLOR_NONE,
 
+	// Greyscale ranges
+	"WHITE",     	// SKINCOLOR_WHITE,
+	"BONE",     	// SKINCOLOR_BONE,
+	"CLOUDY",     	// SKINCOLOR_CLOUDY,
+	"GREY",     	// SKINCOLOR_GREY,
+	"SILVER",     	// SKINCOLOR_SILVER,
+	"CARBON",     	// SKINCOLOR_CARBON,
+	"JET",     		// SKINCOLOR_JET,
+	"BLACK",     	// SKINCOLOR_BLACK,
 
-	"WHITE",     	 
-	"BONE",     	 
-	"CLOUDY",     	 
-	"GREY",     	 
-	"SILVER",     	 
-	"CARBON",     	 
-	"JET",     		 
-	"BLACK",     	 
+	// Desaturated
+	"AETHER",     	// SKINCOLOR_AETHER,
+	"SLATE",     	// SKINCOLOR_SLATE,
+	"MOONSTONE",   	// SKINCOLOR_MOONSTONE,
+	"BLUEBELL",   	// SKINCOLOR_BLUEBELL,
+	"PINK",     	// SKINCOLOR_PINK,
+	"ROSEWOOD",   	// SKINCOLOR_ROSEWOOD,
+	"YOGURT",     	// SKINCOLOR_YOGURT,
+	"LATTE",     	// SKINCOLOR_LATTE,
+	"BROWN",     	// SKINCOLOR_BROWN,
+	"BOULDER",   	// SKINCOLOR_BOULDER
+	"BRONZE",     	// SKINCOLOR_BRONZE,
+	"SEPIA",     	// SKINCOLOR_SEPIA,
+	"ECRU",     	// SKINCOLOR_ECRU,
+	"TAN",      	// SKINCOLOR_TAN,
+	"BEIGE",     	// SKINCOLOR_BEIGE,
+	"ROSEBUSH",  	// SKINCOLOR_ROSEBUSH,
+	"MOSS",     	// SKINCOLOR_MOSS,
+	"AZURE",     	// SKINCOLOR_AZURE,
+	"EGGPLANT",  	// SKINCOLOR_EGGPLANT,
+	"LAVENDER",   	// SKINCOLOR_LAVENDER,
 
+	// Viv's vivid colours (toast 21/07/17)
+	// Tweaks & additions (Lach, sphere, Alice, MotorRoach 26/10/22)
+	"RUBY",     	// SKINCOLOR_RUBY,
+	"CHERRY",     	// SKINCOLOR_CHERRY,
+	"SALMON",     	// SKINCOLOR_SALMON,
+	"PEPPER",     	// SKINCOLOR_PEPPER,
+	"RED",     		// SKINCOLOR_RED,
+	"CRIMSON",     	// SKINCOLOR_CRIMSON,
+	"FLAME",     	// SKINCOLOR_FLAME,
+	"GARNET",      	// SKINCOLOR_GARNET,
+	"KETCHUP",     	// SKINCOLOR_KETCHUP,
+	"PEACHY",     	// SKINCOLOR_PEACHY,
+	"QUAIL",     	// SKINCOLOR_QUAIL,
+	"FOUNDATION",   // SKINCOLOR_FOUNDATION,
+	"SUNSET",     	// SKINCOLOR_SUNSET,
+	"COPPER",     	// SKINCOLOR_COPPER,
+	"APRICOT",     	// SKINCOLOR_APRICOT,
+	"ORANGE",     	// SKINCOLOR_ORANGE,
+	"RUST",     	// SKINCOLOR_RUST,
+	"TANGERINE",   	// SKINCOLOR_TANGERINE,
+	"TOPAZ",     	// SKINCOLOR_TOPAZ,
+	"GOLD",     	// SKINCOLOR_GOLD,
+	"SANDY",     	// SKINCOLOR_SANDY,
+	"GOLDENROD",   	// SKINCOLOR_GOLDENROD,
+	"YELLOW",     	// SKINCOLOR_YELLOW,
+	"OLIVE",     	// SKINCOLOR_OLIVE,
+	"PEAR",     	// SKINCOLOR_PEAR,
+	"LEMON",     	// SKINCOLOR_LEMON,
+	"LIME",     	// SKINCOLOR_LIME,
+	"PERIDOT",     	// SKINCOLOR_PERIDOT,
+	"APPLE",     	// SKINCOLOR_APPLE,
+	"HEADLIGHT",	// SKINCOLOR_HEADLIGHT,
+	"CHARTREUSE",   // SKINCOLOR_CHARTREUSE,
+	"GREEN",     	// SKINCOLOR_GREEN,
+	"FOREST",     	// SKINCOLOR_FOREST,
+	"SHAMROCK",    	// SKINCOLOR_SHAMROCK,
+	"JADE",     	// SKINCOLOR_JADE,
+	"MINT",     	// SKINCOLOR_MINT,
+	"MASTER",     	// SKINCOLOR_MASTER,
+	"EMERALD",     	// SKINCOLOR_EMERALD,
+	"SEAFOAM",     	// SKINCOLOR_SEAFOAM,
+	"ISLAND",     	// SKINCOLOR_ISLAND,
+	"BOTTLE",     	// SKINCOLOR_BOTTLE,
+	"AQUA",     	// SKINCOLOR_AQUA,
+	"TEAL",     	// SKINCOLOR_TEAL,
+	"OCEAN",     	// SKINCOLOR_OCEAN,
+	"WAVE",     	// SKINCOLOR_WAVE,
+	"CYAN",     	// SKINCOLOR_CYAN,
+	"TURQUOISE",    // SKINCOLOR_TURQUOISE,
+	"AQUAMARINE",  	// SKINCOLOR_AQUAMARINE,
+	"SKY",     		// SKINCOLOR_SKY,
+	"MARINE",     	// SKINCOLOR_MARINE,
+	"CERULEAN",     // SKINCOLOR_CERULEAN,
+	"DREAM",     	// SKINCOLOR_DREAM,
+	"ICY",     		// SKINCOLOR_ICY,
+	"DAYBREAK",     // SKINCOLOR_DAYBREAK,
+	"SAPPHIRE",     // SKINCOLOR_SAPPHIRE,
+	"ARCTIC",     	// SKINCOLOR_ARCTIC,
+	"CORNFLOWER",   // SKINCOLOR_CORNFLOWER,
+	"BLUE",     	// SKINCOLOR_BLUE,
+	"COBALT",     	// SKINCOLOR_COBALT,
+	"MIDNIGHT",     // SKINCOLOR_MIDNIGHT,
+	"GALAXY",     	// SKINCOLOR_GALAXY,
+	"VAPOR",     	// SKINCOLOR_VAPOR,
+	"DUSK",     	// SKINCOLOR_DUSK,
+	"MAJESTY",     	// SKINCOLOR_MAJESTY,
+	"PASTEL",     	// SKINCOLOR_PASTEL,
+	"PURPLE",     	// SKINCOLOR_PURPLE,
+	"NOBLE",     	// SKINCOLOR_NOBLE,
+	"FUCHSIA",     	// SKINCOLOR_FUCHSIA,
+	"BUBBLEGUM",   	// SKINCOLOR_BUBBLEGUM,
+	"SIBERITE",   	// SKINCOLOR_SIBERITE,
+	"MAGENTA",     	// SKINCOLOR_MAGENTA,
+	"NEON",     	// SKINCOLOR_NEON,
+	"VIOLET",     	// SKINCOLOR_VIOLET,
+	"ROYAL",     	// SKINCOLOR_ROYAL,
+	"LILAC",     	// SKINCOLOR_LILAC,
+	"MAUVE",     	// SKINCOLOR_MAUVE,
+	"EVENTIDE",   	// SKINCOLOR_EVENTIDE,
+	"PLUM",     	// SKINCOLOR_PLUM,
+	"RASPBERRY",  	// SKINCOLOR_RASPBERRY,
+	"TAFFY",     	// SKINCOLOR_TAFFY,
+	"ROSY",     	// SKINCOLOR_ROSY,
+	"FANCY",  		// SKINCOLOR_FANCY,
+	"SANGRIA",     	// SKINCOLOR_SANGRIA,
+	"VOLCANIC",    	// SKINCOLOR_VOLCANIC,
 
-	"AETHER",     	 
-	"SLATE",     	 
-	"MOONSTONE",   	 
-	"BLUEBELL",   	 
-	"PINK",     	 
-	"ROSEWOOD",   	 
-	"YOGURT",     	 
-	"LATTE",     	 
-	"BROWN",     	 
-	"BOULDER",   	 
-	"BRONZE",     	 
-	"SEPIA",     	 
-	"ECRU",     	 
-	"TAN",      	 
-	"BEIGE",     	 
-	"ROSEBUSH",  	 
-	"MOSS",     	 
-	"AZURE",     	 
-	"EGGPLANT",  	 
-	"LAVENDER",   	 
+	// Super special awesome Super flashing colors!
+	"SUPERSILVER1",	// SKINCOLOR_SUPERSILVER1
+	"SUPERSILVER2",	// SKINCOLOR_SUPERSILVER2,
+	"SUPERSILVER3",	// SKINCOLOR_SUPERSILVER3,
+	"SUPERSILVER4",	// SKINCOLOR_SUPERSILVER4,
+	"SUPERSILVER5",	// SKINCOLOR_SUPERSILVER5,
 
+	"SUPERRED1",	// SKINCOLOR_SUPERRED1
+	"SUPERRED2",	// SKINCOLOR_SUPERRED2,
+	"SUPERRED3",	// SKINCOLOR_SUPERRED3,
+	"SUPERRED4",	// SKINCOLOR_SUPERRED4,
+	"SUPERRED5",	// SKINCOLOR_SUPERRED5,
 
+	"SUPERORANGE1",	// SKINCOLOR_SUPERORANGE1
+	"SUPERORANGE2",	// SKINCOLOR_SUPERORANGE2,
+	"SUPERORANGE3",	// SKINCOLOR_SUPERORANGE3,
+	"SUPERORANGE4",	// SKINCOLOR_SUPERORANGE4,
+	"SUPERORANGE5",	// SKINCOLOR_SUPERORANGE5,
 
-	"RUBY",     	 
-	"CHERRY",     	 
-	"SALMON",     	 
-	"PEPPER",     	 
-	"RED",     		 
-	"CRIMSON",     	 
-	"FLAME",     	 
-	"GARNET",      	 
-	"KETCHUP",     	 
-	"PEACHY",     	 
-	"QUAIL",     	 
-	"FOUNDATION",    
-	"SUNSET",     	 
-	"COPPER",     	 
-	"APRICOT",     	 
-	"ORANGE",     	 
-	"RUST",     	 
-	"TANGERINE",   	 
-	"TOPAZ",     	 
-	"GOLD",     	 
-	"SANDY",     	 
-	"GOLDENROD",   	 
-	"YELLOW",     	 
-	"OLIVE",     	 
-	"PEAR",     	 
-	"LEMON",     	 
-	"LIME",     	 
-	"PERIDOT",     	 
-	"APPLE",     	 
-	"HEADLIGHT",	 
-	"CHARTREUSE",    
-	"GREEN",     	 
-	"FOREST",     	 
-	"SHAMROCK",    	 
-	"JADE",     	 
-	"MINT",     	 
-	"MASTER",     	 
-	"EMERALD",     	 
-	"SEAFOAM",     	 
-	"ISLAND",     	 
-	"BOTTLE",     	 
-	"AQUA",     	 
-	"TEAL",     	 
-	"OCEAN",     	 
-	"WAVE",     	 
-	"CYAN",     	 
-	"TURQUOISE",     
-	"AQUAMARINE",  	 
-	"SKY",     		 
-	"MARINE",     	 
-	"CERULEAN",      
-	"DREAM",     	 
-	"ICY",     		 
-	"DAYBREAK",      
-	"SAPPHIRE",      
-	"ARCTIC",     	 
-	"CORNFLOWER",    
-	"BLUE",     	 
-	"COBALT",     	 
-	"MIDNIGHT",      
-	"GALAXY",     	 
-	"VAPOR",     	 
-	"DUSK",     	 
-	"MAJESTY",     	 
-	"PASTEL",     	 
-	"PURPLE",     	 
-	"NOBLE",     	 
-	"FUCHSIA",     	 
-	"BUBBLEGUM",   	 
-	"SIBERITE",   	 
-	"MAGENTA",     	 
-	"NEON",     	 
-	"VIOLET",     	 
-	"ROYAL",     	 
-	"LILAC",     	 
-	"MAUVE",     	 
-	"EVENTIDE",   	 
-	"PLUM",     	 
-	"RASPBERRY",  	 
-	"TAFFY",     	 
-	"ROSY",     	 
-	"FANCY",  		 
-	"SANGRIA",     	 
-	"VOLCANIC",    	 
+	"SUPERGOLD1",	// SKINCOLOR_SUPERGOLD1
+	"SUPERGOLD2",	// SKINCOLOR_SUPERGOLD2,
+	"SUPERGOLD3",	// SKINCOLOR_SUPERGOLD3,
+	"SUPERGOLD4",	// SKINCOLOR_SUPERGOLD4,
+	"SUPERGOLD5",	// SKINCOLOR_SUPERGOLD5,
 
+	"SUPERPERIDOT1",	// SKINCOLOR_SUPERPERIDOT1
+	"SUPERPERIDOT2",	// SKINCOLOR_SUPERPERIDOT2,
+	"SUPERPERIDOT3",	// SKINCOLOR_SUPERPERIDOT3,
+	"SUPERPERIDOT4",	// SKINCOLOR_SUPERPERIDOT4,
+	"SUPERPERIDOT5",	// SKINCOLOR_SUPERPERIDOT5,
 
-	"SUPERSILVER1",	 
-	"SUPERSILVER2",	 
-	"SUPERSILVER3",	 
-	"SUPERSILVER4",	 
-	"SUPERSILVER5",	 
+	"SUPERSKY1",	// SKINCOLOR_SUPERSKY1
+	"SUPERSKY2",	// SKINCOLOR_SUPERSKY2,
+	"SUPERSKY3",	// SKINCOLOR_SUPERSKY3,
+	"SUPERSKY4",	// SKINCOLOR_SUPERSKY4,
+	"SUPERSKY5",	// SKINCOLOR_SUPERSKY5,
 
-	"SUPERRED1",	 
-	"SUPERRED2",	 
-	"SUPERRED3",	 
-	"SUPERRED4",	 
-	"SUPERRED5",	 
+	"SUPERPURPLE1",	// SKINCOLOR_SUPERPURPLE1,
+	"SUPERPURPLE2",	// SKINCOLOR_SUPERPURPLE2,
+	"SUPERPURPLE3",	// SKINCOLOR_SUPERPURPLE3,
+	"SUPERPURPLE4",	// SKINCOLOR_SUPERPURPLE4,
+	"SUPERPURPLE5",	// SKINCOLOR_SUPERPURPLE5,
 
-	"SUPERORANGE1",	 
-	"SUPERORANGE2",	 
-	"SUPERORANGE3",	 
-	"SUPERORANGE4",	 
-	"SUPERORANGE5",	 
+	"SUPERRUST1",	// SKINCOLOR_SUPERRUST1
+	"SUPERRUST2",	// SKINCOLOR_SUPERRUST2,
+	"SUPERRUST3",	// SKINCOLOR_SUPERRUST3,
+	"SUPERRUST4",	// SKINCOLOR_SUPERRUST4,
+	"SUPERRUST5",	// SKINCOLOR_SUPERRUST5,
 
-	"SUPERGOLD1",	 
-	"SUPERGOLD2",	 
-	"SUPERGOLD3",	 
-	"SUPERGOLD4",	 
-	"SUPERGOLD5",	 
-
-	"SUPERPERIDOT1",	 
-	"SUPERPERIDOT2",	 
-	"SUPERPERIDOT3",	 
-	"SUPERPERIDOT4",	 
-	"SUPERPERIDOT5",	 
-
-	"SUPERSKY1",	 
-	"SUPERSKY2",	 
-	"SUPERSKY3",	 
-	"SUPERSKY4",	 
-	"SUPERSKY5",	 
-
-	"SUPERPURPLE1",	 
-	"SUPERPURPLE2",	 
-	"SUPERPURPLE3",	 
-	"SUPERPURPLE4",	 
-	"SUPERPURPLE5",	 
-
-	"SUPERRUST1",	 
-	"SUPERRUST2",	 
-	"SUPERRUST3",	 
-	"SUPERRUST4",	 
-	"SUPERRUST5",	 
-
-	"SUPERTAN1",	 
-	"SUPERTAN2",	 
-	"SUPERTAN3",	 
-	"SUPERTAN4",	 
-	"SUPERTAN5"		 
+	"SUPERTAN1",	// SKINCOLOR_SUPERTAN1
+	"SUPERTAN2",	// SKINCOLOR_SUPERTAN2,
+	"SUPERTAN3",	// SKINCOLOR_SUPERTAN3,
+	"SUPERTAN4",	// SKINCOLOR_SUPERTAN4,
+	"SUPERTAN5"		// SKINCOLOR_SUPERTAN5,
 };
 
 const char *const POWERS_LIST[] = {
@@ -4824,18 +4824,18 @@ const char *const POWERS_LIST[] = {
 	"FLASHING",
 	"SHIELD",
 	"CARRY",
-	"TAILSFLY",  
-	"UNDERWATER",  
-	"SPACETIME",  
-	"EXTRALIFE",  
+	"TAILSFLY", // tails flying
+	"UNDERWATER", // underwater timer
+	"SPACETIME", // In space, no one can hear you spin!
+	"EXTRALIFE", // Extra Life timer
 	"PUSHING",
 	"JUSTSPRUNG",
 	"NOAUTOBRAKE",
 
-	"SUPER",  
-	"GRAVITYBOOTS",  
+	"SUPER", // Are you super?
+	"GRAVITYBOOTS", // gravity boots
 
-
+	// Weapon ammunition
 	"INFINITYRING",
 	"AUTOMATICRING",
 	"BOUNCERING",
@@ -4844,18 +4844,18 @@ const char *const POWERS_LIST[] = {
 	"EXPLOSIONRING",
 	"RAILRING",
 
+	// Power Stones
+	"EMERALDS", // stored like global 'emeralds' variable
 
-	"EMERALDS",  
-
-
+	// NiGHTS powerups
 	"NIGHTS_SUPERLOOP",
 	"NIGHTS_HELPER",
 	"NIGHTS_LINKFREEZE",
 
-
+	//for linedef exec 427
 	"NOCONTROL",
 
-
+	//for dyes
 	"DYE",
 
 	"JUSTLAUNCHED",
@@ -4899,7 +4899,7 @@ const char *const MENUTYPES_LIST[] = {
 
 	"MAIN",
 
-
+	// Single Player
 	"SP_MAIN",
 
 	"SP_LOAD",
@@ -4920,23 +4920,23 @@ const char *const MENUTYPES_LIST[] = {
 	"SP_NIGHTS_REPLAY",
 	"SP_NIGHTS_GHOST",
 
-
+	// Multiplayer
 	"MP_MAIN",
-	"MP_SPLITSCREEN",  
+	"MP_SPLITSCREEN", // SplitServer
 	"MP_SERVER",
 	"MP_CONNECT",
 	"MP_ROOM",
 	"MP_PLAYERSETUP",
 	"MP_SERVER_OPTIONS",
 
-
+	// Options
 	"OP_MAIN",
 
 	"OP_P1CONTROLS",
-	"OP_CHANGECONTROLS",  
+	"OP_CHANGECONTROLS", // OP_ChangeControlsDef shared with P2
 	"OP_P1MOUSE",
 	"OP_P1JOYSTICK",
-	"OP_JOYSTICKSET",  
+	"OP_JOYSTICKSET", // OP_JoystickSetDef shared with P2
 	"OP_P1CAMERA",
 
 	"OP_P2CONTROLS",
@@ -4962,7 +4962,7 @@ const char *const MENUTYPES_LIST[] = {
 	"OP_SCREENSHOTS",
 	"OP_ERASEDATA",
 
-
+	// Extras
 	"SR_MAIN",
 	"SR_PANDORA",
 	"SR_LEVELSELECT",
@@ -4971,77 +4971,77 @@ const char *const MENUTYPES_LIST[] = {
 	"SR_PLAYER",
 	"SR_SOUNDTEST",
 
-
+	// Addons (Part of MISC, but let's make it our own)
 	"AD_MAIN",
 
+	// MISC
+	// "MESSAGE",
+	// "SPAUSE",
 
+	// "MPAUSE",
+	// "SCRAMBLETEAM",
+	// "CHANGETEAM",
+	// "CHANGELEVEL",
 
-
-
-
-
-
-
-
-
-
+	// "MAPAUSE",
+	// "HELP",
 
 	"SPECIAL"
 };
 
 struct int_const_s const INT_CONST[] = {
+	// If a mod removes some variables here,
+	// please leave the names in-tact and just set
+	// the value to 0 or something.
 
-
-
-
-
-
-
+	// integer type limits, from doomtype.h
+	// INT64 and UINT64 limits not included, they're too big for most purposes anyway
+	// signed
 	{"INT8_MIN",INT8_MIN},
 	{"INT16_MIN",INT16_MIN},
 	{"INT32_MIN",INT32_MIN},
 	{"INT8_MAX",INT8_MAX},
 	{"INT16_MAX",INT16_MAX},
 	{"INT32_MAX",INT32_MAX},
-
+	// unsigned
 	{"UINT8_MAX",UINT8_MAX},
 	{"UINT16_MAX",UINT16_MAX},
 	{"UINT32_MAX",UINT32_MAX},
 
-
+	// fixed_t constants, from m_fixed.h
 	{"FRACUNIT",FRACUNIT},
 	{"FU"      ,FRACUNIT},
 	{"FRACBITS",FRACBITS},
 
-
+	// doomdef.h constants
 	{"TICRATE",TICRATE},
 	{"MUSICRATE",MUSICRATE},
 	{"RING_DIST",RING_DIST},
 	{"PUSHACCEL",PUSHACCEL},
-	{"MODID",MODID},  
-	{"MODVERSION",MODVERSION},  
-	{"CODEBASE",CODEBASE},  
-	{"NEWTICRATE",NEWTICRATE},  
+	{"MODID",MODID}, // I don't know, I just thought it would be cool for a wad to potentially know what mod it was loaded into.
+	{"MODVERSION",MODVERSION}, // or what version of the mod this is.
+	{"CODEBASE",CODEBASE}, // or what release of SRB2 this is.
+	{"NEWTICRATE",NEWTICRATE}, // TICRATE*NEWTICRATERATIO
 	{"NEWTICRATERATIO",NEWTICRATERATIO},
 
+	// Special linedef executor tag numbers!
+	{"LE_PINCHPHASE",LE_PINCHPHASE}, // A boss entered pinch phase (and, in most cases, is preparing their pinch phase attack!)
+	{"LE_ALLBOSSESDEAD",LE_ALLBOSSESDEAD}, // All bosses in the map are dead (Egg capsule raise)
+	{"LE_BOSSDEAD",LE_BOSSDEAD}, // A boss in the map died (Chaos mode boss tally)
+	{"LE_BOSS4DROP",LE_BOSS4DROP}, // CEZ boss dropped its cage
+	{"LE_BRAKVILEATACK",LE_BRAKVILEATACK}, // Brak's doing his LOS attack, oh noes
+	{"LE_TURRET",LE_TURRET}, // THZ turret
+	{"LE_BRAKPLATFORM",LE_BRAKPLATFORM}, // v2.0 Black Eggman destroys platform
+	{"LE_CAPSULE2",LE_CAPSULE2}, // Egg Capsule
+	{"LE_CAPSULE1",LE_CAPSULE1}, // Egg Capsule
+	{"LE_CAPSULE0",LE_CAPSULE0}, // Egg Capsule
+	{"LE_KOOPA",LE_KOOPA}, // Distant cousin to Gay Bowser
+	{"LE_AXE",LE_AXE}, // MKB Axe object
+	{"LE_PARAMWIDTH",LE_PARAMWIDTH},  // If an object that calls LinedefExecute has a nonzero parameter value, this times the parameter will be subtracted. (Mostly for the purpose of coexisting bosses...)
 
-	{"LE_PINCHPHASE",LE_PINCHPHASE},  
-	{"LE_ALLBOSSESDEAD",LE_ALLBOSSESDEAD},  
-	{"LE_BOSSDEAD",LE_BOSSDEAD},  
-	{"LE_BOSS4DROP",LE_BOSS4DROP},  
-	{"LE_BRAKVILEATACK",LE_BRAKVILEATACK},  
-	{"LE_TURRET",LE_TURRET},  
-	{"LE_BRAKPLATFORM",LE_BRAKPLATFORM},  
-	{"LE_CAPSULE2",LE_CAPSULE2},  
-	{"LE_CAPSULE1",LE_CAPSULE1},  
-	{"LE_CAPSULE0",LE_CAPSULE0},  
-	{"LE_KOOPA",LE_KOOPA},  
-	{"LE_AXE",LE_AXE},  
-	{"LE_PARAMWIDTH",LE_PARAMWIDTH},   
+	/// \todo Get all this stuff into its own sections, maybe. Maybe.
 
-
-
-
+	// Frame settings
 	{"FF_FRAMEMASK",FF_FRAMEMASK},
 	{"FF_SPR2SUPER",FF_SPR2SUPER},
 	{"FF_SPR2ENDSTATE",FF_SPR2ENDSTATE},
@@ -5064,7 +5064,7 @@ struct int_const_s const INT_CONST[] = {
 	{"FF_MODULATE",FF_MODULATE},
 	{"FF_TRANSMASK",FF_TRANSMASK},
 	{"FF_TRANSSHIFT",FF_TRANSSHIFT},
-
+	// new preshifted translucency (used in source)
 	{"FF_TRANS10",FF_TRANS10},
 	{"FF_TRANS20",FF_TRANS20},
 	{"FF_TRANS30",FF_TRANS30},
@@ -5074,8 +5074,8 @@ struct int_const_s const INT_CONST[] = {
 	{"FF_TRANS70",FF_TRANS70},
 	{"FF_TRANS80",FF_TRANS80},
 	{"FF_TRANS90",FF_TRANS90},
-
-
+	// compatibility
+	// Transparency for SOCs is pre-shifted
 	{"TR_TRANS10",tr_trans10<<FF_TRANSSHIFT},
 	{"TR_TRANS20",tr_trans20<<FF_TRANSSHIFT},
 	{"TR_TRANS30",tr_trans30<<FF_TRANSSHIFT},
@@ -5085,7 +5085,7 @@ struct int_const_s const INT_CONST[] = {
 	{"TR_TRANS70",tr_trans70<<FF_TRANSSHIFT},
 	{"TR_TRANS80",tr_trans80<<FF_TRANSSHIFT},
 	{"TR_TRANS90",tr_trans90<<FF_TRANSSHIFT},
-
+	// Transparency for Lua is not, unless capitalized as above.
 	{"tr_trans10",tr_trans10},
 	{"tr_trans20",tr_trans20},
 	{"tr_trans30",tr_trans30},
@@ -5097,7 +5097,7 @@ struct int_const_s const INT_CONST[] = {
 	{"tr_trans90",tr_trans90},
 	{"NUMTRANSMAPS",NUMTRANSMAPS},
 
-
+	// Alpha styles (blend modes)
 	{"AST_COPY",AST_COPY},
 	{"AST_TRANSLUCENT",AST_TRANSLUCENT},
 	{"AST_ADD",AST_ADD},
@@ -5107,7 +5107,7 @@ struct int_const_s const INT_CONST[] = {
 	{"AST_OVERLAY",AST_OVERLAY},
 	{"AST_FOG",AST_FOG},
 
-
+	// Render flags
 	{"RF_HORIZONTALFLIP",RF_HORIZONTALFLIP},
 	{"RF_VERTICALFLIP",RF_VERTICALFLIP},
 	{"RF_ABSOLUTEOFFSETS",RF_ABSOLUTEOFFSETS},
@@ -5129,11 +5129,11 @@ struct int_const_s const INT_CONST[] = {
 	{"RF_SHADOWEFFECTS",RF_SHADOWEFFECTS},
 	{"RF_DROPSHADOW",RF_DROPSHADOW},
 
-
+	// Animation flags
 	{"SPR2F_MASK",SPR2F_MASK},
 	{"SPR2F_SUPER",SPR2F_SUPER},
 
-
+	// Level flags
 	{"LF_SCRIPTISFILE",LF_SCRIPTISFILE},
 	{"LF_SPEEDMUSIC",LF_SPEEDMUSIC},
 	{"LF_NOSSMUSIC",LF_NOSSMUSIC},
@@ -5146,7 +5146,7 @@ struct int_const_s const INT_CONST[] = {
 	{"LF_NOTITLECARDRECORDATTACK",LF_NOTITLECARDRECORDATTACK},
 	{"LF_NOTITLECARD",LF_NOTITLECARD},
 	{"LF_WARNINGTITLE",LF_WARNINGTITLE},
-
+	// And map flags
 	{"LF2_HIDEINMENU",LF2_HIDEINMENU},
 	{"LF2_HIDEINSTATS",LF2_HIDEINSTATS},
 	{"LF2_RECORDATTACK",LF2_RECORDATTACK},
@@ -5154,7 +5154,7 @@ struct int_const_s const INT_CONST[] = {
 	{"LF2_NOVISITNEEDED",LF2_NOVISITNEEDED},
 	{"LF2_WIDEICON",LF2_WIDEICON},
 
-
+	// Emeralds
 	{"EMERALD1",EMERALD1},
 	{"EMERALD2",EMERALD2},
 	{"EMERALD3",EMERALD3},
@@ -5163,12 +5163,12 @@ struct int_const_s const INT_CONST[] = {
 	{"EMERALD6",EMERALD6},
 	{"EMERALD7",EMERALD7},
 
-
+	// SKINCOLOR_ doesn't include these..!
 	{"MAXSKINCOLORS",MAXSKINCOLORS},
 	{"FIRSTSUPERCOLOR",FIRSTSUPERCOLOR},
 	{"NUMSUPERCOLORS",NUMSUPERCOLORS},
 
-
+	// Precipitation
 	{"PRECIP_NONE",PRECIP_NONE},
 	{"PRECIP_STORM",PRECIP_STORM},
 	{"PRECIP_SNOW",PRECIP_SNOW},
@@ -5177,34 +5177,34 @@ struct int_const_s const INT_CONST[] = {
 	{"PRECIP_STORM_NORAIN",PRECIP_STORM_NORAIN},
 	{"PRECIP_STORM_NOSTRIKES",PRECIP_STORM_NOSTRIKES},
 
-
+	// Shields
 	{"SH_NONE",SH_NONE},
-
+	// Shield flags
 	{"SH_PROTECTFIRE",SH_PROTECTFIRE},
 	{"SH_PROTECTWATER",SH_PROTECTWATER},
 	{"SH_PROTECTELECTRIC",SH_PROTECTELECTRIC},
 	{"SH_PROTECTSPIKE",SH_PROTECTSPIKE},
-
+	// Indivisible shields
 	{"SH_PITY",SH_PITY},
 	{"SH_WHIRLWIND",SH_WHIRLWIND},
 	{"SH_ARMAGEDDON",SH_ARMAGEDDON},
 	{"SH_PINK",SH_PINK},
-
+	// normal shields that use flags
 	{"SH_ATTRACT",SH_ATTRACT},
 	{"SH_ELEMENTAL",SH_ELEMENTAL},
-
+	// Sonic 3 shields
 	{"SH_FLAMEAURA",SH_FLAMEAURA},
 	{"SH_BUBBLEWRAP",SH_BUBBLEWRAP},
 	{"SH_THUNDERCOIN",SH_THUNDERCOIN},
-
+	// The force shield uses the lower 8 bits to count how many extra hits are left.
 	{"SH_FORCE",SH_FORCE},
-	{"SH_FORCEHP",SH_FORCEHP},  
-
+	{"SH_FORCEHP",SH_FORCEHP}, // to be used as a bitmask only
+	// Mostly for use with Mario mode.
 	{"SH_FIREFLOWER",SH_FIREFLOWER},
 	{"SH_STACK",SH_STACK},
 	{"SH_NOSTACK",SH_NOSTACK},
 
-
+	// Carrying
 	{"CR_NONE",CR_NONE},
 	{"CR_GENERIC",CR_GENERIC},
 	{"CR_PLAYER",CR_PLAYER},
@@ -5220,7 +5220,7 @@ struct int_const_s const INT_CONST[] = {
 	{"CR_DUSTDEVIL",CR_DUSTDEVIL},
 	{"CR_FAN",CR_FAN},
 
-
+	// Strong powers
 	{"STR_NONE",STR_NONE},
 	{"STR_ANIM",STR_ANIM},
 	{"STR_PUNCH",STR_PUNCH},
@@ -5244,8 +5244,8 @@ struct int_const_s const INT_CONST[] = {
 	{"STR_BOUNCE",STR_BOUNCE},
 	{"STR_METAL",STR_METAL},
 
-
-
+	// Ring weapons (ringweapons_t)
+	// Useful for A_GiveWeapon
 	{"RW_AUTO",RW_AUTO},
 	{"RW_BOUNCE",RW_BOUNCE},
 	{"RW_SCATTER",RW_SCATTER},
@@ -5253,7 +5253,7 @@ struct int_const_s const INT_CONST[] = {
 	{"RW_EXPLODE",RW_EXPLODE},
 	{"RW_RAIL",RW_RAIL},
 
-
+	// Character flags (skinflags_t)
 	{"SF_SUPER",SF_SUPER},
 	{"SF_NOSUPERSPIN",SF_NOSUPERSPIN},
 	{"SF_NOSPINDASHDUST",SF_NOSPINDASHDUST},
@@ -5277,13 +5277,13 @@ struct int_const_s const INT_CONST[] = {
 	{"SF_CANBUSTWALLS",SF_CANBUSTWALLS},
 	{"SF_NOSHIELDABILITY",SF_NOSHIELDABILITY},
 
-
+	// Dashmode constants
 	{"DASHMODE_THRESHOLD",DASHMODE_THRESHOLD},
 	{"DASHMODE_MAX",DASHMODE_MAX},
 
-
-
-	{"CA_NONE",CA_NONE},  
+	// Character abilities!
+	// Primary
+	{"CA_NONE",CA_NONE}, // now slot 0!
 	{"CA_THOK",CA_THOK},
 	{"CA_FLY",CA_FLY},
 	{"CA_GLIDEANDCLIMB",CA_GLIDEANDCLIMB},
@@ -5299,13 +5299,13 @@ struct int_const_s const INT_CONST[] = {
 	{"CA_JUMPTHOK",CA_JUMPTHOK},
 	{"CA_BOUNCE",CA_BOUNCE},
 	{"CA_TWINSPIN",CA_TWINSPIN},
-
-	{"CA2_NONE",CA2_NONE},  
+	// Secondary
+	{"CA2_NONE",CA2_NONE}, // now slot 0!
 	{"CA2_SPINDASH",CA2_SPINDASH},
 	{"CA2_GUNSLINGER",CA2_GUNSLINGER},
 	{"CA2_MELEE",CA2_MELEE},
 
-
+	// Sound flags
 	{"SF_TOTALLYSINGLE",SF_TOTALLYSINGLE},
 	{"SF_NOMULTIPLESOUND",SF_NOMULTIPLESOUND},
 	{"SF_OUTSIDESOUND",SF_OUTSIDESOUND},
@@ -5314,59 +5314,59 @@ struct int_const_s const INT_CONST[] = {
 	{"SF_NOINTERRUPT",SF_NOINTERRUPT},
 	{"SF_X2AWAYSOUND",SF_X2AWAYSOUND},
 
-
+	// Global emblem var flags
 	{"GE_NIGHTSPULL",GE_NIGHTSPULL},
 	{"GE_NIGHTSITEM",GE_NIGHTSITEM},
 
-
+	// Map emblem var flags
 	{"ME_ALLEMERALDS",ME_ALLEMERALDS},
 	{"ME_ULTIMATE",ME_ULTIMATE},
 	{"ME_PERFECT",ME_PERFECT},
 
-
+	// p_local.h constants
 	{"FLOATSPEED",FLOATSPEED},
 	{"MAXSTEPMOVE",MAXSTEPMOVE},
 	{"USERANGE",USERANGE},
 	{"MELEERANGE",MELEERANGE},
 	{"MISSILERANGE",MISSILERANGE},
-	{"ONFLOORZ",ONFLOORZ},  
-	{"ONCEILINGZ",ONCEILINGZ},  
-
+	{"ONFLOORZ",ONFLOORZ}, // INT32_MIN
+	{"ONCEILINGZ",ONCEILINGZ}, //INT32_MAX
+	// for P_FlashPal
 	{"PAL_WHITE",PAL_WHITE},
 	{"PAL_MIXUP",PAL_MIXUP},
 	{"PAL_RECYCLE",PAL_RECYCLE},
 	{"PAL_NUKE",PAL_NUKE},
 	{"PAL_INVERT",PAL_INVERT},
-
-
+	// for P_DamageMobj
+	//// Damage types
 	{"DMG_WATER",DMG_WATER},
 	{"DMG_FIRE",DMG_FIRE},
 	{"DMG_ELECTRIC",DMG_ELECTRIC},
 	{"DMG_SPIKE",DMG_SPIKE},
 	{"DMG_NUKE",DMG_NUKE},
-
+	//// Death types
 	{"DMG_INSTAKILL",DMG_INSTAKILL},
 	{"DMG_DROWNED",DMG_DROWNED},
 	{"DMG_SPACEDROWN",DMG_SPACEDROWN},
 	{"DMG_DEATHPIT",DMG_DEATHPIT},
 	{"DMG_CRUSHED",DMG_CRUSHED},
 	{"DMG_SPECTATOR",DMG_SPECTATOR},
-
+	//// Masks
 	{"DMG_CANHURTSELF",DMG_CANHURTSELF},
 	{"DMG_DEATHMASK",DMG_DEATHMASK},
 
-
+	// Intermission types
 	{"int_none",int_none},
 	{"int_coop",int_coop},
 	{"int_match",int_match},
 	{"int_teammatch",int_teammatch},
-
+	//{"int_tag",int_tag},
 	{"int_ctf",int_ctf},
 	{"int_spec",int_spec},
 	{"int_race",int_race},
 	{"int_comp",int_comp},
 
-
+	// Jingles (jingletype_t)
 	{"JT_NONE",JT_NONE},
 	{"JT_OTHER",JT_OTHER},
 	{"JT_MASTER",JT_MASTER},
@@ -5379,16 +5379,16 @@ struct int_const_s const INT_CONST[] = {
 	{"JT_GOVER",JT_GOVER},
 	{"JT_NIGHTSTIMEOUT",JT_NIGHTSTIMEOUT},
 	{"JT_SSTIMEOUT",JT_SSTIMEOUT},
+	// {"JT_LCLEAR",JT_LCLEAR},
+	// {"JT_RACENT",JT_RACENT},
+	// {"JT_CONTSC",JT_CONTSC},
 
+	// Player state (playerstate_t)
+	{"PST_LIVE",PST_LIVE}, // Playing or camping.
+	{"PST_DEAD",PST_DEAD}, // Dead on the ground, view follows killer.
+	{"PST_REBORN",PST_REBORN}, // Ready to restart/respawn???
 
-
-
-
-	{"PST_LIVE",PST_LIVE},  
-	{"PST_DEAD",PST_DEAD},  
-	{"PST_REBORN",PST_REBORN},  
-
-
+	// Player animation (panim_t)
 	{"PA_ETC",PA_ETC},
 	{"PA_IDLE",PA_IDLE},
 	{"PA_EDGE",PA_EDGE},
@@ -5404,7 +5404,7 @@ struct int_const_s const INT_CONST[] = {
 	{"PA_ABILITY2",PA_ABILITY2},
 	{"PA_RIDE",PA_RIDE},
 
-
+	// Current weapon
 	{"WEP_AUTO",WEP_AUTO},
 	{"WEP_BOUNCE",WEP_BOUNCE},
 	{"WEP_SCATTER",WEP_SCATTER},
@@ -5413,33 +5413,33 @@ struct int_const_s const INT_CONST[] = {
 	{"WEP_RAIL",WEP_RAIL},
 	{"NUM_WEAPONS",NUM_WEAPONS},
 
-
+	// Value for infinite lives
 	{"INFLIVES",INFLIVES},
 
-
-
+	// Got Flags, for player->gotflag!
+	// Used to be MF_ for some stupid reason, now they're GF_ to stop them looking like mobjflags
 	{"GF_REDFLAG",GF_REDFLAG},
 	{"GF_BLUEFLAG",GF_BLUEFLAG},
 
-
+	// Bot types
 	{"BOT_NONE",BOT_NONE},
 	{"BOT_2PAI",BOT_2PAI},
 	{"BOT_2PHUMAN",BOT_2PHUMAN},
 	{"BOT_MPAI",BOT_MPAI},
 
-
+	// Customisable sounds for Skins, from sounds.h
 	{"SKSSPIN",SKSSPIN},
 	{"SKSPUTPUT",SKSPUTPUT},
 	{"SKSPUDPUD",SKSPUDPUD},
-	{"SKSPLPAN1",SKSPLPAN1},  
+	{"SKSPLPAN1",SKSPLPAN1}, // Ouchies
 	{"SKSPLPAN2",SKSPLPAN2},
 	{"SKSPLPAN3",SKSPLPAN3},
 	{"SKSPLPAN4",SKSPLPAN4},
-	{"SKSPLDET1",SKSPLDET1},  
+	{"SKSPLDET1",SKSPLDET1}, // Deaths
 	{"SKSPLDET2",SKSPLDET2},
 	{"SKSPLDET3",SKSPLDET3},
 	{"SKSPLDET4",SKSPLDET4},
-	{"SKSPLVCT1",SKSPLVCT1},  
+	{"SKSPLVCT1",SKSPLVCT1}, // Victories
 	{"SKSPLVCT2",SKSPLVCT2},
 	{"SKSPLVCT3",SKSPLVCT3},
 	{"SKSPLVCT4",SKSPLVCT4},
@@ -5450,44 +5450,44 @@ struct int_const_s const INT_CONST[] = {
 	{"SKSGASP",SKSGASP},
 	{"SKSJUMP",SKSJUMP},
 
+	// 3D Floor/Fake Floor/FOF/whatever flags
+	{"FOF_EXISTS",FOF_EXISTS},                   ///< Always set, to check for validity.
+	{"FOF_BLOCKPLAYER",FOF_BLOCKPLAYER},         ///< Solid to player, but nothing else
+	{"FOF_BLOCKOTHERS",FOF_BLOCKOTHERS},         ///< Solid to everything but player
+	{"FOF_SOLID",FOF_SOLID},                     ///< Clips things.
+	{"FOF_RENDERSIDES",FOF_RENDERSIDES},         ///< Renders the sides.
+	{"FOF_RENDERPLANES",FOF_RENDERPLANES},       ///< Renders the floor/ceiling.
+	{"FOF_RENDERALL",FOF_RENDERALL},             ///< Renders everything.
+	{"FOF_SWIMMABLE",FOF_SWIMMABLE},             ///< Is a water block.
+	{"FOF_NOSHADE",FOF_NOSHADE},                 ///< Messes with the lighting?
+	{"FOF_CUTSOLIDS",FOF_CUTSOLIDS},             ///< Cuts out hidden solid pixels.
+	{"FOF_CUTEXTRA",FOF_CUTEXTRA},               ///< Cuts out hidden translucent pixels.
+	{"FOF_CUTLEVEL",FOF_CUTLEVEL},               ///< Cuts out all hidden pixels.
+	{"FOF_CUTSPRITES",FOF_CUTSPRITES},           ///< Final step in making 3D water.
+	{"FOF_BOTHPLANES",FOF_BOTHPLANES},           ///< Render inside and outside planes.
+	{"FOF_EXTRA",FOF_EXTRA},                     ///< Gets cut by ::FOF_CUTEXTRA.
+	{"FOF_TRANSLUCENT",FOF_TRANSLUCENT},         ///< See through!
+	{"FOF_FOG",FOF_FOG},                         ///< Fog "brush."
+	{"FOF_INVERTPLANES",FOF_INVERTPLANES},       ///< Only render inside planes.
+	{"FOF_ALLSIDES",FOF_ALLSIDES},               ///< Render inside and outside sides.
+	{"FOF_INVERTSIDES",FOF_INVERTSIDES},         ///< Only render inside sides.
+	{"FOF_DOUBLESHADOW",FOF_DOUBLESHADOW},       ///< Make two lightlist entries to reset light?
+	{"FOF_FLOATBOB",FOF_FLOATBOB},               ///< Floats on water and bobs if you step on it.
+	{"FOF_NORETURN",FOF_NORETURN},               ///< Used with ::FOF_CRUMBLE. Will not return to its original position after falling.
+	{"FOF_CRUMBLE",FOF_CRUMBLE},                 ///< Falls 2 seconds after being stepped on, and randomly brings all touching crumbling 3dfloors down with it, providing their master sectors share the same tag (allows crumble platforms above or below, to also exist).
+	{"FOF_GOOWATER",FOF_GOOWATER},               ///< Used with ::FOF_SWIMMABLE. Makes thick bouncey goop.
+	{"FOF_MARIO",FOF_MARIO},                     ///< Acts like a question block when hit from underneath. Goodie spawned at top is determined by master sector.
+	{"FOF_BUSTUP",FOF_BUSTUP},                   ///< You can spin through/punch this block and it will crumble!
+	{"FOF_QUICKSAND",FOF_QUICKSAND},             ///< Quicksand!
+	{"FOF_PLATFORM",FOF_PLATFORM},               ///< You can jump up through this to the top.
+	{"FOF_REVERSEPLATFORM",FOF_REVERSEPLATFORM}, ///< A fall-through floor in normal gravity, a platform in reverse gravity.
+	{"FOF_INTANGIBLEFLATS",FOF_INTANGIBLEFLATS}, ///< Both flats are intangible, but the sides are still solid.
+	{"FOF_RIPPLE",FOF_RIPPLE},                   ///< Ripple the flats
+	{"FOF_COLORMAPONLY",FOF_COLORMAPONLY},       ///< Only copy the colormap, not the lightlevel
+	{"FOF_BOUNCY",FOF_BOUNCY},                   ///< Bounces players
+	{"FOF_SPLAT",FOF_SPLAT},                     ///< Use splat flat renderer (treat cyan pixels as invisible)
 
-	{"FOF_EXISTS",FOF_EXISTS},                    
-	{"FOF_BLOCKPLAYER",FOF_BLOCKPLAYER},          
-	{"FOF_BLOCKOTHERS",FOF_BLOCKOTHERS},          
-	{"FOF_SOLID",FOF_SOLID},                      
-	{"FOF_RENDERSIDES",FOF_RENDERSIDES},          
-	{"FOF_RENDERPLANES",FOF_RENDERPLANES},        
-	{"FOF_RENDERALL",FOF_RENDERALL},              
-	{"FOF_SWIMMABLE",FOF_SWIMMABLE},              
-	{"FOF_NOSHADE",FOF_NOSHADE},                  
-	{"FOF_CUTSOLIDS",FOF_CUTSOLIDS},              
-	{"FOF_CUTEXTRA",FOF_CUTEXTRA},                
-	{"FOF_CUTLEVEL",FOF_CUTLEVEL},                
-	{"FOF_CUTSPRITES",FOF_CUTSPRITES},            
-	{"FOF_BOTHPLANES",FOF_BOTHPLANES},            
-	{"FOF_EXTRA",FOF_EXTRA},                      
-	{"FOF_TRANSLUCENT",FOF_TRANSLUCENT},          
-	{"FOF_FOG",FOF_FOG},                          
-	{"FOF_INVERTPLANES",FOF_INVERTPLANES},        
-	{"FOF_ALLSIDES",FOF_ALLSIDES},                
-	{"FOF_INVERTSIDES",FOF_INVERTSIDES},          
-	{"FOF_DOUBLESHADOW",FOF_DOUBLESHADOW},        
-	{"FOF_FLOATBOB",FOF_FLOATBOB},                
-	{"FOF_NORETURN",FOF_NORETURN},                
-	{"FOF_CRUMBLE",FOF_CRUMBLE},                  
-	{"FOF_GOOWATER",FOF_GOOWATER},                
-	{"FOF_MARIO",FOF_MARIO},                      
-	{"FOF_BUSTUP",FOF_BUSTUP},                    
-	{"FOF_QUICKSAND",FOF_QUICKSAND},              
-	{"FOF_PLATFORM",FOF_PLATFORM},                
-	{"FOF_REVERSEPLATFORM",FOF_REVERSEPLATFORM},  
-	{"FOF_INTANGIBLEFLATS",FOF_INTANGIBLEFLATS},  
-	{"FOF_RIPPLE",FOF_RIPPLE},                    
-	{"FOF_COLORMAPONLY",FOF_COLORMAPONLY},        
-	{"FOF_BOUNCY",FOF_BOUNCY},                    
-	{"FOF_SPLAT",FOF_SPLAT},                      
-
-
+	// Old FOF flags for backwards compatibility
 	{"FF_EXISTS",FF_OLD_EXISTS},
 	{"FF_BLOCKPLAYER",FF_OLD_BLOCKPLAYER},
 	{"FF_BLOCKOTHERS",FF_OLD_BLOCKOTHERS},
@@ -5527,46 +5527,46 @@ struct int_const_s const INT_CONST[] = {
 	{"FF_RIPPLE",FF_OLD_RIPPLE},
 	{"FF_COLORMAPONLY",FF_OLD_COLORMAPONLY},
 
-
+	// FOF bustable flags
 	{"FB_PUSHABLES",FB_PUSHABLES},
 	{"FB_EXECUTOR",FB_EXECUTOR},
 	{"FB_ONLYBOTTOM",FB_ONLYBOTTOM},
 
-
+	// Bustable FOF type
 	{"BT_TOUCH",BT_TOUCH},
 	{"BT_SPINBUST",BT_SPINBUST},
 	{"BT_REGULAR",BT_REGULAR},
 	{"BT_STRONG",BT_STRONG},
 
-
-	{"POF_CLIPLINES",POF_CLIPLINES},                
-	{"POF_CLIPPLANES",POF_CLIPPLANES},              
-	{"POF_SOLID",POF_SOLID},                        
-	{"POF_TESTHEIGHT",POF_TESTHEIGHT},              
-	{"POF_RENDERSIDES",POF_RENDERSIDES},            
-	{"POF_RENDERTOP",POF_RENDERTOP},                
-	{"POF_RENDERBOTTOM",POF_RENDERBOTTOM},          
-	{"POF_RENDERPLANES",POF_RENDERPLANES},          
-	{"POF_RENDERALL",POF_RENDERALL},                
-	{"POF_INVERT",POF_INVERT},                      
-	{"POF_INVERTPLANES",POF_INVERTPLANES},          
-	{"POF_INVERTPLANESONLY",POF_INVERTPLANESONLY},  
-	{"POF_PUSHABLESTOP",POF_PUSHABLESTOP},          
-	{"POF_LDEXEC",POF_LDEXEC},                      
-	{"POF_ONESIDE",POF_ONESIDE},                    
-	{"POF_NOSPECIALS",POF_NOSPECIALS},              
-	{"POF_SPLAT",POF_SPLAT},                        
+	// PolyObject flags
+	{"POF_CLIPLINES",POF_CLIPLINES},               ///< Test against lines for collision
+	{"POF_CLIPPLANES",POF_CLIPPLANES},             ///< Test against tops and bottoms for collision
+	{"POF_SOLID",POF_SOLID},                       ///< Clips things.
+	{"POF_TESTHEIGHT",POF_TESTHEIGHT},             ///< Test line collision with heights
+	{"POF_RENDERSIDES",POF_RENDERSIDES},           ///< Renders the sides.
+	{"POF_RENDERTOP",POF_RENDERTOP},               ///< Renders the top.
+	{"POF_RENDERBOTTOM",POF_RENDERBOTTOM},         ///< Renders the bottom.
+	{"POF_RENDERPLANES",POF_RENDERPLANES},         ///< Renders top and bottom.
+	{"POF_RENDERALL",POF_RENDERALL},               ///< Renders everything.
+	{"POF_INVERT",POF_INVERT},                     ///< Inverts collision (like a cage).
+	{"POF_INVERTPLANES",POF_INVERTPLANES},         ///< Render inside planes.
+	{"POF_INVERTPLANESONLY",POF_INVERTPLANESONLY}, ///< Only render inside planes.
+	{"POF_PUSHABLESTOP",POF_PUSHABLESTOP},         ///< Pushables will stop movement.
+	{"POF_LDEXEC",POF_LDEXEC},                     ///< This PO triggers a linedef executor.
+	{"POF_ONESIDE",POF_ONESIDE},                   ///< Only use the first side of the linedef.
+	{"POF_NOSPECIALS",POF_NOSPECIALS},             ///< Don't apply sector specials.
+	{"POF_SPLAT",POF_SPLAT},                       ///< Use splat flat renderer (treat cyan pixels as invisible).
 
 #ifdef HAVE_LUA_SEGS
-
-	{"NF_SUBSECTOR",NF_SUBSECTOR},  
+	// Node flags
+	{"NF_SUBSECTOR",NF_SUBSECTOR}, // Indicate a leaf.
 #endif
 
-
+	// Slope flags
 	{"SL_NOPHYSICS",SL_NOPHYSICS},
 	{"SL_DYNAMIC",SL_DYNAMIC},
 
-
+	// Angles
 	{"ANG1",ANG1},
 	{"ANG2",ANG2},
 	{"ANG10",ANG10},
@@ -5598,7 +5598,7 @@ struct int_const_s const INT_CONST[] = {
 	{"ANGLE_337h",ANGLE_337h},
 	{"ANGLE_MAX",ANGLE_MAX},
 
-
+	// P_Chase directions (dirtype_t)
 	{"DI_NODIR",DI_NODIR},
 	{"DI_EAST",DI_EAST},
 	{"DI_NORTHEAST",DI_NORTHEAST},
@@ -5610,32 +5610,32 @@ struct int_const_s const INT_CONST[] = {
 	{"DI_SOUTHEAST",DI_SOUTHEAST},
 	{"NUMDIRS",NUMDIRS},
 
-
+	// Sprite rotation axis (rotaxis_t)
 	{"ROTAXIS_X",ROTAXIS_X},
 	{"ROTAXIS_Y",ROTAXIS_Y},
 	{"ROTAXIS_Z",ROTAXIS_Z},
 
-
-	{"BT_WEAPONMASK",BT_WEAPONMASK},  
+	// Buttons (ticcmd_t)
+	{"BT_WEAPONMASK",BT_WEAPONMASK}, //our first four bits.
 	{"BT_WEAPONNEXT",BT_WEAPONNEXT},
 	{"BT_WEAPONPREV",BT_WEAPONPREV},
-	{"BT_ATTACK",BT_ATTACK},  
+	{"BT_ATTACK",BT_ATTACK}, // shoot rings
 	{"BT_SPIN",BT_SPIN},
-	{"BT_CAMLEFT",BT_CAMLEFT},  
-	{"BT_CAMRIGHT",BT_CAMRIGHT},  
+	{"BT_CAMLEFT",BT_CAMLEFT}, // turn camera left
+	{"BT_CAMRIGHT",BT_CAMRIGHT}, // turn camera right
 	{"BT_TOSSFLAG",BT_TOSSFLAG},
 	{"BT_JUMP",BT_JUMP},
-	{"BT_FIRENORMAL",BT_FIRENORMAL},  
-	{"BT_CUSTOM1",BT_CUSTOM1},  
-	{"BT_CUSTOM2",BT_CUSTOM2},  
-	{"BT_CUSTOM3",BT_CUSTOM3},  
+	{"BT_FIRENORMAL",BT_FIRENORMAL}, // Fire a normal ring no matter what
+	{"BT_CUSTOM1",BT_CUSTOM1}, // Lua customizable
+	{"BT_CUSTOM2",BT_CUSTOM2}, // Lua customizable
+	{"BT_CUSTOM3",BT_CUSTOM3}, // Lua customizable
 
-
+	// Lua command registration flags
 	{"COM_ADMIN",COM_ADMIN},
 	{"COM_SPLITSCREEN",COM_SPLITSCREEN},
 	{"COM_LOCAL",COM_LOCAL},
 
-
+	// cvflags_t
 	{"CV_SAVE",CV_SAVE},
 	{"CV_CALL",CV_CALL},
 	{"CV_NETVAR",CV_NETVAR},
@@ -5651,7 +5651,7 @@ struct int_const_s const INT_CONST[] = {
 	{"CV_CHEAT",CV_CHEAT},
 	{"CV_ALLOWLUA",CV_ALLOWLUA},
 
-
+	// v_video flags
 	{"V_NOSCALEPATCH",V_NOSCALEPATCH},
 	{"V_SMALLSCALEPATCH",V_SMALLSCALEPATCH},
 	{"V_MEDSCALEPATCH",V_MEDSCALEPATCH},
@@ -5680,7 +5680,7 @@ struct int_const_s const INT_CONST[] = {
 	{"V_20TRANS",V_20TRANS},
 	{"V_30TRANS",V_30TRANS},
 	{"V_40TRANS",V_40TRANS},
-	{"V_50TRANS",V_TRANSLUCENT},  
+	{"V_50TRANS",V_TRANSLUCENT}, // alias
 	{"V_60TRANS",V_60TRANS},
 	{"V_70TRANS",V_70TRANS},
 	{"V_80TRANS",V_80TRANS},
@@ -5715,7 +5715,7 @@ struct int_const_s const INT_CONST[] = {
 	{"V_CHARCOLORSHIFT",V_CHARCOLORSHIFT},
 	{"V_ALPHASHIFT",V_ALPHASHIFT},
 
-
+	//Kick Reasons
 	{"KR_KICK",KR_KICK},
 	{"KR_PINGLIMIT",KR_PINGLIMIT},
 	{"KR_SYNCH",KR_SYNCH},
@@ -5723,7 +5723,7 @@ struct int_const_s const INT_CONST[] = {
 	{"KR_BAN",KR_BAN},
 	{"KR_LEAVE",KR_LEAVE},
 
-
+	// translation colormaps
 	{"TC_DEFAULT",TC_DEFAULT},
 	{"TC_BOSS",TC_BOSS},
 	{"TC_METALSONIC",TC_METALSONIC},
@@ -5732,13 +5732,13 @@ struct int_const_s const INT_CONST[] = {
 	{"TC_BLINK",TC_BLINK},
 	{"TC_DASHMODE",TC_DASHMODE},
 
-
+	// marathonmode flags
 	{"MA_INIT",MA_INIT},
 	{"MA_RUNNING",MA_RUNNING},
 	{"MA_NOCUTSCENES",MA_NOCUTSCENES},
 	{"MA_INGAME",MA_INGAME},
 
-
+	// music types
 	{"MU_NONE", MU_NONE},
 	{"MU_WAV", MU_WAV},
 	{"MU_MOD", MU_MOD},
@@ -5750,7 +5750,7 @@ struct int_const_s const INT_CONST[] = {
 	{"MU_MOD_EX", MU_MOD_EX},
 	{"MU_MID_EX", MU_MID_EX},
 
-
+	// gamestates
 	{"GS_NULL",GS_NULL},
 	{"GS_LEVEL",GS_LEVEL},
 	{"GS_INTERMISSION",GS_INTERMISSION},
@@ -5766,7 +5766,7 @@ struct int_const_s const INT_CONST[] = {
 	{"GS_DEDICATEDSERVER",GS_DEDICATEDSERVER},
 	{"GS_WAITINGPLAYERS",GS_WAITINGPLAYERS},
 
-
+	// Joystick axes
 	{"JA_NONE",JA_NONE},
 	{"JA_TURN",JA_TURN},
 	{"JA_MOVE",JA_MOVE},
@@ -5779,7 +5779,7 @@ struct int_const_s const INT_CONST[] = {
 	{"JA_FIRENORMAL",JA_FIRENORMAL},
 	{"JOYAXISRANGE",JOYAXISRANGE},
 
-
+	// Game controls
 	{"GC_NULL",GC_NULL},
 	{"GC_FORWARD",GC_FORWARD},
 	{"GC_BACKWARD",GC_BACKWARD},
@@ -5819,14 +5819,14 @@ struct int_const_s const INT_CONST[] = {
 	{"GC_SCREENSHOT",GC_SCREENSHOT},
 	{"GC_RECORDGIF",GC_RECORDGIF},
 	{"GC_VIEWPOINTNEXT",GC_VIEWPOINTNEXT},
-	{"GC_VIEWPOINT",GC_VIEWPOINTNEXT},  
+	{"GC_VIEWPOINT",GC_VIEWPOINTNEXT}, // Alias for retrocompatibility. Remove for the next major version
 	{"GC_VIEWPOINTPREV",GC_VIEWPOINTPREV},
 	{"GC_CUSTOM1",GC_CUSTOM1},
 	{"GC_CUSTOM2",GC_CUSTOM2},
 	{"GC_CUSTOM3",GC_CUSTOM3},
 	{"NUM_GAMECONTROLS",NUM_GAMECONTROLS},
 
-
+	// Mouse buttons
 	{"MB_BUTTON1",MB_BUTTON1},
 	{"MB_BUTTON2",MB_BUTTON2},
 	{"MB_BUTTON3",MB_BUTTON3},
@@ -5838,15 +5838,15 @@ struct int_const_s const INT_CONST[] = {
 	{"MB_SCROLLUP",MB_SCROLLUP},
 	{"MB_SCROLLDOWN",MB_SCROLLDOWN},
 
-
+	// screen.h constants
 	{"BASEVIDWIDTH",BASEVIDWIDTH},
 	{"BASEVIDHEIGHT",BASEVIDHEIGHT},
 
 	{NULL,0}
 };
 
-
-
+// For this to work compile-time without being in this file,
+// this function would need to check sizes at runtime, without sizeof
 void DEH_TableCheck(void)
 {
 #if defined(_DEBUG) || defined(PARANOIA)

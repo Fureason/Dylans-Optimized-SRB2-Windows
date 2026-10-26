@@ -7,17 +7,17 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  keys.h
+/// \brief SRB2 keyboard definition
 
 #ifndef __KEYS_H__
 #define __KEYS_H__
 
+// These are the key codes as posted by the keyboard handler,
+// ascii codes are 0->127,
+// scancodes are 0x80 + 0->127
 
-
-
-
-#define KEY_NULL      0  
+#define KEY_NULL      0 // null key, triggers nothing
 #define KEY_BACKSPACE 8
 #define KEY_TAB       9
 #define KEY_ENTER    13
@@ -29,9 +29,9 @@
 #define KEY_NUMLOCK    (0x80+69)
 #define KEY_SCROLLLOCK (0x80+70)
 
-
-
-
+//
+//  scancodes 71-83 (non-extended)
+//
 #define KEY_KEYPAD7  (0x80+71)
 #define KEY_KEYPAD8  (0x80+72)
 #define KEY_KEYPAD9  (0x80+73)
@@ -46,14 +46,14 @@
 #define KEY_KEYPAD0  (0x80+82)
 #define KEY_KPADDEL  (0x80+83)
 
-
+// windows95 keys
 
 #define KEY_LEFTWIN  (0x80+91)
 #define KEY_RIGHTWIN (0x80+92)
 #define KEY_MENU     (0x80+93)
 
-
-#define KEY_KPADSLASH  (0x80+100)  
+// scancodes 71-83 EXTENDED are remapped to these by the keyboard handler (just add 30)
+#define KEY_KPADSLASH  (0x80+100) // extended scancode 53 '/' remapped
 #define KEY_HOME       (0x80+101)
 #define KEY_UPARROW    (0x80+102)
 #define KEY_PGUP       (0x80+103)
@@ -80,7 +80,7 @@
 
 #define KEY_PAUSE 255
 
-
+// these ones must be non-extended scancodes (rctrl, rshift, lalt)
 #define KEY_LSHIFT (0x80+54)
 #define KEY_RSHIFT (0x80+55)
 #define KEY_LCTRL  (0x80+29)

@@ -83,14 +83,14 @@ static int LoadContext(GLES2_Context *data)
             return SDL_SetError("Couldn't load GLES2 function %s: %s", #func, SDL_GetError()); \
         }                                                                                      \
     } while (0);
-#endif  
+#endif /* __SDL_NOGETPROCADDR__ */
 
 #include "../src/render/opengles2/SDL_gles2funcs.h"
 #undef SDL_PROC
     return 0;
 }
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -120,10 +120,10 @@ quit(int rc)
         }                                                                                   \
     }
 
-  
-                                                                        
-         
-   
+/*
+ * Simulates desktop's glRotatef. The matrix is returned in column-major
+ * order.
+ */
 static void
 rotate_matrix(float angle, float x, float y, float z, float *r)
 {
@@ -161,9 +161,9 @@ rotate_matrix(float angle, float x, float y, float z, float *r)
     }
 }
 
-  
-                                 
-   
+/*
+ * Simulates gluPerspectiveMatrix
+ */
 static void
 perspective_matrix(float fovy, float aspect, float znear, float zfar, float *r)
 {
@@ -184,10 +184,10 @@ perspective_matrix(float fovy, float aspect, float znear, float zfar, float *r)
     r[15] = 0.0f;
 }
 
-  
-                                                                             
-                                               
-   
+/*
+ * Multiplies lhs by rhs and writes out to r. All matrices are 4x4 and column
+ * major. In-place multiplication is supported.
+ */
 static void
 multiply_matrix(const float *lhs, const float *rhs, float *r)
 {
@@ -209,13 +209,13 @@ multiply_matrix(const float *lhs, const float *rhs, float *r)
     }
 }
 
-  
-                                                                   
-  
-                                               
-                                        
-                                                    
-   
+/*
+ * Create shader, load in source, compile, dump debug as necessary.
+ *
+ * shader: Pointer to return created shader ID.
+ * source: Passed-in shader source code.
+ * shader_type: Passed to GL, e.g. GL_VERTEX_SHADER.
+ */
 static void
 process_shader(GLuint *shader, const char *source, GLint shader_type)
 {
@@ -224,21 +224,21 @@ process_shader(GLuint *shader, const char *source, GLint shader_type)
     char buffer[1024];
     GLsizei length = 0;
 
-     
+    /* Create shader and load into GL. */
     *shader = GL_CHECK(ctx.glCreateShader(shader_type));
 
     shaders[0] = source;
 
     GL_CHECK(ctx.glShaderSource(*shader, 1, shaders, NULL));
 
-     
+    /* Clean up shader source. */
     shaders[0] = NULL;
 
-     
+    /* Try compiling the shader. */
     GL_CHECK(ctx.glCompileShader(*shader));
     GL_CHECK(ctx.glGetShaderiv(*shader, GL_COMPILE_STATUS, &status));
 
-     
+    /* Dump debug info (source and log) if compilation failed. */
     if (status != GL_TRUE) {
         ctx.glGetShaderInfoLog(*shader, sizeof(buffer), &length, &buffer[0]);
         buffer[length] = '\0';
@@ -269,11 +269,11 @@ link_program(struct shader_data *data)
     }
 }
 
-                                               
-                                 
+/* 3D data. Vertex range -0.5..0.5 in all axes.
+ * Z -0.5 is near, 0.5 is far. */
 const float _vertices[] = {
-     
-     
+    /* Front face. */
+    /* Bottom left */
     -0.5,
     0.5,
     -0.5,
@@ -283,7 +283,7 @@ const float _vertices[] = {
     -0.5,
     -0.5,
     -0.5,
-     
+    /* Top right */
     -0.5,
     0.5,
     -0.5,
@@ -293,8 +293,8 @@ const float _vertices[] = {
     0.5,
     -0.5,
     -0.5,
-     
-     
+    /* Left face */
+    /* Bottom left */
     -0.5,
     0.5,
     0.5,
@@ -304,7 +304,7 @@ const float _vertices[] = {
     -0.5,
     -0.5,
     0.5,
-     
+    /* Top right */
     -0.5,
     0.5,
     0.5,
@@ -314,8 +314,8 @@ const float _vertices[] = {
     -0.5,
     -0.5,
     -0.5,
-     
-     
+    /* Top face */
+    /* Bottom left */
     -0.5,
     0.5,
     0.5,
@@ -325,7 +325,7 @@ const float _vertices[] = {
     -0.5,
     0.5,
     -0.5,
-     
+    /* Top right */
     -0.5,
     0.5,
     0.5,
@@ -335,8 +335,8 @@ const float _vertices[] = {
     0.5,
     0.5,
     -0.5,
-     
-     
+    /* Right face */
+    /* Bottom left */
     0.5,
     0.5,
     -0.5,
@@ -346,7 +346,7 @@ const float _vertices[] = {
     0.5,
     -0.5,
     -0.5,
-     
+    /* Top right */
     0.5,
     0.5,
     -0.5,
@@ -356,8 +356,8 @@ const float _vertices[] = {
     0.5,
     -0.5,
     0.5,
-     
-     
+    /* Back face */
+    /* Bottom left */
     0.5,
     0.5,
     0.5,
@@ -367,7 +367,7 @@ const float _vertices[] = {
     0.5,
     -0.5,
     0.5,
-     
+    /* Top right */
     0.5,
     0.5,
     0.5,
@@ -377,8 +377,8 @@ const float _vertices[] = {
     -0.5,
     -0.5,
     0.5,
-     
-     
+    /* Bottom face */
+    /* Bottom left */
     -0.5,
     -0.5,
     -0.5,
@@ -388,7 +388,7 @@ const float _vertices[] = {
     -0.5,
     -0.5,
     0.5,
-     
+    /* Top right */
     -0.5,
     -0.5,
     -0.5,
@@ -401,60 +401,60 @@ const float _vertices[] = {
 };
 
 const float _colors[] = {
-     
-     
-    1.0, 0.0, 0.0,  
-    0.0, 0.0, 1.0,  
-    0.0, 1.0, 0.0,  
-     
-    1.0, 0.0, 0.0,  
-    1.0, 1.0, 0.0,  
-    0.0, 0.0, 1.0,  
-     
-     
-    1.0, 1.0, 1.0,  
-    0.0, 1.0, 0.0,  
-    0.0, 1.0, 1.0,  
-     
-    1.0, 1.0, 1.0,  
-    1.0, 0.0, 0.0,  
-    0.0, 1.0, 0.0,  
-     
-     
-    1.0, 1.0, 1.0,  
-    1.0, 1.0, 0.0,  
-    1.0, 0.0, 0.0,  
-     
-    1.0, 1.0, 1.0,  
-    0.0, 0.0, 0.0,  
-    1.0, 1.0, 0.0,  
-     
-     
-    1.0, 1.0, 0.0,  
-    1.0, 0.0, 1.0,  
-    0.0, 0.0, 1.0,  
-     
-    1.0, 1.0, 0.0,  
-    0.0, 0.0, 0.0,  
-    1.0, 0.0, 1.0,  
-     
-     
-    0.0, 0.0, 0.0,  
-    0.0, 1.0, 1.0,  
-    1.0, 0.0, 1.0,  
-     
-    0.0, 0.0, 0.0,  
-    1.0, 1.0, 1.0,  
-    0.0, 1.0, 1.0,  
-     
-     
-    0.0, 1.0, 0.0,  
-    1.0, 0.0, 1.0,  
-    0.0, 1.0, 1.0,  
-     
-    0.0, 1.0, 0.0,  
-    0.0, 0.0, 1.0,  
-    1.0, 0.0, 1.0,  
+    /* Front face */
+    /* Bottom left */
+    1.0, 0.0, 0.0, /* red */
+    0.0, 0.0, 1.0, /* blue */
+    0.0, 1.0, 0.0, /* green */
+    /* Top right */
+    1.0, 0.0, 0.0, /* red */
+    1.0, 1.0, 0.0, /* yellow */
+    0.0, 0.0, 1.0, /* blue */
+    /* Left face */
+    /* Bottom left */
+    1.0, 1.0, 1.0, /* white */
+    0.0, 1.0, 0.0, /* green */
+    0.0, 1.0, 1.0, /* cyan */
+    /* Top right */
+    1.0, 1.0, 1.0, /* white */
+    1.0, 0.0, 0.0, /* red */
+    0.0, 1.0, 0.0, /* green */
+    /* Top face */
+    /* Bottom left */
+    1.0, 1.0, 1.0, /* white */
+    1.0, 1.0, 0.0, /* yellow */
+    1.0, 0.0, 0.0, /* red */
+    /* Top right */
+    1.0, 1.0, 1.0, /* white */
+    0.0, 0.0, 0.0, /* black */
+    1.0, 1.0, 0.0, /* yellow */
+    /* Right face */
+    /* Bottom left */
+    1.0, 1.0, 0.0, /* yellow */
+    1.0, 0.0, 1.0, /* magenta */
+    0.0, 0.0, 1.0, /* blue */
+    /* Top right */
+    1.0, 1.0, 0.0, /* yellow */
+    0.0, 0.0, 0.0, /* black */
+    1.0, 0.0, 1.0, /* magenta */
+    /* Back face */
+    /* Bottom left */
+    0.0, 0.0, 0.0, /* black */
+    0.0, 1.0, 1.0, /* cyan */
+    1.0, 0.0, 1.0, /* magenta */
+    /* Top right */
+    0.0, 0.0, 0.0, /* black */
+    1.0, 1.0, 1.0, /* white */
+    0.0, 1.0, 1.0, /* cyan */
+    /* Bottom face */
+    /* Bottom left */
+    0.0, 1.0, 0.0, /* green */
+    1.0, 0.0, 1.0, /* magenta */
+    0.0, 1.0, 1.0, /* cyan */
+    /* Top right */
+    0.0, 1.0, 0.0, /* green */
+    0.0, 0.0, 1.0, /* blue */
+    1.0, 0.0, 1.0, /* magenta */
 };
 
 const char *_shader_vert_src =
@@ -479,10 +479,10 @@ Render(unsigned int width, unsigned int height, shader_data *data)
 {
     float matrix_rotate[16], matrix_modelview[16], matrix_perspective[16], matrix_mvp[16];
 
-      
-                                                                    
-                                                   
-       
+    /*
+     * Do some rotation with Euler angles. It is not a fixed axis as
+     * quaterions would be, but the effect is cool.
+     */
     rotate_matrix((float)data->angle_x, 1.0f, 0.0f, 0.0f, matrix_modelview);
     rotate_matrix((float)data->angle_y, 0.0f, 1.0f, 0.0f, matrix_rotate);
 
@@ -492,7 +492,7 @@ Render(unsigned int width, unsigned int height, shader_data *data)
 
     multiply_matrix(matrix_rotate, matrix_modelview, matrix_modelview);
 
-     
+    /* Pull the camera back from the cube */
     matrix_modelview[14] -= 2.5;
 
     perspective_matrix(45.0f, (float)width / height, 0.01f, 100.0f, matrix_perspective);
@@ -574,14 +574,14 @@ loop_threaded()
     SDL_Event event;
     int i;
 
-     
+    /* Wait for events */
     while (SDL_WaitEvent(&event) && !done) {
         if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE) {
             SDL_Window *window = SDL_GetWindowFromID(event.window.windowID);
             if (window) {
                 for (i = 0; i < state->num_windows; ++i) {
                     if (window == state->windows[i]) {
-                         
+                        /* Stop the render thread when the window is closed */
                         threads[i].done = 1;
                         if (threads[i].thread) {
                             SDL_WaitThread(threads[i].thread, NULL);
@@ -603,7 +603,7 @@ loop()
     SDL_Event event;
     int i;
 
-     
+    /* Check for events */
     while (SDL_PollEvent(&event) && !done) {
         SDLTest_CommonEvent(state, &event, &done);
     }
@@ -629,12 +629,12 @@ int main(int argc, char *argv[])
     int status;
     shader_data *data;
 
-     
+    /* Initialize parameters */
     fsaa = 0;
     accel = 0;
     threaded = 0;
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -673,7 +673,7 @@ int main(int argc, char *argv[])
         i += consumed;
     }
 
-     
+    /* Set OpenGL parameters */
     state->window_flags |= SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
     state->gl_red_size = 5;
     state->gl_green_size = 5;
@@ -701,7 +701,7 @@ int main(int argc, char *argv[])
         quit(2);
     }
 
-     
+    /* Create OpenGL ES contexts */
     for (i = 0; i < state->num_windows; i++) {
         context[i] = SDL_GL_CreateContext(state->windows[i]);
         if (!context[i]) {
@@ -710,7 +710,7 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Important: call this *after* creating the context */
     if (LoadContext(&ctx) < 0) {
         SDL_Log("Could not load GLES2 functions\n");
         quit(2);
@@ -790,7 +790,7 @@ int main(int argc, char *argv[])
 
     datas = (shader_data *)SDL_calloc(state->num_windows, sizeof(shader_data));
 
-     
+    /* Set rendering settings for each context */
     for (i = 0; i < state->num_windows; ++i) {
 
         int w, h;
@@ -798,7 +798,7 @@ int main(int argc, char *argv[])
         if (status) {
             SDL_Log("SDL_GL_MakeCurrent(): %s\n", SDL_GetError());
 
-             
+            /* Continue for next window */
             continue;
         }
         SDL_GL_GetDrawableSize(state->windows[i], &w, &h);
@@ -809,30 +809,30 @@ int main(int argc, char *argv[])
         data->angle_y = 0;
         data->angle_z = 0;
 
-         
+        /* Shader Initialization */
         process_shader(&data->shader_vert, _shader_vert_src, GL_VERTEX_SHADER);
         process_shader(&data->shader_frag, _shader_frag_src, GL_FRAGMENT_SHADER);
 
-         
+        /* Create shader_program (ready to attach shaders) */
         data->shader_program = GL_CHECK(ctx.glCreateProgram());
 
-         
+        /* Attach shaders and link shader_program */
         link_program(data);
 
-         
+        /* Get attribute locations of non-fixed attributes like color and texture coordinates. */
         data->attr_position = GL_CHECK(ctx.glGetAttribLocation(data->shader_program, "av4position"));
         data->attr_color = GL_CHECK(ctx.glGetAttribLocation(data->shader_program, "av3color"));
 
-         
+        /* Get uniform locations */
         data->attr_mvp = GL_CHECK(ctx.glGetUniformLocation(data->shader_program, "mvp"));
 
         GL_CHECK(ctx.glUseProgram(data->shader_program));
 
-         
+        /* Enable attributes for position, color and texture coordinates etc. */
         GL_CHECK(ctx.glEnableVertexAttribArray(data->attr_position));
         GL_CHECK(ctx.glEnableVertexAttribArray(data->attr_color));
 
-         
+        /* Populate attributes for position, color and texture coordinates etc. */
 
         GL_CHECK(ctx.glGenBuffers(1, &data->position_buffer));
         GL_CHECK(ctx.glBindBuffer(GL_ARRAY_BUFFER, data->position_buffer));
@@ -852,7 +852,7 @@ int main(int argc, char *argv[])
         SDL_GL_MakeCurrent(state->windows[i], NULL);
     }
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
@@ -863,7 +863,7 @@ int main(int argc, char *argv[])
     if (threaded) {
         threads = (thread_data *)SDL_calloc(state->num_windows, sizeof(thread_data));
 
-         
+        /* Start a render thread for each window */
         for (i = 0; i < state->num_windows; ++i) {
             threads[i].index = i;
             threads[i].thread = SDL_CreateThread(render_thread_fn, "RenderThread", &threads[i]);
@@ -873,7 +873,7 @@ int main(int argc, char *argv[])
             loop_threaded();
         }
 
-         
+        /* Join the remaining render threads (if any) */
         for (i = 0; i < state->num_windows; ++i) {
             threads[i].done = 1;
             if (threads[i].thread) {
@@ -887,7 +887,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         SDL_Log("%2.2f frames per second\n",
@@ -899,7 +899,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-#else  
+#else /* HAVE_OPENGLES2 */
 
 int main(int argc, char *argv[])
 {
@@ -907,6 +907,6 @@ int main(int argc, char *argv[])
     return 1;
 }
 
-#endif  
+#endif /* HAVE_OPENGLES2 */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

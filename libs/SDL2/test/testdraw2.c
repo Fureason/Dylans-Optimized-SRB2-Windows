@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple program:  draw as many random objects on the screen as possible */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -43,11 +43,11 @@ void DrawPoints(SDL_Renderer *renderer)
     int x, y;
     SDL_Rect viewport;
 
-     
+    /* Query the sizes */
     SDL_RenderGetViewport(renderer, &viewport);
 
     for (i = 0; i < num_objects * 4; ++i) {
-         
+        /* Cycle the color and alpha, if desired */
         if (cycle_color) {
             current_color += cycle_direction;
             if (current_color < 0) {
@@ -85,11 +85,11 @@ void DrawLines(SDL_Renderer *renderer)
     int x1, y1, x2, y2;
     SDL_Rect viewport;
 
-     
+    /* Query the sizes */
     SDL_RenderGetViewport(renderer, &viewport);
 
     for (i = 0; i < num_objects; ++i) {
-         
+        /* Cycle the color and alpha, if desired */
         if (cycle_color) {
             current_color += cycle_direction;
             if (current_color < 0) {
@@ -136,11 +136,11 @@ void DrawRects(SDL_Renderer *renderer)
     SDL_Rect rect;
     SDL_Rect viewport;
 
-     
+    /* Query the sizes */
     SDL_RenderGetViewport(renderer, &viewport);
 
     for (i = 0; i < num_objects / 4; ++i) {
-         
+        /* Cycle the color and alpha, if desired */
         if (cycle_color) {
             current_color += cycle_direction;
             if (current_color < 0) {
@@ -180,7 +180,7 @@ void loop()
     int i;
     SDL_Event event;
 
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &done);
     }
@@ -206,7 +206,7 @@ void loop()
     frames++;
     now = SDL_GetTicks();
     if (SDL_TICKS_PASSED(now, next_fps_check)) {
-         
+        /* Print out some timing information */
         const Uint32 then = next_fps_check - fps_check_delay;
         const double fps = ((double)frames * 1000) / (now - then);
         SDL_Log("%2.2f frames per second\n", fps);
@@ -219,13 +219,13 @@ int main(int argc, char *argv[])
 {
     int i;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize parameters */
     num_objects = NUM_OBJECTS;
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-     
+    /* Create the windows and initialize the renderers */
     for (i = 0; i < state->num_windows; ++i) {
         SDL_Renderer *renderer = state->renderers[i];
         SDL_SetRenderDrawBlendMode(renderer, blendMode);
@@ -290,7 +290,7 @@ int main(int argc, char *argv[])
 
     srand((unsigned int)time(NULL));
 
-     
+    /* Main render loop */
     frames = 0;
     next_fps_check = SDL_GetTicks() + fps_check_delay;
     done = 0;
@@ -308,4 +308,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

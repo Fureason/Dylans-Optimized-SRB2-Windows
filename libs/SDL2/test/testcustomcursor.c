@@ -19,18 +19,18 @@
 
 #include "SDL_test_common.h"
 
- 
- 
+/* Stolen from the mailing list */
+/* Creates a new mouse cursor from an XPM */
 
- 
+/* XPM */
 static const char *arrow[] = {
-     
+    /* width height num_colors chars_per_pixel */
     "    32    32        3            1",
-     
+    /* colors */
     "X c #000000",
     ". c #ffffff",
     "  c None",
-     
+    /* pixels */
     "X                               ",
     "XX                              ",
     "X.X                             ",
@@ -140,7 +140,7 @@ static int num_cursors;
 static int current_cursor;
 static int show_cursor;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -152,7 +152,7 @@ void loop()
 {
     int i;
     SDL_Event event;
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &done);
         if (event.type == SDL_MOUSEBUTTONDOWN) {
@@ -237,10 +237,10 @@ int main(int argc, char *argv[])
     int i;
     const char *color_cursor = NULL;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -303,7 +303,7 @@ int main(int argc, char *argv[])
 
     show_cursor = SDL_ShowCursor(SDL_QUERY);
 
-     
+    /* Main render loop */
     done = 0;
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(loop, 0, 1);
@@ -318,8 +318,8 @@ int main(int argc, char *argv[])
     }
     quit(0);
 
-     
+    /* keep the compiler happy ... */
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

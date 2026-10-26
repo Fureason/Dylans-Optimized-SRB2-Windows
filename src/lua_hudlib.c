@@ -7,20 +7,20 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_hudlib.c
+/// \brief custom HUD rendering library for Lua scripting
 
 #include "doomdef.h"
 #include "fastcmp.h"
 #include "r_defs.h"
 #include "r_local.h"
 #include "r_translation.h"
-#include "st_stuff.h"  
+#include "st_stuff.h" // hudinfo[]
 #include "g_game.h"
-#include "i_video.h"  
-#include "p_local.h"  
-#include "screen.h"  
-#include "m_random.h"  
+#include "i_video.h" // rendermode
+#include "p_local.h" // camera_t
+#include "screen.h" // screen width/height
+#include "m_random.h" // m_random
 #include "v_video.h"
 #include "w_wad.h"
 #include "z_zone.h"
@@ -36,7 +36,7 @@
 boolean hud_running = false;
 static UINT8 hud_enabled[(hud_MAX/8)+1];
 
-
+// must match enum hud in lua_hud.h
 static const char *const hud_disable_options[] = {
 	"stagetitle",
 	"textspectator",
@@ -71,8 +71,8 @@ static const char *const hud_disable_options[] = {
 	"intermissionemeralds",
 	NULL};
 
-
-
+// you know, let's actually make sure that the table is synced.
+// because fuck knows how many times this has happened at this point. :v
 I_StaticAssert(sizeof(hud_disable_options) / sizeof(*hud_disable_options) == hud_MAX+1);
 
 enum hudinfo {
@@ -104,7 +104,7 @@ static const char *const patch_opt[] = {
 
 static int patch_fields_ref = LUA_NOREF;
 
-
+// alignment types for v.drawString
 enum align {
 	align_left = 0,
 	align_center,
@@ -158,7 +158,7 @@ static const char *const align_opt[] = {
 	"thin-right",
 	NULL};
 
-
+// width types for v.stringWidth
 enum widtht {
 	widtht_normal = 0,
 	widtht_small,
@@ -231,7 +231,7 @@ static int hudinfo_get(lua_State *L)
 {
 	hudinfo_t *info = *((hudinfo_t **)luaL_checkudata(L, 1, META_HUDINFO));
 	enum hudinfo field = luaL_checkoption(L, 2, hudinfo_opt[0], hudinfo_opt);
-	I_Assert(info != NULL);  
+	I_Assert(info != NULL); // huditems are always valid
 
 	switch(field)
 	{
@@ -330,7 +330,7 @@ static int camera_get(lua_State *L)
 	camera_t *cam = *((camera_t **)luaL_checkudata(L, 1, META_CAMERA));
 	enum cameraf field = Lua_optoption(L, 2, -1, camera_fields_ref);
 
-
+	// cameras should always be valid unless I'm a nutter
 	I_Assert(cam != NULL);
 
 	switch (field)
@@ -408,7 +408,7 @@ static int camera_set(lua_State *L)
 			CV_SetValue(&cv_chasecam, chase);
 		else if (cam == &camera2)
 			CV_SetValue(&cv_chasecam2, chase);
-		else  
+		else // ??? this should never happen, but ok
 			cam->chase = chase;
 		break;
 	}
@@ -455,9 +455,9 @@ static int camera_set(lua_State *L)
 	return 0;
 }
 
-
-
-
+//
+// lib_draw
+//
 
 static int libd_patchExists(lua_State *L)
 {
@@ -473,23 +473,23 @@ static int libd_cachePatch(lua_State *L)
 	return 1;
 }
 
-
+// v.getSpritePatch(sprite, [frame, [angle, [rollangle]]])
 static int libd_getSpritePatch(lua_State *L)
 {
-	UINT32 i;  
-	UINT32 frame = 0;  
+	UINT32 i; // sprite prefix
+	UINT32 frame = 0; // 'A'
 	UINT8 angle = 0;
 	spritedef_t *sprdef;
 	spriteframe_t *sprframe;
 	HUDONLY
 
-	if (lua_isnumber(L, 1))  
+	if (lua_isnumber(L, 1)) // sprite number given, e.g. SPR_THOK
 	{
 		i = lua_tonumber(L, 1);
 		if (i >= NUMSPRITES)
 			return 0;
 	}
-	else if (lua_isstring(L, 1))  
+	else if (lua_isstring(L, 1)) // sprite prefix name given, e.g. "THOK"
 	{
 		const char *name = lua_tostring(L, 1);
 		i = R_GetSpriteNumByName(name);
@@ -499,33 +499,33 @@ static int libd_getSpritePatch(lua_State *L)
 	else
 		return 0;
 
-	if (i == SPR_PLAY)  
+	if (i == SPR_PLAY) // Use getSprite2Patch instead!
 		return 0;
 
 	sprdef = &sprites[i];
 
-
+	// set frame number
 	frame = luaL_optinteger(L, 2, 0);
-	frame &= FF_FRAMEMASK;  
+	frame &= FF_FRAMEMASK; // ignore any bits that are not the actual frame, just in case
 	if (frame >= sprdef->numframes)
 		return 0;
-
+	// set angle number
 	sprframe = &sprdef->spriteframes[frame];
 	angle = luaL_optinteger(L, 3, 1);
 
-
-
-
+	// convert WAD editor angle numbers (1-8) to internal angle numbers (0-7)
+	// keep 0 the same since we'll make it default to angle 1 (which is internally 0)
+	// in case somebody didn't know that angle 0 really just maps all 8/16 angles to the same patch
 	if (angle != 0)
 		angle--;
 
-	if (angle >= ((sprframe->rotate & SRF_3DGE) ? 16 : 8))  
+	if (angle >= ((sprframe->rotate & SRF_3DGE) ? 16 : 8)) // out of range?
 		return 0;
 
 #ifdef ROTSPRITE
 	if (lua_isnumber(L, 4))
 	{
-
+		// rotsprite?????
 		angle_t rollangle = luaL_checkangle(L, 4);
 		INT32 rot = R_GetRollAngle(rollangle);
 
@@ -539,26 +539,26 @@ static int libd_getSpritePatch(lua_State *L)
 	}
 #endif
 
-
+	// push both the patch and it's "flip" value
 	LUA_PushUserdata(L, W_CachePatchNum(sprframe->lumppat[angle], PU_SPRITE), META_PATCH);
 	lua_pushboolean(L, (sprframe->flip & (1<<angle)) != 0);
 	return 2;
 }
 
-
+// v.getSprite2Patch(skin, sprite, [super?,] [frame, [angle, [rollangle]]])
 static int libd_getSprite2Patch(lua_State *L)
 {
-	INT32 i;  
-	playersprite_t j;  
-	UINT32 frame = 0;  
+	INT32 i; // skin number
+	playersprite_t j; // sprite2 prefix
+	UINT32 frame = 0; // 'A'
 	UINT8 angle = 0;
 	spritedef_t *sprdef;
 	spriteframe_t *sprframe;
-	boolean super = false;  
+	boolean super = false; // add SPR2F_SUPER to sprite2 if true
 	HUDONLY
 
-
-	if (lua_isnumber(L, 1))  
+	// get skin first!
+	if (lua_isnumber(L, 1)) // find skin by number
 	{
 		i = lua_tonumber(L, 1);
 		if (i < 0 || i >= MAXSKINS)
@@ -566,7 +566,7 @@ static int libd_getSprite2Patch(lua_State *L)
 		if (i >= numskins)
 			return 0;
 	}
-	else  
+	else // find skin by name
 	{
 		const char *name = luaL_checkstring(L, 1);
 		for (i = 0; i < numskins; i++)
@@ -576,71 +576,71 @@ static int libd_getSprite2Patch(lua_State *L)
 			return 0;
 	}
 
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // remove skin now
 
-	if (lua_isnumber(L, 1))  
+	if (lua_isnumber(L, 1)) // sprite number given, e.g. SPR2_STND
 	{
 		j = lua_tonumber(L, 1);
-		if (j & SPR2F_SUPER)  
+		if (j & SPR2F_SUPER) // e.g. SPR2_STND|SPR2F_SUPER
 		{
 			super = true;
-			j &= ~SPR2F_SUPER;  
+			j &= ~SPR2F_SUPER; // remove flag so the next check doesn't fail
 		}
 
 		if (j >= free_spr2)
 			return 0;
 	}
-	else if (lua_isstring(L, 1))  
+	else if (lua_isstring(L, 1)) // sprite prefix name given, e.g. "STND"
 	{
 		const char *name = lua_tostring(L, 1);
 		for (j = 0; j < free_spr2; j++)
 			if (fastcmp(name, spr2names[j]))
 				break;
-
+		// if you want super flags you'll have to use the optional boolean following this
 		if (j >= free_spr2)
 			return 0;
 	}
 	else
 		return 0;
 
-	if (lua_isboolean(L, 2))  
+	if (lua_isboolean(L, 2)) // optional boolean for superness
 	{
-		super = lua_toboolean(L, 2);  
-		lua_remove(L, 2);  
+		super = lua_toboolean(L, 2); // note: this can override SPR2F_SUPER from sprite number
+		lua_remove(L, 2); // remove
 	}
-
+	// if it's not boolean then just assume it's the frame number
 
 	if (super)
 		j |= SPR2F_SUPER;
 
-
+	// If there is no "super" variation of this sprite, try with the normal one.
 	if (!P_IsValidSprite2(skins[i], j))
 		j &= ~SPR2F_SUPER;
 
 	sprdef = P_GetSkinSpritedef(skins[i], j);
 
-
+	// set frame number
 	frame = luaL_optinteger(L, 2, 0);
-	frame &= FF_FRAMEMASK;  
+	frame &= FF_FRAMEMASK; // ignore any bits that are not the actual frame, just in case
 	if (frame >= sprdef->numframes)
 		return 0;
-
+	// set angle number
 	sprframe = &sprdef->spriteframes[frame];
 	angle = luaL_optinteger(L, 3, 1);
 
-
-
-
+	// convert WAD editor angle numbers (1-8) to internal angle numbers (0-7)
+	// keep 0 the same since we'll make it default to angle 1 (which is internally 0)
+	// in case somebody didn't know that angle 0 really just maps all 8/16 angles to the same patch
 	if (angle != 0)
 		angle--;
 
-	if (angle >= ((sprframe->rotate & SRF_3DGE) ? 16 : 8))  
+	if (angle >= ((sprframe->rotate & SRF_3DGE) ? 16 : 8)) // out of range?
 		return 0;
 
 #ifdef ROTSPRITE
 	if (lua_isnumber(L, 4))
 	{
-
+		// rotsprite?????
 		angle_t rollangle = luaL_checkangle(L, 4);
 		INT32 rot = R_GetRollAngle(rollangle);
 
@@ -654,7 +654,7 @@ static int libd_getSprite2Patch(lua_State *L)
 	}
 #endif
 
-
+	// push both the patch and it's "flip" value
 	LUA_PushUserdata(L, W_CachePatchNum(sprframe->lumppat[angle], PU_SPRITE), META_PATCH);
 	lua_pushboolean(L, (sprframe->flip & (1<<angle)) != 0);
 	return 2;
@@ -677,7 +677,7 @@ static int libd_draw(lua_State *L)
 	if (!lua_isnoneornil(L, 5))
 		colormap = *((UINT8 **)luaL_checkudata(L, 5, META_COLORMAP));
 
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -711,7 +711,7 @@ static int libd_drawScaled(lua_State *L)
 	if (!lua_isnoneornil(L, 6))
 		colormap = *((UINT8 **)luaL_checkudata(L, 6, META_COLORMAP));
 
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -746,7 +746,7 @@ static int libd_drawStretched(lua_State *L)
 	if (!lua_isnoneornil(L, 7))
 		colormap = *((UINT8 **)luaL_checkudata(L, 7, META_COLORMAP));
 
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -781,19 +781,19 @@ static int libd_drawCropped(lua_State *L)
 	if (!lua_isnoneornil(L, 7))
 		colormap = *((UINT8 **)luaL_checkudata(L, 7, META_COLORMAP));
 	sx = luaL_checkinteger(L, 8);
-	if (sx < 0)  
+	if (sx < 0) // Don't crash. Now, we could do "x-=sx*FRACUNIT; sx=0;" here...
 		return luaL_error(L, "negative crop sx");
 	sy = luaL_checkinteger(L, 9);
-	if (sy < 0)  
+	if (sy < 0) // ...but it's more truthful to just deny it, as negative values would crash
 		return luaL_error(L, "negative crop sy");
 	w = luaL_checkinteger(L, 10);
-	if (w < 0)  
+	if (w < 0) // Again, don't crash
 		return luaL_error(L, "negative crop w");
 	h = luaL_checkinteger(L, 11);
 	if (h < 0)
 		return luaL_error(L, "negative crop h");
 
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -816,7 +816,7 @@ static int libd_drawNum(lua_State *L)
 	y = luaL_checkinteger(L, 2);
 	num = luaL_checkinteger(L, 3);
 	flags = luaL_optinteger(L, 4, 0);
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -840,7 +840,7 @@ static int libd_drawPaddedNum(lua_State *L)
 	num = labs(luaL_checkinteger(L, 3));
 	digits = luaL_optinteger(L, 4, 2);
 	flags = luaL_optinteger(L, 5, 0);
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -884,7 +884,7 @@ static int libd_drawString(lua_State *L)
 	INT32 flags = luaL_optinteger(L, 4, V_ALLOWLOWERCASE);
 	enum align align = luaL_checkoption(L, 5, "left", align_opt);
 
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	HUDONLY
 
@@ -892,13 +892,13 @@ static int libd_drawString(lua_State *L)
 	list = (huddrawlist_h) lua_touserdata(L, -1);
 	lua_pop(L, 1);
 
-
+	// okay, sorry, this is kind of ugly
 	if (LUA_HUD_IsDrawListValid(list))
 		LUA_HUD_AddDrawString(list, x, y, str, flags, align);
 	else
 	switch(align)
 	{
-
+	// hu_font
 	case align_left:
 		V_DrawString(x, y, flags, str);
 		break;
@@ -917,7 +917,7 @@ static int libd_drawString(lua_State *L)
 	case align_fixedright:
 		V_DrawRightAlignedStringAtFixed(x, y, flags, str);
 		break;
-
+	// hu_font, 0.5x scale
 	case align_small:
 		V_DrawSmallString(x, y, flags, str);
 		break;
@@ -954,7 +954,7 @@ static int libd_drawString(lua_State *L)
 	case align_smallthinfixedright:
 		V_DrawRightAlignedSmallThinStringAtFixed(x, y, flags, str);
 		break;
-
+	// tny_font
 	case align_thin:
 		V_DrawThinString(x, y, flags, str);
 		break;
@@ -1002,7 +1002,7 @@ static int libd_drawNameTag(lua_State *L)
 	if (outlinecolor != SKINCOLOR_NONE)
 		outlinecolormap = R_GetTranslationColormap(TC_DEFAULT, outlinecolor, GTC_CACHE);
 
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -1044,7 +1044,7 @@ static int libd_drawScaledNameTag(lua_State *L)
 	if (outlinecolor != SKINCOLOR_NONE)
 		outlinecolormap = R_GetTranslationColormap(TC_DEFAULT, outlinecolor, GTC_CACHE);
 
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -1072,7 +1072,7 @@ static int libd_drawLevelTitle(lua_State *L)
 	str = luaL_checkstring(L, 3);
 	flags = luaL_optinteger(L, 4, 0);
 
-	flags &= ~V_PARAMMASK;  
+	flags &= ~V_PARAMMASK; // Don't let crashes happen.
 
 	lua_getfield(L, LUA_REGISTRYINDEX, "HUD_DRAW_LIST");
 	list = (huddrawlist_h) lua_touserdata(L, -1);
@@ -1094,13 +1094,13 @@ static int libd_stringWidth(lua_State *L)
 	HUDONLY
 	switch(widtht)
 	{
-	case widtht_normal:  
+	case widtht_normal: // hu_font
 		lua_pushinteger(L, V_StringWidth(str, flags));
 		break;
-	case widtht_small:  
+	case widtht_small: // hu_font, 0.5x scale
 		lua_pushinteger(L, V_SmallStringWidth(str, flags));
 		break;
-	case widtht_thin:  
+	case widtht_thin: // tny_font
 		lua_pushinteger(L, V_ThinStringWidth(str, flags));
 		break;
 	}
@@ -1138,8 +1138,8 @@ static int libd_getColormap(lua_State *L)
 	HUDONLY
 
 	if (lua_isnoneornil(L, 1))
-		;  
-	else if (lua_type(L, 1) == LUA_TNUMBER)  
+		; // defaults to TC_DEFAULT
+	else if (lua_type(L, 1) == LUA_TNUMBER) // skin number
 	{
 		skinnum = (INT32)luaL_checkinteger(L, 1);
 		if (skinnum >= MAXSKINS)
@@ -1147,19 +1147,19 @@ static int libd_getColormap(lua_State *L)
 		else if (skinnum < 0 && skinnum > TC_DEFAULT)
 			return luaL_error(L, "translation colormap index is out of range");
 	}
-	else  
+	else // skin name
 	{
 		const char *skinname = luaL_checkstring(L, 1);
 		INT32 i = R_SkinAvailable(skinname);
-		if (i != -1)  
+		if (i != -1) // if -1, just default to TC_DEFAULT as above
 			skinnum = i;
 	}
 
-
+	// Fix a crash that appeared in my custom build.
 	if (color >= MAXSKINCOLORS) {
 		CONS_Alert(CONS_WARNING, "Skin color %u is out of range\n", color);
 		color = SKINCOLOR_NONE;
-
+		// Don't call luaL_error, as this affects control flow and can desync with vanilla builds.
 	}
 
 	if (!lua_isnoneornil(L, 3))
@@ -1170,14 +1170,14 @@ static int libd_getColormap(lua_State *L)
 			return luaL_error(L, "invalid translation '%s'.", translation_name);
 	}
 
-
+	// all was successful above, now we generate the colormap at last!
 	if (translation_id != -1)
 		colormap = R_GetTranslationRemap(translation_id, color, skinnum);
 
 	if (colormap == NULL)
 		colormap = R_GetTranslationColormap(skinnum, color, GTC_CACHE);
 
-	LUA_PushUserdata(L, colormap, META_COLORMAP);  
+	LUA_PushUserdata(L, colormap, META_COLORMAP); // push as META_COLORMAP userdata, specifically for patches to use!
 	return 1;
 }
 
@@ -1188,7 +1188,7 @@ static int libd_getStringColormap(lua_State *L)
 	HUDONLY
 	colormap = V_GetStringColormap(flags & V_CHARCOLORMASK);
 	if (colormap) {
-		LUA_PushUserdata(L, colormap, META_COLORMAP);  
+		LUA_PushUserdata(L, colormap, META_COLORMAP); // push as META_COLORMAP userdata, specifically for patches to use!
 		return 1;
 	}
 	return 0;
@@ -1252,7 +1252,7 @@ static int libd_fadeScreen(lua_State *L)
 	list = (huddrawlist_h) lua_touserdata(L, -1);
 	lua_pop(L, 1);
 
-	if (strength == maxstrength)  
+	if (strength == maxstrength) // Allow as a shortcut for drawfill...
 	{
 		if (LUA_HUD_IsDrawListValid(list))
 			LUA_HUD_AddDrawFill(list, 0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, ((color & 0xFF00) ? 31 : color));
@@ -1272,22 +1272,22 @@ static int libd_fadeScreen(lua_State *L)
 static int libd_width(lua_State *L)
 {
 	HUDONLY
-	lua_pushinteger(L, vid.width);  
+	lua_pushinteger(L, vid.width); // push screen width
 	return 1;
 }
 
 static int libd_height(lua_State *L)
 {
 	HUDONLY
-	lua_pushinteger(L, vid.height);  
+	lua_pushinteger(L, vid.height); // push screen height
 	return 1;
 }
 
 static int libd_dup(lua_State *L)
 {
 	HUDONLY
-	lua_pushinteger(L, vid.dup);  
-	lua_pushfixed(L, vid.fdup);  
+	lua_pushinteger(L, vid.dup); // push integral scale (patch scale)
+	lua_pushfixed(L, vid.fdup); // push fixed point scale (position scale)
 	return 2;
 }
 
@@ -1295,15 +1295,15 @@ static int libd_renderer(lua_State *L)
 {
 	HUDONLY
 	switch (rendermode) {
-		case render_opengl: lua_pushliteral(L, "opengl");   break;  
-		case render_soft:   lua_pushliteral(L, "software"); break;  
-		default:            lua_pushliteral(L, "none");     break;  
+		case render_opengl: lua_pushliteral(L, "opengl");   break; // OpenGL renderer
+		case render_soft:   lua_pushliteral(L, "software"); break; // Software renderer
+		default:            lua_pushliteral(L, "none");     break; // render_none (for dedicated), in case there's any reason this should be run
 	}
 	return 1;
 }
 
-
-
+// M_RANDOM
+//////////////
 
 static int libd_RandomFixed(lua_State *L)
 {
@@ -1338,7 +1338,7 @@ static int libd_RandomRange(lua_State *L)
 	return 1;
 }
 
-
+// Macros.
 static int libd_SignedRandom(lua_State *L)
 {
 	HUDONLY
@@ -1354,8 +1354,8 @@ static int libd_RandomChance(lua_State *L)
 	return 1;
 }
 
-
-
+// 30/10/18 Lat': Get st_translucency's value for HUD rendering as a normal V_xxTRANS int
+// Could as well be thrown in global vars for ease of access but I guess it makes sense for it to be a HUD fn
 static int libd_getlocaltransflag(lua_State *L)
 {
 	HUDONLY
@@ -1363,16 +1363,16 @@ static int libd_getlocaltransflag(lua_State *L)
 	return 1;
 }
 
-
+// Get cv_translucenthud's value for HUD rendering as a normal V_xxTRANS int
 static int libd_getusertransflag(lua_State *L)
 {
 	HUDONLY
-	lua_pushinteger(L, (10-cv_translucenthud.value)*V_10TRANS);	 
+	lua_pushinteger(L, (10-cv_translucenthud.value)*V_10TRANS);	// A bit weird that it's called "translucenthud" yet 10 is fully opaque :V
 	return 1;
 }
 
 static luaL_Reg lib_draw[] = {
-
+	// cache
 	{"patchExists", libd_patchExists},
 	{"cachePatch", libd_cachePatch},
 	{"getSpritePatch", libd_getSpritePatch},
@@ -1380,7 +1380,7 @@ static luaL_Reg lib_draw[] = {
 	{"getColormap", libd_getColormap},
 	{"getStringColormap", libd_getStringColormap},
 	{"getSectorColormap", libd_getSectorColormap},
-
+	// drawing
 	{"draw", libd_draw},
 	{"drawScaled", libd_drawScaled},
 	{"drawStretched", libd_drawStretched},
@@ -1393,19 +1393,19 @@ static luaL_Reg lib_draw[] = {
 	{"drawScaledNameTag", libd_drawScaledNameTag},
 	{"drawLevelTitle", libd_drawLevelTitle},
 	{"fadeScreen", libd_fadeScreen},
-
+	// misc
 	{"stringWidth", libd_stringWidth},
 	{"nameTagWidth", libd_nameTagWidth},
 	{"levelTitleWidth", libd_levelTitleWidth},
 	{"levelTitleHeight", libd_levelTitleHeight},
-
+	// m_random
 	{"RandomFixed",libd_RandomFixed},
 	{"RandomByte",libd_RandomByte},
 	{"RandomKey",libd_RandomKey},
 	{"RandomRange",libd_RandomRange},
-	{"SignedRandom",libd_SignedRandom},  
-	{"RandomChance",libd_RandomChance},  
-
+	{"SignedRandom",libd_SignedRandom}, // MACRO
+	{"RandomChance",libd_RandomChance}, // MACRO
+	// properties
 	{"width", libd_width},
 	{"height", libd_height},
 	{"dupx", libd_dup},
@@ -1418,11 +1418,11 @@ static luaL_Reg lib_draw[] = {
 
 static int lib_draw_ref;
 
+//
+// lib_hud
+//
 
-
-
-
-
+// enable vanilla HUD element
 static int lib_hudenable(lua_State *L)
 {
 	enum hud option = luaL_checkoption(L, 1, NULL, hud_disable_options);
@@ -1430,7 +1430,7 @@ static int lib_hudenable(lua_State *L)
 	return 0;
 }
 
-
+// disable vanilla HUD element
 static int lib_huddisable(lua_State *L)
 {
 	enum hud option = luaL_checkoption(L, 1, NULL, hud_disable_options);
@@ -1438,7 +1438,7 @@ static int lib_huddisable(lua_State *L)
 	return 0;
 }
 
-
+// 30/10/18: Lat': How come this wasn't here before?
 static int lib_hudenabled(lua_State *L)
 {
 	enum hud option = luaL_checkoption(L, 1, NULL, hud_disable_options);
@@ -1451,7 +1451,7 @@ static int lib_hudenabled(lua_State *L)
 }
 
 
-
+// add a HUD element for rendering
 extern int lib_hudadd(lua_State *L);
 
 static luaL_Reg lib_hud[] = {
@@ -1462,9 +1462,9 @@ static luaL_Reg lib_hud[] = {
 	{NULL, NULL}
 };
 
-
-
-
+//
+//
+//
 
 int LUA_HudLib(lua_State *L)
 {

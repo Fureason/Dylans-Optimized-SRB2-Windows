@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Gym_Emu.h"
 
@@ -35,18 +35,18 @@ Gym_Emu::Gym_Emu()
 		"FM 1", "FM 2", "FM 3", "FM 4", "FM 5", "FM 6", "PCM", "PSG"
 	};
 	set_voice_names( names );
-	set_silence_lookahead( 1 );  
+	set_silence_lookahead( 1 ); // tracks should already be trimmed
 }
 
 Gym_Emu::~Gym_Emu() { }
 
-
+// Track info
 
 static void get_gym_info( Gym_Emu::header_t const& h, long length, track_info_t* out )
 {
 	if ( !memcmp( h.tag, "GYMX", 4 ) )
 	{
-		length = length * 50 / 3;  
+		length = length * 50 / 3; // 1000 / 60
 		long loop = get_le32( h.loop_start );
 		if ( loop )
 		{
@@ -56,11 +56,11 @@ static void get_gym_info( Gym_Emu::header_t const& h, long length, track_info_t*
 		else
 		{
 			out->length = length;
-			out->intro_length = length;  
+			out->intro_length = length; // make it clear that track is no longer than length
 			out->loop_length = 0;
 		}
 		
-
+		// more stupidity where the field should have been left
 		if ( strcmp( h.song, "Unknown Song" ) )
 			GME_COPY_FIELD( h, out, song );
 		
@@ -164,7 +164,7 @@ static Music_Emu* new_gym_file() { return BLARGG_NEW Gym_File; }
 static gme_type_t_ const gme_gym_type_ = { "Sega Genesis", 1, &new_gym_emu, &new_gym_file, "GYM", 0 };
 gme_type_t const gme_gym_type = &gme_gym_type_;
 
-
+// Setup
 
 blargg_err_t Gym_Emu::set_sample_rate_( long sample_rate )
 {
@@ -227,7 +227,7 @@ blargg_err_t Gym_Emu::load_mem_( byte const* in, long size )
 	return 0;
 }
 
-
+// Emulation
 
 blargg_err_t Gym_Emu::start_track_( int track )
 {
@@ -249,9 +249,9 @@ blargg_err_t Gym_Emu::start_track_( int track )
 
 void Gym_Emu::run_dac( int dac_count )
 {
-
+	// Guess beginning and end of sample and adjust rate and buffer position accordingly.
 	
-
+	// count dac samples in next frame
 	int next_dac_count = 0;
 	const byte* p = this->pos;
 	int cmd;
@@ -264,7 +264,7 @@ void Gym_Emu::run_dac( int dac_count )
 			next_dac_count++;
 	}
 	
-
+	// detect beginning and end of sample
 	int rate_count = dac_count;
 	int start = 0;
 	if ( !prev_dac_count && next_dac_count && dac_count < next_dac_count )
@@ -277,7 +277,7 @@ void Gym_Emu::run_dac( int dac_count )
 		rate_count = prev_dac_count;
 	}
 	
-
+	// Evenly space samples within buffer section being used
 	blip_resampled_time_t period = blip_buf.resampled_duration( clocks_per_frame ) / rate_count;
 	
 	blip_resampled_time_t time = blip_buf.resampled_time( 0 ) +
@@ -303,7 +303,7 @@ void Gym_Emu::parse_frame()
 	const byte* pos = this->pos;
 	
 	if ( loop_remain && !--loop_remain )
-		loop_begin = pos;  
+		loop_begin = pos; // find loop on first time through sequence
 	
 	int cmd;
 	while ( (cmd = *pos++) != 0 )
@@ -335,14 +335,14 @@ void Gym_Emu::parse_frame()
 		}
 		else
 		{
-
-
-
-			--pos;  
+			// to do: many GYM streams are full of errors, and error count should
+			// reflect cases where music is really having problems
+			//log_error(); 
+			--pos; // put data back
 		}
 	}
 	
-
+	// loop
 	if ( pos >= data_end )
 	{
 		check( pos == data_end );
@@ -354,7 +354,7 @@ void Gym_Emu::parse_frame()
 	}
 	this->pos = pos;
 	
-
+	// dac
 	if ( dac_count && !dac_muted )
 		run_dac( dac_count );
 	prev_dac_count = dac_count;

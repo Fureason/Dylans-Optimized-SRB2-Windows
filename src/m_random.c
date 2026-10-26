@@ -10,28 +10,28 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_random.c
+/// \brief RNG for client effects and PRNG for game actions
 
 #include "doomdef.h"
 #include "doomtype.h"
-#include "i_system.h"  
+#include "i_system.h" // I_GetRandomBytes
 
 #include "m_random.h"
 #include "m_fixed.h"
 
-
+// SFC32 random number generator implementation
 
 typedef struct rnstate_s {
 	UINT32 data[3];
 	UINT32 counter;
 } rnstate_t;
 
-                                                                  
-   
-                                      
-                            
-    
+/** Generate a raw uniform random number using a particular state.
+  *
+  * \param state The RNG state to use.
+  * \return A random UINT32.
+  */
 static inline UINT32 RandomState_Get32(rnstate_t *state) {
 	UINT32 result, b, c;
 
@@ -46,12 +46,12 @@ static inline UINT32 RandomState_Get32(rnstate_t *state) {
 	return result;
 }
 
-                                                            
-   
-                                       
-                                                                  
-                                               
-    
+/** Seed an SFC32 RNG state with up to 96 bits of seed data.
+  *
+  * \param state The RNG state to seed.
+  * \param seeds A pointer to up to 3 UINT32s to use as seed data.
+  * \param seed_count The number of seed words.
+  */
 static inline void RandomState_Seed(rnstate_t *state, UINT32 *seeds, size_t seed_count)
 {
 	size_t i;
@@ -67,7 +67,7 @@ static inline void RandomState_Seed(rnstate_t *state, UINT32 *seeds, size_t seed
 		else
 			seed_word = 0;
 
-
+		// For SFC32, seed data should be stored in the state in reverse order.
 		state->data[2-i] = seed_word;
 	}
 
@@ -75,44 +75,44 @@ static inline void RandomState_Seed(rnstate_t *state, UINT32 *seeds, size_t seed
 		RandomState_Get32(state);
 }
 
-                                                  
-                                                                         
-                                      
-   
-                                                   
-   
-                                      
-                                              
-                                             
-    
+/** Gets a uniform number in the range [0, limit).
+  * Technique is based on a combination of scaling and rejection sampling
+  * and is adapted from Daniel Lemire.
+  *
+  * \note Any UINT32 is a valid argument for limit.
+  *
+  * \param state The RNG state to use.
+  * \param limit The upper limit of the range.
+  * \return A UINT32 in the range [0, limit).
+  */
 static inline UINT32 RandomState_GetKey32(rnstate_t *state, const UINT32 limit)
 {
 	UINT32 raw_random, scaled_lower_word;
 	UINT64 scaled_random;
 
-
+	// This algorithm won't work correctly if passed a 0.
 	if (limit == 0) return 0;
 
 	raw_random = RandomState_Get32(state);
 	scaled_random = (UINT64)raw_random * (UINT64)limit;
 
-	                                                                          
-                                                                       
-                                                                        
-                      
-   
+	/*The high bits of scaled_random now contain the number we want, but it is
+	possible, depending on the number we generated and the value of limit,
+	that there is bias in the result. The rest of this code is for ensuring
+	that does not happen.
+	*/
 	scaled_lower_word = (UINT32)scaled_random;
 
-
+	// If we're lucky, we can bail out now and avoid the division
 	if (scaled_lower_word < limit)
 	{
-
-
+		// Scale the limit to improve the chance of success.
+		// After this, the first result might turn out to be good enough.
 		UINT32 scaled_limit;
-
-
-
-
+		// An explanation for this trick: scaled_limit should be
+		// (UINT32_MAX+1)%range, but if that was computed directly the result
+		// would need to be computed as a UINT64. This trick allows it to be
+		// computed using 32-bit arithmetic.
 		scaled_limit = (-limit) % limit;
 
 		while (scaled_lower_word < scaled_limit)
@@ -126,43 +126,43 @@ static inline UINT32 RandomState_GetKey32(rnstate_t *state, const UINT32 limit)
 	return scaled_random >> 32;
 }
 
-
+// The default seed is the hexadecimal digits of pi, though it will be overwritten.
 static rnstate_t m_randomstate = {
 	.data = {0x4A3B6035U, 0x99555606U, 0x6F603421U},
 	.counter = 16
 };
 
+// ---------------------------
+// RNG functions (not synched)
+// ---------------------------
 
-
-
-
-                                                                  
-                                                            
-   
-                                                   
-    
+/** Provides a random fixed point number. Distribution is uniform.
+  * As with all M_Random functions, not synched in netgames.
+  *
+  * \return A random fixed point number from [0,1).
+  */
 fixed_t M_RandomFixed(void)
 {
 	return RandomState_Get32(&m_randomstate) >> (32-FRACBITS);
 }
 
-                                                    
-                                                            
-   
-                                           
-    
+/** Provides a random byte. Distribution is uniform.
+  * As with all M_Random functions, not synched in netgames.
+  *
+  * \return A random integer from [0, 255].
+  */
 UINT8 M_RandomByte(void)
 {
 	return RandomState_Get32(&m_randomstate) >> 24;
 }
 
-                                                                        
-                            
-                                                            
-   
-                                      
-                                        
-    
+/** Provides a random integer for picking random elements from an array.
+  * Distribution is uniform.
+  * As with all M_Random functions, not synched in netgames.
+  *
+  * \param a Number of items in array.
+  * \return A random integer from [0,a).
+  */
 INT32 M_RandomKey(INT32 a)
 {
 	boolean range_is_negative;
@@ -183,14 +183,14 @@ INT32 M_RandomKey(INT32 a)
 	return random_result;
 }
 
-                                               
-                            
-                                                            
-   
-                         
-                         
-                                        
-    
+/** Provides a random integer in a given range.
+  * Distribution is uniform.
+  * As with all M_Random functions, not synched in netgames.
+  *
+  * \param a Lower bound.
+  * \param b Upper bound.
+  * \return A random integer from [a,b].
+  */
 INT32 M_RandomRange(INT32 a, INT32 b)
 {
 	if (b < a)
@@ -206,10 +206,10 @@ INT32 M_RandomRange(INT32 a, INT32 b)
 	return (INT32)((INT64)RandomState_GetKey32(&m_randomstate, spread) + a);
 }
 
-                                                                       
-                                     
-                                              
-    
+/** Attempts to seed the unsynched RNG from a good random number source
+  * provided by the operating system.
+  * \return true on success, false on failure.
+  */
 boolean M_RandomSeedFromOS(void)
 {
 	UINT32 complete_word_count;
@@ -221,7 +221,7 @@ boolean M_RandomSeedFromOS(void)
 
 	complete_word_count = I_GetRandomBytes((char *)&seed_data.bytes, sizeof(seed_data)) / sizeof(UINT32);
 
-
+	// If we get even 1 word of seed, it's fine, but any less probably is not fine.
 	if (complete_word_count == 0)
 		return false;
 
@@ -237,21 +237,21 @@ void M_RandomSeed(UINT32 seed)
 
 
 
+// ------------------------
+// PRNG functions (synched)
+// ------------------------
 
-
-
-
-
+// Holds the current seed.
 static UINT32 randomseed = 0xBADE4404;
 
-
+// Holds the INITIAL seed value.  Used for demos, possibly other debugging.
 static UINT32 initialseed = 0xBADE4404;
 
-                                         
-                                                                                    
-   
-                                                   
-    
+/** Provides a random fixed point number.
+  * This is a variant of an xorshift PRNG; state fits in a 32 bit integer structure.
+  *
+  * \return A random fixed point number from [0,1).
+  */
 ATTRINLINE static fixed_t FUNCINLINE __internal_prng__(void)
 {
 	randomseed ^= randomseed >> 13;
@@ -260,11 +260,11 @@ ATTRINLINE static fixed_t FUNCINLINE __internal_prng__(void)
 	return ( (randomseed*36548569) >> 4) & (FRACUNIT-1);
 }
 
-                                                                  
-                                                       
-   
-                                                   
-    
+/** Provides a random fixed point number. Distribution is uniform.
+  * Literally a wrapper for the internal PRNG function.
+  *
+  * \return A random fixed point number from [0,1).
+  */
 #ifndef DEBUGRANDOM
 fixed_t P_RandomFixed(void)
 {
@@ -276,13 +276,13 @@ fixed_t P_RandomFixedD(const char *rfile, INT32 rline)
 	return __internal_prng__();
 }
 
-                                                    
-                                                           
-                                           
-   
-                                         
-                         
-    
+/** Provides a random byte. Distribution is uniform.
+  * If you're curious, (&0xFF00) >> 8 gives the same result
+  * as a fixed point multiplication by 256.
+  *
+  * \return Random integer from [0, 255].
+  * \sa __internal_prng__
+  */
 #ifndef DEBUGRANDOM
 UINT8 P_RandomByte(void)
 {
@@ -294,14 +294,14 @@ UINT8 P_RandomByteD(const char *rfile, INT32 rline)
 	return (UINT8)((__internal_prng__()&0xFF00)>>8);
 }
 
-                                                                        
-                            
-                                 
-   
-                                      
-                                        
-                         
-    
+/** Provides a random integer for picking random elements from an array.
+  * Distribution is uniform.
+  * NOTE: Maximum range is 65536.
+  *
+  * \param a Number of items in array.
+  * \return A random integer from [0,a).
+  * \sa __internal_prng__
+  */
 #ifndef DEBUGRANDOM
 INT32 P_RandomKey(INT32 a)
 {
@@ -313,15 +313,15 @@ INT32 P_RandomKeyD(const char *rfile, INT32 rline, INT32 a)
 	return (INT32)(((INT64)__internal_prng__() * a) >> FRACBITS);
 }
 
-                                               
-                            
-                                 
-   
-                         
-                         
-                                        
-                         
-    
+/** Provides a random integer in a given range.
+  * Distribution is uniform.
+  * NOTE: Maximum range is 65536.
+  *
+  * \param a Lower bound.
+  * \param b Upper bound.
+  * \return A random integer from [a,b].
+  * \sa __internal_prng__
+  */
 #ifndef DEBUGRANDOM
 INT32 P_RandomRange(INT32 a, INT32 b)
 {
@@ -335,16 +335,16 @@ INT32 P_RandomRangeD(const char *rfile, INT32 rline, INT32 a, INT32 b)
 
 
 
+// ----------------------
+// PRNG seeds & debugging
+// ----------------------
 
-
-
-
-                                                            
-                       
-   
-                                                     
-                         
-    
+/** Peeks to see what the next result from the PRNG will be.
+  * Used for debugging.
+  *
+  * \return A 'random' fixed point number from [0,1).
+  * \sa __internal_prng__
+  */
 fixed_t P_RandomPeek(void)
 {
 	UINT32 r = randomseed;
@@ -353,11 +353,11 @@ fixed_t P_RandomPeek(void)
 	return ret;
 }
 
-                                                             
-   
-                                
-                     
-    
+/** Gets the current random seed.  Used by netgame savegames.
+  *
+  * \return Current random seed.
+  * \sa P_SetRandSeed
+  */
 #ifndef DEBUGRANDOM
 UINT32 P_GetRandSeed(void)
 {
@@ -369,11 +369,11 @@ UINT32 P_GetRandSeedD(const char *rfile, INT32 rline)
 	return randomseed;
 }
 
-                                                 
-   
-                                
-                     
-    
+/** Gets the initial random seed.  Used by demos.
+  *
+  * \return Initial random seed.
+  * \sa P_SetRandSeed
+  */
 #ifndef DEBUGRANDOM
 UINT32 P_GetInitSeed(void)
 {
@@ -385,12 +385,12 @@ UINT32 P_GetInitSeedD(const char *rfile, INT32 rline)
 	return initialseed;
 }
 
-                         
-                                                             
-   
-                                   
-                     
-    
+/** Sets the random seed.
+  * Used at the beginning of the game, and also for netgames.
+  *
+  * \param rindex New random index.
+  * \sa P_GetRandSeed
+  */
 #ifndef DEBUGRANDOM
 void P_SetRandSeed(UINT32 seed)
 {
@@ -399,18 +399,18 @@ void P_SetRandSeedD(const char *rfile, INT32 rline, UINT32 seed)
 {
 	CONS_Printf("P_SetRandSeed() at: %sp %d\n", rfile, rline);
 #endif
-
-
+	// xorshift requires a nonzero seed
+	// this should never happen, but just in case it DOES, we check
 	if (!seed) seed = 0xBADE4404;
 	randomseed = initialseed = seed;
 }
 
-                                                       
-                                                                             
-                                                                
-   
-                     
-    
+/** Gets a randomized seed for setting the random seed.
+  * This function will never return 0, as the current P_Random implementation
+  * cannot handle a zero seed. Any other seed is equally likely.
+  *
+  * \sa P_GetRandSeed
+  */
 UINT32 M_RandomizedSeed(void)
 {
 	UINT32 seed;

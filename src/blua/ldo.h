@@ -28,13 +28,13 @@
 #define restoreci(L,n)		((CallInfo *)(void *)((char *)L->base_ci + (n)))
 
 
- 
-#define PCRLUA		0	 
-#define PCRC		1	 
-#define PCRYIELD	2	 
+/* results from luaD_precall */
+#define PCRLUA		0	/* initiated a call to a Lua function */
+#define PCRC		1	/* did a call to a C function */
+#define PCRYIELD	2	/* C funtion yielded */
 
 
- 
+/* type of protected functions, to be ran by `runprotected' */
 typedef void (*Pfunc) (lua_State *L, void *ud);
 
 LUAI_FUNC int luaD_protectedparser (lua_State *L, ZIO *z, const char *name);

@@ -17,18 +17,18 @@
 #include <stdio.h>
 #include <string.h>
 #ifdef _MSC_VER
-#include <wchar.h>  
+#include <wchar.h> /* off_t */
 #endif
 
-                            
-     
-   
+/*! \addtogroup libopenmpt_c
+ * @{
+ */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
- 
+/* This stuff has to be in a header file because of possibly different MSVC CRTs which cause problems for FILE * crossing CRT boundaries. */
 
 static size_t openmpt_stream_file_read_func( void * stream, void * dst, size_t bytes ) {
 	FILE * f = 0;
@@ -100,17 +100,17 @@ static int64_t openmpt_stream_file_tell_func( void * stream ) {
 	return retval;
 }
 
-                                                                       
-  
-                                                                                                                                           
-  
-                                                                       
-                               
-                               
-                                      
-                                            
-                             
-   
+/*! \brief Provide openmpt_stream_callbacks for standard C FILE objects
+ *
+ * Fills openmpt_stream_callbacks suitable for passing a standard C FILE object as a stream parameter to functions doing file input/output.
+ *
+ * \remarks The stream argument must be passed as `(void*)(FILE*)file`.
+ * \sa \ref libopenmpt_c_fileio
+ * \sa openmpt_stream_callbacks
+ * \sa openmpt_could_open_probability2
+ * \sa openmpt_probe_file_header_from_stream
+ * \sa openmpt_module_create2
+ */
 static openmpt_stream_callbacks openmpt_stream_get_file_callbacks(void) {
 	openmpt_stream_callbacks retval;
 	memset( &retval, 0, sizeof( openmpt_stream_callbacks ) );
@@ -124,9 +124,9 @@ static openmpt_stream_callbacks openmpt_stream_get_file_callbacks(void) {
 }
 #endif
 
-   
-     
-   
+/*!
+ * @}
+ */
 
-#endif  
+#endif /* LIBOPENMPT_STREAM_CALLBACKS_FILE_H */
 

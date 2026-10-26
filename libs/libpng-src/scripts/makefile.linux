@@ -7,18 +7,18 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
+# Library name:
 LIBNAME = libpng16
 PNGMAJ = 16
 RELEASE = 37
 
-
+# Shared library names:
 LIBSO=$(LIBNAME).so
 LIBSOMAJ=$(LIBNAME).so.$(PNGMAJ)
 LIBSOREL=$(LIBSOMAJ).$(RELEASE)
 OLDSO=libpng.so
 
-
+# Utilities:
 AR_RC=ar rc
 CC=gcc
 MKDIR_P=mkdir -p
@@ -27,30 +27,30 @@ RANLIB=ranlib
 CP=cp
 RM_F=/bin/rm -f
 
-
-
-
+# where "make install" puts libpng16.a, libpng16.so*,
+# libpng16/png.h, libpng16/pngconf.h, and libpng16/pnglibconf.h
+# Prefix must be a full pathname.
 prefix=/usr/local
 exec_prefix=$(prefix)
 
-
-
-
+# Where the zlib library and include files are located.
+#ZLIBLIB=/usr/local/lib
+#ZLIBINC=/usr/local/include
 ZLIBLIB=../zlib
 ZLIBINC=../zlib
 
 ALIGN=
-
-
+# for i386:
+#ALIGN=-malign-loops=2 -malign-functions=2
 
 WARNMORE=-Wwrite-strings -Wpointer-arith -Wshadow \
 	-Wmissing-declarations -Wtraditional -Wcast-align \
-	-Wstrict-prototypes -Wmissing-prototypes  
+	-Wstrict-prototypes -Wmissing-prototypes #-Wconversion
 
+# for pgcc version 2.95.1, -O3 is buggy; don't use it.
 
-
-CPPFLAGS=-I$(ZLIBINC)  
-CFLAGS=-W -Wall -O3 -funroll-loops $(ALIGN)  
+CPPFLAGS=-I$(ZLIBINC) # -DPNG_DEBUG=5
+CFLAGS=-W -Wall -O3 -funroll-loops $(ALIGN) # $(WARNMORE) -g
 
 LDFLAGS=-L. -Wl,-rpath,. -L$(ZLIBLIB) -Wl,-rpath,$(ZLIBLIB) -lpng16 -lz -lm
 LDFLAGS_A=-L$(ZLIBLIB) -Wl,-rpath,$(ZLIBLIB) libpng.a -lz -lm
@@ -60,14 +60,14 @@ LIBPATH=$(exec_prefix)/lib
 MANPATH=$(prefix)/man
 BINPATH=$(exec_prefix)/bin
 
-
-
-
-
-
-
-
-
+# override DESTDIR= on the make install command line to easily support
+# installing into a temporary location.  Example:
+#
+#    make install DESTDIR=/tmp/build/libpng
+#
+# If you're going to install into a temporary location
+# via DESTDIR, $(DESTDIR)$(prefix) must already exist before
+# you execute make install.
 DESTDIR=
 
 DB=$(DESTDIR)$(BINPATH)
@@ -75,8 +75,8 @@ DI=$(DESTDIR)$(INCPATH)
 DL=$(DESTDIR)$(LIBPATH)
 DM=$(DESTDIR)$(MANPATH)
 
-
-
+# Pre-built configuration
+# See scripts/pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT = scripts/pnglibconf.h.prebuilt
 
 OBJS =  png.o pngset.o pngget.o pngrutil.o pngtrans.o pngwutil.o \

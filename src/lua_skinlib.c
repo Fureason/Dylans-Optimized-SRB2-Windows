@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_skinlib.c
+/// \brief player skin structure library for Lua scripting
 
 #include "doomdef.h"
 #include "fastcmp.h"
@@ -54,7 +54,7 @@ enum skin {
 	skin_contspeed,
 	skin_contangle,
 	skin_soundsid,
-	skin_sprites,  
+	skin_sprites, // TODO: 2.3: Delete
 	skin_skinsprites,
 	skin_supersprites,
 	skin_natkcolor
@@ -96,7 +96,7 @@ static const char *const skin_opt[] = {
 	"contspeed",
 	"contangle",
 	"soundsid",
-	"sprites",  
+	"sprites", // TODO: 2.3: Delete
 	"skinsprites",
 	"supersprites",
 	"natkcolor",
@@ -111,7 +111,7 @@ static int skin_get(lua_State *L)
 	skin_t *skin = *((skin_t **)luaL_checkudata(L, 1, META_SKIN));
 	enum skin field = Lua_optoption(L, 2, -1, skin_fields_ref);
 
-
+	// skins are always valid, only added, never removed
 	I_Assert(skin != NULL);
 
 	switch (field)
@@ -123,7 +123,7 @@ static int skin_get(lua_State *L)
 		lua_pushstring(L, skin->name);
 		break;
 	case skin_wadnum:
-
+		// !!WARNING!! May differ between clients due to music wads, therefore NOT NETWORK SAFE
 		return UNIMPLEMENTED;
 	case skin_flags:
 		lua_pushinteger(L, skin->flags);
@@ -221,7 +221,7 @@ static int skin_get(lua_State *L)
 	case skin_soundsid:
 		LUA_PushUserdata(L, skin->soundsid, META_SOUNDSID);
 		break;
-	case skin_sprites:  
+	case skin_sprites: // TODO: 2.3: Delete
 		LUA_PushUserdata(L, skin->sprites_compat, META_SKINSPRITESCOMPAT);
 		break;
 	case skin_skinsprites:
@@ -246,7 +246,7 @@ static int skin_num(lua_State *L)
 {
 	skin_t *skin = *((skin_t **)luaL_checkudata(L, 1, META_SKIN));
 
-
+	// skins are always valid, only added, never removed
 	I_Assert(skin != NULL);
 
 	lua_pushinteger(L, skin->skinnum);
@@ -259,20 +259,20 @@ static int lib_iterateSkins(lua_State *L)
 
 	if (lua_gettop(L) < 2)
 	{
-
+		//return luaL_error(L, "Don't call skins.iterate() directly, use it as 'for skin in skins.iterate do <block> end'.");
 		lua_pushcfunction(L, lib_iterateSkins);
 		return 1;
 	}
 
 	lua_settop(L, 2);
-	lua_remove(L, 1);  
+	lua_remove(L, 1); // state is unused.
 
 	if (!lua_isnil(L, 1))
 		i = (INT32)((*((skin_t **)luaL_checkudata(L, 1, META_SKIN)))->skinnum) + 1;
 	else
 		i = 0;
 
-
+	// skins are always valid, only added, never removed
 	if (i < numskins)
 	{
 		LUA_PushUserdata(L, skins[i], META_SKIN);
@@ -287,7 +287,7 @@ static int lib_getSkin(lua_State *L)
 	const char *field;
 	INT32 i;
 
-
+	// find skin by number
 	if (lua_type(L, 2) == LUA_TNUMBER)
 	{
 		i = luaL_checkinteger(L, 2);
@@ -301,14 +301,14 @@ static int lib_getSkin(lua_State *L)
 
 	field = luaL_checkstring(L, 2);
 
-
+	// special function iterate
 	if (fastcmp(field,"iterate"))
 	{
 		lua_pushcfunction(L, lib_iterateSkins);
 		return 1;
 	}
 
-
+	// find skin by name
 	for (i = 0; i < numskins; i++)
 		if (fastcmp(skins[i]->name, field))
 		{
@@ -325,7 +325,7 @@ static int lib_numSkins(lua_State *L)
 	return 1;
 }
 
-
+// soundsid, i -> soundsid[i]
 static int soundsid_get(lua_State *L)
 {
 	sfxenum_t *soundsid = *((sfxenum_t **)luaL_checkudata(L, 1, META_SOUNDSID));
@@ -336,14 +336,14 @@ static int soundsid_get(lua_State *L)
 	return 1;
 }
 
-
+// #soundsid -> NUMSKINSOUNDS
 static int soundsid_num(lua_State *L)
 {
 	lua_pushinteger(L, NUMSKINSOUNDS);
 	return 1;
 }
 
-
+// skin.skinsprites[i] -> sprites[i]
 static int lib_getSkinSprite(lua_State *L)
 {
 	spritedef_t *sksprites = *(spritedef_t **)luaL_checkudata(L, 1, META_SKINSPRITES);
@@ -356,15 +356,15 @@ static int lib_getSkinSprite(lua_State *L)
 	return 1;
 }
 
-
+// #skin.skinsprites -> NUMPLAYERSPRITES
 static int lib_numSkinsSprites(lua_State *L)
 {
 	lua_pushinteger(L, NUMPLAYERSPRITES);
 	return 1;
 }
 
-
-
+// TODO: 2.3: Delete
+// skin.sprites[i] -> sprites[i]
 static int lib_getSkinSpriteCompat(lua_State *L)
 {
 	spritedef_t *sksprites = *(spritedef_t **)luaL_checkudata(L, 1, META_SKINSPRITESCOMPAT);
@@ -380,8 +380,8 @@ static int lib_getSkinSpriteCompat(lua_State *L)
 	return 1;
 }
 
-
-
+// TODO: 2.3: Delete
+// #skin.sprites -> NUMPLAYERSPRITES*2
 static int lib_numSkinsSpritesCompat(lua_State *L)
 {
 	lua_pushinteger(L, NUMPLAYERSPRITES*2);
@@ -417,7 +417,7 @@ int LUA_SkinLib(lua_State *L)
 	LUA_RegisterUserdataMetatable(L, META_SOUNDSID, soundsid_get, NULL, soundsid_num);
 	LUA_RegisterUserdataMetatable(L, META_SKINSPRITES, lib_getSkinSprite, NULL, lib_numSkinsSprites);
 	LUA_RegisterUserdataMetatable(L, META_SKINSPRITESLIST, sprite_get, NULL, NULL);
-	LUA_RegisterUserdataMetatable(L, META_SKINSPRITESCOMPAT, lib_getSkinSpriteCompat, NULL, lib_numSkinsSpritesCompat);  
+	LUA_RegisterUserdataMetatable(L, META_SKINSPRITESCOMPAT, lib_getSkinSpriteCompat, NULL, lib_numSkinsSpritesCompat); // TODO: 2.3: Delete
 
 	skin_fields_ref = Lua_CreateFieldTable(L, skin_opt);
 

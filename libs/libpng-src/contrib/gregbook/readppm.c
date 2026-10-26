@@ -61,7 +61,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "readpng.h"     
+#include "readpng.h"    /* typedefs, common macros, public prototypes */
 
 
 ulg  width, height;
@@ -76,7 +76,7 @@ void readpng_version_info()
 }
 
 
- 
+/* return value = 0 for success, 1 for bad sig, 2 for bad IHDR, 4 for no mem */
 
 int readpng_init(FILE *infile, ulg *pWidth, ulg *pHeight)
 {
@@ -91,14 +91,14 @@ int readpng_init(FILE *infile, ulg *pWidth, ulg *pHeight)
         fprintf(stderr, "ERROR:  not a PPM file\n");
         return 1;
     }
-     
+    /* possible color types:  P5 = grayscale (0), P6 = RGB (2), P8 = RGBA (6) */
     if (ppmline[1] == '6') {
         color_type = 2;
         channels = 3;
     } else if (ppmline[1] == '8') {
         color_type = 6;
         channels = 4;
-    } else   {
+    } else /* if (ppmline[1] == '5') */ {
         color_type = 0;
         channels = 1;
     }
@@ -127,8 +127,8 @@ int readpng_init(FILE *infile, ulg *pWidth, ulg *pHeight)
 
 
 
-                                                                             
-                                         
+/* returns 0 if succeeds, 1 if fails due to no bKGD chunk, 2 if libpng error;
+ * scales values to 8-bit if necessary */
 
 int readpng_get_bgcolor(uch *red, uch *green, uch *blue)
 {
@@ -138,25 +138,25 @@ int readpng_get_bgcolor(uch *red, uch *green, uch *blue)
 
 
 
- 
+/* display_exponent == LUT_exponent * CRT_exponent */
 
 uch *readpng_get_image(double display_exponent, int *pChannels, ulg *pRowbytes)
 {
     ulg  rowbytes;
 
 
-                                                                              
-                                                                         
-                                                                      
+    /* expand palette images to RGB, low-bit-depth grayscale images to 8 bits,
+     * transparency chunks to full alpha channel; strip 16-bit-per-sample
+     * images to 8 bits per sample; and convert grayscale to RGB[A] */
 
-     
+    /* GRR WARNING:  grayscale needs to be expanded and channels reset! */
 
     *pRowbytes = rowbytes = channels*width;
     *pChannels = channels;
 
     Trace((stderr, "readpng_get_image:  rowbytes = %ld, height = %ld\n", rowbytes, height));
 
-     
+    /* Guard against integer overflow */
     if (height > ((size_t)(-1))/rowbytes) {
         fprintf(stderr, PROGNAME ":  image_data buffer would be too large\n",
         return NULL;
@@ -166,7 +166,7 @@ uch *readpng_get_image(double display_exponent, int *pChannels, ulg *pRowbytes)
         return NULL;
     }
 
-     
+    /* now we can go ahead and just read the whole image */
 
     if (fread(image_data, 1L, rowbytes*height, saved_infile) <
        rowbytes*height) {

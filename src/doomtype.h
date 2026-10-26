@@ -8,11 +8,11 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
-
-
+/// \file  doomtype.h
+/// \brief SRB2 standard types
+///
+///        Simple basic typedefs, isolated here to make it easier
+///        separating modules.
 
 #ifndef __DOOMTYPE__
 #define __DOOMTYPE__
@@ -22,15 +22,15 @@ extern "C" {
 #endif
 
 #ifdef _WIN32
-
+//#define WIN32_LEAN_AND_MEAN
 #define RPC_NO_WINDOWS_H
 #include <windows.h>
 #endif
 
- 
+/* 7.18.1.1  Exact-width integer types */
 #ifdef _MSC_VER
-
-
+// libopenmpt.h will include stdint.h later;
+// include it now so that INT8_MAX etc. don't get redefined
 #ifdef HAVE_OPENMPT
 #include <stdint.h>
 #endif
@@ -39,7 +39,7 @@ extern "C" {
 
 typedef long ssize_t;
 
- 
+/* Older Visual C++ headers don't have the Win64-compatible typedefs... */
 #if (_MSC_VER <= 1200)
 	#ifndef DWORD_PTR
 		#define DWORD_PTR DWORD
@@ -70,13 +70,13 @@ typedef long ssize_t;
 #define NOIPX
 #endif
 
- 
+/* Strings and some misc platform specific stuff */
 
 #ifdef _MSC_VER
-
-#if (_MSC_VER <= 1800)  
+	// Microsoft VisualC++
+#if (_MSC_VER <= 1800) // MSVC 2013 and back
 	#define snprintf                _snprintf
-#if (_MSC_VER <= 1200)  
+#if (_MSC_VER <= 1200) // MSVC 6.0 and back
 	#define vsnprintf               _vsnprintf
 #endif
 #endif
@@ -117,38 +117,38 @@ char *xstrtok(char *line, const char *delims);
 #if defined (__APPLE__)
 	#define SRB2_HAVE_STRLCPY
 #elif defined (__GLIBC_PREREQ)
-
+	// glibc 2.38: added strlcpy and strlcat to _DEFAULT_SOURCE
 	#if __GLIBC_PREREQ(2, 38)
 		#define SRB2_HAVE_STRLCPY
 	#endif
 #endif
 
 #ifndef HAVE_DOSSTR_FUNCS
-int strupr(char *n);  
-int strlwr(char *n);  
+int strupr(char *n); // from dosstr.c
+int strlwr(char *n); // from dosstr.c
 #endif
 
-#include <stddef.h>  
+#include <stddef.h> // for size_t
 
 #ifndef SRB2_HAVE_STRLCPY
 size_t strlcat(char *dst, const char *src, size_t siz);
 size_t strlcpy(char *dst, const char *src, size_t siz);
 #endif
 
-
-
-
-
-
-
+// Macro for use with char foo[FOOSIZE+1] type buffers.
+// Never use this with a buffer that is a "char *" or passed
+// into the function as an argument.
+//
+// In those cases sizeof will return the size of the pointer,
+// not the number of bytes in the buffer.
 #define STRBUFCPY(dst,src) strlcpy(dst, src, sizeof dst)
 
- 
+/* Boolean type definition */
 
-
-
-
-
+// Note: C++ bool and C99/C11 _Bool are NOT compatible.
+// Historically, boolean was win32 BOOL on Windows. For equivalence, it's now
+// int32_t. "true" and "false" are only declared for C code; in C++, conversion
+// between "bool" and "int32_t" takes over.
 #ifndef _WIN32
 typedef int32_t boolean;
 #else
@@ -164,7 +164,7 @@ enum {false = 0, true = 1};
 #endif
 #endif
 
- 
+/* 7.18.2.1  Limits of exact-width integer types */
 
 #ifndef INT8_MIN
 #define INT8_MIN (-128)
@@ -193,30 +193,30 @@ enum {false = 0, true = 1};
 #endif
 
 #ifndef UINT8_MAX
-#define UINT8_MAX 0xff  
+#define UINT8_MAX 0xff /* 255U */
 #endif
 #ifndef UINT16_MAX
-#define UINT16_MAX 0xffff  
+#define UINT16_MAX 0xffff /* 65535U */
 #endif
 #ifndef UINT32_MAX
-#define UINT32_MAX 0xffffffff   
+#define UINT32_MAX 0xffffffff  /* 4294967295U */
 #endif
 #ifndef UINT64_MAX
-#define UINT64_MAX 0xffffffffffffffffULL  
+#define UINT64_MAX 0xffffffffffffffffULL /* 18446744073709551615ULL */
 #endif
 
- 
+/* Compiler-specific attributes and other macros */
 
-#ifdef __GNUC__  
+#ifdef __GNUC__ // __attribute__ ((X))
 	#define FUNCNORETURN __attribute__ ((noreturn))
 
-	#if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 1)) && defined (__MINGW32__)  
+	#if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 1)) && defined (__MINGW32__) // MinGW, >= GCC 4.1
 		#include "inttypes.h"
-		#if 0  
+		#if 0 //defined  (__USE_MINGW_ANSI_STDIO) && __USE_MINGW_ANSI_STDIO > 0
 			#define FUNCPRINTF __attribute__ ((format(gnu_printf, 1, 2)))
 			#define FUNCDEBUG  __attribute__ ((format(gnu_printf, 2, 3)))
 			#define FUNCIERROR __attribute__ ((format(gnu_printf, 1, 2),noreturn))
-		#elif (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4)  
+		#elif (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) // >= GCC 4.4
 			#define FUNCPRINTF __attribute__ ((format(ms_printf, 1, 2)))
 			#define FUNCDEBUG  __attribute__ ((format(ms_printf, 2, 3)))
 			#define FUNCIERROR __attribute__ ((format(ms_printf, 1, 2),noreturn))
@@ -237,7 +237,7 @@ enum {false = 0, true = 1};
 
 	#define FUNCMATH __attribute__((const))
 
-	#if (__GNUC__ > 3) || (__GNUC__ == 3 && __GNUC_MINOR__ >= 1)  
+	#if (__GNUC__ > 3) || (__GNUC__ == 3 && __GNUC_MINOR__ >= 1) // >= GCC 3.1
 		#define FUNCDEAD __attribute__ ((deprecated))
 		#define FUNCINLINE __attribute__((always_inline))
 		#define FUNCNONNULL __attribute__((nonnull))
@@ -245,13 +245,13 @@ enum {false = 0, true = 1};
 
 	#define FUNCNOINLINE __attribute__((noinline))
 
-	#if (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4)  
-		#ifdef __i386__  
+	#if (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4) // >= GCC 4.4
+		#ifdef __i386__ // i386 only
 			#define FUNCTARGET(X)  __attribute__ ((__target__ (X)))
 		#endif
 	#endif
 
-	#if defined (__MINGW32__) && ((__GNUC__ > 3) || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4))  
+	#if defined (__MINGW32__) && ((__GNUC__ > 3) || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4)) // MinGW, >= GCC 3.4
 		#define ATTRPACK __attribute__((packed, gcc_struct))
 	#else
 		#define ATTRPACK __attribute__((packed))
@@ -261,7 +261,7 @@ enum {false = 0, true = 1};
 #elif defined (_MSC_VER)
 	#define ATTRNORETURN __declspec(noreturn)
 	#define ATTRINLINE __forceinline
-	#if _MSC_VER > 1200  
+	#if _MSC_VER > 1200 // >= MSVC 6.0
 		#define ATTRNOINLINE __declspec(noinline)
 	#endif
 #endif
@@ -312,7 +312,7 @@ enum {false = 0, true = 1};
 #define ATTRNOINLINE
 #endif
 
- 
+/* Miscellaneous types that don't fit anywhere else (Can this be changed?) */
 
 typedef struct
 {
@@ -338,13 +338,13 @@ typedef enum
 	postimg_heat
 } postimg_t;
 
-typedef UINT32 lumpnum_t;  
+typedef UINT32 lumpnum_t; // 16 : 16 unsigned long (wad num: lump num)
 #define LUMPERROR UINT32_MAX
 
 typedef UINT32 tic_t;
 #define INFTICS UINT32_MAX
 
-#include "endian.h"  
+#include "endian.h" // This is needed to make sure the below macro acts correctly in big endian builds
 
 #ifdef SRB2_BIG_ENDIAN
 #define UINT2RGBA(a) a
@@ -354,15 +354,15 @@ typedef UINT32 tic_t;
 
 #define TOSTR(x) #x
 
- 
+/* preprocessor dumb and needs second macro to expand input */
 #define WSTRING2(s) L ## s
 #define WSTRING(s) WSTRING2 (s)
 
-  
-                                                        
-                                                       
-                                
-  
+/*
+A hack by Monster Iestyn: Return a pointer to a field of
+a struct from a pointer to another field in the struct.
+Needed for some lua shenanigans.
+*/
 #define FIELDFROM( type, field, have, want ) \
 	(void *)((intptr_t)(field) - offsetof (type, have) + offsetof (type, want))
 
@@ -391,7 +391,7 @@ unset_bit_array (bitarray_t * const array, const int value)
 typedef UINT64 precise_t;
 
 #ifdef __cplusplus
-}  
+} // extern "C"
 #endif
 
-#endif  
+#endif //__DOOMTYPE__

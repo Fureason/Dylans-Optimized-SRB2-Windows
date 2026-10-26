@@ -6,13 +6,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
+// \brief HTTP based master server
 
+/*
+Documentation available here.
 
-  
-                             
-
-                                                          
-  
+                     <http://mb.srb2.org/MS/tools/api/v1/>
+*/
 
 #ifdef HAVE_CURL
 #include <curl/curl.h>
@@ -27,13 +27,13 @@
 #include "../m_argv.h"
 #include "../m_menu.h"
 #include "mserv.h"
-#include "i_tcp.h" 
+#include "i_tcp.h"/* for current_port */
 #include "../i_threads.h"
 
- 
+/* reasonable default I guess?? */
 #define DEFAULT_BUFFER_SIZE (4096)
 
- 
+/* I just stop myself from making macros anymore. */
 #define Blame( ... ) \
 	CONS_Printf("\x85" __VA_ARGS__)
 
@@ -151,7 +151,7 @@ HMS_on_read (char *s, size_t _1, size_t n, void *userdata)
 
 	if (n >= (size_t)( buffer->end - buffer->needle ))
 	{
-		 
+		/* resize to next multiple of buffer size */
 		blocks = ( n / DEFAULT_BUFFER_SIZE + 1 );
 		buffer->end += ( blocks * DEFAULT_BUFFER_SIZE );
 
@@ -184,9 +184,9 @@ HMS_connect (int proto, const char *format, ...)
 #endif
 
 #ifdef HAVE_THREADS
-	                                                                         
-                                                                            
-                                                        
+	/* curl_global_init and the shared API/user-agent state are process-wide.
+	 * A listen host can register while the room menu performs its own request,
+	 * so protect first use as well as URL construction. */
 	I_lock_mutex(&hms_api_mutex);
 #endif
 
@@ -233,7 +233,7 @@ HMS_connect (int proto, const char *format, ...)
 
 	init_user_agent_once();
 
-	seek = strlen(hms_api) + 1; 
+	seek = strlen(hms_api) + 1;/* + '/' */
 
 	va_start (ap, format);
 	url = malloc(seek + vsnprintf(0, 0, format, ap) + token_length + 1);
@@ -252,9 +252,9 @@ HMS_connect (int proto, const char *format, ...)
 	if (quack_token)
 		sprintf(&url[seek], "?token=%s", quack_token);
 
-	                                                                            
-                                                                          
-                                                                            
+	/* Routine master-server traffic runs on a worker thread. Avoid touching the
+	 * shared console/log stream unless verbose diagnostics were requested; a
+	 * flushed log write can otherwise briefly contend with the game thread. */
 	if (cv_masterserver_debug.value)
 		CONS_Printf("HMS: connecting '%s'...\n", url);
 
@@ -286,10 +286,10 @@ HMS_connect (int proto, const char *format, ...)
 #endif
 		curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
-	                                                                         
-                                                                           
-                                                                         
-                                                                           
+	/* Five seconds is too short when the public master is under load: it can
+	 * accept the TLS connection immediately but take a little longer to begin
+	 * the response. Keep zero's libcurl meaning (no overall timeout), while
+	 * giving old configs that still contain "5" a safer effective minimum. */
 	{
 		long timeout = cv_masterserver_timeout.value;
 		if (timeout > 0 && timeout < 8)
@@ -300,9 +300,9 @@ HMS_connect (int proto, const char *format, ...)
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, buffer);
 
 #ifdef HAVE_THREADS
-	                                                                           
-                                                                             
-                                                                     
+	/* Leaving a master-server menu changes ms_QueryId. Let libcurl notice that
+	 * while it is waiting for DNS, TLS, or response data so Back does not leave
+	 * an obsolete request occupying the menu until its full timeout. */
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, HMS_progress);
 	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, buffer);
@@ -429,8 +429,8 @@ HMS_fetch_rooms (int joining, int query_id)
 
 	int i;
 
-	                                                                        
-                                                                         
+	/* Room definitions change very rarely. Reuse a recent successful result
+	 * when the player backs out and immediately opens the browser again. */
 	if (hms_rooms_cached_at != 0
 		&& hms_rooms_cached_joining == joining
 		&& now - hms_rooms_cached_at <= 15)
@@ -451,9 +451,9 @@ HMS_fetch_rooms (int joining, int query_id)
 		doing_shit = 1;
 
 #ifdef HAVE_THREADS
-		                                                                        
-                                                                            
-                                           
+		/* The user may have backed out while curl was blocked.  Treat that as a
+		 * completed canceled request before touching room/menu storage, including
+		 * the valid-but-empty room-list case. */
 		I_lock_mutex(&ms_QueryId_mutex);
 		if (query_id != ms_QueryId)
 			doing_shit = 0;
@@ -479,10 +479,10 @@ HMS_fetch_rooms (int joining, int query_id)
 			{
 				id_no = atoi(id);
 
-				  
-                                                                   
-                                                              
-      
+				/*
+				Don't show the 'All' room if hosting. And it's a hack like this
+				because I'm way too lazy to add another feature to the MS.
+				*/
 				if (joining || id_no != 0)
 				{
 #ifdef HAVE_THREADS
@@ -506,7 +506,7 @@ HMS_fetch_rooms (int joining, int query_id)
 					i++;
 				}
 
-				p = ( end + 3 ); 
+				p = ( end + 3 );/* skip the three linefeeds */
 			}
 			else
 				break;
@@ -527,8 +527,8 @@ HMS_fetch_rooms (int joining, int query_id)
 	}
 	else
 	{
-		                                                                      
-                                
+		/* A temporary outage should not empty a room menu that already worked
+		 * earlier in this process. */
 		if (hms_rooms_cached_at != 0
 			&& hms_rooms_cached_joining == joining
 			&& HMS_publish_cached_rooms(query_id))
@@ -823,10 +823,10 @@ HMS_fetch_servers (msg_server_t *list, int room_number, int query_id)
 						strlcpy(list[i].ip,      address, sizeof list[i].ip);
 						strlcpy(list[i].port,    port,    sizeof list[i].port);
 
-						                                                          
-                                                             
-                                                                
-                                                                  
+						/* Server titles are URL-escaped by the master server (for
+						 * example, spaces arrive as "%20"). Decode them before
+						 * displaying or comparing names; otherwise hoststatus can
+						 * report a false negative for nearly every normal title. */
 						decoded_title = curl_easy_unescape(hms->curl, title, 0, NULL);
 						strlcpy(list[i].name,
 							decoded_title ? decoded_title : title,
@@ -842,14 +842,14 @@ HMS_fetch_servers (msg_server_t *list, int room_number, int query_id)
 						i++;
 					}
 
-					if (end == section_end) 
+					if (end == section_end)/* end of list for this room */
 						break;
 					else
-						p = ( end + 1 ); 
+						p = ( end + 1 );/* skip server delimiter */
 				}
 				else
 				{
-					section_end = 0; 
+					section_end = 0;/* malformed so quit the parsing */
 					break;
 				}
 			}
@@ -927,13 +927,13 @@ HMS_set_api (char *api)
 #endif
 }
 
-#endif 
+#endif/*MASTERSERVER*/
 
 static void
 MasterServer_Debug_OnChange (void)
 {
 #ifdef MASTERSERVER
-	 
+	/* TODO: change to 'latest-log.txt' for log files revision. */
 	if (cv_masterserver_debug.value)
 		CONS_Printf("Master server debug messages will appear in log.txt\n");
 #endif

@@ -1,4 +1,4 @@
- 
+/* $Id: addr_is_reserved.h,v 1.1 2020/09/28 21:11:19 nanard Exp $ */
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * Project: miniupnp
  * http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
@@ -11,4 +11,4 @@
 
 int addr_is_reserved(const char * addr_str);
 
-#endif  
+#endif /* ADDR_IS_RESERVED_H_INCLUDED */

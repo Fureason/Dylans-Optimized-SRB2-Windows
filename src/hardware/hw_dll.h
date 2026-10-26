@@ -6,18 +6,18 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw_dll.h
+/// \brief Win32 DLL and Shared Objects API definitions
 
 #ifndef __HWR_DLL_H__
 #define __HWR_DLL_H__
 
-
-
-
-
-
-
+// Function declaration for exports from the DLL :
+// EXPORT <return-type> HWRAPI(<function-name>) (<arguments>);
+// If _CREATE_DLL_ is defined the above declaration translates to :
+// __declspec(dllexport) <return-type> WINAPI <function-name> (<arguments>);
+// If _CREATE_DLL_ is NOT DEFINED the above declaration translates to :
+// __declspec(dllexport) <return->type> (WINAPI *<function-name>) (<arguments>);
 
 #ifdef _CREATE_DLL_
  #ifdef _WINDOWS
@@ -38,7 +38,7 @@
  #else
   #define HWRAPI(fn)  fn
  #endif
-#else  
+#else // _CREATE_DLL_
  #define EXPORT      typedef
  #ifdef _WIN32
   #define HWRAPI(fn)  (WINAPI *fn)
@@ -47,14 +47,14 @@
  #endif
 #endif
 
+// ==========================================================================
+//                                                                      MATHS
+// ==========================================================================
 
+// Constants
+#define DEGREE (0.017453292519943295769236907684883l) // 2*PI/360
 
-
-
-
-#define DEGREE (0.017453292519943295769236907684883l)  
-
-void GL_DBG_Printf(const char *format, ...)  ;
+void GL_DBG_Printf(const char *format, ...) /*FUNCPRINTF*/;
 
 #ifdef _WINDOWS
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);

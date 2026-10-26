@@ -104,7 +104,7 @@ typedef struct _mainprog_info {
     char *copyright;
     char *email;
     char *url;
-    int filter;     
+    int filter;    /* command-line-filter flag, not PNG row filter! */
     int pnmtype;
     int sample_depth;
     int interlaced;
@@ -118,7 +118,7 @@ typedef struct _mainprog_info {
 } mainprog_info;
 
 
- 
+/* prototypes for public functions in writepng.c */
 
 void writepng_version_info(void);
 

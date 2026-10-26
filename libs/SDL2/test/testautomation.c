@@ -21,7 +21,7 @@
 
 static SDLTest_CommonState *state;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -39,16 +39,16 @@ int main(int argc, char *argv[])
     int i, done;
     SDL_Event event;
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
     }
 
-     
+    /* No need of windows (or update testautomation_mouse.c:mouse_getMouseFocus() */
     state->num_windows = 0;
 
-     
+    /* Parse commandline */
     for (i = 1; i < argc;) {
         int consumed;
 
@@ -89,22 +89,22 @@ int main(int argc, char *argv[])
         i += consumed;
     }
 
-     
+    /* Initialize common state */
     if (!SDLTest_CommonInit(state)) {
         quit(2);
     }
 
-     
+    /* Create the windows, initialize the renderers */
     for (i = 0; i < state->num_windows; ++i) {
         SDL_Renderer *renderer = state->renderers[i];
         SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
         SDL_RenderClear(renderer);
     }
 
-     
+    /* Call Harness */
     result = SDLTest_RunSuites(testSuites, userRunSeed, userExecKey, filter, testIterations);
 
-     
+    /* Empty event queue */
     done = 0;
     for (i = 0; i < 100; i++) {
         while (SDL_PollEvent(&event)) {
@@ -113,13 +113,13 @@ int main(int argc, char *argv[])
         SDL_Delay(10);
     }
 
-     
+    /* Clean up */
     SDL_free(userRunSeed);
     SDL_free(filter);
 
-     
+    /* Shutdown everything */
     quit(result);
     return result;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

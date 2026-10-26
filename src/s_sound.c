@@ -8,31 +8,31 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  s_sound.c
+/// \brief System-independent sound and music routines
 
 #include "doomdef.h"
 #include "doomstat.h"
 #include "command.h"
 #include "g_game.h"
 #include "m_argv.h"
-#include "r_main.h"  
-#include "r_skins.h"  
+#include "r_main.h" // R_PointToAngle2() used to calc stereo sep.
+#include "r_skins.h" // for skins
 #include "i_system.h"
 #include "i_sound.h"
 #include "s_sound.h"
 #include "w_wad.h"
 #include "z_zone.h"
 #include "d_main.h"
-#include "r_sky.h"  
-#include "p_local.h"  
+#include "r_sky.h" // skyflatnum
+#include "p_local.h" // camera info
 #include "fastcmp.h"
-#include "m_misc.h"  
-#include "m_cond.h"  
-#include "lua_hook.h"  
+#include "m_misc.h" // for tunes command
+#include "m_cond.h" // for conditionsets
+#include "lua_hook.h" // MusicChange hook
 
 #ifdef HW3SOUND
-
+// 3D Sound Interface
 #include "hardware/hw3sound.h"
 #else
 static INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *vol, INT32 *sep, INT32 *pitch, sfxinfo_t *sfxinfo);
@@ -45,7 +45,7 @@ static void Command_RestartAudio_f(void);
 static void S_CacheSfxDataProfiled(sfxinfo_t *sfx, sfxenum_t sfx_id);
 static void S_ProcessBackgroundSoundPrecache(void);
 
-
+// Sound system toggles
 static void GameMIDIMusic_OnChange(void);
 static void GameSounds_OnChange(void);
 static void GameDigiMusic_OnChange(void);
@@ -59,24 +59,24 @@ static lumpnum_t S_GetMusicLumpNum(const char *mname);
 
 static boolean S_CheckQueue(void);
 
-#if defined (_WINDOWS) && !defined (SURROUND)  
+#if defined (_WINDOWS) && !defined (SURROUND) //&& defined (_X86_)
 #define SURROUND
 #endif
 
 #ifdef _WINDOWS
-consvar_t cv_samplerate = CVAR_INIT ("samplerate", "44100", 0, CV_Unsigned, NULL);  
+consvar_t cv_samplerate = CVAR_INIT ("samplerate", "44100", 0, CV_Unsigned, NULL); //Alam: For easy hacking?
 #else
-consvar_t cv_samplerate = CVAR_INIT ("samplerate", "22050", 0, CV_Unsigned, NULL);  
+consvar_t cv_samplerate = CVAR_INIT ("samplerate", "22050", 0, CV_Unsigned, NULL); //Alam: For easy hacking?
 #endif
 
-
+// stereo reverse
 consvar_t stereoreverse = CVAR_INIT ("stereoreverse", "Off", CV_SAVE, CV_OnOff, NULL);
 
-
+// if true, all sounds are loaded at game startup
 static consvar_t precachesound = CVAR_INIT ("precachesound", "Off", CV_SAVE, CV_OnOff, NULL);
 
-
-
+// Move first-use decoding for sounds referenced by objects in this map into
+// the loading screen, without retaining every sound in every loaded add-on.
 consvar_t cv_precachelevelsounds = CVAR_INIT ("precachelevelsounds", "On", CV_SAVE, CV_OnOff, NULL);
 
 #define SFX_BACKGROUND_QUEUE_SIZE 512
@@ -85,7 +85,7 @@ static boolean sfx_background_pending[NUMSFX];
 static UINT16 sfx_background_head;
 static UINT16 sfx_background_count;
 
-
+// actual general (maximum) sound & music volume, saved into the config
 consvar_t cv_soundvolume = CVAR_INIT ("soundvolume", "16", CV_SAVE, soundvolume_cons_t, NULL);
 consvar_t cv_digmusicvolume = CVAR_INIT ("digmusicvolume", "16", CV_SAVE, soundvolume_cons_t, NULL);
 consvar_t cv_midimusicvolume = CVAR_INIT ("midimusicvolume", "16", CV_SAVE, soundvolume_cons_t, NULL);
@@ -104,7 +104,7 @@ static CV_PossibleValue_t captionscale_cons_t[] = {
 };
 consvar_t cv_captionscale = CVAR_INIT ("captionscale", "1.0", CV_SAVE|CV_FLOAT, captionscale_cons_t, NULL);
 
-
+// number of channels available
 static CV_PossibleValue_t soundchannels_cons_t[] = {{0, "MIN"}, {256, "MAX"}, {0, NULL}};
 consvar_t cv_numChannels = CVAR_INIT ("snd_channels", "32", CV_SAVE|CV_CALL, soundchannels_cons_t, SetChannelsNum);
 
@@ -120,12 +120,12 @@ static CV_PossibleValue_t cons_1upsound_t[] = {
 };
 consvar_t cv_1upsound = CVAR_INIT ("1upsound", "Jingle", CV_SAVE, cons_1upsound_t, NULL);
 
-
+// Sound system toggles, saved into the config
 consvar_t cv_gamedigimusic = CVAR_INIT ("digimusic", "On", CV_SAVE|CV_CALL|CV_NOINIT, CV_OnOff, GameDigiMusic_OnChange);
 consvar_t cv_gamemidimusic = CVAR_INIT ("midimusic", "On", CV_SAVE|CV_CALL|CV_NOINIT, CV_OnOff, GameMIDIMusic_OnChange);
 consvar_t cv_gamesounds = CVAR_INIT ("sounds", "On", CV_SAVE|CV_CALL|CV_NOINIT, CV_OnOff, GameSounds_OnChange);
 
-
+// Music preference
 static CV_PossibleValue_t cons_musicpref_t[] = {
 	{0, "Digital"},
 	{1, "MIDI"},
@@ -133,7 +133,7 @@ static CV_PossibleValue_t cons_musicpref_t[] = {
 };
 consvar_t cv_musicpref = CVAR_INIT ("musicpref", "Digital", CV_SAVE|CV_CALL|CV_NOINIT, cons_musicpref_t, MusicPref_OnChange);
 
-
+// Window focus sound sytem toggles
 consvar_t cv_playmusicifunfocused = CVAR_INIT ("playmusicifunfocused", "No", CV_SAVE, CV_YesNo, NULL);
 consvar_t cv_playsoundsifunfocused = CVAR_INIT ("playsoundsifunfocused", "No", CV_SAVE, CV_YesNo, NULL);
 
@@ -145,22 +145,22 @@ consvar_t cv_modfilter = CVAR_INIT ("modfilter", "0", CV_SAVE|CV_CALL, interpola
 
 #define S_MAX_VOLUME 127
 
-
-
-
+// when to clip out sounds
+// Does not fit the large outdoor areas.
+// added 2-2-98 in 8 bit volume control (before (1200*0x10000))
 #define S_CLIPPING_DIST (1536*0x10000)
 
-
-
-
-
-
+// Distance to origin when sounds should be maxed out.
+// This should relate to movement clipping resolution
+// (see BLOCKMAP handling).
+// Originally: (200*0x10000).
+// added 2-2-98 in 8 bit volume control (before (160*0x10000))
 #define S_CLOSE_DIST (160*0x10000)
 
-
+// added 2-2-98 in 8 bit volume control (before remove the +4)
 #define S_ATTENUATOR ((S_CLIPPING_DIST-S_CLOSE_DIST)>>(FRACBITS+4))
 
-
+// Adjustable by menu.
 #define NORM_VOLUME snd_MaxVolume
 
 #define NORM_PITCH 128
@@ -174,10 +174,10 @@ consvar_t cv_modfilter = CVAR_INIT ("modfilter", "0", CV_SAVE|CV_CALL, interpola
 #define SURROUND_SEP -128
 #endif
 
-
+// percent attenuation from front to back
 #define S_IFRACVOL 30
 
-
+// the set of channels available
 static channel_t *channels = NULL;
 static INT32 numofchannels = 0;
 
@@ -195,31 +195,31 @@ void S_ResetCaptions(void)
 	}
 }
 
-
-
-
+//
+// Internals.
+//
 static void S_StopChannel(INT32 cnum);
 
-
-
-
-
-
+//
+// S_getChannel
+//
+// If none available, return -1. Otherwise channel #.
+//
 static INT32 S_getChannel(const void *origin, sfxinfo_t *sfxinfo)
 {
-
+	// channel number to use
 	INT32 cnum;
 
 	channel_t *c;
 
-
+	// Find an open channel
 	for (cnum = 0; cnum < numofchannels; cnum++)
 	{
 		if (!channels[cnum].sfxinfo)
 			break;
 
-
-
+		// Now checks if same sound is being played, rather
+		// than just one sound per mobj
 		else if (sfxinfo == channels[cnum].sfxinfo && (sfxinfo->pitch & SF_NOMULTIPLESOUND))
 		{
 			return -1;
@@ -247,29 +247,29 @@ static INT32 S_getChannel(const void *origin, sfxinfo_t *sfxinfo)
 		}
 	}
 
-
+	// None available
 	if (cnum == numofchannels)
 	{
-
+		// Look for lower priority
 		for (cnum = 0; cnum < numofchannels; cnum++)
 			if (channels[cnum].sfxinfo->priority <= sfxinfo->priority)
 				break;
 
 		if (cnum == numofchannels)
 		{
-
+			// No lower priority. Sorry, Charlie.
 			return -1;
 		}
 		else
 		{
-
+			// Otherwise, kick out lower priority.
 			S_StopChannel(cnum);
 		}
 	}
 
 	c = &channels[cnum];
 
-
+	// channel is decided to be cnum.
 	c->sfxinfo = sfxinfo;
 	c->origin = origin;
 
@@ -316,9 +316,9 @@ static void SetChannelsNum(void)
 {
 	INT32 i;
 
-
-
-
+	// Allocating the internal channels for mixing
+	// (the maximum number of sounds rendered
+	// simultaneously) within zone memory.
 	if (channels)
 		S_StopSounds();
 
@@ -326,7 +326,7 @@ static void SetChannelsNum(void)
 	channels = NULL;
 
 
-	if (cv_numChannels.value == 999999999)  
+	if (cv_numChannels.value == 999999999) //Alam_GBC: OH MY ROD!(ROD rimmiced with GOD!)
 		CV_StealthSet(&cv_numChannels,cv_numChannels.defaultvalue);
 
 #ifdef HW3SOUND
@@ -340,16 +340,25 @@ static void SetChannelsNum(void)
 		channels = (channel_t *)Z_Malloc(cv_numChannels.value * sizeof (channel_t), PU_STATIC, NULL);
 	numofchannels = cv_numChannels.value;
 
+	/* S_getChannel reserves a channel before a sound is decoded. Initialize the
+	 * entire record, including its mixer handle, so a failed decode can never
+	 * pass an indeterminate handle into SDL_mixer. */
+	if (channels)
+		memset(channels, 0, numofchannels * sizeof (*channels));
 
+	// Free all channels for use and give each one its matching mixer handle.
 	for (i = 0; i < numofchannels; i++)
+	{
 		channels[i].sfxinfo = 0;
+		channels[i].handle = i;
+	}
 
 	S_ResetCaptions();
 }
 
 
-
-
+// Retrieve the lump number of sfx
+//
 lumpnum_t S_GetSfxLumpNum(sfxinfo_t *sfx)
 {
 	char namebuf[9];
@@ -370,9 +379,9 @@ lumpnum_t S_GetSfxLumpNum(sfxinfo_t *sfx)
 	return W_GetNumForName("dsthok");
 }
 
-
-
-
+//
+// Sound Status
+//
 
 boolean S_SoundDisabled(void)
 {
@@ -382,7 +391,7 @@ boolean S_SoundDisabled(void)
 	);
 }
 
-
+// Stop all sounds, load level info, THEN start sounds.
 void S_StopSounds(void)
 {
 	INT32 cnum;
@@ -395,7 +404,7 @@ void S_StopSounds(void)
 	}
 #endif
 
-
+	// kill all playing sounds at start of level
 	for (cnum = 0; cnum < numofchannels; cnum++)
 		if (channels[cnum].sfxinfo)
 			S_StopChannel(cnum);
@@ -407,8 +416,8 @@ void S_StopSoundByID(void *origin, sfxenum_t sfx_id)
 {
 	INT32 cnum;
 
-
-
+	// Sounds without origin can have multiple sources, they shouldn't
+	// be stopped by new sounds.
 	if (!origin)
 		return;
 #ifdef HW3SOUND
@@ -455,16 +464,16 @@ void S_StartCaption(sfxenum_t sfx_id, INT32 cnum, UINT16 lifespan)
 	boolean same = false;
 	sfxinfo_t *sfx;
 
-	if (!cv_closedcaptioning.value)  
+	if (!cv_closedcaptioning.value) // no captions at all
 		return;
 
-
-
+	// check for bogus sound #
+	// I_Assert(sfx_id >= 0); -- allowing sfx_None; this shouldn't be allowed directly if S_StartCaption is ever exposed to Lua by itself
 	I_Assert(sfx_id < NUMSFX);
 
 	sfx = &S_sfx[sfx_id];
 
-	if (sfx->caption[0] == '/')  
+	if (sfx->caption[0] == '/') // no caption for this one
 		return;
 
 	start = ((closedcaptions[0].s && (closedcaptions[0].s-S_sfx == sfx_None)) ? 1 : 0);
@@ -532,7 +541,7 @@ void S_StartCaption(sfxenum_t sfx_id, INT32 cnum, UINT16 lifespan)
 	closedcaptions[set].c = ((cnum == -1) ? NULL : &channels[cnum]);
 	closedcaptions[set].s = sfx;
 	closedcaptions[set].t = lifespan;
-	closedcaptions[set].b = 3;  
+	closedcaptions[set].b = 3; // bob
 }
 
 void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
@@ -553,7 +562,7 @@ void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
 	if (S_SoundDisabled() || !sound_started)
 		return;
 
-
+	// Don't want a sound? Okay then...
 	if (sfx_id == sfx_None)
 		return;
 
@@ -610,7 +619,7 @@ void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
 		}
 	}
 
-
+	// check for bogus sound #
 	I_Assert(sfx_id >= 1);
 	I_Assert(sfx_id < NUMSFX);
 
@@ -618,58 +627,67 @@ void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
 
 	if (sfx->skinsound != -1 && origin && origin->skin)
 	{
-
+		// redirect player sound to the sound in the skin table
 		sfx_id = ((skin_t *)origin->skin)->soundsid[sfx->skinsound];
 		sfx = &S_sfx[sfx_id];
 	}
 
-
+	// Initialize sound parameters
 	pitch = NORM_PITCH;
 	priority = NORM_PRIORITY;
 
-	if (splitscreen && listenmobj2)  
+	if (splitscreen && listenmobj2) // Copy the sound for the split player
 	{
-
+		// Check to see if it is audible, and if not, modify the params
 		if (origin && origin != listenmobj2)
 		{
 			INT32 rc;
 			rc = S_AdjustSoundParams(listenmobj2, origin, &volume, &sep, &pitch, sfx);
 
 			if (!rc)
-				goto dontplay;  
+				goto dontplay; // Maybe the other player can hear it...
 
 			if (origin->x == listener2.x && origin->y == listener2.y)
 				sep = NORM_SEP;
 		}
 		else if (!origin)
-
-
-
+			// Do not play origin-less sounds for the second player.
+			// The first player will be able to hear it just fine,
+			// we really don't want it playing twice.
 			goto dontplay;
 		else
 			sep = NORM_SEP;
 
-
+		// try to find a channel
 		cnum = S_getChannel(origin, sfx);
 
 		if (cnum < 0)
-			return;  
+			return; // If there's no free channels, it's not gonna be free for player 1, either.
 
+		// This is supposed to handle the loading/caching.
+		// For some odd reason, the caching is done nearly
+		// each time the sound is needed?
 
-
-
-
-
-
+		// cache data if necessary
+		// NOTE: set sfx->data NULL sfx->lump -1 to force a reload
 		if (!sfx->data)
 			S_CacheSfxDataProfiled(sfx, sfx_id);
+		if (!sfx->data)
+		{
+			/* No mixer channel was started, so release only the engine-side
+			 * reservation. S_StopChannel would query an as-yet-unused handle. */
+			channels[cnum].sfxinfo = NULL;
+			channels[cnum].origin = NULL;
+			channels[cnum].handle = cnum;
+			return;
+		}
 
-
+		// increase the usefulness
 		if (sfx->usefulness++ < 0)
 			sfx->usefulness = -1;
 
 #ifdef SURROUND
-
+		// Avoid channel reverse if surround
 		if (stereoreverse.value && sep != SURROUND_SEP)
 			sep = (~sep) & 255;
 #else
@@ -677,17 +695,17 @@ void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
 			sep = (~sep) & 255;
 #endif
 
-
+		// Handle closed caption input.
 		S_StartCaption(actual_id, cnum, MAXCAPTIONTICS);
 
-
-
+		// Assigns the handle to one of the channels in the
+		// mix/output buffer.
 		channels[cnum].handle = I_StartSound(sfx_id, volume, sep, pitch, priority, cnum);
 	}
 
 dontplay:
 
-
+	// Check to see if it is audible, and if not, modify the params
 	if (origin && origin != listenmobj)
 	{
 		INT32 rc;
@@ -702,27 +720,36 @@ dontplay:
 	else
 		sep = NORM_SEP;
 
-
+	// try to find a channel
 	cnum = S_getChannel(origin, sfx);
 
 	if (cnum < 0)
 		return;
 
+	// This is supposed to handle the loading/caching.
+	// For some odd reason, the caching is done nearly
+	// each time the sound is needed?
 
-
-
-
-
-
+	// cache data if necessary
+	// NOTE: set sfx->data NULL sfx->lump -1 to force a reload
 	if (!sfx->data)
 		S_CacheSfxDataProfiled(sfx, sfx_id);
+	if (!sfx->data)
+	{
+		/* No mixer channel was started, so release only the engine-side
+		 * reservation. S_StopChannel would query an as-yet-unused handle. */
+		channels[cnum].sfxinfo = NULL;
+		channels[cnum].origin = NULL;
+		channels[cnum].handle = cnum;
+		return;
+	}
 
-
+	// increase the usefulness
 	if (sfx->usefulness++ < 0)
 		sfx->usefulness = -1;
 
 #ifdef SURROUND
-
+	// Avoid channel reverse if surround
 	if (stereoreverse.value && sep != SURROUND_SEP)
 		sep = (~sep) & 255;
 #else
@@ -730,11 +757,11 @@ dontplay:
 		sep = (~sep) & 255;
 #endif
 
-
+	// Handle closed caption input.
 	S_StartCaption(actual_id, cnum, MAXCAPTIONTICS);
 
-
-
+	// Assigns the handle to one of the channels in the
+	// mix/output buffer.
 	channels[cnum].volume = initial_volume;
 	channels[cnum].handle = I_StartSound(sfx_id, volume, sep, pitch, priority, cnum);
 }
@@ -744,16 +771,16 @@ void S_StartSound(const void *origin, sfxenum_t sfx_id)
 	if (S_SoundDisabled())
 		return;
 
-	if (mariomode)  
+	if (mariomode) // Sounds change in Mario mode!
 	{
 		switch (sfx_id)
 		{
-
-
-
-
-
-
+//			case sfx_altow1:
+//			case sfx_altow2:
+//			case sfx_altow3:
+//			case sfx_altow4:
+//				sfx_id = sfx_mario8;
+//				break;
 			case sfx_thok:
 			case sfx_wepfir:
 				sfx_id = sfx_mario7;
@@ -778,20 +805,20 @@ void S_StartSound(const void *origin, sfxenum_t sfx_id)
 			case sfx_itemup:
 				sfx_id = sfx_mario4;
 				break;
-
-
-
-
-
-
-
-
-
+//			case sfx_tink:
+//				sfx_id = sfx_mario1;
+//				break;
+//			case sfx_cgot:
+//				sfx_id = sfx_mario9;
+//				break;
+//			case sfx_lose:
+//				sfx_id = sfx_mario2;
+//				break;
 			default:
 				break;
 		}
 	}
-	if (maptol & TOL_XMAS)  
+	if (maptol & TOL_XMAS) // Some sounds change for xmas
 	{
 		switch (sfx_id)
 		{
@@ -805,7 +832,7 @@ void S_StartSound(const void *origin, sfxenum_t sfx_id)
 		}
 	}
 
-
+	// the volume is handled 8 bits
 #ifdef HW3SOUND
 	if (hws_mode != HWS_DEFAULT_MODE)
 		HW3S_StartSound(origin, sfx_id);
@@ -818,8 +845,8 @@ void S_StopSound(void *origin)
 {
 	INT32 cnum;
 
-
-
+	// Sounds without origin can have multiple sources, they shouldn't
+	// be stopped by new sounds.
 	if (!origin)
 		return;
 
@@ -840,10 +867,10 @@ void S_StopSound(void *origin)
 	}
 }
 
-
-
-
-static INT32 actualsfxvolume;  
+//
+// Updates music & sounds
+//
+static INT32 actualsfxvolume; // check for change through console
 static INT32 actualdigmusicvolume;
 static INT32 actualmidimusicvolume;
 
@@ -861,7 +888,7 @@ void S_UpdateSounds(void)
 	memset(&listener, 0, sizeof(listener_t));
 	memset(&listener2, 0, sizeof(listener_t));
 
-
+	// Update sound/music volumes, if changed manually at console
 	if (actualsfxvolume != cv_soundvolume.value)
 		S_SetSfxVolume (cv_soundvolume.value);
 	if (actualdigmusicvolume != cv_digmusicvolume.value)
@@ -869,11 +896,11 @@ void S_UpdateSounds(void)
 	if (actualmidimusicvolume != cv_midimusicvolume.value)
 		S_SetMIDIMusicVolume (cv_midimusicvolume.value);
 
-
+	// We're done now, if we're not in a level.
 	if (gamestate != GS_LEVEL)
 	{
 #ifndef NOMUMBLE
-
+		// Stop Mumble cutting out. I'm sick of it.
 		I_UpdateMumble(NULL, listener);
 #endif
 
@@ -946,17 +973,17 @@ void S_UpdateSounds(void)
 		{
 			if (I_SoundIsPlaying(c->handle))
 			{
-
-				volume = c->volume;  
+				// initialize parameters
+				volume = c->volume; // 8 bits internal volume precision
 				pitch = NORM_PITCH;
 				sep = NORM_SEP;
 
-
-
+				// check non-local sounds for distance clipping
+				//  or modify their params
 				if (c->origin && ((c->origin != players[consoleplayer].mo) ||
 					(splitscreen && c->origin != players[secondarydisplayplayer].mo)))
 				{
-
+					// Whomever is closer gets the sound, but only in splitscreen.
 					if (listenmobj && listenmobj2 && splitscreen)
 					{
 						const mobj_t *soundmobj = c->origin;
@@ -967,13 +994,13 @@ void S_UpdateSounds(void)
 
 						if (dist1 <= dist2)
 						{
-
+							// Player 1 gets the sound
 							audible = S_AdjustSoundParams(listenmobj, c->origin, &volume, &sep, &pitch,
 								c->sfxinfo);
 						}
 						else
 						{
-
+							// Player 2 gets the sound
 							audible = S_AdjustSoundParams(listenmobj2, c->origin, &volume, &sep, &pitch,
 								c->sfxinfo);
 						}
@@ -985,7 +1012,7 @@ void S_UpdateSounds(void)
 					}
 					else if (listenmobj && !splitscreen)
 					{
-
+						// In the case of a single player, he or she always should get updated sound.
 						audible = S_AdjustSoundParams(listenmobj, c->origin, &volume, &sep, &pitch,
 							c->sfxinfo);
 
@@ -998,16 +1025,16 @@ void S_UpdateSounds(void)
 			}
 			else
 			{
-
+				// if channel is allocated but sound has stopped, free it
 				S_StopChannel(cnum);
 			}
 		}
 	}
 
 notinlevel:
-	                                                                           
-                                                                             
-                                                                 
+	/* Add-on sounds can be queued while the title screen or join UI is active.
+	 * Use those otherwise-idle frames too, so their first in-level use does not
+	 * synchronously decode a large sample in the middle of play. */
 	if (cv_precachelevelsounds.value
 	&& R_GetAdaptiveEffectsLevel() == 0)
 		S_ProcessBackgroundSoundPrecache();
@@ -1018,7 +1045,7 @@ void S_UpdateClosedCaptions(void)
 {
 	UINT8 i;
 	boolean gamestopped = (paused || P_AutoPause());
-	for (i = 0; i < NUMCAPTIONS; i++)  
+	for (i = 0; i < NUMCAPTIONS; i++) // update captions
 	{
 		if (!closedcaptions[i].s)
 			continue;
@@ -1046,12 +1073,12 @@ void S_SetSfxVolume(INT32 volume)
 		CONS_Alert(CONS_WARNING, "sfxvolume should be between 0-31\n");
 
 	CV_SetValue(&cv_soundvolume, volume&0x1F);
-	actualsfxvolume = cv_soundvolume.value;  
+	actualsfxvolume = cv_soundvolume.value; // check for change of var
 
 #ifdef HW3SOUND
 	hws_mode == HWS_DEFAULT_MODE ? I_SetSfxVolume(volume&0x1F) : HW3S_SetSfxVolume(volume&0x1F);
 #else
-
+	// now hardware volume
 	I_SetSfxVolume(volume&0x1F);
 #endif
 }
@@ -1152,9 +1179,9 @@ static void S_ProcessBackgroundSoundPrecache(void)
 {
 	UINT8 checked = 0;
 
-	                                                                            
-                                                                             
-                                                                            
+	/* Decode no more than one new sound per frame. Already-cached queue entries
+	 * are cheap to discard in small batches. Work pauses whenever frame time is
+	 * under pressure, so preparation cannot pile onto an existing slowdown. */
 	while (sfx_background_count && checked++ < 8)
 	{
 		const sfxenum_t sfx_id = sfx_background_queue[sfx_background_head];
@@ -1190,8 +1217,8 @@ void S_PrecacheLevelSounds(void)
 		if (mobj->type < 0 || mobj->type >= NUMMOBJTYPES)
 			continue;
 
-
-
+		// A skin can redirect a base sound to different data, so inspect each
+		// skinned object. Other object types only need one pass.
 		if (!mobj->skin && seen[mobj->type])
 			continue;
 		seen[mobj->type] = true;
@@ -1199,9 +1226,9 @@ void S_PrecacheLevelSounds(void)
 		if (!info)
 			continue;
 
-		                                                                         
-                                                                           
-                                                                       
+		/* Queue rather than decoding every referenced sample while the screen is
+		 * black. The audio update consumes one uncached sound per spare frame; a
+		 * sound needed earlier still follows the ordinary on-demand path. */
 		S_QueueBackgroundSound(mobj, info->seesound);
 		S_QueueBackgroundSound(mobj, info->attacksound);
 		S_QueueBackgroundSound(mobj, info->painsound);
@@ -1216,11 +1243,11 @@ static void S_StopChannel(INT32 cnum)
 
 	if (c->sfxinfo)
 	{
-
+		// stop the sound playing
 		if (I_SoundIsPlaying(c->handle))
 			I_StopSound(c->handle);
 
-
+		// degrade usefulness of sound data
 		c->sfxinfo->usefulness--;
 		c->sfxinfo = 0;
 	}
@@ -1228,22 +1255,22 @@ static void S_StopChannel(INT32 cnum)
 	c->origin = NULL;
 }
 
-
-
-
-
-
-
+//
+// S_CalculateSoundDistance
+//
+// Calculates the distance between two points for a sound.
+// Clips the distance to prevent overflow.
+//
 fixed_t S_CalculateSoundDistance(fixed_t sx1, fixed_t sy1, fixed_t sz1, fixed_t sx2, fixed_t sy2, fixed_t sz2)
 {
 	fixed_t approx_dist, adx, ady;
 
-
+	// calculate the distance to sound origin and clip it if necessary
 	adx = abs((sx1>>FRACBITS) - (sx2>>FRACBITS));
 	ady = abs((sy1>>FRACBITS) - (sy2>>FRACBITS));
 
-
-
+	// From _GG1_ p.428. Approx. euclidian distance fast.
+	// Take Z into account
 	adx = adx + ady - ((adx < ady ? adx : ady)>>1);
 	ady = abs((sz1>>FRACBITS) - (sz2>>FRACBITS));
 	approx_dist = adx + ady - ((adx < ady ? adx : ady)>>1);
@@ -1256,12 +1283,12 @@ fixed_t S_CalculateSoundDistance(fixed_t sx1, fixed_t sy1, fixed_t sz1, fixed_t 
 	return approx_dist;
 }
 
-
-
-
-
-
-
+//
+// Changes volume, stereo-separation, and pitch variables
+// from the norm of a sound effect to be played.
+// If the sound is not audible, returns a 0.
+// Otherwise, modifies parameters and returns 1.
+//
 INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *vol, INT32 *sep, INT32 *pitch,
 	sfxinfo_t *sfxinfo)
 {
@@ -1296,7 +1323,7 @@ INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *v
 		listensource.angle = listener->angle;
 	}
 
-	if (sfxinfo->pitch & SF_OUTSIDESOUND)  
+	if (sfxinfo->pitch & SF_OUTSIDESOUND) // Rain special case
 	{
 		fixed_t x, y, yl, yh, xl, xh, newdist;
 
@@ -1304,7 +1331,7 @@ INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *v
 			approx_dist = 0;
 		else
 		{
-
+			// Essentially check in a 1024 unit radius of the player for an outdoor area.
 			yl = listensource.y - 1024*FRACUNIT;
 			yh = listensource.y + 1024*FRACUNIT;
 			xl = listensource.x - 1024*FRACUNIT;
@@ -1315,7 +1342,7 @@ INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *v
 				{
 					if (R_PointInSubsector(x, y)->sector->ceilingpic == skyflatnum)
 					{
-
+						// Found the outdoors!
 						newdist = S_CalculateSoundDistance(listensource.x, listensource.y, 0, x, y, 0);
 						if (newdist < approx_dist)
 						{
@@ -1331,11 +1358,11 @@ INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *v
 												source->x, source->y, source->z);
 	}
 
-
+	// Ring loss, deaths, etc, should all be heard louder.
 	if (sfxinfo->pitch & SF_X8AWAYSOUND)
 		approx_dist = FixedDiv(approx_dist,8*FRACUNIT);
 
-
+	// Combine 8XAWAYSOUND with 4XAWAYSOUND and get.... 32XAWAYSOUND?
 	if (sfxinfo->pitch & SF_X4AWAYSOUND)
 		approx_dist = FixedDiv(approx_dist,4*FRACUNIT);
 
@@ -1345,7 +1372,7 @@ INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *v
 	if (approx_dist > S_CLIPPING_DIST)
 		return 0;
 
-
+	// angle of source to listener
 	angle = R_PointToAngle2(listensource.x, listensource.y, source->x, source->y);
 
 	if (angle > listensource.angle)
@@ -1354,7 +1381,7 @@ INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *v
 		angle = angle + InvAngle(listensource.angle);
 
 #ifdef SURROUND
-
+	// Produce a surround sound for angle from 105 till 255
 	if (surround.value == 1 && (angle > ANG105 && angle < ANG255 ))
 		*sep = SURROUND_SEP;
 	else
@@ -1362,15 +1389,15 @@ INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *v
 	{
 		angle >>= ANGLETOFINESHIFT;
 
-
+		// stereo separation
 		*sep = 128 - (FixedMul(S_STEREO_SWING, FINESINE(angle))>>FRACBITS);
 	}
 
-
-	 
+	// volume calculation
+	/* not sure if it should be > (no =), but this matches the old behavior */
 	if (approx_dist >= S_CLOSE_DIST)
 	{
-
+		// distance effect
 		INT32 n = (15 * ((S_CLIPPING_DIST - approx_dist)>>FRACBITS));
 		*vol = FixedMul(*vol * FRACUNIT / 255, n) / S_ATTENUATOR;
 	}
@@ -1378,8 +1405,8 @@ INT32 S_AdjustSoundParams(const mobj_t *listener, const mobj_t *source, INT32 *v
 	return (*vol > 0);
 }
 
-
-
+// Searches through the channels and checks if a sound is playing
+// on the given origin.
 INT32 S_OriginPlaying(void *origin)
 {
 	INT32 cnum;
@@ -1397,8 +1424,8 @@ INT32 S_OriginPlaying(void *origin)
 	return 0;
 }
 
-
-
+// Searches through the channels and checks if a given id
+// is playing anywhere.
 INT32 S_IdPlaying(sfxenum_t id)
 {
 	INT32 cnum;
@@ -1414,8 +1441,8 @@ INT32 S_IdPlaying(sfxenum_t id)
 	return 0;
 }
 
-
-
+// Searches through the channels and checks for
+// origin x playing sound id y.
 INT32 S_SoundPlaying(void *origin, sfxenum_t id)
 {
 	INT32 cnum;
@@ -1436,16 +1463,16 @@ INT32 S_SoundPlaying(void *origin, sfxenum_t id)
 	return 0;
 }
 
-
-
-
+//
+// S_StartSoundName
+// Starts a sound using the given name.
 #define MAXNEWSOUNDS 10
 static sfxenum_t newsounds[MAXNEWSOUNDS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 void S_StartSoundName(void *mo, const char *soundname)
 {
 	INT32 i, soundnum = 0;
-
+	// Search existing sounds...
 	for (i = sfx_None + 1; i < NUMSFX; i++)
 	{
 		if (!S_sfx[i].name)
@@ -1483,11 +1510,11 @@ void S_StartSoundName(void *mo, const char *soundname)
 	S_StartSound(mo, soundnum);
 }
 
-
-
-
-
-
+//
+// Initializes sound stuff, including volume
+// Sets channels, SFX volume,
+//  allocates channel buffer, sets S_sfx lookup.
+//
 void S_InitSfxChannels(INT32 sfxVolume)
 {
 	INT32 i;
@@ -1499,17 +1526,17 @@ void S_InitSfxChannels(INT32 sfxVolume)
 
 	SetChannelsNum();
 
-
+	// Note that sounds have not been cached (yet).
 	for (i = 1; i < NUMSFX; i++)
 	{
-		S_sfx[i].usefulness = -1;  
+		S_sfx[i].usefulness = -1; // for I_GetSfx()
 		S_sfx[i].lumpnum = LUMPERROR;
 	}
 
-
+	// precache sounds if requested by cmdline, or precachesound var true
 	if (!sound_disabled && (M_CheckParm("-precachesound") || precachesound.value))
 	{
-
+		// Initialize external data (all sounds) at start, keep static.
 		CONS_Printf(M_GetText("Loading sounds... "));
 
 		for (i = 1; i < NUMSFX; i++)
@@ -1520,11 +1547,11 @@ void S_InitSfxChannels(INT32 sfxVolume)
 	}
 }
 
+/// ------------------------
+/// Music
+/// ------------------------
 
-
-
-
-static char      music_name[7];  
+static char      music_name[7]; // up to 6-character name
 static void      *music_data;
 static UINT16    music_flags;
 static boolean   music_looping;
@@ -1537,9 +1564,9 @@ static UINT32    queue_fadeinms;
 
 static tic_t     pause_starttic;
 
-
-
-
+/// ------------------------
+/// Music Definitions
+/// ------------------------
 
 enum
 {
@@ -1548,12 +1575,12 @@ enum
 };
 
 musicdef_t soundtestsfx = {
-	"_STSFX",  
+	"_STSFX", // prevents exactly one valid track name from being used on the sound test
 	"Sound Effects",
 	"",
 	"SEGA, VAdaPEGA, other sources",
-	1,  
-	0,  
+	1, // show on soundtest page 1
+	0, // with no conditions
 	0,
 	0,
 	0,
@@ -1563,9 +1590,9 @@ musicdef_t soundtestsfx = {
 
 musicdef_t *musicdefstart = &soundtestsfx;
 
-
-
-
+//
+// search for music definition in wad
+//
 static UINT16 W_CheckForMusicDefInPwad(UINT16 wadid)
 {
 	UINT16 i;
@@ -1576,7 +1603,7 @@ static UINT16 W_CheckForMusicDefInPwad(UINT16 wadid)
 		if (memcmp(lump_p->name, "MUSICDEF", 8) == 0)
 			return i;
 
-	return INT16_MAX;  
+	return INT16_MAX; // not found
 }
 
 static void
@@ -1586,7 +1613,7 @@ MusicDefStrcpy (char *p, const char *s, size_t n, int version)
 	if (version == MUSICDEF_220)
 	{
 		while (( p = strchr(p, '_') ))
-			*p++ = ' ';  
+			*p++ = ' '; // turn _ into spaces.
 	}
 }
 
@@ -1616,13 +1643,13 @@ ReadMusicDefFields (UINT16 wadnum, int line, boolean fields, char *stoken,
 			musicdef_t *prev = NULL;
 			def = musicdefstart;
 
-
-
+			// Search if this is a replacement
+			//CONS_Printf("S_LoadMusicDefs: Searching for song replacement...\n");
 			while (def)
 			{
 				if (!stricmp(def->name, value))
 				{
-
+					//CONS_Printf("S_LoadMusicDefs: Found song replacement '%s'\n", def->name);
 					break;
 				}
 
@@ -1630,16 +1657,16 @@ ReadMusicDefFields (UINT16 wadnum, int line, boolean fields, char *stoken,
 				def = def->next;
 			}
 
-
+			// Nothing found, add to the end.
 			if (!def)
 			{
 				def = Z_Calloc(sizeof (musicdef_t), PU_STATIC, NULL);
 				STRBUFCPY(def->name, value);
 				strlwr(def->name);
-				def->bpm = TICRATE<<(FRACBITS-1);  
+				def->bpm = TICRATE<<(FRACBITS-1); // FixedDiv((60*TICRATE)<<FRACBITS, 120<<FRACBITS)
 				if (prev != NULL)
 					prev->next = def;
-
+				//CONS_Printf("S_LoadMusicDefs: Added song '%s'\n", def->name);
 			}
 
 			(*defp) = def;
@@ -1647,7 +1674,7 @@ ReadMusicDefFields (UINT16 wadnum, int line, boolean fields, char *stoken,
 	}
 	else if (!stricmp(stoken, "version"))
 	{
-		if (fields) 
+		if (fields)/* is this not the first field? */
 		{
 			CONS_Alert(CONS_WARNING,
 					"MUSICDEF: Field '%s' must come first. (file %s, line %d)\n",
@@ -1683,7 +1710,7 @@ ReadMusicDefFields (UINT16 wadnum, int line, boolean fields, char *stoken,
 
 			if (value)
 			{
-
+				// Find the equals sign.
 				value = strchr(value, '=');
 			}
 		}
@@ -1709,23 +1736,23 @@ ReadMusicDefFields (UINT16 wadnum, int line, boolean fields, char *stoken,
 
 			if (version != MUSICDEF_220)
 			{
-
+				// Skip the equals sign.
 				value++;
 
-
+				// Now skip funny whitespace.
 				value += strspn(value, "\t ");
 			}
 
 			textline = value;
 			i = atoi(value);
 
-			 
+			/* based ignored lumps */
 			if (!stricmp(stoken, "usage")) {
-#if 0  
+#if 0 // Ignore for now
 				STRBUFCPY(def->usage, textline);
 #endif
 			} else if (!stricmp(stoken, "source")) {
-#if 0  
+#if 0 // Ignore for now
 				STRBUFCPY(def->source, textline);
 #endif
 			} else if (!stricmp(stoken, "title")) {
@@ -1740,7 +1767,7 @@ ReadMusicDefFields (UINT16 wadnum, int line, boolean fields, char *stoken,
 			} else if (!stricmp(stoken, "soundtestpage")) {
 				def->soundtestpage = (UINT8)i;
 			} else if (!stricmp(stoken, "soundtestcond")) {
-
+				// Convert to map number
 				if (textline[0] >= 'A' && textline[0] <= 'Z' && textline[2] == '\0')
 					i = M_MapNumber(textline[0], textline[1]);
 				def->soundtestcond = (INT16)i;
@@ -1780,7 +1807,7 @@ void S_LoadMusicDefs(UINT16 wadnum)
 
 	musicdef_t *def = NULL;
 	int version = MUSICDEF_220;
-	int line = 1;  
+	int line = 1; // for better error msgs
 	boolean fields = false;
 
 	lumpnum = W_CheckForMusicDefInPwad(wadnum);
@@ -1790,14 +1817,14 @@ void S_LoadMusicDefs(UINT16 wadnum)
 	lump = W_CacheLumpNumPwad(wadnum, lumpnum, PU_CACHE);
 	size = W_LumpLengthPwad(wadnum, lumpnum);
 
-
+	// Null-terminated MUSICDEF lump.
 	musdeftext = malloc(size+1);
 	if (!musdeftext)
 		I_Error("S_LoadMusicDefs: No more free memory for the parser\n");
 	M_Memcpy(musdeftext, lump, size);
 	musdeftext[size] = '\0';
 
-
+	// Find music def
 	stoken = musdeftext;
 	for (;;)
 	{
@@ -1808,7 +1835,7 @@ void S_LoadMusicDefs(UINT16 wadnum)
 				nlf = 1;
 			else
 				nlf = 0;
-			*lf++ = '\0'; 
+			*lf++ = '\0';/* now we can delimit to here */
 		}
 
 		stoken = strtok(stoken, " ");
@@ -1825,27 +1852,27 @@ void S_LoadMusicDefs(UINT16 wadnum)
 			do
 			{
 				line += nlf;
-				ncr = strspn(lf, "\r"); 
+				ncr = strspn(lf, "\r");/* skip CR */
 				lf += ncr;
 				nlf = strspn(lf, "\n");
 				lf += nlf;
 			}
 			while (nlf || ncr) ;
 
-			stoken = lf; 
+			stoken = lf;/* now the next nonempty line */
 		}
 		else
-			break; 
+			break;/* EOF */
 	}
 
 	free(musdeftext);
 }
 
-
-
-
-
-
+//
+// S_InitMusicDefs
+//
+// Simply load music defs in all wads.
+//
 void S_InitMusicDefs(void)
 {
 	UINT16 i;
@@ -1857,11 +1884,11 @@ musicdef_t **soundtestdefs = NULL;
 INT32 numsoundtestdefs = 0;
 UINT8 soundtestpage = 1;
 
-
-
-
-
-
+//
+// S_PrepareSoundTest
+//
+// Prepare sound test. What am I, your butler?
+//
 boolean S_PrepareSoundTest(void)
 {
 	gamedata_t *data = clientGamedata;
@@ -1885,7 +1912,7 @@ boolean S_PrepareSoundTest(void)
 	if (!(soundtestdefs = Z_Malloc(numsoundtestdefs*sizeof(musicdef_t *), PU_STATIC, NULL)))
 		I_Error("S_PrepareSoundTest(): could not allocate soundtestdefs.");
 
-	for (def = musicdefstart; def  ; def = def->next)
+	for (def = musicdefstart; def /*&& i < numsoundtestdefs*/; def = def->next)
 	{
 		if (!(def->soundtestpage & soundtestpage))
 			continue;
@@ -1901,9 +1928,9 @@ boolean S_PrepareSoundTest(void)
 }
 
 
-
-
-
+/// ------------------------
+/// Music Status
+/// ------------------------
 
 boolean S_DigMusicDisabled(void)
 {
@@ -1955,18 +1982,18 @@ boolean S_MusicExists(const char *mname, boolean checkMIDI, boolean checkDigi)
 	);
 }
 
-
-
-
+/// ------------------------
+/// Music Effects
+/// ------------------------
 
 boolean S_SpeedMusic(float speed)
 {
 	return I_SetSongSpeed(speed);
 }
 
-
-
-
+/// ------------------------
+/// Music Seeking
+/// ------------------------
 
 UINT32 S_GetMusicLength(void)
 {
@@ -1993,10 +2020,10 @@ UINT32 S_GetMusicPosition(void)
 	return I_GetSongPosition();
 }
 
-
-
-
-
+/// ------------------------
+/// Music Stacking (Jingles)
+/// In this section: mazmazz doesn't know how to do dynamic arrays or struct pointers!
+/// ------------------------
 
 char music_stack_nextmusname[7];
 boolean music_stack_noposition = false;
@@ -2040,8 +2067,8 @@ static void S_RemoveMusicStackEntry(musicstack_t *entry)
 	{
 		if (mst == entry)
 		{
-
-
+			// Remove ourselves from the chain and link
+			// prev and next together
 
 			if (mst->prev)
 				mst->prev->next = mst->next;
@@ -2078,7 +2105,7 @@ static void S_AddMusicStackEntry(const char *mname, UINT16 mflags, boolean loopi
 {
 	musicstack_t *mst, *new_mst;
 
-
+	// if the first entry is empty, force master onto it
 	if (!music_stacks)
 	{
 		music_stacks = Z_Calloc(sizeof (*mst), PU_MUSIC, NULL);
@@ -2092,13 +2119,13 @@ static void S_AddMusicStackEntry(const char *mname, UINT16 mflags, boolean loopi
 		music_stacks->noposition = S_CheckQueue();
 
 		if (status == JT_MASTER)
-			return;  
+			return; // we just added the user's entry here
 	}
 
-
+	// look for an empty slot to park ourselves
 	for (mst = music_stacks; mst->next; mst = mst->next);
 
-
+	// create our new entry
 	new_mst = Z_Calloc(sizeof (*new_mst), PU_MUSIC, NULL);
 	strncpy(new_mst->musname, mname, 7);
 	new_mst->musname[6] = 0;
@@ -2120,8 +2147,8 @@ static musicstack_t *S_GetMusicStackEntry(UINT16 status, boolean fromfirst, INT1
 {
 	musicstack_t *mst, *start_mst = NULL, *mst_next;
 
-
-
+	// if the first entry is empty, force master onto it
+	// fixes a memory corruption bug
 	if (!music_stacks && status != JT_MASTER)
 		S_AddMusicStackEntry(mapmusname, mapmusflags, true, S_GetMusicPosition(), JT_MASTER);
 
@@ -2142,13 +2169,13 @@ static musicstack_t *S_GetMusicStackEntry(UINT16 status, boolean fromfirst, INT1
 		{
 			if (P_EvaluateMusicStatus(mst->status, mst->musname))
 			{
-				if (!S_MusicExists(mst->musname, !midi_disabled, !digital_disabled))  
-					S_RemoveMusicStackEntry(mst);  
+				if (!S_MusicExists(mst->musname, !midi_disabled, !digital_disabled)) // paranoia
+					S_RemoveMusicStackEntry(mst); // then continue
 				else
 					return mst;
 			}
 			else
-				S_RemoveMusicStackEntry(mst);  
+				S_RemoveMusicStackEntry(mst); // then continue
 		}
 	}
 
@@ -2159,12 +2186,12 @@ void S_RetainMusic(const char *mname, UINT16 mflags, boolean looping, UINT32 pos
 {
 	musicstack_t *mst;
 
-	if (!status)  
+	if (!status) // we use this as a null indicator, don't push
 	{
 		CONS_Alert(CONS_ERROR, "Music stack entry must have a nonzero status.\n");
 		return;
 	}
-	else if (status == JT_MASTER)  
+	else if (status == JT_MASTER) // enforce only one JT_MASTER
 	{
 		for (mst = music_stacks; mst; mst = mst->next)
 		{
@@ -2175,7 +2202,7 @@ void S_RetainMusic(const char *mname, UINT16 mflags, boolean looping, UINT32 pos
 			}
 		}
 	}
-	else  
+	else // remove any existing status
 		S_RemoveMusicStackEntryByStatus(status);
 
 	S_AddMusicStackEntry(mname, mflags, looping, position, status);
@@ -2198,17 +2225,17 @@ boolean S_RecallMusic(UINT16 status, boolean fromfirst)
 	if (result && !S_MusicExists(result->musname, !midi_disabled, !digital_disabled))
 	{
 		Z_Free(entry);
-		return false;  
+		return false; // music doesn't exist, so don't do anything
 	}
 
-
+	// make a copy of result, since we make modifications to our copy
 	if (result)
 	{
 		*entry = *result;
 		memcpy(entry->musname, result->musname, sizeof(entry->musname));
 	}
 
-
+	// no result, just grab mapmusname
 	if (!result || !entry->musname[0] || ((status == JT_MASTER || (music_stacks ? !music_stacks->status : false)) && !entry->status))
 	{
 		strncpy(entry->musname, mapmusname, 7);
@@ -2218,7 +2245,7 @@ boolean S_RecallMusic(UINT16 status, boolean fromfirst)
 		entry->tic = gametic;
 		entry->status = JT_MASTER;
 		entry->mlumpnum = S_GetMusicLumpNum(entry->musname);
-		entry->noposition = false;  
+		entry->noposition = false; // don't set this until we do the mapmuschanged check, below. Else, this breaks some resumes.
 	}
 
 	if (entry->status == JT_MASTER)
@@ -2243,8 +2270,8 @@ boolean S_RecallMusic(UINT16 status, boolean fromfirst)
 		return false;
 	}
 
-	if (strncmp(entry->musname, S_MusicName(), 7) ||  
-		(midipref != currentmidi && S_PrefAvailable(midipref, entry->musname)))  
+	if (strncmp(entry->musname, S_MusicName(), 7) || // don't restart music if we're already playing it
+		(midipref != currentmidi && S_PrefAvailable(midipref, entry->musname))) // but do if the user's preference has changed
 	{
 		if (music_stack_fadeout)
 			S_ChangeMusicEx(entry->musname, entry->musflags, entry->looping, 0, music_stack_fadeout, 0);
@@ -2252,22 +2279,22 @@ boolean S_RecallMusic(UINT16 status, boolean fromfirst)
 		{
 			S_ChangeMusicEx(entry->musname, entry->musflags, entry->looping, 0, 0, music_stack_fadein);
 
-			if (!entry->noposition && !music_stack_noposition)  
+			if (!entry->noposition && !music_stack_noposition) // HACK: Global boolean to toggle position resuming, e.g., de-superize
 			{
 				UINT32 poslapse = 0;
 
-
-
-
+				// To prevent the game from jumping past the end of the music, we need
+				// to check if we can get the song's length. Otherwise, if the lapsed resume time goes
+				// over a LOOPPOINT, mixer_sound.c will be unable to calculate the new resume position.
 				if (S_GetMusicLength())
 					poslapse = (UINT32)((float)(gametic - entry->tic)/(float)TICRATE*(float)MUSICRATE);
 
 				newpos = entry->position + poslapse;
 			}
 
-
-
-
+			// If the newly recalled music lumpnum does not match the lumpnum that we stored in stack,
+			// then discard the new position. That way, we will not recall an invalid position
+			// when the music is replaced or digital/MIDI is toggled.
 			if (newpos > 0 && S_MusicPlaying() && S_GetMusicLumpNum(entry->musname) == entry->mlumpnum)
 				S_SetMusicPosition(newpos);
 			else
@@ -2285,9 +2312,9 @@ boolean S_RecallMusic(UINT16 status, boolean fromfirst)
 	return true;
 }
 
-
-
-
+/// ------------------------
+/// Music Playback
+/// ------------------------
 
 static lumpnum_t S_GetMusicLumpNum(const char *mname)
 {
@@ -2321,7 +2348,7 @@ static boolean S_LoadMusic(const char *mname)
 		return false;
 	}
 
-
+	// load & register it
 	mdata = W_CacheLumpNum(mlumpnum, PU_MUSIC);
 
 
@@ -2353,7 +2380,7 @@ static void S_UnloadMusic(void)
 {
 	I_UnloadSong();
 
-#ifndef HAVE_SDL  
+#ifndef HAVE_SDL //SDL uses RWOPS
 	Z_ChangeTag(music_data, PU_CACHE);
 #endif
 	music_data = NULL;
@@ -2378,7 +2405,7 @@ static boolean S_PlayMusic(boolean looping, UINT32 fadeinms)
 		return false;
 	}
 
-	 
+	/* set loop point from MUSICDEF */
 	for (def = musicdefstart; def; def = def->next)
 	{
 		if (strcasecmp(def->name, music_name) == 0)
@@ -2389,7 +2416,7 @@ static boolean S_PlayMusic(boolean looping, UINT32 fadeinms)
 		}
 	}
 
-	S_InitMusicVolume();  
+	S_InitMusicVolume(); // switch between digi and sequence volume
 
 	if (S_MusicNotInFocus())
 		S_PauseAudio();
@@ -2446,7 +2473,7 @@ void S_ChangeMusicEx(const char *mmusic, UINT16 mflags, boolean looping, UINT32 
 	if (LUA_HookMusicChange(music_name, &hook_param))
 		return;
 
-
+	// No Music (empty string)
 	if (newmusic[0] == 0)
 	{
 		if (prefadems)
@@ -2456,8 +2483,8 @@ void S_ChangeMusicEx(const char *mmusic, UINT16 mflags, boolean looping, UINT32 
 		return;
 	}
 
-	if (prefadems)  
-
+	if (prefadems) // queue music change for after fade // allow even if the music is the same
+		// && S_MusicPlaying() // Let the delay happen even if we're not playing music
 	{
 		CONS_Debug(DBG_DETAILED, "Now fading out song %s\n", music_name);
 		S_QueueMusic(newmusic, mflags, looping, position, fadeinms);
@@ -2485,12 +2512,12 @@ void S_ChangeMusicEx(const char *mmusic, UINT16 mflags, boolean looping, UINT32 
 
 		I_SetSongTrack(mflags & MUSIC_TRACKMASK);
 	}
-	else if (fadeinms)  
+	else if (fadeinms) // let fades happen with same music
 	{
 		I_SetSongPosition(position);
 		I_FadeSong(100, fadeinms, NULL);
 }
-	else  
+	else // reset volume to 100 with same music
 	{
 		I_StopFadingSong();
 		I_FadeSong(100, 500, NULL);
@@ -2507,7 +2534,7 @@ void S_StopMusic(void)
 
 	S_SpeedMusic(1.0f);
 	I_StopSong();
-	S_UnloadMusic();  
+	S_UnloadMusic(); // for now, stopping also means you unload the song
 
 	if (cv_closedcaptioning.value)
 	{
@@ -2526,9 +2553,9 @@ void S_StopMusic(void)
 	}
 }
 
-
-
-
+//
+// Stop and resume music, during game PAUSE.
+//
 void S_PauseAudio(void)
 {
 	if (I_SongPlaying() && !I_SongPaused())
@@ -2558,19 +2585,19 @@ void S_SetMusicVolume(INT32 digvolume, INT32 seqvolume)
 	if (digvolume < 0 || digvolume > 31)
 		CONS_Alert(CONS_WARNING, "digmusicvolume should be between 0-31\n");
 	CV_SetValue(&cv_digmusicvolume, digvolume&31);
-	actualdigmusicvolume = cv_digmusicvolume.value;    
+	actualdigmusicvolume = cv_digmusicvolume.value;   //check for change of var
 
 	if (seqvolume < 0 || seqvolume > 31)
 		CONS_Alert(CONS_WARNING, "midimusicvolume should be between 0-31\n");
 	CV_SetValue(&cv_midimusicvolume, seqvolume&31);
-	actualmidimusicvolume = cv_midimusicvolume.value;    
+	actualmidimusicvolume = cv_midimusicvolume.value;   //check for change of var
 
 	switch(I_SongType())
 	{
 		case MU_MID:
 		case MU_MID_EX:
-
-
+		//case MU_MOD:
+		//case MU_GME:
 			I_SetMusicVolume(seqvolume&31);
 			break;
 		default:
@@ -2579,9 +2606,9 @@ void S_SetMusicVolume(INT32 digvolume, INT32 seqvolume)
 	}
 }
 
-
-
-
+/// ------------------------
+/// Music Fading
+/// ------------------------
 
 void S_SetInternalMusicVolume(INT32 volume)
 {
@@ -2606,15 +2633,15 @@ boolean S_FadeOutStopMusic(UINT32 ms)
 	return I_FadeSong(0, ms, &S_StopMusic);
 }
 
+/// ------------------------
+/// Init & Others
+/// ------------------------
 
-
-
-
-
-
-
-
-
+//
+// Per level startup code.
+// Kills playing sounds at start of level,
+//  determines music if any, changes music.
+//
 void S_StartEx(boolean reset)
 {
 	if (mapmusflags & MUSIC_RELOADRESET)
@@ -2642,7 +2669,7 @@ static void Command_Tunes_f(void)
 	UINT32 position = 0;
 	const size_t argc = COM_Argc();
 
-	if (argc < 2)  
+	if (argc < 2) //tunes slot ...
 	{
 		CONS_Printf("tunes <name/num> [track] [speed] [position] / <-show> / <-default> / <-none>:\n");
 		CONS_Printf(M_GetText("Play an arbitrary music lump. If a map number is used, 'MAP##M' is played.\n"));
@@ -2673,7 +2700,7 @@ static void Command_Tunes_f(void)
 		track = mapheaderinfo[gamemap-1]->mustrack;
 	}
 
-	if (strlen(tunearg) > 6)  
+	if (strlen(tunearg) > 6) // This is automatic -- just show the error just in case
 		CONS_Alert(CONS_NOTICE, M_GetText("Music name too long - truncated to six characters.\n"));
 
 	if (argc > 2)
@@ -2707,11 +2734,11 @@ static void Command_RestartAudio_f(void)
 	I_StartupSound();
 	I_InitMusic();
 
-
+// These must be called or no sound and music until manually set.
 
 	I_SetSfxVolume(cv_soundvolume.value);
 	S_SetMusicVolume(cv_digmusicvolume.value, cv_midimusicvolume.value);
-	if (Playing())  
+	if (Playing()) // Gotta make sure the player is in a level
 		P_RestoreMusic(&players[consoleplayer]);
 }
 
@@ -2723,7 +2750,7 @@ void GameSounds_OnChange(void)
 	if (sound_disabled)
 	{
 		sound_disabled = false;
-		I_StartupSound();  
+		I_StartupSound(); // will return early if initialised
 		S_InitSfxChannels(cv_soundvolume.value);
 		S_StartSound(NULL, sfx_strpst);
 	}
@@ -2744,7 +2771,7 @@ void GameDigiMusic_OnChange(void)
 	if (digital_disabled)
 	{
 		digital_disabled = false;
-		I_StartupSound();  
+		I_StartupSound(); // will return early if initialised
 		I_InitMusic();
 
 		if (Playing())
@@ -2779,7 +2806,7 @@ void GameMIDIMusic_OnChange(void)
 	if (midi_disabled)
 	{
 		midi_disabled = false;
-		I_StartupSound();  
+		I_StartupSound(); // will return early if initialised
 		I_InitMusic();
 
 		if (Playing())

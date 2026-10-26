@@ -37,10 +37,10 @@ class SRB2MS_BOT
 			$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, 'Running SRB2 NetGames ');
 			while (1)
 			{
-				$content=fgets($fd, 13);  
+				$content=fgets($fd, 13); // skip 13 first bytes
 				$content=fgets($fd, 1024);
 				$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, "$content");
-
+				//echo "$content";
 				if (feof($fd)) break;
 			}
 		}
@@ -60,10 +60,10 @@ class SRB2MS_BOT
 			$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, 'Running SRB2 NetGames ');
 			while (1)
 			{
-				$content=fgets($fd, 13);  
+				$content=fgets($fd, 13); // skip 13 first bytes
 				$content=fgets($fd, 1024);
 				$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "$content");
-
+				//echo "$content";
 				if (feof($fd)) break;
 			}
 		}
@@ -99,7 +99,7 @@ class SRB2MS_BOT
 				return;
 			}
 		}
-
+		//$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "Sorry, but I don't like you, or your channel, $data->message");
 	}
 	
 	function Talk(&$irc, &$data)
@@ -187,41 +187,41 @@ class SRB2MS_BOT
 
 }
 
-
+// the Bot is the Class SRB2MS_BOT
 $bot = &new SRB2MS_BOT();
-
+// Create SmartIRC, and name it as <network>irc for use to, well, do irc stuff ^_^
 $esperirc = &new Net_SmartIRC();
-
-
-
-
-
+//no Excess Flood!
+//$esperirc->setSendDelay(300);
+// To Debug or Not
+//$esperirc->setDebug(SMARTIRC_DEBUG_IRCMESSAGES);
+// Do connect to the Internet
 $esperirc->setUseSockets(TRUE);
-
-
+// Register the trigger !listgames as to call ListGames with the class of SRB2MS_BOT
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!gamelist$', $bot, 'ListGamesPM');
 $esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!gamelist$', $bot, 'ListGamesChan');
 $esperirc->registerActionhandler(SMARTIRC_TYPE_INVITE, '', $bot, 'BeenInvited');
-
-
-
-
-
-
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_ALL, '', $bot, 'DebugPM');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!talk', $bot, 'Talk');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!action', $bot, 'Action');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!kick', $bot, 'Kick');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!ban', $bot, 'Ban');
+// If you fail once, try agian
 $esperirc->setAutoRetry(TRUE);
-
+// Connect to EsperNet
 $esperirc->connect('cosmos.esper.net', 6667);
-
+// kep a list of all the users in the channel
 $esperirc->setChannelSyncing(TRUE);
-
+// Reconnect as needed
 $esperirc->setAutoReconnect(TRUE);
-
+// Use the name SRB2MS, and set other stuff
 $esperirc->login('SRB2MS2', 'Net_SmartIRC Client '.SMARTIRC_VERSION.' (SRB2MS_Bot.php)', 0, 'Net_SmartIRC');
-
+// Join #srb2fun and #srb2general
 $esperirc->join((array('#srb2general,#srb2fun')));
-
+// SRB2MS_Pass.php have "$esperirc->message(SMARTIRC_TYPE_QUERY, 'nickserv', 'identify <password>');"
 include('./SRB2MS_Pass.php');
-
+// Idle
 $esperirc->listen();
-
+// Rejoin?
 $esperirc->reconnect();
 ?>

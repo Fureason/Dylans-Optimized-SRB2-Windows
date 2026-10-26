@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  client_connection.h
+/// \brief Client connection handling
 
 #ifndef __D_CLIENT_CONNECTION__
 #define __D_CLIENT_CONNECTION__
@@ -44,9 +44,9 @@ extern serverelem_t serverlist[MAXSERVERLIST];
 extern UINT32 serverlistcount;
 
 extern cl_mode_t cl_mode;
-extern boolean serverisfull;  
+extern boolean serverisfull; //lets us be aware if the server was full after we check files, but before downloading, so we can ask if the user still wants to download or not
 extern tic_t firstconnectattempttime;
-extern UINT8 mynode;  
+extern UINT8 mynode; // my address pointofview server
 
 void CL_QueryServerList(msg_server_t *list);
 void CL_UpdateServerList(boolean internetsearch, INT32 room);

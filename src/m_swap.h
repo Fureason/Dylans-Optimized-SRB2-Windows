@@ -8,17 +8,17 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_swap.h
+/// \brief Endianess handling, swapping 16bit and 32bit
 
 #ifndef __M_SWAP__
 #define __M_SWAP__
 
-
-
+// Endianess handling.
+// WAD files are stored little endian.
 #include "endian.h"
 
-
+// Little to big endian
 #ifdef SRB2_BIG_ENDIAN
 
 	#define SHORT(x) ((INT16)(\
@@ -40,7 +40,7 @@
 	#define LONG(x)	((INT32)(x))
 #endif
 
-
+// Big to little endian
 #ifdef SRB2_LITTLE_ENDIAN
 	#define BIGENDIAN_LONG(x) ((INT32)(((x)>>24)&0xff)|(((x)<<8)&0xff0000)|(((x)>>8)&0xff00)|(((x)<<24)&0xff000000))
 	#define BIGENDIAN_SHORT(x) ((INT16)(((x)>>8)|((x)<<8)))

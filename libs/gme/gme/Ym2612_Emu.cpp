@@ -1,6 +1,6 @@
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
-
-
+// Based on Gens 2.10 ym2612.c
 
 #include "Ym2612_Emu.h"
 
@@ -23,14 +23,14 @@ details. You should have received a copy of the GNU Lesser General Public
 License along with this module; if not, write to the Free Software Foundation,
 Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
-
-
-
-
-
-
-
-
+// This is mostly the original source in its C style and all.
+//
+// Somewhat optimized and simplified. Uses a template to generate the many
+// variants of Update_Chan. Rewrote header file. In need of full rewrite by
+// someone more familiar with FM sound and the YM2612. Has some inaccuracies
+// compared to the Sega Genesis sound, particularly being mixed at such a
+// high sample accuracy (the Genesis sounds like it has only 8 bit samples).
+// - Shay
 
 #ifdef BLARGG_ENABLE_OPTIMIZER
 	#include BLARGG_ENABLE_OPTIMIZER
@@ -40,79 +40,79 @@ const int output_bits = 14;
 
 struct slot_t
 {
-	const int *DT;   
-	int MUL;     
-	int TL;      
-	int TLL;     
-	int SLL;     
-	int KSR_S;   
-	int KSR;     
-
-	int SEG;     
+	const int *DT;  // parametre detune
+	int MUL;    // parametre "multiple de frequence"
+	int TL;     // Total Level = volume lorsque l'enveloppe est au plus haut
+	int TLL;    // Total Level ajusted
+	int SLL;    // Sustin Level (ajusted) = volume où l'enveloppe termine sa premiere phase de regression
+	int KSR_S;  // Key Scale Rate Shift = facteur de prise en compte du KSL dans la variations de l'enveloppe
+	int KSR;    // Key Scale Rate = cette valeur est calculee par rapport à la frequence actuelle, elle va influer
+				// sur les differents parametres de l'enveloppe comme l'attaque, le decay ...  comme dans la realite !
+	int SEG;    // Type enveloppe SSG
 	int env_xor;
 	int env_max;
 
-	const int *AR;   
-	const int *DR;   
-	const int *SR;   
-	const int *RR;   
-	int Fcnt;    
-	int Finc;    
-
-	int Ecurp;   
-
-
-
-	int Ecnt;    
-	int Einc;    
-	int Ecmp;    
-	int EincA;   
-
-	int EincD;   
-
-	int EincS;   
-
-	int EincR;   
-
-	int *OUTp;   
-
-	int INd;     
-	int ChgEnM;  
-	int AMS;     
-	int AMSon;   
+	const int *AR;  // Attack Rate (table pointeur) = Taux d'attaque (AR[KSR])
+	const int *DR;  // Decay Rate (table pointeur) = Taux pour la regression (DR[KSR])
+	const int *SR;  // Sustin Rate (table pointeur) = Taux pour le maintien (SR[KSR])
+	const int *RR;  // Release Rate (table pointeur) = Taux pour le rel'chement (RR[KSR])
+	int Fcnt;   // Frequency Count = compteur-frequence pour determiner l'amplitude actuelle (SIN[Finc >> 16])
+	int Finc;   // frequency step = pas d'incrementation du compteur-frequence
+				// plus le pas est grand, plus la frequence est aïgu (ou haute)
+	int Ecurp;  // Envelope current phase = cette variable permet de savoir dans quelle phase
+				// de l'enveloppe on se trouve, par exemple phase d'attaque ou phase de maintenue ...
+				// en fonction de la valeur de cette variable, on va appeler une fonction permettant
+				// de mettre à jour l'enveloppe courante.
+	int Ecnt;   // Envelope counter = le compteur-enveloppe permet de savoir où l'on se trouve dans l'enveloppe
+	int Einc;   // Envelope step courant
+	int Ecmp;   // Envelope counter limite pour la prochaine phase
+	int EincA;  // Envelope step for Attack = pas d'incrementation du compteur durant la phase d'attaque
+				// cette valeur est egal à AR[KSR]
+	int EincD;  // Envelope step for Decay = pas d'incrementation du compteur durant la phase de regression
+				// cette valeur est egal à DR[KSR]
+	int EincS;  // Envelope step for Sustain = pas d'incrementation du compteur durant la phase de maintenue
+				// cette valeur est egal à SR[KSR]
+	int EincR;  // Envelope step for Release = pas d'incrementation du compteur durant la phase de rel'chement
+				// cette valeur est egal à RR[KSR]
+	int *OUTp;  // pointeur of SLOT output = pointeur permettant de connecter la sortie de ce slot à l'entree
+				// d'un autre ou carrement à la sortie de la voie
+	int INd;    // input data of the slot = donnees en entree du slot
+	int ChgEnM; // Change envelop mask.
+	int AMS;    // AMS depth level of this SLOT = degre de modulation de l'amplitude par le LFO
+	int AMSon;  // AMS enable flag = drapeau d'activation de l'AMS
 };
 
 struct channel_t
 {
-	int S0_OUT[4];           
-	int LEFT;                
-	int RIGHT;               
-	int ALGO;                
-	int FB;                  
-	int FMS;                 
-	int AMS;                 
-	int FNUM[4];             
-	int FOCT[4];             
-	int KC[4];               
-	slot_t SLOT[4];  
-	int FFlag;               
+	int S0_OUT[4];          // anciennes sorties slot 0 (pour le feed back)
+	int LEFT;               // LEFT enable flag
+	int RIGHT;              // RIGHT enable flag
+	int ALGO;               // Algorythm = determine les connections entre les operateurs
+	int FB;                 // shift count of self feed back = degre de "Feed-Back" du SLOT 1 (il est son unique entree)
+	int FMS;                // Frequency Modulation Sensitivity of channel = degre de modulation de la frequence sur la voie par le LFO
+	int AMS;                // Amplitude Modulation Sensitivity of channel = degre de modulation de l'amplitude sur la voie par le LFO
+	int FNUM[4];            // hauteur frequence de la voie (+ 3 pour le mode special)
+	int FOCT[4];            // octave de la voie (+ 3 pour le mode special)
+	int KC[4];              // Key Code = valeur fonction de la frequence (voir KSR pour les slots, KSR = KC >> KSR_S)
+	slot_t SLOT[4]; // four slot.operators = les 4 slots de la voie
+	int FFlag;              // Frequency step recalculation flag
 };
 
 struct state_t
 {
-	int TimerBase;       
-	int Status;          
-	int TimerA;          
+	int TimerBase;      // TimerBase calculation
+	int Status;         // YM2612 Status (timer overflow)
+	int TimerA;         // timerA limit = valeur jusqu'à laquelle le timer A doit compter
 	int TimerAL;
-	int TimerAcnt;       
-	int TimerB;          
+	int TimerAcnt;      // timerA counter = valeur courante du Timer A
+	int TimerB;         // timerB limit = valeur jusqu'à laquelle le timer B doit compter
 	int TimerBL;
-	int TimerBcnt;       
-	int Mode;            
-	int DAC;             
-	channel_t CHANNEL[Ym2612_Emu::channel_count];    
-	int REG[2][0x100];   
-
+	int TimerBcnt;      // timerB counter = valeur courante du Timer B
+	int Mode;           // Mode actuel des voie 3 et 6 (normal / special)
+	int DAC;            // DAC enabled flag
+	channel_t CHANNEL[Ym2612_Emu::channel_count];   // Les 6 voies du YM2612
+	int REG[2][0x100];  // Sauvegardes des valeurs de tout les registres, c'est facultatif
+						// cela nous rend le debuggage plus facile
 };
 
 #ifndef PI
@@ -124,42 +124,42 @@ struct state_t
 #define SUBSTAIN  2
 #define RELEASE   3
 
+// SIN_LBITS <= 16
+// LFO_HBITS <= 16
+// (SIN_LBITS + SIN_HBITS) <= 26
+// (ENV_LBITS + ENV_HBITS) <= 28
+// (LFO_LBITS + LFO_HBITS) <= 28
 
-
-
-
-
-
-#define SIN_HBITS      12                                
-#define SIN_LBITS      (26 - SIN_HBITS)                  
+#define SIN_HBITS      12                               // Sinus phase counter int part
+#define SIN_LBITS      (26 - SIN_HBITS)                 // Sinus phase counter float part (best setting)
 
 #if (SIN_LBITS > 16)
-#define SIN_LBITS      16                                
+#define SIN_LBITS      16                               // Can't be greater than 16 bits
 #endif
 
-#define ENV_HBITS      12                                
-#define ENV_LBITS      (28 - ENV_HBITS)                  
+#define ENV_HBITS      12                               // Env phase counter int part
+#define ENV_LBITS      (28 - ENV_HBITS)                 // Env phase counter float part (best setting)
 
-#define LFO_HBITS      10                                
-#define LFO_LBITS      (28 - LFO_HBITS)                  
+#define LFO_HBITS      10                               // LFO phase counter int part
+#define LFO_LBITS      (28 - LFO_HBITS)                 // LFO phase counter float part (best setting)
 
 #define SIN_LENGHT     (1 << SIN_HBITS)
 #define ENV_LENGHT     (1 << ENV_HBITS)
 #define LFO_LENGHT     (1 << LFO_HBITS)
 
-#define TL_LENGHT      (ENV_LENGHT * 3)                  
+#define TL_LENGHT      (ENV_LENGHT * 3)                 // Env + TL scaling + LFO
 
 #define SIN_MASK       (SIN_LENGHT - 1)
 #define ENV_MASK       (ENV_LENGHT - 1)
 #define LFO_MASK       (LFO_LENGHT - 1)
 
-#define ENV_STEP       (96.0 / ENV_LENGHT)               
+#define ENV_STEP       (96.0 / ENV_LENGHT)              // ENV_MAX = 96 dB
 
 #define ENV_ATTACK     ((ENV_LENGHT * 0) << ENV_LBITS)
 #define ENV_DECAY      ((ENV_LENGHT * 1) << ENV_LBITS)
 #define ENV_END        ((ENV_LENGHT * 2) << ENV_LBITS)
 
-#define MAX_OUT_BITS   (SIN_HBITS + SIN_LBITS + 2)       
+#define MAX_OUT_BITS   (SIN_HBITS + SIN_LBITS + 2)      // Modulation = -4 <--> +4
 #define MAX_OUT        ((1 << MAX_OUT_BITS) - 1)
 
 #define PG_CUT_OFF     ((int) (78.0 / ENV_STEP))
@@ -168,13 +168,13 @@ struct state_t
 #define AR_RATE        399128
 #define DR_RATE        5514396
 
+//#define AR_RATE        426136
+//#define DR_RATE        (AR_RATE * 12)
 
-
-
-#define LFO_FMS_LBITS  9     
+#define LFO_FMS_LBITS  9    // FIXED (LFO_FMS_BASE gives somethink as 1)
 #define LFO_FMS_BASE   ((int) (0.05946309436 * 0.0338 * (double) (1 << LFO_FMS_LBITS)))
 
-#define S0             0     
+#define S0             0    // Stupid typo of the YM2612
 #define S1             2
 #define S2             1
 #define S3             3
@@ -193,41 +193,41 @@ inline void set_seg( slot_t& s, int seg )
 
 struct tables_t
 {
-	short SIN_TAB [SIN_LENGHT];                  
-	int LFOcnt;          
-	int LFOinc;          
-
-	unsigned int AR_TAB [128];                   
-	unsigned int DR_TAB [96];                    
-	unsigned int DT_TAB [8] [32];                
-	unsigned int SL_TAB [16];                    
-	unsigned int NULL_RATE [32];                 
-	int LFO_INC_TAB [8];                         
+	short SIN_TAB [SIN_LENGHT];                 // SINUS TABLE (offset into TL TABLE)
+	int LFOcnt;         // LFO counter = compteur-frequence pour le LFO
+	int LFOinc;         // LFO step counter = pas d'incrementation du compteur-frequence du LFO
+						// plus le pas est grand, plus la frequence est grande
+	unsigned int AR_TAB [128];                  // Attack rate table
+	unsigned int DR_TAB [96];                   // Decay rate table
+	unsigned int DT_TAB [8] [32];               // Detune table
+	unsigned int SL_TAB [16];                   // Substain level table
+	unsigned int NULL_RATE [32];                // Table for NULL rate
+	int LFO_INC_TAB [8];                        // LFO step table
 	
-	short ENV_TAB [2 * ENV_LENGHT + 8];          
+	short ENV_TAB [2 * ENV_LENGHT + 8];         // ENV CURVE TABLE (attack & decay)
 	
-	short LFO_ENV_TAB [LFO_LENGHT];              
-	short LFO_FREQ_TAB [LFO_LENGHT];             
-	int TL_TAB [TL_LENGHT * 2];                  
-	unsigned int DECAY_TO_ATTACK [ENV_LENGHT];   
-	unsigned int FINC_TAB [2048];                
+	short LFO_ENV_TAB [LFO_LENGHT];             // LFO AMS TABLE (adjusted for 11.8 dB)
+	short LFO_FREQ_TAB [LFO_LENGHT];            // LFO FMS TABLE
+	int TL_TAB [TL_LENGHT * 2];                 // TOTAL LEVEL TABLE (positif and minus)
+	unsigned int DECAY_TO_ATTACK [ENV_LENGHT];  // Conversion from decay to attack phase
+	unsigned int FINC_TAB [2048];               // Frequency step table
 };
 
 static const unsigned char DT_DEF_TAB [4 * 32] =
 {
-
+// FD = 0
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
-
+// FD = 1
   0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2,
   2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8, 8,
 
-
+// FD = 2
   1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5,
   5, 6, 6, 7, 8, 8, 9, 10, 11, 12, 13, 14, 16, 16, 16, 16,
 
-
+// FD = 3
   2, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 7,
   8 , 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 22, 22, 22, 22
 };
@@ -279,19 +279,19 @@ struct Ym2612_Impl
 
 void Ym2612_Impl::KEY_ON( channel_t& ch, int nsl)
 {
-	slot_t *SL = &(ch.SLOT [nsl]);   
+	slot_t *SL = &(ch.SLOT [nsl]);  // on recupere le bon pointeur de slot
 	
-	if (SL->Ecurp == RELEASE)        
+	if (SL->Ecurp == RELEASE)       // la touche est-elle rel'chee ?
 	{
 		SL->Fcnt = 0;
 
-
+		// Fix Ecco 2 splash sound
 		
 		SL->Ecnt = (g.DECAY_TO_ATTACK [g.ENV_TAB [SL->Ecnt >> ENV_LBITS]] + ENV_ATTACK) & SL->ChgEnM;
 		SL->ChgEnM = ~0;
 
-
-
+//      SL->Ecnt = g.DECAY_TO_ATTACK [g.ENV_TAB [SL->Ecnt >> ENV_LBITS]] + ENV_ATTACK;
+//      SL->Ecnt = 0;
 
 		SL->Einc = SL->EincA;
 		SL->Ecmp = ENV_DECAY;
@@ -302,11 +302,11 @@ void Ym2612_Impl::KEY_ON( channel_t& ch, int nsl)
 
 void Ym2612_Impl::KEY_OFF(channel_t& ch, int nsl)
 {
-	slot_t *SL = &(ch.SLOT [nsl]);   
+	slot_t *SL = &(ch.SLOT [nsl]);  // on recupere le bon pointeur de slot
 	
-	if (SL->Ecurp != RELEASE)        
+	if (SL->Ecurp != RELEASE)       // la touche est-elle appuyee ?
 	{
-		if (SL->Ecnt < ENV_DECAY)    
+		if (SL->Ecnt < ENV_DECAY)   // attack phase ?
 		{
 			SL->Ecnt = (g.ENV_TAB [SL->Ecnt >> ENV_LBITS] << ENV_LBITS) + ENV_DECAY;
 		}
@@ -342,7 +342,7 @@ int Ym2612_Impl::SLOT_SET( int Adr, int data )
 		case 0x40:
 			sl.TL = data & 0x7F;
 
-
+			// SOR2 do a lot of TL adjustement and this fix R.Shinobi jump sound...
 			YM2612_Special_Update();
 
 #if ((ENV_HBITS - 7) < 0)
@@ -394,23 +394,23 @@ int Ym2612_Impl::SLOT_SET( int Adr, int data )
 			break;
 
 		case 0x90:
-
+			// SSG-EG envelope shapes :
+			/*
+			   E  At Al H
 			  
-                
-     
-                     \
-                      
-                      
-                  \
-                      
-                   
-                     \
-                      
-     
-                        
-                       
-                 
-                  
+			   1  0  0  0  \\\\
+			   1  0  0  1  \___
+			   1  0  1  0  \/\/
+			   1  0  1  1  \
+			   1  1  0  0  ////
+			   1  1  0  1  /
+			   1  1  1  0  /\/\
+			   1  1  1  1  /___
+			  
+			   E  = SSG-EG enable
+			   At = Start negate
+			   Al = Altern
+			   H  = Hold */
 
 			set_seg( sl, (data & 8) ? (data & 0x0F) : 0 );
 			break;
@@ -483,7 +483,7 @@ int Ym2612_Impl::CHANNEL_SET( int Adr, int data )
 		case 0xB0:
 			if ( ch.ALGO != (data & 7) )
 			{
-
+				// Fix VectorMan 2 heli sound (level 1)
 				YM2612_Special_Update();
 
 				ch.ALGO = data & 7;
@@ -494,10 +494,10 @@ int Ym2612_Impl::CHANNEL_SET( int Adr, int data )
 				ch.SLOT [3].ChgEnM = 0;
 			}
 
-			ch.FB = 9 - ((data >> 3) & 7);                               
+			ch.FB = 9 - ((data >> 3) & 7);                              // Real thing ?
 
-
-
+//          if (ch.FB = ((data >> 3) & 7)) ch.FB = 9 - ch.FB;       // Thunder force 4 (music stage 8), Gynoug, Aladdin bug sound...
+//          else ch.FB = 31;
 			break;
 
 		case 0xB4: {
@@ -527,10 +527,10 @@ int Ym2612_Impl::YM_SET(int Adr, int data)
 	switch ( Adr )
 	{
 		case 0x22:
-			if (data & 8)  
+			if (data & 8) // LFO enable
 			{
-
-
+				// Cool Spot music 1, LFO modified severals time which
+				// distord the sound, have to check that on a real genesis...
 
 				g.LFOinc = g.LFO_INC_TAB [data & 7];
 			}
@@ -568,31 +568,31 @@ int Ym2612_Impl::YM_SET(int Adr, int data)
 			break;
 
 		case 0x27:
-
-
-
-
-
-
-
-
-
+			// Parametre divers
+			// b7 = CSM MODE
+			// b6 = 3 slot mode
+			// b5 = reset b
+			// b4 = reset a
+			// b3 = timer enable b
+			// b2 = timer enable a
+			// b1 = load b
+			// b0 = load a
 
 			if ((data ^ YM2612.Mode) & 0x40)
 			{
-
-
+				// We changed the channel 2 mode, so recalculate phase step
+				// This fix the punch sound in Street of Rage 2
 
 				YM2612_Special_Update();
 
-				YM2612.CHANNEL [2].SLOT [0].Finc = -1;       
+				YM2612.CHANNEL [2].SLOT [0].Finc = -1;      // recalculate phase step
 			}
 
+//          if ((data & 2) && (YM2612.Status & 2)) YM2612.TimerBcnt = YM2612.TimerBL;
+//          if ((data & 1) && (YM2612.Status & 1)) YM2612.TimerAcnt = YM2612.TimerAL;
 
-
-
-
-			YM2612.Status &= (~data >> 4) & (data >> 2);     
+//          YM2612.Status &= (~data >> 4);                  // Reset du Status au cas ou c'est demande
+			YM2612.Status &= (~data >> 4) & (data >> 2);    // Reset Status
 
 			YM2612.Mode = data;
 			break;
@@ -607,21 +607,21 @@ int Ym2612_Impl::YM_SET(int Adr, int data)
 
 			YM2612_Special_Update();
 
-			if (data & 0x10) KEY_ON(ch, S0);     
-			else KEY_OFF(ch, S0);                
-			if (data & 0x20) KEY_ON(ch, S1);     
-			else KEY_OFF(ch, S1);                
-			if (data & 0x40) KEY_ON(ch, S2);     
-			else KEY_OFF(ch, S2);                
-			if (data & 0x80) KEY_ON(ch, S3);     
-			else KEY_OFF(ch, S3);                
+			if (data & 0x10) KEY_ON(ch, S0);    // On appuie sur la touche pour le slot 1
+			else KEY_OFF(ch, S0);               // On rel'che la touche pour le slot 1
+			if (data & 0x20) KEY_ON(ch, S1);    // On appuie sur la touche pour le slot 3
+			else KEY_OFF(ch, S1);               // On rel'che la touche pour le slot 3
+			if (data & 0x40) KEY_ON(ch, S2);    // On appuie sur la touche pour le slot 2
+			else KEY_OFF(ch, S2);               // On rel'che la touche pour le slot 2
+			if (data & 0x80) KEY_ON(ch, S3);    // On appuie sur la touche pour le slot 4
+			else KEY_OFF(ch, S3);               // On rel'che la touche pour le slot 4
 			break;
 		}
 		
 		case 0x2B:
 			if (YM2612.DAC ^ (data & 0x80)) YM2612_Special_Update();
 
-			YM2612.DAC = data & 0x80;    
+			YM2612.DAC = data & 0x80;   // activation/desactivation du DAC
 			break;
 	}
 	
@@ -635,46 +635,46 @@ void Ym2612_Impl::set_rate( double sample_rate, double clock_rate )
 	
 	int i;
 
-
-
+	// 144 = 12 * (prescale * 2) = 12 * 6 * 2
+	// prescale set to 6 by default
 	
 	double Frequence = clock_rate / sample_rate / 144.0;
 	if ( fabs( Frequence - 1.0 ) < 0.0000001 )
 		Frequence = 1.0;
 	YM2612.TimerBase = int (Frequence * 4096.0);
 
-
-
-
+	// Tableau TL :
+	// [0     -  4095] = +output  [4095  - ...] = +output overflow (fill with 0)
+	// [12288 - 16383] = -output  [16384 - ...] = -output overflow (fill with 0)
 
 	for(i = 0; i < TL_LENGHT; i++)
 	{
-		if (i >= PG_CUT_OFF)     
+		if (i >= PG_CUT_OFF)    // YM2612 cut off sound after 78 dB (14 bits output ?)
 		{
 			g.TL_TAB [TL_LENGHT + i] = g.TL_TAB [i] = 0;
 		}
 		else
 		{
-			double x = MAX_OUT;                          
-			x /= pow( 10.0, (ENV_STEP * i) / 20.0 );     
+			double x = MAX_OUT;                         // Max output
+			x /= pow( 10.0, (ENV_STEP * i) / 20.0 );    // Decibel -> Voltage
 
 			g.TL_TAB [i] = (int) x;
 			g.TL_TAB [TL_LENGHT + i] = -g.TL_TAB [i];
 		}
 	}
 	
-
-
-
+	// Tableau SIN :
+	// g.SIN_TAB [x] [y] = sin(x) * y; 
+	// x = phase and y = volume
 
 	g.SIN_TAB [0] = g.SIN_TAB [SIN_LENGHT / 2] = PG_CUT_OFF;
 
 	for(i = 1; i <= SIN_LENGHT / 4; i++)
 	{
-		double x = sin(2.0 * PI * (double) (i) / (double) (SIN_LENGHT));     
-		x = 20 * log10(1 / x);                                       
+		double x = sin(2.0 * PI * (double) (i) / (double) (SIN_LENGHT));    // Sinus
+		x = 20 * log10(1 / x);                                      // convert to dB
 
-		int j = (int) (x / ENV_STEP);                        
+		int j = (int) (x / ENV_STEP);                       // Get TL range
 
 		if (j > PG_CUT_OFF) j = (int) PG_CUT_OFF;
 
@@ -682,37 +682,37 @@ void Ym2612_Impl::set_rate( double sample_rate, double clock_rate )
 		g.SIN_TAB [(SIN_LENGHT / 2) + i] = g.SIN_TAB [SIN_LENGHT - i] = TL_LENGHT + j;
 	}
 
-
+	// Tableau LFO (LFO wav) :
 
 	for(i = 0; i < LFO_LENGHT; i++)
 	{
-		double x = sin(2.0 * PI * (double) (i) / (double) (LFO_LENGHT));     
+		double x = sin(2.0 * PI * (double) (i) / (double) (LFO_LENGHT));    // Sinus
 		x += 1.0;
-		x /= 2.0;                    
-		x *= 11.8 / ENV_STEP;        
+		x /= 2.0;                   // positive only
+		x *= 11.8 / ENV_STEP;       // ajusted to MAX enveloppe modulation
 
 		g.LFO_ENV_TAB [i] = (int) x;
 
-		x = sin(2.0 * PI * (double) (i) / (double) (LFO_LENGHT));    
+		x = sin(2.0 * PI * (double) (i) / (double) (LFO_LENGHT));   // Sinus
 		x *= (double) ((1 << (LFO_HBITS - 1)) - 1);
 
 		g.LFO_FREQ_TAB [i] = (int) x;
 
 	}
 
-
-
-
+	// Tableau Enveloppe :
+	// g.ENV_TAB [0] -> g.ENV_TAB [ENV_LENGHT - 1]              = attack curve
+	// g.ENV_TAB [ENV_LENGHT] -> g.ENV_TAB [2 * ENV_LENGHT - 1] = decay curve
 
 	for(i = 0; i < ENV_LENGHT; i++)
 	{
-
+		// Attack curve (x^8 - music level 2 Vectorman 2)
 		double x = pow(((double) ((ENV_LENGHT - 1) - i) / (double) (ENV_LENGHT)), 8);
 		x *= ENV_LENGHT;
 
 		g.ENV_TAB [i] = (int) x;
 
-
+		// Decay curve (just linear)
 		x = pow(((double) (i) / (double) (ENV_LENGHT)), 1);
 		x *= ENV_LENGHT;
 
@@ -721,9 +721,9 @@ void Ym2612_Impl::set_rate( double sample_rate, double clock_rate )
 	for ( i = 0; i < 8; i++ )
 		g.ENV_TAB [i + ENV_LENGHT * 2] = 0;
 	
-	g.ENV_TAB [ENV_END >> ENV_LBITS] = ENV_LENGHT - 1;       
+	g.ENV_TAB [ENV_END >> ENV_LBITS] = ENV_LENGHT - 1;      // for the stopped state
 	
-
+	// Tableau pour la conversion Attack -> Decay and Decay -> Attack
 	
 	int j = ENV_LENGHT - 1;
 	for ( i = 0; i < ENV_LENGHT; i++ )
@@ -734,19 +734,19 @@ void Ym2612_Impl::set_rate( double sample_rate, double clock_rate )
 		g.DECAY_TO_ATTACK [i] = j << ENV_LBITS;
 	}
 
-
+	// Tableau pour le Substain Level
 	
 	for(i = 0; i < 15; i++)
 	{
-		double x = i * 3;            
+		double x = i * 3;           // 3 and not 6 (Mickey Mania first music for test)
 		x /= ENV_STEP;
 
 		g.SL_TAB [i] = ((int) x << ENV_LBITS) + ENV_DECAY;
 	}
 
-	g.SL_TAB [15] = ((ENV_LENGHT - 1) << ENV_LBITS) + ENV_DECAY;  
+	g.SL_TAB [15] = ((ENV_LENGHT - 1) << ENV_LBITS) + ENV_DECAY; // special case : volume off
 
-
+	// Tableau Frequency Step
 
 	for(i = 0; i < 2048; i++)
 	{
@@ -758,12 +758,12 @@ void Ym2612_Impl::set_rate( double sample_rate, double clock_rate )
 		x *= (double) (1 << (SIN_LBITS + SIN_HBITS - (21 - 7)));
 #endif
 
-		x /= 2.0;    
+		x /= 2.0;   // because MUL = value * 2
 
 		g.FINC_TAB [i] = (unsigned int) x;
 	}
 
-
+	// Tableaux Attack & Decay Rate
 
 	for(i = 0; i < 4; i++)
 	{
@@ -775,9 +775,9 @@ void Ym2612_Impl::set_rate( double sample_rate, double clock_rate )
 	{
 		double x = Frequence;
 
-		x *= 1.0 + ((i & 3) * 0.25);                     
-		x *= (double) (1 << ((i >> 2)));                 
-		x *= (double) (ENV_LENGHT << ENV_LBITS);         
+		x *= 1.0 + ((i & 3) * 0.25);                    // bits 0-1 : x1.00, x1.25, x1.50, x1.75
+		x *= (double) (1 << ((i >> 2)));                // bits 2-5 : shift bits (x2^0 - x2^15)
+		x *= (double) (ENV_LENGHT << ENV_LBITS);        // on ajuste pour le tableau g.ENV_TAB
 
 		g.AR_TAB [i + 4] = (unsigned int) (x / AR_RATE);
 		g.DR_TAB [i + 4] = (unsigned int) (x / DR_RATE);
@@ -794,7 +794,7 @@ void Ym2612_Impl::set_rate( double sample_rate, double clock_rate )
 	for ( i = 96; i < 128; i++ )
 		g.AR_TAB [i] = 0;
 	
-
+	// Tableau Detune
 
 	for(i = 0; i < 4; i++)
 	{
@@ -811,7 +811,7 @@ void Ym2612_Impl::set_rate( double sample_rate, double clock_rate )
 		}
 	}
 	
-
+	// Tableau LFO
 	g.LFO_INC_TAB [0] = (unsigned int) (3.98 * (double) (1 << (LFO_HBITS + LFO_LBITS)) / sample_rate);
 	g.LFO_INC_TAB [1] = (unsigned int) (5.56 * (double) (1 << (LFO_HBITS + LFO_LBITS)) / sample_rate);
 	g.LFO_INC_TAB [2] = (unsigned int) (6.02 * (double) (1 << (LFO_HBITS + LFO_LBITS)) / sample_rate);
@@ -919,7 +919,7 @@ void Ym2612_Impl::reset()
 
 			ch.SLOT [j].Fcnt = 0;
 			ch.SLOT [j].Finc = 0;
-			ch.SLOT [j].Ecnt = ENV_END;      
+			ch.SLOT [j].Ecnt = ENV_END;     // Put it at the end of Decay phase...
 			ch.SLOT [j].Einc = 0;
 			ch.SLOT [j].Ecmp = 0;
 			ch.SLOT [j].Ecurp = RELEASE;
@@ -966,9 +966,9 @@ static void update_envelope_( slot_t* sl )
 	switch ( sl->Ecurp )
 	{
 	case 0:
-
+		// Env_Attack_Next
 		
-
+		// Verified with Gynoug even in HQ (explode SFX)
 		sl->Ecnt = ENV_DECAY;
 
 		sl->Einc = sl->EincD;
@@ -977,9 +977,9 @@ static void update_envelope_( slot_t* sl )
 		break;
 	
 	case 1:
-
+		// Env_Decay_Next
 		
-
+		// Verified with Gynoug even in HQ (explode SFX)
 		sl->Ecnt = sl->SLL;
 
 		sl->Einc = sl->EincS;
@@ -988,17 +988,17 @@ static void update_envelope_( slot_t* sl )
 		break;
 	
 	case 2:
-
-		if (sl->SEG & 8)     
+		// Env_Substain_Next(slot_t *SL)
+		if (sl->SEG & 8)    // SSG envelope type
 		{
 			int release = sl->SEG & 1;
 			
 			if ( !release )
 			{
+				// re KEY ON
 
-
-
-
+				// sl->Fcnt = 0;
+				// sl->ChgEnM = ~0;
 
 				sl->Ecnt = 0;
 				sl->Einc = sl->EincA;
@@ -1011,16 +1011,16 @@ static void update_envelope_( slot_t* sl )
 			if ( !release )
 				break;
 		}
-
+		// fall through
 	
 	case 3:
-
+		// Env_Release_Next
 		sl->Ecnt = ENV_END;
 		sl->Einc = 0;
 		sl->Ecmp = ENV_END + 1;
 		break;
 	
-
+	// default: no op
 	}
 }
 
@@ -1044,10 +1044,10 @@ void ym2612_update_chan<algo>::func( tables_t& g, channel_t& ch,
 {
 	int not_end = ch.SLOT [S3].Ecnt - ENV_END;
 	
-
-
+	// algo is a compile-time constant, so all conditions based on it are resolved
+	// during compilation
 	
-
+	// special cases
 	if ( algo == 7 )
 		not_end |= ch.SLOT [S0].Ecnt - ENV_END;
 	
@@ -1072,7 +1072,7 @@ void ym2612_update_chan<algo>::func( tables_t& g, channel_t& ch,
 	
 	do
 	{
-
+		// envelope
 		int const env_LFO = g.LFO_ENV_TAB [YM2612_LFOcnt >> LFO_LBITS & LFO_MASK];
 		
 		short const* const ENV_TAB = g.ENV_TAB;
@@ -1091,7 +1091,7 @@ void ym2612_update_chan<algo>::func( tables_t& g, channel_t& ch,
 		
 	#define SINT( i, o ) (TL_TAB [g.SIN_TAB [(i)] + (o)])
 		
-
+		// feedback
 		int CH_S0_OUT_0 = ch.S0_OUT [0];
 		{
 			int temp = in0 + ((CH_S0_OUT_0 + CH_S0_OUT_1) >> ch.FB);
@@ -1131,7 +1131,7 @@ void ym2612_update_chan<algo>::func( tables_t& g, channel_t& ch,
 			int temp = in3 + SINT( (in2 >> SIN_LBITS) & SIN_MASK, en2 );
 			CH_OUTd = SINT( (temp >> SIN_LBITS) & SIN_MASK, en3 ) +
 					SINT( ((in1 + CH_S0_OUT_1) >> SIN_LBITS) & SIN_MASK, en1 );
-
+			//DO_LIMIT
 		}
 		else if ( algo == 5 )
 		{
@@ -1139,26 +1139,26 @@ void ym2612_update_chan<algo>::func( tables_t& g, channel_t& ch,
 			CH_OUTd = SINT( ((in3 + temp) >> SIN_LBITS) & SIN_MASK, en3 ) +
 					SINT( ((in1 + temp) >> SIN_LBITS) & SIN_MASK, en1 ) +
 					SINT( ((in2 + temp) >> SIN_LBITS) & SIN_MASK, en2 );
-
+			//DO_LIMIT
 		}
 		else if ( algo == 6 )
 		{
 			CH_OUTd = SINT( (in3 >> SIN_LBITS) & SIN_MASK, en3 ) +
 					SINT( ((in1 + CH_S0_OUT_1) >> SIN_LBITS) & SIN_MASK, en1 ) +
 					SINT( (in2 >> SIN_LBITS) & SIN_MASK, en2 );
-
+			//DO_LIMIT
 		}
 		else if ( algo == 7 )
 		{
 			CH_OUTd = SINT( (in3 >> SIN_LBITS) & SIN_MASK, en3 ) +
 					SINT( (in1 >> SIN_LBITS) & SIN_MASK, en1 ) +
 					SINT( (in2 >> SIN_LBITS) & SIN_MASK, en2 ) + CH_S0_OUT_1;
-
+			//DO_LIMIT
 		}
 		
 		CH_OUTd >>= MAX_OUT_BITS - output_bits + 2;
 		
-
+		// update phase
 		unsigned freq_LFO = ((g.LFO_FREQ_TAB [YM2612_LFOcnt >> LFO_LBITS & LFO_MASK] *
 				ch.FMS) >> (LFO_HBITS - 1 + 1)) + (1L << (LFO_FMS_LBITS - 1));
 		YM2612_LFOcnt += YM2612_LFOinc;
@@ -1213,12 +1213,12 @@ void Ym2612_Impl::run_timer( int length )
 		remain -= n;
 		
 		long i = n * YM2612.TimerBase;
-		if (YM2612.Mode & 1)                             
+		if (YM2612.Mode & 1)                            // Timer A ON ?
 		{
-
+	//      if ((YM2612.TimerAcnt -= 14073) <= 0)       // 13879=NTSC (old: 14475=NTSC  14586=PAL)
 			if ((YM2612.TimerAcnt -= i) <= 0)
 			{
-
+				// timer a overflow
 				
 				YM2612.Status |= (YM2612.Mode & 0x04) >> 2;
 				YM2612.TimerAcnt += YM2612.TimerAL;
@@ -1233,12 +1233,12 @@ void Ym2612_Impl::run_timer( int length )
 			}
 		}
 
-		if (YM2612.Mode & 2)                             
+		if (YM2612.Mode & 2)                            // Timer B ON ?
 		{
-
+	//      if ((YM2612.TimerBcnt -= 14073) <= 0)       // 13879=NTSC (old: 14475=NTSC  14586=PAL)
 			if ((YM2612.TimerBcnt -= i) <= 0)
 			{
-
+				// timer b overflow
 				YM2612.Status |= (YM2612.Mode & 0x08) >> 2;
 				YM2612.TimerBcnt += YM2612.TimerBL;
 			}
@@ -1255,7 +1255,7 @@ void Ym2612_Impl::run( int pair_count, Ym2612_Emu::sample_t* out )
 	if ( YM2612.Mode & 3 )
 		run_timer( pair_count );
 	
-
+	// Mise à jour des pas des compteurs-frequences s'ils ont ete modifies
 	
 	for ( int chi = 0; chi < channel_count; chi++ )
 	{
@@ -1269,15 +1269,15 @@ void Ym2612_Impl::run( int pair_count, Ym2612_Emu::sample_t* out )
 		
 		for ( int i = 0; i < 4; i++ )
 		{
-
-
+			// static int seq [4] = { 2, 1, 3, 0 };
+			// if ( i2 ) i2 = seq [i];
 			
 			slot_t& sl = ch.SLOT [i];
 			int finc = g.FINC_TAB [ch.FNUM [i2]] >> (7 - ch.FOCT [i2]);
-			int ksr = ch.KC [i2] >> sl.KSR_S;    
+			int ksr = ch.KC [i2] >> sl.KSR_S;   // keycode attenuation
 			sl.Finc = (finc + sl.DT [ch.KC [i2]]) * sl.MUL;
-			if (sl.KSR != ksr)           
-			{                        
+			if (sl.KSR != ksr)          // si le KSR a change alors
+			{                       // les differents taux pour l'enveloppe sont mis à jour
 				sl.KSR = ksr;
 
 				sl.EincA = sl.AR [ksr];

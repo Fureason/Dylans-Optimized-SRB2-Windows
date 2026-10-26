@@ -8,19 +8,19 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_local.h
+/// \brief Refresh (R_*) module, global header. All the rendering/drawing stuff is here
 
 #ifndef __R_LOCAL__
 #define __R_LOCAL__
 
-
+// Screen size related parameters.
 #include "doomdef.h"
 
-
+// Binary Angles, sine/cosine/atan lookups.
 #include "tables.h"
 
-
+// this one holds the max vid sizes and standard aspect
 #include "screen.h"
 
 #include "m_bbox.h"
@@ -39,4 +39,4 @@ extern drawseg_t *firstseg;
 
 void SplitScreen_OnChange(void);
 
-#endif  
+#endif // __R_LOCAL__

@@ -24,16 +24,16 @@
 
 
 
-  TValue luaO_nilobject_ = {{NULL}, LUA_TNIL};
+/*const*/ TValue luaO_nilobject_ = {{NULL}, LUA_TNIL};
 
 
-  
-                                                                 
-                                                                
-                                  
-  
+/*
+** converts an integer to a "floating point byte", represented as
+** (eeeeexxx), where the real value is (1xxx) * 2^(eeeee - 1) if
+** eeeee != 0 and (xxx) otherwise.
+*/
 int luaO_int2fb (unsigned int x) {
-  int e = 0;   
+  int e = 0;  /* expoent */
   while (x >= 16) {
     x = (x+1) >> 1;
     e++;
@@ -43,7 +43,7 @@ int luaO_int2fb (unsigned int x) {
 }
 
 
- 
+/* converts back */
 int luaO_fb2int (int x) {
   int e = (x >> 3) & 31;
   if (e == 0) return x;
@@ -77,7 +77,7 @@ int luaO_rawequalObj (const TValue *t1, const TValue *t2) {
     case LUA_TNUMBER:
       return luai_numeq(nvalue(t1), nvalue(t2));
     case LUA_TBOOLEAN:
-      return bvalue(t1) == bvalue(t2);   
+      return bvalue(t1) == bvalue(t2);  /* boolean true must be 1 !! */
     case LUA_TLIGHTUSERDATA:
       return pvalue(t1) == pvalue(t2);
     default:
@@ -91,12 +91,12 @@ int luaO_str2d (const char *s, lua_Number *result) {
   char *endptr;
   double r = lua_str2number(s, &endptr);
    *result = (lua_Number)r;
-  if (endptr == s) return 0;   
-  if (*endptr == 'x' || *endptr == 'X')   
+  if (endptr == s) return 0;  /* conversion failed */
+  if (*endptr == 'x' || *endptr == 'X')  /* maybe an hexadecimal constant? */
     *result = cast_num(strtoul(s, &endptr, 16));
-  if (*endptr == '\0') return 1;   
+  if (*endptr == '\0') return 1;  /* most common case */
   while (isspace(cast(unsigned char, *endptr))) endptr++;
-  if (*endptr != '\0') return 0;   
+  if (*endptr != '\0') return 0;  /* invalid trailing characters? */
   return 1;
 }
 
@@ -108,7 +108,7 @@ static void pushstr (lua_State *L, const char *str) {
 }
 
 
- 
+/* this function handles only `%d', `%c', %f, %p, and `%s' formats */
 const char *luaO_pushvfstring (lua_State *L, const char *fmt, va_list argp) {
   int n = 1;
   pushstr(L, "");
@@ -142,7 +142,7 @@ const char *luaO_pushvfstring (lua_State *L, const char *fmt, va_list argp) {
         break;
       }
       case 'p': {
-        char buff[4*sizeof(void *) + 8];  
+        char buff[4*sizeof(void *) + 8]; /* should be enough space for a `%p' */
         sprintf(buff, "%p", va_arg(argp, void *));
         pushstr(L, buff);
         break;
@@ -182,28 +182,28 @@ const char *luaO_pushfstring (lua_State *L, const char *fmt, ...) {
 
 void luaO_chunkid (char *out, const char *source, size_t bufflen) {
   if (*source == '=') {
-    strncpy(out, source+1, bufflen);   
-    out[bufflen-1] = '\0';   
+    strncpy(out, source+1, bufflen);  /* remove first char */
+    out[bufflen-1] = '\0';  /* ensures null termination */
   }
-  else {   
+  else {  /* out = "source", or "...source" */
     if (*source == '@') {
       size_t l;
-      source++;   
+      source++;  /* skip the `@' */
       bufflen -= sizeof(" '...' ");
       l = strlen(source);
       strcpy(out, "");
       if (l > bufflen) {
-        source += (l-bufflen);   
+        source += (l-bufflen);  /* get last part of file name */
         strcat(out, "...");
       }
       strcat(out, source);
     }
-    else {   
-      size_t len = strcspn(source, "\n\r");   
+    else {  /* out = [string "string"] */
+      size_t len = strcspn(source, "\n\r");  /* stop at first newline */
       bufflen -= sizeof(" [string \"...\"] ");
       if (len > bufflen) len = bufflen;
       strcpy(out, "[string \"");
-      if (source[len] != '\0') {   
+      if (source[len] != '\0') {  /* must truncate? */
         strncat(out, source, len);
         strcat(out, "...");
       }

@@ -4,7 +4,7 @@
 	<property name="description"> zip compression library </property>
 	<property name="include-target-dir" value="$(@PACKAGE/install-includedir)" />
 
-	 
+	<!-- fixme: not implemented yet -->
 	<property name="compiler/c/inline" value="yes" />
 
 	<include-file name="zlib.h" scope="public" mode="644" />
@@ -98,19 +98,19 @@
     </library>
 </package>
 
-    
-         
-                                           
-                       
-                                                                
-                                                    
+<!--
+CFLAGS=-O
+#CFLAGS=-O -DMAX_WBITS=14 -DMAX_MEM_LEVEL=7
+#CFLAGS=-g -DZLIB_DEBUG
+#CFLAGS=-O3 -Wall -Wwrite-strings -Wpointer-arith -Wconversion \
+#           -Wstrict-prototypes -Wmissing-prototypes
 
-        
-                                        
- 
-                
-                          
-                  
-                    
-               
-   
+# OBJA =
+# to use the asm code: make OBJA=match.o
+#
+match.o: match.S
+	$(CPP) match.S > _match.s
+	$(CC) -c _match.s
+	mv _match.o match.o
+	rm -f _match.s
+-->

@@ -1,4 +1,4 @@
-
+// Blip_Buffer 0.4.1. http://www.slack.net/~ant/
 
 #include "Multi_Buffer.h"
 
@@ -28,17 +28,17 @@ Multi_Buffer::Multi_Buffer( int spf ) : samples_per_frame_( spf )
 
 blargg_err_t Multi_Buffer::set_channel_count( int ) { return 0; }
 
+// Silent_Buffer
 
-
-Silent_Buffer::Silent_Buffer() : Multi_Buffer( 1 )  
+Silent_Buffer::Silent_Buffer() : Multi_Buffer( 1 ) // 0 channels would probably confuse
 {
-
+	// TODO: better to use empty Blip_Buffer so caller never has to check for NULL?
 	chan.left   = 0;
 	chan.center = 0;
 	chan.right  = 0;
 }
 
-
+// Mono_Buffer
 
 Mono_Buffer::Mono_Buffer() : Multi_Buffer( 1 )
 {
@@ -55,7 +55,7 @@ blargg_err_t Mono_Buffer::set_sample_rate( long rate, int msec )
 	return Multi_Buffer::set_sample_rate( buf.sample_rate(), buf.length() );
 }
 
-
+// Stereo_Buffer
 
 Stereo_Buffer::Stereo_Buffer() : Multi_Buffer( 2 )
 {
@@ -105,7 +105,7 @@ void Stereo_Buffer::end_frame( blip_time_t clock_count )
 
 long Stereo_Buffer::read_samples( blip_sample_t* out, long count )
 {
-	require( !(count & 1) );  
+	require( !(count & 1) ); // count must be even
 	count = (unsigned) count / 2;
 	
 	long avail = bufs [0].samples_avail();
@@ -114,7 +114,7 @@ long Stereo_Buffer::read_samples( blip_sample_t* out, long count )
 	if ( count )
 	{
 		int bufs_used = stereo_added | was_stereo;
-
+		//debug_printf( "%X\n", bufs_used );
 		if ( bufs_used <= 1 )
 		{
 			mix_mono( out, count );
@@ -137,7 +137,7 @@ long Stereo_Buffer::read_samples( blip_sample_t* out, long count )
 			bufs [2].remove_samples( count );
 		}
 		
-
+		// to do: this might miss opportunities for optimization
 		if ( !bufs [0].samples_avail() )
 		{
 			was_stereo   = stereo_added;

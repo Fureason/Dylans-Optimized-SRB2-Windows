@@ -1,20 +1,20 @@
-   
-                      
-   
+/**
+ * Joystick test suite
+ */
 
 #include "SDL.h"
 #include "SDL_test.h"
 #include "../src/joystick/usb_ids.h"
 
- 
+/* ================= Test Case Implementation ================== */
 
- 
+/* Test case functions */
 
-   
-                                         
-  
-                                  
-   
+/**
+ * @brief Check virtual joystick creation
+ *
+ * @sa SDL_JoystickAttachVirtualEx
+ */
 static int
 TestVirtualJoystick(void *arg)
 {
@@ -69,20 +69,20 @@ TestVirtualJoystick(void *arg)
     return TEST_COMPLETED;
 }
 
- 
+/* ================= Test References ================== */
 
- 
+/* Joystick routine test cases */
 static const SDLTest_TestCaseReference joystickTest1 = {
     (SDLTest_TestCaseFp)TestVirtualJoystick, "TestVirtualJoystick", "Test virtual joystick functionality", TEST_ENABLED
 };
 
- 
+/* Sequence of Joystick routine test cases */
 static const SDLTest_TestCaseReference *joystickTests[] = {
     &joystickTest1,
     NULL
 };
 
- 
+/* Joystick routine test suite (global) */
 SDLTest_TestSuiteReference joystickTestSuite = {
     "Joystick",
     NULL,

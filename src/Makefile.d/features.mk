@@ -1,13 +1,13 @@
-
-
-
+#
+# Makefile for feature flags.
+#
 
 passthru_opts+=\
 	NO_IPV6 NOHW NOMD5 NOPOSTPROCESSING\
 	MOBJCONSISTANCY PACKETDROP ZDEBUG\
 	NOUPNP NOEXECINFO\
 
-
+# build with debugging information
 ifdef DEBUGMODE
 PACKETDROP=1
 opts+=-DPARANOIA -DRANGECHECK
@@ -48,7 +48,7 @@ HAVE_MINIUPNPC=1
 opts+=-DHAVE_MINIUPNPC
 endif
 
-
+# (Valgrind is a memory debugger.)
 ifdef VALGRIND
 VALGRIND_PKGCONFIG?=valgrind
 VALGRIND_LDFLAGS=

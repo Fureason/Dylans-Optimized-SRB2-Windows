@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file m_perfstats.c
+/// \brief Performance measurement tools.
 
 #include "m_perfstats.h"
 #include "v_video.h"
@@ -42,14 +42,14 @@ struct perfstatrow {
 	UINT8         flags;
 };
 
+// perfstatrow_t flags
 
-
-#define PS_TIME      1   
-#define PS_LEVEL     2   
-#define PS_SW        4   
-#define PS_HW        8   
-#define PS_BATCHING  16  
-#define PS_HIDE_ZERO 32  
+#define PS_TIME      1  // metric measures time (uses precise_t instead of INT32)
+#define PS_LEVEL     2  // metric is valid only when a level is active
+#define PS_SW        4  // metric is valid only in software mode
+#define PS_HW        8  // metric is valid only in opengl mode
+#define PS_BATCHING  16 // metric is valid only when opengl batching is active
+#define PS_HIDE_ZERO 32 // hide metric if its value is zero
 
 static ps_metric_t ps_frametime = {0};
 
@@ -82,10 +82,10 @@ ps_metric_t ps_lua_mobjiterates = {0};
 
 ps_metric_t ps_otherlogictime = {0};
 
-                                                                             
-                                                                           
-                                                                            
-                                 
+/* Automatic deep profiling is deliberately burst-based. Querying the precise
+ * timer around every thinker forever costs measurable time in object-heavy
+ * add-ons; doing it for a few seconds after a real hitch gives useful blame
+ * without taxing normal play. */
 static UINT16 ps_deep_profile_tics;
 static precise_t ps_mobjtype_times[NUMMOBJTYPES];
 static UINT32 ps_mobjtype_calls[NUMMOBJTYPES];
@@ -147,15 +147,15 @@ void PS_ArmHitchProfile(void)
 	const precise_t now = I_GetPreciseTime();
 	const precise_t precision = I_GetPrecisePrecision();
 
-	                                                                         
-                                                                          
-                                                                        
-                                                                       
+	/* Automatic hitch attribution only needs a short sample after the event.
+	 * Do not extend an active sample on every subsequent hitch: on maps with
+	 * thousands of thinkers that feedback kept precise timer calls enabled
+	 * permanently and the profiler itself became part of the slowdown. */
 	if (!ps_deep_profile_tics && (!next_allowed || now >= next_allowed))
 	{
 		ps_deep_profile_tics = max(1, TICRATE / 4);
-		                                                                   
-                                                                            
+		/* Sample at most once per ten seconds automatically. The console's
+		 * perfprofile command still supplies the deliberate full five seconds. */
 		next_allowed = now + precision * 10;
 	}
 }
@@ -171,8 +171,8 @@ void PS_BeginTickProfile(void)
 	precise_t hottest_time = 0;
 	const boolean was_active = (ps_deep_profile_tics != 0);
 
-	                                                                        
-                                                                           
+	/* Preserve the previous tick's result until this tick produces a better
+	 * snapshot. This is useful when a slow frame is reported between tics. */
 	if (ps_deep_profile_tics)
 	{
 		if (ps_current_mobj_instance.time)
@@ -190,9 +190,9 @@ void PS_BeginTickProfile(void)
 		ps_deep_profile_tics--;
 	}
 
-	                                                                          
-                                                                           
-                                                                       
+	/* These arrays are sizeable in add-on-heavy builds. Clearing and updating
+	 * all of them every 35 Hz tic made the diagnostics system permanent work.
+	 * Keep it completely dormant until a hitch or perfprofile arms it. */
 	if (was_active || ps_deep_profile_tics)
 	{
 		memset(ps_mobjtype_times, 0, sizeof ps_mobjtype_times);
@@ -240,8 +240,8 @@ void PS_RecordLuaHook(const char *description, precise_t time_taken)
 	UINT32 i;
 	if (!description)
 		return;
-	                                                                       
-                                                                        
+	/* The per-tic slowest hook and the multi-second total answer different
+	 * questions. Keep accumulating even when this is not a new maximum. */
 	if (time_taken > ps_slowest_lua_time)
 	{
 		ps_slowest_lua_time = time_taken;
@@ -390,10 +390,10 @@ void PS_FormatHitchContext(char *buffer, size_t buffer_size)
 
 	for (type = MT_NULL; type < NUMMOBJTYPES; type++)
 	{
-		                                                                       
-                                                                       
-                                                                      
-                                                                            
+		/* Never walk the live thinker list from a hitch report. Reports may be
+		 * emitted while map cleanup is unlinking/freeing that list. The call
+		 * counters come from P_RunThinkers itself, so they provide the same
+		 * useful per-type population clue without touching transitional state. */
 		if (ps_mobjtype_calls[type] > hottest_object_count)
 		{
 			hottest_object = type;
@@ -457,8 +457,8 @@ void PS_DeepProfile_f(void)
 static double PS_Milliseconds(precise_t value)
 {
 	const UINT64 precision = I_GetPrecisePrecision();
-	                                                                           
-                                                                             
+	/* A timing slot can retain a pre-map timestamp while the map is torn down.
+	 * Do not turn that unsigned subtraction into a multi-hour "measurement". */
 	if (!precision || value > precision * 10)
 		return 0.0;
 	return (double)value * 1000.0 / (double)precision;
@@ -598,17 +598,17 @@ void PS_PerformanceReport_f(void)
 #undef PS_ADD_CAUSE
 }
 
+// Columns for perfstats pages.
 
+// Position on screen is determined separately in the drawing functions.
 
+// New columns must also be added to the drawing and update functions.
+// Drawing functions: PS_DrawRenderStats, PS_DrawGameLogicStats, etc.
+// Update functions:
+//  - PS_UpdateFrameStats for frame-dependent values
+//  - PS_UpdateTickStats for tick-dependent values
 
-
-
-
-
-
-
-
-
+// Rendering stats columns
 
 perfstatrow_t rendertime_rows[] = {
 	{"frmtime", "Frame time:    ", &ps_frametime, PS_TIME},
@@ -680,7 +680,7 @@ perfstatrow_t batchcalls_rows[] = {
 };
 #endif
 
-
+// Game logic stats columns
 
 perfstatrow_t gamelogic_rows[] = {
 	{"logic  ", "Game logic:     ", &ps_tictime, PS_TIME},
@@ -719,16 +719,16 @@ perfstatrow_t misc_calls_rows[] = {
 	{0}
 };
 
-
-
-
+// Sample collection status for averaging.
+// Maximum of these two is shown to user if nonzero to tell that
+// the reported averages are not correct yet.
 int ps_frame_samples_left = 0;
 int ps_tick_samples_left = 0;
-
+// History writing positions for frame and tick based metrics
 int ps_frame_index = 0;
 int ps_tick_index = 0;
 
-
+// dynamically allocated resizeable array for thinkframe hook stats
 ps_hookinfo_t *prethinkframe_hooks = NULL;
 int prethinkframe_hooks_length = 0;
 int prethinkframe_hooks_capacity = 16;
@@ -745,24 +745,24 @@ void PS_SetPreThinkFrameHookInfo(int index, precise_t time_taken, char* short_sr
 {
 	if (!prethinkframe_hooks)
 	{
-
+		// array needs to be initialized
 		prethinkframe_hooks = Z_Calloc(sizeof(ps_hookinfo_t) * prethinkframe_hooks_capacity, PU_STATIC, NULL);
 	}
 	if (index >= prethinkframe_hooks_capacity)
 	{
-
+		// array needs more space, realloc with double size
 		int new_capacity = prethinkframe_hooks_capacity * 2;
 		prethinkframe_hooks = Z_Realloc(prethinkframe_hooks,
 			sizeof(ps_hookinfo_t) * new_capacity, PU_STATIC, NULL);
-
+		// initialize new memory with zeros so the pointers in the structs are null
 		memset(&prethinkframe_hooks[prethinkframe_hooks_capacity], 0,
 			sizeof(ps_hookinfo_t) * prethinkframe_hooks_capacity);
 		prethinkframe_hooks_capacity = new_capacity;
 	}
 	prethinkframe_hooks[index].time_taken.value.p = time_taken;
 	memcpy(prethinkframe_hooks[index].short_src, short_src, LUA_IDSIZE * sizeof(char));
-
-
+	// since the values are set sequentially from begin to end, the last call should leave
+	// the correct value to this variable
 	prethinkframe_hooks_length = index + 1;
 }
 
@@ -770,24 +770,24 @@ void PS_SetThinkFrameHookInfo(int index, precise_t time_taken, char* short_src)
 {
 	if (!thinkframe_hooks)
 	{
-
+		// array needs to be initialized
 		thinkframe_hooks = Z_Calloc(sizeof(ps_hookinfo_t) * thinkframe_hooks_capacity, PU_STATIC, NULL);
 	}
 	if (index >= thinkframe_hooks_capacity)
 	{
-
+		// array needs more space, realloc with double size
 		int new_capacity = thinkframe_hooks_capacity * 2;
 		thinkframe_hooks = Z_Realloc(thinkframe_hooks,
 			sizeof(ps_hookinfo_t) * new_capacity, PU_STATIC, NULL);
-
+		// initialize new memory with zeros so the pointers in the structs are null
 		memset(&thinkframe_hooks[thinkframe_hooks_capacity], 0,
 			sizeof(ps_hookinfo_t) * thinkframe_hooks_capacity);
 		thinkframe_hooks_capacity = new_capacity;
 	}
 	thinkframe_hooks[index].time_taken.value.p = time_taken;
 	memcpy(thinkframe_hooks[index].short_src, short_src, LUA_IDSIZE * sizeof(char));
-
-
+	// since the values are set sequentially from begin to end, the last call should leave
+	// the correct value to this variable
 	thinkframe_hooks_length = index + 1;
 }
 
@@ -795,24 +795,24 @@ void PS_SetPostThinkFrameHookInfo(int index, precise_t time_taken, char* short_s
 {
 	if (!postthinkframe_hooks)
 	{
-
+		// array needs to be initialized
 		postthinkframe_hooks = Z_Calloc(sizeof(ps_hookinfo_t) * postthinkframe_hooks_capacity, PU_STATIC, NULL);
 	}
 	if (index >= postthinkframe_hooks_capacity)
 	{
-
+		// array needs more space, realloc with double size
 		int new_capacity = postthinkframe_hooks_capacity * 2;
 		postthinkframe_hooks = Z_Realloc(postthinkframe_hooks,
 			sizeof(ps_hookinfo_t) * new_capacity, PU_STATIC, NULL);
-
+		// initialize new memory with zeros so the pointers in the structs are null
 		memset(&postthinkframe_hooks[postthinkframe_hooks_capacity], 0,
 			sizeof(ps_hookinfo_t) * postthinkframe_hooks_capacity);
 		postthinkframe_hooks_capacity = new_capacity;
 	}
 	postthinkframe_hooks[index].time_taken.value.p = time_taken;
 	memcpy(postthinkframe_hooks[index].short_src, short_src, LUA_IDSIZE * sizeof(char));
-
-
+	// since the values are set sequentially from begin to end, the last call should leave
+	// the correct value to this variable
 	postthinkframe_hooks_length = index + 1;
 }
 
@@ -827,7 +827,7 @@ static boolean PS_IsLevelActive(void)
 			(gamestate == GS_TITLESCREEN && titlemapinaction);
 }
 
-
+// Is the row valid in the current context?
 static boolean PS_IsRowValid(perfstatrow_t *row)
 {
 	return !((row->flags & PS_LEVEL && !PS_IsLevelActive())
@@ -839,7 +839,7 @@ static boolean PS_IsRowValid(perfstatrow_t *row)
 		);
 }
 
-
+// Should the row be visible on the screen?
 static boolean PS_IsRowVisible(perfstatrow_t *row)
 {
 	boolean value_is_zero;
@@ -855,7 +855,7 @@ static boolean PS_IsRowVisible(perfstatrow_t *row)
 
 static INT32 PS_GetMetricAverage(ps_metric_t *metric, boolean time_metric)
 {
-	char* history_read_pos = metric->history;  
+	char* history_read_pos = metric->history; // char* used for pointer arithmetic
 	INT64 sum = 0;
 	int i;
 	int value_size = time_metric ? sizeof(precise_t) : sizeof(INT32);
@@ -874,7 +874,7 @@ static INT32 PS_GetMetricAverage(ps_metric_t *metric, boolean time_metric)
 
 static INT32 PS_GetMetricMinOrMax(ps_metric_t *metric, boolean time_metric, boolean get_max)
 {
-	char* history_read_pos = metric->history;  
+	char* history_read_pos = metric->history; // char* used for pointer arithmetic
 	INT32 found_value = get_max ? INT32_MIN : INT32_MAX;
 	int i;
 	int value_size = time_metric ? sizeof(precise_t) : sizeof(INT32);
@@ -898,10 +898,10 @@ static INT32 PS_GetMetricMinOrMax(ps_metric_t *metric, boolean time_metric, bool
 	return found_value;
 }
 
-
+// Calculates the standard deviation for metric.
 static INT32 PS_GetMetricSD(ps_metric_t *metric, boolean time_metric)
 {
-	char* history_read_pos = metric->history;  
+	char* history_read_pos = metric->history; // char* used for pointer arithmetic
 	INT64 sum = 0;
 	int i;
 	int value_size = time_metric ? sizeof(precise_t) : sizeof(INT32);
@@ -924,7 +924,7 @@ static INT32 PS_GetMetricSD(ps_metric_t *metric, boolean time_metric)
 	return round(sqrt(sum / cv_ps_samplesize.value));
 }
 
-
+// Returns the value to show on screen for metric.
 static INT32 PS_GetMetricScreenValue(ps_metric_t *metric, boolean time_metric)
 {
 	if (cv_ps_samplesize.value > 1 && metric->history)
@@ -991,14 +991,14 @@ static void PS_UpdateMetricHistory(ps_metric_t *metric, boolean time_metric, boo
 
 	if (!metric->history)
 	{
-
+		// allocate history table
 		int value_size = time_metric ? sizeof(precise_t) : sizeof(INT32);
 		void** memory_user = &metric->history;
 
 		metric->history = Z_Calloc(value_size * cv_ps_samplesize.value, PU_PERFSTATS,
 				memory_user);
 
-
+		// reset "samples left" counter since this history table needs to be filled
 		if (frame_metric)
 			ps_frame_samples_left = cv_ps_samplesize.value;
 		else
@@ -1027,19 +1027,19 @@ static void PS_UpdateRowHistories(perfstatrow_t *rows, boolean frame_metric)
 	}
 }
 
-
+// Update all metrics that are calculated on every frame.
 void PS_UpdateFrameStats(void)
 {
-
+	// update frame time
 	precise_t currenttime = I_GetPreciseTime();
 	precise_t attributedrendertime;
 	ps_frametime.value.p = ps_prevframetime ? currenttime - ps_prevframetime : 0;
 	ps_prevframetime = currenttime;
 
-
+	// update 3d rendering stats
 	if (PS_IsLevelActive())
 	{
-
+		// Remember to update this calculation when adding more 3d rendering stats!
 		attributedrendertime = ps_bsptime.value.p;
 
 #ifdef HWRENDER
@@ -1070,9 +1070,9 @@ void PS_UpdateFrameStats(void)
 				ps_sw_maskedtime.value.p;
 		}
 
-		                                                                          
-                                                                       
-                                                                       
+		/* Some renderer timers can overlap by a few ticks. precise_t is unsigned,
+		 * so subtracting a slightly larger attributed total used to wrap the
+		 * "Other" row into a multi-billion value and pollute its average. */
 		ps_otherrendertime.value.p = ps_rendercalltime.value.p > attributedrendertime
 			? ps_rendercalltime.value.p - attributedrendertime : 0;
 	}
@@ -1102,7 +1102,7 @@ void PS_UpdateFrameStats(void)
 	}
 }
 
-
+// Update thinker counters by iterating the thinker lists.
 static void PS_CountThinkers(void)
 {
 	int i;
@@ -1152,7 +1152,7 @@ static void PS_CountThinkers(void)
 	}
 }
 
-
+// Update all metrics that are calculated on every tick.
 void PS_UpdateTickStats(void)
 {
 	if (PS_IsLevelActive())
@@ -1160,9 +1160,9 @@ void PS_UpdateTickStats(void)
 		const precise_t attributed = ps_playerthink_time.value.p
 			+ ps_thinkertime.value.p + ps_lua_prethinkframe_time.value.p
 			+ ps_lua_thinkframe_time.value.p + ps_lua_postthinkframe_time.value.p;
-		                                                                  
-                                                                           
-                                                                               
+		/* Hitch and perfreport diagnostics need this even when the visual
+		 * perfstats page is hidden. The old conditional left every normal user's
+		 * report saying other_logic_ms=0, concealing first-tic/map-script stalls. */
 		ps_otherlogictime.value.p = ps_tictime.value.p > attributed
 			? ps_tictime.value.p - attributed : 0;
 	}
@@ -1323,7 +1323,7 @@ static void draw_think_frame_stats(int hook_length, ps_hookinfo_t *hook)
 {
 	char s[100];
 	int i;
-
+	// text writing position
 	int x = 2;
 	int y = 4;
 	UINT32 text_color;
@@ -1352,22 +1352,22 @@ if (y > 192) \
 		char* str_ptr;
 		if (strcmp(".lua", str + len - 4) == 0)
 		{
-			str[len-4] = '\0';  
+			str[len-4] = '\0'; // remove .lua at end
 			len -= 4;
 		}
-
-
-
+		// we locate the wad/pk3 name in the string and compare it to
+		// what we found on the previous iteration.
+		// if the name has changed, print it out on the screen
 		strcpy(tempstr, str);
 		str_ptr = strrchr(tempstr, '|');
 		if (str_ptr)
 		{
 			*str_ptr = '\0';
-			str = str_ptr + 1;  
+			str = str_ptr + 1; // this is the name of the hook without the mod file name
 			str_ptr = strrchr(tempstr, PATHSEP[0]);
 			if (str_ptr)
 				tempstr = str_ptr + 1;
-
+			// tempstr should now point to the mod name, (wad/pk3) possibly truncated
 			if (strcmp(tempstr, last_mod_name) != 0)
 			{
 				strcpy(last_mod_name, tempstr);
@@ -1382,12 +1382,12 @@ if (y > 192) \
 		}
 		else
 		{
-
-
+			// probably a standalone lua file
+			// cut off the folder if it's there
 			str_ptr = strrchr(tempstr, PATHSEP[0]);
 			if (str_ptr)
 				str = str_ptr + 1;
-			text_color = 0;  
+			text_color = 0; // white
 		}
 		len = (int)strlen(str);
 		if (len > 20)
@@ -1419,25 +1419,25 @@ static void PS_DrawPostThinkFrameStats(void)
 
 void M_DrawPerfStats(void)
 {
-	if (cv_perfstats.value == 1)  
+	if (cv_perfstats.value == 1) // rendering
 	{
 		PS_DrawRenderStats();
 	}
-	else if (cv_perfstats.value == 2)  
+	else if (cv_perfstats.value == 2) // logic
 	{
-
-
+		// PS_UpdateTickStats is called in TryRunTics, since otherwise it would miss
+		// tics when frame skips happen
 		PS_DrawGameLogicStats();
 	}
-	else if (cv_perfstats.value >= 3)  
+	else if (cv_perfstats.value >= 3) // lua thinkframe
 	{
 		if (!PS_IsLevelActive())
 			return;
 		if (!PS_HighResolution())
 		{
-
-
-
+			// Low resolutions can't really use V_DrawSmallString that is used by thinkframe stats.
+			// A low-res version using V_DrawThinString could be implemented,
+			// but it would have much less space for information.
 			V_DrawThinString(80, 92, V_MONOSPACE | V_ALLOWLOWERCASE | V_YELLOWMAP, "Lua Perfstats is not available");
 			V_DrawThinString(80, 100, V_MONOSPACE | V_ALLOWLOWERCASE | V_YELLOWMAP, "for resolutions below 640x400.");
 			return;
@@ -1457,20 +1457,20 @@ void M_DrawPerfStats(void)
 	}
 }
 
-
+// remove and unallocate history from all metrics
 static void PS_ClearHistory(void)
 {
 	int i;
 
 	Z_FreeTag(PU_PERFSTATS);
-
+	// thinkframe hook metric history pointers need to be cleared manually
 	for (i = 0; i < thinkframe_hooks_length; i++)
 	{
 		thinkframe_hooks[i].time_taken.history = NULL;
 	}
 
 	ps_frame_index = ps_tick_index = 0;
-
+	// PS_UpdateMetricHistory will set these correctly when it runs
 	ps_frame_samples_left = ps_tick_samples_left = 0;
 }
 

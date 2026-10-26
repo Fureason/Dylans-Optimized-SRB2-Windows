@@ -10,10 +10,10 @@
   freely.
 */
 
-                                             
-                                                                   
-                                            
-  
+/* Simple program:  Loop, watching keystrokes
+   Note that you need to call SDL_PollEvent() or SDL_WaitEvent() to
+   pump the event loop and catch keystrokes.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,7 +27,7 @@
 
 int done;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -126,7 +126,7 @@ PrintKey(SDL_Keysym *sym, SDL_bool pressed, SDL_bool repeat)
     spot = message;
     left = sizeof(message);
 
-     
+    /* Print the keycode, name and state */
     if (sym->sym) {
         print_string(&spot, &left,
                      "Key %s:  scancode %d = %s, keycode 0x%08X = %s ",
@@ -165,12 +165,12 @@ PrintText(const char *eventtype, const char *text)
 void loop()
 {
     SDL_Event event;
-     
-     
+    /* Check for events */
+    /*SDL_WaitEvent(&event); emscripten does not like waiting*/
 
     (void)fprintf(stderr, "starting loop\n");
     (void)fflush(stderr);
-
+    // while (SDL_PollEvent(&event)) {
     while (!done && SDL_WaitEvent(&event)) {
         SDL_Log("Got event type: %" SDL_PRIu32 "\n", event.type);
         switch (event.type) {
@@ -185,7 +185,7 @@ void loop()
             PrintText("INPUT", event.text.text);
             break;
         case SDL_MOUSEBUTTONDOWN:
-             
+            /* Left button quits the app, other buttons toggles text input */
             (void)fprintf(stderr, "mouse button down button: %d (LEFT=%d)\n", event.button.button, SDL_BUTTON_LEFT);
             (void)fflush(stderr);
             if (event.button.button == SDL_BUTTON_LEFT) {
@@ -218,7 +218,7 @@ void loop()
 #endif
 }
 
- 
+/* Very simple thread - counts 0 to 9 delaying 50ms between increments */
 static int SDLCALL ping_thread(void *ptr)
 {
     int cnt;
@@ -241,16 +241,16 @@ int main(int argc, char *argv[])
     SDL_Renderer *renderer;
     SDL_Thread *thread;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize SDL */
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
     }
 
-     
+    /* Set 640x480 video mode */
     window = SDL_CreateWindow("CheckKeys Test",
                               SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                               640, 480, 0);
@@ -260,24 +260,24 @@ int main(int argc, char *argv[])
         quit(2);
     }
 
-                                                                   
-                               
-      
+    /* On wayland, no window will actually show until something has
+       actually been displayed.
+    */
     renderer = SDL_CreateRenderer(window, -1, 0);
     SDL_RenderPresent(renderer);
 
 #if __IPHONEOS__
-     
+    /* Creating the context creates the view, which we need to show keyboard */
     SDL_GL_CreateContext(window);
 #endif
 
     SDL_StartTextInput();
 
-     
+    /* Print initial modifier state */
     SDL_PumpEvents();
     PrintModifierState();
 
-     
+    /* Watch keystrokes */
     done = 0;
 
     thread = SDL_CreateThread(ping_thread, "PingThread", NULL);
@@ -295,4 +295,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

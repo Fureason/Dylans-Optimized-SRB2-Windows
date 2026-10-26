@@ -14,8 +14,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file wad_static.c
+/// \brief Static functions for internal libwad operations.
 
 #include "wad_static.h"
 
@@ -67,15 +67,15 @@ char *WAD_BaseName(char *path)
 {
 	wad_int32_t i;
 
-
-
-
+	//
+	// Check if there is no text to check.
+	//
 	if (!path || path[0] == '\0')
 		return NULL;
 
-
-
-
+	//
+	// Find the buffer entry where the actual filename begins.
+	//
 	for (i = strlen(path) - 1; i >= 0 && path[i] != '/'; i--);
 
 	return (i >= 0) ? &path[i+1] : path;

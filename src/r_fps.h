@@ -9,8 +9,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_fps.h
+/// \brief Uncapped framerate stuff.
 
 #ifndef __R_FPS_H__
 #define __R_FPS_H__
@@ -18,12 +18,12 @@
 #include "m_fixed.h"
 #include "p_local.h"
 #include "r_state.h"
-#include "m_perfstats.h"  
+#include "m_perfstats.h" // ps_metric_t
 
 extern consvar_t cv_fpscap, cv_smoothframepacing, cv_adaptiveeffects;
 
-                                                                           
-                                                                       
+/* Client-local visual load shedding. It never changes thinker execution or
+ * synchronized game state, so stock 2.2.15 peers remain compatible. */
 void R_UpdateAdaptiveEffects(precise_t active_time, precise_t frame_budget);
 UINT8 R_GetAdaptiveEffectsLevel(void);
 
@@ -76,9 +76,9 @@ typedef struct {
 	fixed_t spriteyoffset;
 } interpmobjstate_t;
 
+// Level interpolators
 
-
-
+// The union tag for levelinterpolator_t
 typedef enum {
 	LVLINTERP_SectorPlane,
 	LVLINTERP_SectorScroll,
@@ -87,7 +87,7 @@ typedef enum {
 	LVLINTERP_DynSlope,
 } levelinterpolator_type_e;
 
-
+// Tagged union of a level interpolator
 typedef struct levelinterpolator_s {
 	levelinterpolator_type_e type;
 	thinker_t *thinker;
@@ -127,21 +127,21 @@ typedef struct levelinterpolator_s {
 	};
 } levelinterpolator_t;
 
-
+// Interpolates the current view variables (r_state.h) against the selected view context in R_SetViewContext
 void R_InterpolateView(fixed_t frac);
-
+// Buffer the current new views into the old views. Call once after each real tic.
 void R_UpdateViewInterpolation(void);
-
+// Reset the view states (e.g. after level load) so R_InterpolateView doesn't interpolate invalid data
 void R_ResetViewInterpolation(UINT8 p);
-
+// Set the current view context (the viewvars pointed to by newview)
 void R_SetViewContext(enum viewcontext_e _viewcontext);
 
 fixed_t R_InterpolateFixed(fixed_t from, fixed_t to);
 angle_t R_InterpolateAngle(angle_t from, angle_t to);
 
-
+// Evaluate the interpolated mobj state for the given mobj
 void R_InterpolateMobjState(mobj_t *mobj, fixed_t frac, interpmobjstate_t *out);
-
+// Evaluate the interpolated mobj state for the given precipmobj
 void R_InterpolatePrecipMobjState(precipmobj_t *mobj, fixed_t frac, interpmobjstate_t *out);
 
 void R_CreateInterpolator_SectorPlane(thinker_t *thinker, sector_t *sector, boolean ceiling);
@@ -150,24 +150,24 @@ void R_CreateInterpolator_SideScroll(thinker_t *thinker, side_t *side);
 void R_CreateInterpolator_Polyobj(thinker_t *thinker, polyobj_t *polyobj);
 void R_CreateInterpolator_DynSlope(thinker_t *thinker, pslope_t *slope);
 
-
+// Initialize level interpolators after a level change
 void R_InitializeLevelInterpolators(void);
-
+// Update level interpolators, storing the previous and current states.
 void R_UpdateLevelInterpolators(void);
-
+// Clear states for all level interpolators for the thinker
 void R_ClearLevelInterpolatorState(thinker_t *thinker);
-
+// Apply level interpolators to the actual game state
 void R_ApplyLevelInterpolators(fixed_t frac);
-
+// Restore level interpolators to the real game state
 void R_RestoreLevelInterpolators(void);
-
+// Destroy interpolators associated with a thinker
 void R_DestroyLevelInterpolators(thinker_t *thinker);
 
-
+// Initialize internal mobj interpolator list (e.g. during level loading)
 void R_InitMobjInterpolators(void);
-
+// Add interpolation state for the given mobj
 void R_AddMobjInterpolator(mobj_t *mobj);
-
+// Remove the interpolation state for the given mobj
 void R_RemoveMobjInterpolator(mobj_t *mobj);
 void R_UpdateMobjInterpolators(void);
 void R_ResetMobjInterpolationState(mobj_t *mobj);

@@ -6,21 +6,21 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw_shaders.h
+/// \brief Handles the shaders used by the game.
 
 #ifndef _HW_SHADERS_H_
 #define _HW_SHADERS_H_
 
 #include "../doomtype.h"
 
+// ================
+//  Vertex shaders
+// ================
 
-
-
-
-
-
-
+//
+// Generic vertex shader
+//
 
 #define GLSL_DEFAULT_VERTEX_SHADER \
 	"void main()\n" \
@@ -31,9 +31,9 @@
 		"gl_ClipVertex = gl_ModelViewMatrix * gl_Vertex;\n" \
 	"}\0"
 
-
-
-
+// replicates the way fixed function lighting is used by the model lighting option,
+// stores the lighting result to gl_Color
+// (ambient lighting of 0.75 and diffuse lighting from above)
 #define GLSL_MODEL_VERTEX_SHADER \
 	"void main()\n" \
 	"{\n" \
@@ -49,13 +49,13 @@
 		"gl_ClipVertex = gl_ModelViewMatrix * gl_Vertex;\n" \
 	"}\0"
 
+// ==================
+//  Fragment shaders
+// ==================
 
-
-
-
-
-
-
+//
+// Generic fragment shader
+//
 
 #define GLSL_DEFAULT_FRAGMENT_SHADER \
 	"uniform sampler2D tex;\n" \
@@ -64,11 +64,11 @@
 		"gl_FragColor = texture2D(tex, gl_TexCoord[0].st) * poly_color;\n" \
 	"}\0"
 
+//
+// Software fragment shader
+//
 
-
-
-
-
+// Include GLSL_FLOOR_FUDGES or GLSL_WALL_FUDGES or define the fudges in shaders that use this macro.
 #define GLSL_DOOM_COLORMAP \
 	"float R_DoomColormap(float light, float z)\n" \
 	"{\n" \
@@ -79,9 +79,9 @@
 		"float cap = (155.0 - light) * 0.26;\n" \
 		"return max(startmap * STARTMAP_FUDGE - scale * 0.5 * SCALE_FUDGE, cap);\n" \
 	"}\n"
-
-
-
+// lighting cap adjustment:
+// first num (155.0), increase to make it start to go dark sooner
+// second num (0.26), increase to make it go dark faster
 
 #define GLSL_DOOM_LIGHT_EQUATION \
 	"float R_DoomLightingEquation(float light)\n" \
@@ -152,7 +152,7 @@
 	"}\n" \
 	"#endif\0"
 
-
+// hand tuned adjustments for light level calculation
 #define GLSL_FLOOR_FUDGES \
 	"#define STARTMAP_FUDGE 1.06\n" \
 	"#define SCALE_FUDGE 1.15\n"
@@ -169,8 +169,8 @@
 	GLSL_WALL_FUDGES \
 	GLSL_SOFTWARE_FRAGMENT_SHADER
 
-
-
+// same as above but multiplies results with the lighting value from the
+// accompanying vertex shader (stored in gl_Color) if model lighting is enabled
 #define GLSL_MODEL_FRAGMENT_SHADER \
 	GLSL_WALL_FUDGES \
 	"#ifdef SRB2_PALETTE_RENDERING\n" \
@@ -211,12 +211,12 @@
 	"}\n" \
 	"#endif\0"
 
-
-
-
-
-
-
+//
+// Water surface shader
+//
+// Mostly guesstimated, rather than the rest being built off Software science.
+// Still needs to distort things underneath/around the water...
+//
 
 #define GLSL_WATER_TEXEL \
 	"float water_z = (gl_FragCoord.z / gl_FragCoord.w) / 2.0;\n" \
@@ -265,14 +265,14 @@
 	"}\n" \
 	"#endif\0"
 
+//
+// Fog block shader
+//
+// Alpha of the planes themselves are still slightly off -- see HWR_FogBlockAlpha
+//
 
-
-
-
-
-
-
-
+// The floor fudges are used, but should the wall fudges be used instead? or something inbetween?
+// or separate values for floors and walls? (need to change more than this shader for that)
 #define GLSL_FOG_FRAGMENT_SHADER \
 	GLSL_FLOOR_FUDGES \
 	"uniform vec4 tint_color;\n" \
@@ -290,10 +290,10 @@
 		"gl_FragColor = final_color;\n" \
 	"}\0"
 
-
-
-
-
+//
+// Sky fragment shader
+// Modulates poly_color with gl_Color
+//
 #define GLSL_SKY_FRAGMENT_SHADER \
 	"uniform sampler2D tex;\n" \
 	"uniform vec4 poly_color;\n" \
@@ -301,7 +301,7 @@
 		"gl_FragColor = texture2D(tex, gl_TexCoord[0].st) * gl_Color * poly_color;\n" \
 	"}\0"
 
-
+// Shader for the palette rendering postprocess step
 #define GLSL_PALETTE_POSTPROCESS_FRAGMENT_SHADER \
 	"uniform sampler2D tex;\n" \
 	"uniform sampler3D palette_lookup_tex;\n" \
@@ -314,7 +314,7 @@
 		"gl_FragColor = final_color;\n" \
 	"}\0"
 
-
+// Applies a palettized colormap fade to tex
 #define GLSL_UI_COLORMAP_FADE_FRAGMENT_SHADER \
 	"uniform sampler2D tex;\n" \
 	"uniform float lighting;\n" \
@@ -327,12 +327,12 @@
 		"gl_FragColor = texture2D(lighttable_tex, lighttable_coord);\n" \
 	"}\0"
 
-
-
-
-
-
-
+// For wipes that use additive and subtractive blending.
+// alpha_factor = 31 * 8 / 10 = 24.8
+// Calculated based on the use of the "fade" variable from the GETCOLOR macro
+// in r_data.c:R_CreateFadeColormaps.
+// However this value created some ugliness in fades to white (special stage entry)
+// while palette rendering is enabled, so I raised the value just a bit.
 #define GLSL_UI_TINTED_WIPE_FRAGMENT_SHADER \
 	"uniform sampler2D tex;\n" \
 	"uniform vec4 poly_color;\n" \
@@ -349,9 +349,9 @@
 		"gl_FragColor = final_color;\n" \
 	"}\0"
 
-
-
-
+//
+// Generic vertex shader
+//
 
 #define GLSL_FALLBACK_VERTEX_SHADER \
 	"void main()\n" \
@@ -362,9 +362,9 @@
 		"gl_ClipVertex = gl_ModelViewMatrix * gl_Vertex;\n" \
 	"}\0"
 
-
-
-
+//
+// Generic fragment shader
+//
 
 #define GLSL_FALLBACK_FRAGMENT_SHADER \
 	"uniform sampler2D tex;\n" \
@@ -373,9 +373,9 @@
 		"gl_FragColor = texture2D(tex, gl_TexCoord[0].st) * poly_color;\n" \
 	"}\0"
 
-
-
-
+//
+// Software fragment shader
+//
 
 #define GLSL_SOFTWARE_FADE_EQUATION \
 	"float darkness = R_DoomLightingEquation(lighting);\n" \
@@ -387,8 +387,8 @@
 	"}\n" \
 	"final_color = mix(final_color, fade_color, darkness);\n"
 
-
-
+// same as above but multiplies results with the lighting value from the
+// accompanying vertex shader (stored in gl_Color)
 #define GLSL_SOFTWARE_MODEL_LIGHTING_FRAGMENT_SHADER \
 	"uniform sampler2D tex;\n" \
 	"uniform vec4 poly_color;\n" \
@@ -410,10 +410,10 @@
 		"gl_FragColor = final_color;\n" \
 	"}\0"
 
-
-
-
-
+//
+// Sky fragment shader
+// Modulates poly_color with gl_Color
+//
 #define GLSL_SKY_FRAGMENT_SHADER \
 	"uniform sampler2D tex;\n" \
 	"uniform vec4 poly_color;\n" \

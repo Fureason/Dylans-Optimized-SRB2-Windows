@@ -7,9 +7,9 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file hw_md2.h
+/// \brief 3D Model Handling
+///	Inspired from md2.h by Mete Ciragan (mete@swissquake.ch)
 
 #ifndef _HW_MD2_H_
 #define _HW_MD2_H_
@@ -28,9 +28,9 @@ typedef struct
 	float       offset;
 	model_t     *model;
 	void        *grpatch;
-	boolean     notexturefile;  
+	boolean     notexturefile; // true if texture file was not found
 	void        *blendgrpatch;
-	boolean     noblendfile;  
+	boolean     noblendfile; // true if blend texture file was not found
 	boolean     found;
 	boolean     error;
 } md2_t;
@@ -46,4 +46,4 @@ boolean HWR_DrawModel(gl_vissprite_t *spr);
 
 #define PLAYERMODELPREFIX "PLAYER"
 
-#endif  
+#endif // _HW_MD2_H_

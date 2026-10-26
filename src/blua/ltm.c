@@ -28,7 +28,7 @@ const char *const luaT_typenames[] = {
 
 
 void luaT_init (lua_State *L) {
-  static const char *const luaT_eventname[] = {   
+  static const char *const luaT_eventname[] = {  /* ORDER TM */
     "__index", "__newindex",
     "__usedindex",
     "__gc", "__mode", "__len", "__eq",
@@ -41,20 +41,20 @@ void luaT_init (lua_State *L) {
   int i;
   for (i=0; i<TM_N; i++) {
     G(L)->tmname[i] = luaS_new(L, luaT_eventname[i]);
-    luaS_fix(G(L)->tmname[i]);   
+    luaS_fix(G(L)->tmname[i]);  /* never collect these names */
   }
 }
 
 
-  
-                                                                    
-              
-  
+/*
+** function to be used with macro "fasttm": optimized for absence of
+** tag methods
+*/
 TValue *luaT_gettm (Table *events, TMS event, TString *ename) {
   TValue *tm = luaH_getstr(events, ename);
   lua_assert(event <= TM_EQ);
-  if (ttisnil(tm)) {   
-    events->flags |= cast_byte(1u<<event);   
+  if (ttisnil(tm)) {  /* no tag method? */
+    events->flags |= cast_byte(1u<<event);  /* cache this fact */
     return NULL;
   }
   else return tm;

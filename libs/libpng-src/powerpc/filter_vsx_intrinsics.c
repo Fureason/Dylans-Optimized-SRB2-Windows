@@ -15,8 +15,8 @@
 
 #ifdef PNG_READ_SUPPORTED
 
- 
-#if PNG_POWERPC_VSX_IMPLEMENTATION == 1  
+/* This code requires -maltivec and -mvsx on the command line: */
+#if PNG_POWERPC_VSX_IMPLEMENTATION == 1 /* intrinsics code from pngpriv.h */
 
 #include <altivec.h>
 
@@ -30,14 +30,14 @@
 #define vec_st_unaligned(vec,data) vec_vsx_st(vec,0,data)
 
 
-                                                                               
-                                
-                
-                
-                                                                         
-                                                 
-                                                           
-   
+/* Functions in this file look at most 3 pixels (a,b,c) to predict the 4th (d).
+ * They're positioned like this:
+ *    prev:  c b
+ *    row:   a d
+ * The Sub filter predicts d=a, Avg d=(a+b)/2, and Paeth predicts d to be
+ * whichever of a, b, or c is closest to p=a+b-c.
+ * ( this is taken from ../intel/filter_sse2_intrinsics.c )
+ */
 
 #define vsx_declare_common_vars(row_info,row,prev_row,offset) \
    png_byte i;\
@@ -62,17 +62,17 @@ void png_read_filter_row_up_vsx(png_row_infop row_info, png_bytep row,
    vector unsigned char pp_vec;
    vsx_declare_common_vars(row_info,row,prev_row,0)
 
-                                                     
-                                                 
-                              
-      
+   /* Altivec operations require 16-byte aligned data
+    * but input can be unaligned. So we calculate
+    * unaligned part as usual.
+    */
    for (i = 0; i < unaligned_top; i++)
    {
       *rp = (png_byte)(((int)(*rp) + (int)(*pp++)) & 0xff);
       rp++;
    }
 
-    
+   /* Using SIMD while we can */
    while( istop >= 16 )
    {
       rp_vec = vec_ld(0,rp);
@@ -89,9 +89,9 @@ void png_read_filter_row_up_vsx(png_row_infop row_info, png_bytep row,
 
    if(istop > 0)
    {
-                                                    
-                                                
-         
+      /* If byte count of row is not divisible by 16
+       * we will process remaining part as usual
+       */
       for (i = 0; i < istop; i++)
       {
          *rp = (png_byte)(((int)(*rp) + (int)(*pp++)) & 0xff);
@@ -183,17 +183,17 @@ void png_read_filter_row_sub4_vsx(png_row_infop row_info, png_bytep row,
 
    PNG_UNUSED(pp)
 
-                                                     
-                                                 
-                              
-      
+   /* Altivec operations require 16-byte aligned data
+    * but input can be unaligned. So we calculate
+    * unaligned part as usual.
+    */
    for (i = 0; i < unaligned_top; i++)
    {
       *rp = (png_byte)(((int)(*rp) + (int)(*(rp-bpp))) & 0xff);
       rp++;
    }
 
-    
+   /* Using SIMD while we can */
    while( istop >= 16 )
    {
       for(i=0;i < bpp ; i++)
@@ -240,17 +240,17 @@ void png_read_filter_row_sub3_vsx(png_row_infop row_info, png_bytep row,
 
    PNG_UNUSED(pp)
 
-                                                     
-                                                 
-                              
-      
+   /* Altivec operations require 16-byte aligned data
+    * but input can be unaligned. So we calculate
+    * unaligned part as usual.
+    */
    for (i = 0; i < unaligned_top; i++)
    {
       *rp = (png_byte)(((int)(*rp) + (int)(*(rp-bpp))) & 0xff);
       rp++;
    }
 
-    
+   /* Using SIMD while we can */
    while( istop >= 16 )
    {
       for(i=0;i < bpp ; i++)
@@ -277,9 +277,9 @@ void png_read_filter_row_sub3_vsx(png_row_infop row_info, png_bytep row,
       rp += 15;
       istop -= 16;
 
-                                                                
-                              
-         
+      /* Since 16 % bpp = 16 % 3 = 1, last element of array must
+       * be proceeded manually
+       */
       *rp = (png_byte)(((int)(*rp) + (int)(*(rp-bpp))) & 0xff);
       rp++;
    }
@@ -316,10 +316,10 @@ void png_read_filter_row_avg4_vsx(png_row_infop row_info, png_bytep row,
       rp++;
    }
 
-                                                     
-                                                 
-                              
-      
+   /* Altivec operations require 16-byte aligned data
+    * but input can be unaligned. So we calculate
+    * unaligned part as usual.
+    */
    for (i = 0; i < unaligned_top; i++)
    {
       *rp = (png_byte)(((int)(*rp) +
@@ -328,7 +328,7 @@ void png_read_filter_row_avg4_vsx(png_row_infop row_info, png_bytep row,
       rp++;
    }
 
-    
+   /* Using SIMD while we can */
    while( istop >= 16 )
    {
       for(i=0;i < bpp ; i++)
@@ -403,10 +403,10 @@ void png_read_filter_row_avg3_vsx(png_row_infop row_info, png_bytep row,
      rp++;
   }
 
-                                                    
-                                                
-                             
-     
+  /* Altivec operations require 16-byte aligned data
+   * but input can be unaligned. So we calculate
+   * unaligned part as usual.
+   */
   for (i = 0; i < unaligned_top; i++)
   {
      *rp = (png_byte)(((int)(*rp) +
@@ -415,7 +415,7 @@ void png_read_filter_row_avg3_vsx(png_row_infop row_info, png_bytep row,
      rp++;
   }
 
-   
+  /* Using SIMD while we can */
   while( istop >= 16 )
   {
      for(i=0;i < bpp ; i++)
@@ -461,9 +461,9 @@ void png_read_filter_row_avg3_vsx(png_row_infop row_info, png_bytep row,
      pp += 15;
      istop -= 16;
 
-                                                               
-                             
-        
+     /* Since 16 % bpp = 16 % 3 = 1, last element of array must
+      * be proceeded manually
+      */
      *rp = (png_byte)(((int)(*rp) +
         (int)(*pp++ + *(rp-bpp)) / 2 ) & 0xff);
      rp++;
@@ -479,7 +479,7 @@ void png_read_filter_row_avg3_vsx(png_row_infop row_info, png_bytep row,
      }
 }
 
- 
+/* Bytewise c ? t : e. */
 #define if_then_else(c,t,e) vec_sel(e,t,c)
 
 #define vsx_paeth_process(rp,pp,a,b,c,pa,pb,pc,bpp) {\
@@ -513,9 +513,9 @@ void png_read_filter_row_paeth4_vsx(png_row_infop row_info, png_bytep row,
    if(istop >= bpp)
       istop -= bpp;
 
-                                                                             
-                                                                       
-      
+   /* Process the first pixel in the row completely (this is the same as 'up'
+    * because there is only one candidate predictor for the first row).
+    */
    for(i = 0; i < bpp ; i++)
    {
       *rp = (png_byte)( *rp + *pp);
@@ -633,9 +633,9 @@ void png_read_filter_row_paeth3_vsx(png_row_infop row_info, png_bytep row,
   if(istop >= bpp)
      istop -= bpp;
 
-                                                                            
-                                                                      
-     
+  /* Process the first pixel in the row completely (this is the same as 'up'
+   * because there is only one candidate predictor for the first row).
+   */
   for(i = 0; i < bpp ; i++)
   {
      *rp = (png_byte)( *rp + *pp);
@@ -750,9 +750,9 @@ void png_read_filter_row_paeth3_vsx(png_row_infop row_info, png_bytep row,
      pp += 15;
      istop -= 16;
 
-                                                               
-                             
-        
+     /* Since 16 % bpp = 16 % 3 = 1, last element of array must
+      * be proceeded manually
+      */
      vsx_paeth_process(rp,pp,a,b,c,pa,pb,pc,bpp)
   }
 
@@ -763,6 +763,6 @@ void png_read_filter_row_paeth3_vsx(png_row_infop row_info, png_bytep row,
      }
 }
 
-#endif  
-#endif  
-#endif  
+#endif /* PNG_POWERPC_VSX_OPT > 0 */
+#endif /* PNG_POWERPC_VSX_IMPLEMENTATION == 1 (intrinsics) */
+#endif /* READ */

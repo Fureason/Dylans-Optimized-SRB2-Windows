@@ -84,8 +84,8 @@
 #define PROGNAME  "rpng-x"
 #define LONGNAME  "Simple PNG Viewer for X"
 #define VERSION   "2.02 of 15 June 2014"
-#define RESNAME   "rpng"         
-#define RESCLASS  "Rpng"         
+#define RESNAME   "rpng"        /* our X resource application name */
+#define RESCLASS  "Rpng"        /* our X resource class name */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,15 +96,15 @@
 #include <X11/Xos.h>
 #include <X11/keysym.h>
 
- 
+/* #define DEBUG  :  this enables the Trace() macros */
 
-#include "readpng.h"    
+#include "readpng.h"   /* typedefs, common macros, readpng prototypes */
 
 
-                                                                     
-                                                                        
-                                                             
-                             
+/* could just include png.h, but this macro is the only thing we need
+ * (name and typedefs changed to local versions); note that side effects
+ * only happen with alpha (which could easily be avoided with
+ * "ush acopy = (alpha);") */
 
 #define alpha_composite(composite, fg, alpha, bg) {               \
     ush temp = ((ush)(fg)*(ush)(alpha) +                          \
@@ -113,7 +113,7 @@
 }
 
 
- 
+/* local prototypes */
 static int  rpng_x_create_window(void);
 static int  rpng_x_display_image(void);
 static void rpng_x_cleanup(void);
@@ -137,7 +137,7 @@ static ulg image_width, image_height, image_rowbytes;
 static int image_channels;
 static uch *image_data;
 
- 
+/* X-specific variables */
 static char *displayname;
 static XImage *ximage;
 static Display *display;
@@ -154,10 +154,10 @@ static int have_nondefault_visual = FALSE;
 static int have_colormap = FALSE;
 static int have_window = FALSE;
 static int have_gc = FALSE;
-  
-                             
-                                       
-   
+/*
+ulg numcolors=0, pixels[256];
+ush reds[256], greens[256], blues[256];
+ */
 
 
 
@@ -171,9 +171,9 @@ int main(int argc, char **argv)
     int rc, alen, flen;
     int error = 0;
     int have_bg = FALSE;
-    double LUT_exponent;                
-    double CRT_exponent = 2.2;          
-    double default_display_exponent;    
+    double LUT_exponent;               /* just the lookup table */
+    double CRT_exponent = 2.2;         /* just the monitor */
+    double default_display_exponent;   /* whole display system */
     XEvent e;
     KeySym k;
 
@@ -182,22 +182,22 @@ int main(int argc, char **argv)
     filename = (char *)NULL;
 
 
-                                                                         
-                                                                        
-                                                                     
-                                                                       
-                                                                      
+    /* First set the default value for our display-system exponent, i.e.,
+     * the product of the CRT exponent and the exponent corresponding to
+     * the frame-buffer's lookup table (LUT), if any.  This is not an
+     * exhaustive list of LUT values (e.g., OpenStep has a lot of weird
+     * ones), but it should cover 99% of the current possibilities. */
 
 #if defined(NeXT)
     LUT_exponent = 1.0 / 2.2;
-      
-                                                           
-                                        
-       
+    /*
+    if (some_next_function_that_returns_gamma(&next_gamma))
+        LUT_exponent = 1.0 / next_gamma;
+     */
 #elif defined(sgi)
     LUT_exponent = 1.0 / 1.7;
-                                                                  
-                                                 
+    /* there doesn't seem to be any documented function to get the
+     * "gamma" value, so we do it the hard way */
     infile = fopen("/etc/config/system.glGammaVal", "r");
     if (infile) {
         double sgi_gamma;
@@ -210,22 +210,22 @@ int main(int argc, char **argv)
     }
 #elif defined(Macintosh)
     LUT_exponent = 1.8 / 2.61;
-      
-                                                         
-                                        
-       
+    /*
+    if (some_mac_function_that_returns_gamma(&mac_gamma))
+        LUT_exponent = mac_gamma / 2.61;
+     */
 #else
-    LUT_exponent = 1.0;    
+    LUT_exponent = 1.0;   /* assume no LUT:  most PCs */
 #endif
 
-     
+    /* the defaults above give 1.0, 1.3, 1.5 and 2.2, respectively: */
     default_display_exponent = LUT_exponent * CRT_exponent;
 
 
-                                                                             
-                                                                              
-                                                                          
-                                                  
+    /* If the user has set the SCREEN_GAMMA environment variable as suggested
+     * (somewhat imprecisely) in the libpng documentation, use that; otherwise
+     * use the default value we just calculated.  Either way, the user may
+     * override this via a command-line option. */
 
     if ((p = getenv("SCREEN_GAMMA")) != NULL)
         display_exponent = atof(p);
@@ -233,7 +233,7 @@ int main(int argc, char **argv)
         display_exponent = default_display_exponent;
 
 
-     
+    /* Now parse the command line for options and the PNG filename. */
 
     while (*++argv && !error) {
         if (!strncmp(*argv, "-display", 2)) {
@@ -262,10 +262,10 @@ int main(int argc, char **argv)
         } else {
             if (**argv != '-') {
                 filename = *argv;
-                if (argv[1])    
+                if (argv[1])   /* shouldn't be any more args after filename */
                     ++error;
             } else
-                ++error;    
+                ++error;   /* not expecting any other options */
         }
     }
 
@@ -273,7 +273,7 @@ int main(int argc, char **argv)
         ++error;
 
 
-     
+    /* print usage screen if any errors up to this point */
 
     if (error) {
         fprintf(stderr, "\n%s %s:  %s\n", PROGNAME, VERSION, appname);
@@ -341,7 +341,7 @@ int main(int argc, char **argv)
     }
 
 
-     
+    /* set the title-bar string, but make sure buffer doesn't overflow */
 
     alen = strlen(appname);
     flen = strlen(filename);
@@ -351,12 +351,12 @@ int main(int argc, char **argv)
         sprintf(titlebar, "%s:  %s", appname, filename);
 
 
-                                                                         
-                                                                         
-                              
+    /* if the user didn't specify a background color on the command line,
+     * check for one in the PNG file--if not, the initialized values of 0
+     * (black) will be used */
 
     if (have_bg) {
-        unsigned r, g, b;    
+        unsigned r, g, b;   /* this approach quiets compiler warnings */
 
         sscanf(bgstr+1, "%2x%2x%2x", &r, &g, &b);
         bg_red   = (uch)r;
@@ -370,14 +370,14 @@ int main(int argc, char **argv)
     }
 
 
-                                                                       
-                                   
+    /* do the basic X initialization stuff, make the window and fill it
+     * with the background color */
 
     if (rpng_x_create_window())
         exit(2);
 
 
-     
+    /* decode the image, all at once */
 
     Trace((stderr, "calling readpng_get_image()\n"))
     image_data = readpng_get_image(display_exponent, &image_channels,
@@ -385,8 +385,8 @@ int main(int argc, char **argv)
     Trace((stderr, "done with readpng_get_image()\n"))
 
 
-                                                                           
-                           
+    /* done with PNG file, so clean up to minimize memory usage (but do NOT
+     * nuke image_data!) */
 
     readpng_cleanup(FALSE);
     fclose(infile);
@@ -397,7 +397,7 @@ int main(int argc, char **argv)
     }
 
 
-     
+    /* display image (composite with background if requested) */
 
     Trace((stderr, "calling rpng_x_display_image()\n"))
     if (rpng_x_display_image()) {
@@ -407,7 +407,7 @@ int main(int argc, char **argv)
     Trace((stderr, "done with rpng_x_display_image()\n"))
 
 
-     
+    /* wait for the user to tell us when to quit */
 
     printf(
       "Done.  Press Q, Esc or mouse button 1 (within image window) to quit.\n");
@@ -416,15 +416,15 @@ int main(int argc, char **argv)
     do
         XNextEvent(display, &e);
     while (!(e.type == ButtonPress && e.xbutton.button == Button1) &&
-           !(e.type == KeyPress &&     
+           !(e.type == KeyPress &&    /*  v--- or 1 for shifted keys */
              ((k = XLookupKeysym(&e.xkey, 0)) == XK_q || k == XK_Escape) ));
 
 
-     
+    /* OK, we're done:  clean up all image and X resources and go away */
 
     rpng_x_cleanup();
 
-    (void)argc;  
+    (void)argc; /* Unused */
 
     return 0;
 }
@@ -461,8 +461,8 @@ static int rpng_x_create_window(void)
 #endif
 
 #if 0
- 
-    if (  depth != 16 && depth != 24 && depth != 32) {
+/* GRR:  add 8-bit support */
+    if (/* depth != 8 && */ depth != 16 && depth != 24 && depth != 32) {
         fprintf(stderr,
           "screen depth %d not supported (only 16-, 24- or 32-bit TrueColor)\n",
           depth);
@@ -479,13 +479,13 @@ static int rpng_x_create_window(void)
         Trace((stderr, "default depth is %d:  checking other visuals\n",
           depth))
 
-         
+        /* 24-bit first */
         visual_info.screen = screen;
         visual_info.depth = 24;
         visual_list = XGetVisualInfo(display,
           VisualScreenMask | VisualDepthMask, &visual_info, &visuals_matched);
         if (visuals_matched == 0) {
- 
+/* GRR:  add 15-, 16- and 32-bit TrueColor visuals (also DirectColor?) */
             fprintf(stderr, "default screen depth %d not supported, and no"
               " 24-bit visuals found\n", depth);
             return 2;
@@ -494,11 +494,11 @@ static int rpng_x_create_window(void)
           visuals_matched))
         visual = visual_list[0].visual;
         depth = visual_list[0].depth;
-  
-                                                     
-                                     
-                                               
-   
+/*
+        colormap_size = visual_list[0].colormap_size;
+        visual_class = visual->class;
+        visualID = XVisualIDFromVisual(visual);
+ */
         have_nondefault_visual = TRUE;
         need_colormap = TRUE;
     } else {
@@ -511,7 +511,7 @@ static int rpng_x_create_window(void)
     GMask = visual->green_mask;
     BMask = visual->blue_mask;
 
- 
+/* GRR:  add/check 8-bit support */
     if (depth == 8 || need_colormap) {
         colormap = XCreateColormap(display, root, visual, AllocNone);
         if (!colormap) {
@@ -521,17 +521,17 @@ static int rpng_x_create_window(void)
         have_colormap = TRUE;
     }
     if (depth == 15 || depth == 16) {
-        RShift = 15 - rpng_x_msb(RMask);     
+        RShift = 15 - rpng_x_msb(RMask);    /* these are right-shifts */
         GShift = 15 - rpng_x_msb(GMask);
         BShift = 15 - rpng_x_msb(BMask);
     } else if (depth > 16) {
 #define NO_24BIT_MASKS
 #ifdef NO_24BIT_MASKS
-        RShift = rpng_x_msb(RMask) - 7;      
+        RShift = rpng_x_msb(RMask) - 7;     /* these are left-shifts */
         GShift = rpng_x_msb(GMask) - 7;
         BShift = rpng_x_msb(BMask) - 7;
 #else
-        RShift = 7 - rpng_x_msb(RMask);      
+        RShift = 7 - rpng_x_msb(RMask);     /* these are right-shifts, too */
         GShift = 7 - rpng_x_msb(GMask);
         BShift = 7 - rpng_x_msb(BMask);
 #endif
@@ -541,9 +541,9 @@ static int rpng_x_create_window(void)
         return 2;
     }
 
-                                                                             
-                               
-                                                                               
+/*---------------------------------------------------------------------------
+    Finally, create the window.
+  ---------------------------------------------------------------------------*/
 
     attr.backing_store = Always;
     attr.event_mask = ExposureMask | KeyPressMask | ButtonPressMask;
@@ -572,10 +572,10 @@ static int rpng_x_create_window(void)
     if (!XStringListToTextProperty(&icon_name, 1, pIconName))
         pIconName = NULL;
 
-     
+    /* OK if any hints allocation fails; XSetWMProperties() allows NULLs */
 
     if ((size_hints = XAllocSizeHints()) != NULL) {
-         
+        /* window will not be resizable */
         size_hints->flags = PMinSize | PMaxSize;
         size_hints->min_width = size_hints->max_width = (int)image_width;
         size_hints->min_height = size_hints->max_height = (int)image_height;
@@ -584,8 +584,8 @@ static int rpng_x_create_window(void)
     if ((wm_hints = XAllocWMHints()) != NULL) {
         wm_hints->initial_state = NormalState;
         wm_hints->input = True;
-      
-        wm_hints->flags = StateHint | InputHint    ;
+     /* wm_hints->icon_pixmap = icon_pixmap; */
+        wm_hints->flags = StateHint | InputHint  /* | IconPixmapHint */ ;
     }
 
     if ((class_hints = XAllocClassHint()) != NULL) {
@@ -596,7 +596,7 @@ static int rpng_x_create_window(void)
     XSetWMProperties(display, window, pWindowName, pIconName, NULL, 0,
       size_hints, wm_hints, class_hints);
 
-     
+    /* various properties and hints no longer needed; free memory */
     if (pWindowName)
        XFree(pWindowName->value);
     if (pIconName)
@@ -613,9 +613,9 @@ static int rpng_x_create_window(void)
     gc = XCreateGC(display, window, 0, &gcvalues);
     have_gc = TRUE;
 
-                                                                             
-                                                    
-                                                                               
+/*---------------------------------------------------------------------------
+    Fill window with the specified background color.
+  ---------------------------------------------------------------------------*/
 
     if (depth == 24 || depth == 32) {
         bg_pixel = ((ulg)bg_red   << RShift) |
@@ -625,18 +625,18 @@ static int rpng_x_create_window(void)
         bg_pixel = ((((ulg)bg_red   << 8) >> RShift) & RMask) |
                    ((((ulg)bg_green << 8) >> GShift) & GMask) |
                    ((((ulg)bg_blue  << 8) >> BShift) & BMask);
-    } else   {
+    } else /* depth == 8 */ {
 
-         
+        /* GRR:  add 8-bit support */
 
     }
 
     XSetForeground(display, gc, bg_pixel);
     XFillRectangle(display, window, gc, 0, 0, image_width, image_height);
 
-                                                                             
-                                                              
-                                                                               
+/*---------------------------------------------------------------------------
+    Wait for first Expose event to do any drawing, then flush.
+  ---------------------------------------------------------------------------*/
 
     do
         XNextEvent(display, &e);
@@ -644,9 +644,9 @@ static int rpng_x_create_window(void)
 
     XFlush(display);
 
-                                                                             
-                                                                         
-                                                                               
+/*---------------------------------------------------------------------------
+    Allocate memory for the X- and display-specific version of the image.
+  ---------------------------------------------------------------------------*/
 
     if (depth == 24 || depth == 32) {
         xdata = (uch *)malloc(4*image_width*image_height);
@@ -654,7 +654,7 @@ static int rpng_x_create_window(void)
     } else if (depth == 16) {
         xdata = (uch *)malloc(2*image_width*image_height);
         pad = 16;
-    } else   {
+    } else /* depth == 8 */ {
         xdata = (uch *)malloc(image_width*image_height);
         pad = 8;
     }
@@ -673,18 +673,18 @@ static int rpng_x_create_window(void)
         return 3;
     }
 
-                                                                           
-                                                                             
-                                                                             
-                                                                              
-                                                                         
-                                                          
+    /* to avoid testing the byte order every pixel (or doubling the size of
+     * the drawing routine with a giant if-test), we arbitrarily set the byte
+     * order to MSBFirst and let Xlib worry about inverting things on little-
+     * endian machines (like Linux/x86, old VAXen, etc.)--this is not the most
+     * efficient approach (the giant if-test would be better), but in the
+     * interest of clarity, we take the easy way out... */
 
     ximage->byte_order = MSBFirst;
 
     return 0;
 
-}  
+} /* end function rpng_x_create_window() */
 
 
 
@@ -698,7 +698,7 @@ static int rpng_x_display_image(void)
     ulg i, row, lastrow = 0;
     ulg pixel;
     int ximage_rowbytes = ximage->bytes_per_line;
- 
+/*  int bpp = ximage->bits_per_pixel;  */
 
 
     Trace((stderr, "beginning display loop (image_channels == %d)\n",
@@ -724,8 +724,8 @@ static int rpng_x_display_image(void)
                     pixel = (red   << RShift) |
                             (green << GShift) |
                             (blue  << BShift);
-                     
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
+                    /* GRR BUG:  this assumes bpp == 32, but may be 24: */
                     *dest++ = (char)((pixel >> 24) & 0xff);
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
@@ -735,14 +735,14 @@ static int rpng_x_display_image(void)
                     green = (GShift < 0)? green << (-GShift) : green >> GShift;
                     blue  = (BShift < 0)? blue  << (-BShift) : blue  >> BShift;
                     pixel = (red & RMask) | (green & GMask) | (blue & BMask);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     *dest++ = (char)((pixel >> 24) & 0xff);
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
 #endif
                 }
-            } else   {
+            } else /* if (image_channels == 4) */ {
                 for (i = image_width;  i > 0;  --i) {
                     r = *src++;
                     g = *src++;
@@ -757,9 +757,9 @@ static int rpng_x_display_image(void)
                         green = bg_green;
                         blue  = bg_blue;
                     } else {
-                                                                            
-                                                                             
-                                            
+                        /* this macro (from png.h) composites the foreground
+                         * and background values and puts the result into the
+                         * first argument */
                         alpha_composite(red,   r, a, bg_red);
                         alpha_composite(green, g, a, bg_green);
                         alpha_composite(blue,  b, a, bg_blue);
@@ -767,14 +767,14 @@ static int rpng_x_display_image(void)
                     pixel = (red   << RShift) |
                             (green << GShift) |
                             (blue  << BShift);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     *dest++ = (char)((pixel >> 24) & 0xff);
                     *dest++ = (char)((pixel >> 16) & 0xff);
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
                 }
             }
-             
+            /* display after every 16 lines */
             if (((row+1) & 0xf) == 0) {
                 XPutImage(display, window, gc, ximage, 0, (int)lastrow, 0,
                   (int)lastrow, image_width, 16);
@@ -800,11 +800,11 @@ static int rpng_x_display_image(void)
                     pixel = ((red   >> RShift) & RMask) |
                             ((green >> GShift) & GMask) |
                             ((blue  >> BShift) & BMask);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
                 }
-            } else   {
+            } else /* if (image_channels == 4) */ {
                 for (i = image_width;  i > 0;  --i) {
                     r = *src++;
                     g = *src++;
@@ -819,9 +819,9 @@ static int rpng_x_display_image(void)
                         green = ((ush)bg_green << 8);
                         blue  = ((ush)bg_blue  << 8);
                     } else {
-                                                                            
-                                                                              
-                                                                         
+                        /* this macro (from png.h) composites the foreground
+                         * and background values and puts the result back into
+                         * the first argument (== fg byte here:  safe) */
                         alpha_composite(r, r, a, bg_red);
                         alpha_composite(g, g, a, bg_green);
                         alpha_composite(b, b, a, bg_blue);
@@ -832,12 +832,12 @@ static int rpng_x_display_image(void)
                     pixel = ((red   >> RShift) & RMask) |
                             ((green >> GShift) & GMask) |
                             ((blue  >> BShift) & BMask);
-                     
+                    /* recall that we set ximage->byte_order = MSBFirst above */
                     *dest++ = (char)((pixel >>  8) & 0xff);
                     *dest++ = (char)( pixel        & 0xff);
                 }
             }
-             
+            /* display after every 16 lines */
             if (((row+1) & 0xf) == 0) {
                 XPutImage(display, window, gc, ximage, 0, (int)lastrow, 0,
                   (int)lastrow, image_width, 16);
@@ -846,9 +846,9 @@ static int rpng_x_display_image(void)
             }
         }
 
-    } else   {
+    } else /* depth == 8 */ {
 
-         
+        /* GRR:  add 8-bit support */
 
     }
 
@@ -874,8 +874,8 @@ static void rpng_x_cleanup(void)
 
     if (ximage) {
         if (ximage->data) {
-            free(ximage->data);            
-            ximage->data = (char *)NULL;   
+            free(ximage->data);           /* we allocated it, so we free it */
+            ximage->data = (char *)NULL;  /*  instead of XDestroyImage() */
         }
         XDestroyImage(ximage);
         ximage = NULL;

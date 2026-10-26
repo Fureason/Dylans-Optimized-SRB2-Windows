@@ -31,7 +31,7 @@ typedef struct GL_Context
 #undef SDL_PROC
 } GL_Context;
 
- 
+/* Undefine this if you want a flat cube instead of a rainbow cube */
 #define SHADED_CUBE
 
 static SDLTest_CommonState *state;
@@ -58,19 +58,19 @@ static int LoadContext(GL_Context *data)
             return SDL_SetError("Couldn't load GL function %s: %s", #func, SDL_GetError()); \
         }                                                                                   \
     } while (0);
-#endif  
+#endif /* __SDL_NOGETPROCADDR__ */
 
 #include "../src/render/opengl/SDL_glfuncs.h"
 #undef SDL_PROC
     return 0;
 }
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
     if (context) {
-           
+        /* SDL_GL_MakeCurrent(0, NULL); */ /* doesn't do anything */
         SDL_GL_DeleteContext(context);
     }
     SDLTest_CommonQuit(state);
@@ -101,7 +101,7 @@ Render()
         { -0.5, -0.5, 0.5 }
     };
 
-     
+    /* Do our drawing, too. */
     ctx.glClearColor(0.0, 0.0, 0.0, 1.0);
     ctx.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -161,7 +161,7 @@ Render()
     ctx.glVertex3fv(cube[2]);
     ctx.glColor3fv(color[7]);
     ctx.glVertex3fv(cube[7]);
-#else   
+#else  /* flat cube */
     ctx.glColor3f(1.0, 0.0, 0.0);
     ctx.glVertex3fv(cube[0]);
     ctx.glVertex3fv(cube[1]);
@@ -197,7 +197,7 @@ Render()
     ctx.glVertex3fv(cube[1]);
     ctx.glVertex3fv(cube[2]);
     ctx.glVertex3fv(cube[7]);
-#endif  
+#endif /* SHADED_CUBE */
 
     ctx.glEnd();
 
@@ -217,14 +217,14 @@ int main(int argc, char *argv[])
     int dw, dh;
     int swap_interval = 0;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize parameters */
     fsaa = 0;
     accel = -1;
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -252,7 +252,7 @@ int main(int argc, char *argv[])
         i += consumed;
     }
 
-     
+    /* Set OpenGL parameters */
     state->window_flags |= SDL_WINDOW_OPENGL;
     state->gl_red_size = 5;
     state->gl_green_size = 5;
@@ -271,14 +271,14 @@ int main(int argc, char *argv[])
         quit(2);
     }
 
-     
+    /* Create OpenGL context */
     context = SDL_GL_CreateContext(state->windows[0]);
     if (!context) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext(): %s\n", SDL_GetError());
         quit(2);
     }
 
-     
+    /* Important: call this *after* creating the context */
     if (LoadContext(&ctx) < 0) {
         SDL_Log("Could not load GL functions\n");
         quit(2);
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
     }
 
     if (state->render_flags & SDL_RENDERER_PRESENTVSYNC) {
-         
+        /* try late-swap-tearing first. If not supported, try normal vsync. */
         if (SDL_GL_SetSwapInterval(-1) == 0) {
             swap_interval = -1;
         } else {
@@ -294,7 +294,7 @@ int main(int argc, char *argv[])
             swap_interval = 1;
         }
     } else {
-        SDL_GL_SetSwapInterval(0);  
+        SDL_GL_SetSwapInterval(0); /* disable vsync. */
         swap_interval = 0;
     }
 
@@ -364,7 +364,7 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Set rendering settings */
     ctx.glMatrixMode(GL_PROJECTION);
     ctx.glLoadIdentity();
     ctx.glOrtho(-2.0, 2.0, -2.0, 2.0, -20.0, 20.0);
@@ -374,14 +374,14 @@ int main(int argc, char *argv[])
     ctx.glDepthFunc(GL_LESS);
     ctx.glShadeModel(GL_SMOOTH);
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
     while (!done) {
         SDL_bool update_swap_interval = SDL_FALSE;
 
-         
+        /* Check for events */
         ++frames;
         while (SDL_PollEvent(&event)) {
             SDLTest_CommonEvent(state, &event, &done);
@@ -416,7 +416,7 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         SDL_Log("%2.2f frames per second\n",
@@ -426,7 +426,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-#else  
+#else /* HAVE_OPENGL */
 
 int main(int argc, char *argv[])
 {
@@ -434,4 +434,4 @@ int main(int argc, char *argv[])
     return 1;
 }
 
-#endif  
+#endif /* HAVE_OPENGL */

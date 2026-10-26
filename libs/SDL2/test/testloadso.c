@@ -10,8 +10,8 @@
   freely.
 */
 
-                                                                  
-   
+/* Test program to test dynamic loading with the loadso subsystem.
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-     
+    /* Initialize SDL */
     if (SDL_Init(0) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 2;

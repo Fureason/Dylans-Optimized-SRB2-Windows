@@ -21,8 +21,8 @@ set(
 )
 
 if(${CMAKE_SYSTEM} MATCHES Windows)
-
-
+	#list(APPEND internal_SDL2_mixer_ext_options "DOWNLOAD_AUDIO_CODECS_DEPENDENCY ON")
+	#set(DOWNLOAD_AUDIO_CODECS_DEPENDENCY ON CACHE BOOL "" FORCE)
 endif()
 
 include(FetchContent)

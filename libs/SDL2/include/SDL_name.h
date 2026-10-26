@@ -28,6 +28,6 @@
 
 #define SDL_NAME(X) SDL_##X
 
-#endif  
+#endif /* SDLname_h_ */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

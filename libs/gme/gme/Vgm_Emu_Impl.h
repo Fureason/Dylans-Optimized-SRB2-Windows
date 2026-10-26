@@ -1,6 +1,6 @@
+// Low-level parts of Vgm_Emu
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef VGM_EMU_IMPL_H
 #define VGM_EMU_IMPL_H
 
@@ -55,7 +55,7 @@ protected:
 	byte const* pcm_data;
 	byte const* pcm_pos;
 	int dac_amp;
-	int dac_disabled;  
+	int dac_disabled; // -1 if disabled
 	void write_pcm( vgm_time_t, int amp );
 	
 	Ym_Emu<Ym2612_Emu> ym2612;

@@ -8,21 +8,21 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_data.h
+/// \brief Refresh module, data I/O, caching, retrieval of graphics by name
 
 #ifndef __R_DATA__
 #define __R_DATA__
 
 #include "r_defs.h"
 #include "r_state.h"
-#include "p_setup.h"  
+#include "p_setup.h" // levelflats
 
 #ifdef __GNUG__
 #pragma interface
 #endif
 
-
+// Store lists of lumps for F_START/F_END etc.
 typedef struct
 {
 	UINT16 wadfile;
@@ -38,19 +38,19 @@ extern INT32 ASTTextureBlendingThreshold[2];
 
 extern CV_PossibleValue_t Color_cons_t[];
 
-
+// I/O, setting up the stuff.
 void R_InitData(void);
 void R_PrecacheLevel(void);
 void R_ContinueLevelSpritePrecache(void);
 
 extern size_t flatmemory, spritememory, texturememory;
 
+// Extra Colormap lumps (C_START/C_END) are not used anywhere
+// Uncomment to enable
+//#define EXTRACOLORMAPLUMPS
 
-
-
-
-
-
+// Uncomment to make extra_colormaps order Newest -> Oldest
+//#define COLORMAPREVERSELIST
 
 void R_ReInitColormaps(UINT16 num);
 void R_ClearColormaps(void);

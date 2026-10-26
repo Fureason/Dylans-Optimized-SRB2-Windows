@@ -9,14 +9,14 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_bbox.c
+/// \brief Boundary box (cube) renderer
 
 #include "doomdef.h"
 #include "command.h"
 #include "r_local.h"
-#include "screen.h"  
-#include "v_video.h"  
+#include "screen.h" // cv_renderhitbox
+#include "v_video.h" // V_DrawFill
 
 enum {
 	RENDERHITBOX_OFF,
@@ -34,8 +34,8 @@ static CV_PossibleValue_t renderhitbox_cons_t[] = {
 	{RENDERHITBOX_RINGS, "Rings"},
 	{0}};
 
-
-
+// This is a local rendering aid and does not affect simulation state. Keep it
+// cheat-protected, but allow an authorized `sudo renderhitbox` in netgames.
 consvar_t cv_renderhitbox = CVAR_INIT ("renderhitbox", "Off", CV_CHEAT, renderhitbox_cons_t, NULL);
 consvar_t cv_renderhitboxinterpolation = CVAR_INIT ("renderhitbox_interpolation", "On", CV_SAVE, CV_OnOff, NULL);
 consvar_t cv_renderhitboxgldepth = CVAR_INIT ("renderhitbox_gldepth", "Off", CV_SAVE, CV_OnOff, NULL);
@@ -88,7 +88,7 @@ draw_bbox_col
 
 	fixed_t xscale, yscale;
 
-	if (ty < FRACUNIT)  
+	if (ty < FRACUNIT) // projection breaks down here
 		ty = FRACUNIT;
 
 	xscale = FixedDiv(projection, ty);
@@ -98,7 +98,7 @@ draw_bbox_col
 	col->y = (centeryfrac - FixedMul(bb->tz, yscale));
 	col->h = FixedMul(bb->height, yscale);
 
-
+	// Using this function is TOO EASY!
 	V_DrawFill(
 			viewwindowx + col->x,
 			viewwindowy + col->y / FRACUNIT, 1,
@@ -115,11 +115,11 @@ draw_bbox_row
 		*a = &bb->col[p1],
 		*b = &bb->col[p2];
 
-	INT32 x1, x2;  
-	INT32 dx;  
+	INT32 x1, x2; // left, right
+	INT32 dx; // width
 
-	fixed_t y1, y2;  
-	fixed_t s1, s2;  
+	fixed_t y1, y2; // top, bottom
+	fixed_t s1, s2; // top and bottom increment
 
 	if (a->x > b->x)
 	{
@@ -143,7 +143,7 @@ draw_bbox_row
 	y2 = y1 + a->h;
 	s2 = ((b->y + b->h) - y2) / dx;
 
-
+	// FixedCeil needs a minimum!!! :D :D
 
 	if (s1 == 0)
 		s1 = 1;
@@ -178,39 +178,39 @@ UINT8 R_GetBoundingBoxColor(mobj_t *thing)
 	UINT32 flags = thing->flags;
 
 	if (thing->player)
-		return 255;  
+		return 255; // 0FF
 
 	if (flags & (MF_NOCLIPTHING))
-		return 7;  
+		return 7; // BFBFBF
 
 	if (flags & (MF_BOSS|MF_ENEMY))
-		return 35;  
+		return 35; // F00
 
 	if (flags & (MF_MISSILE|MF_PAIN))
-		return 54;  
+		return 54; // F70
 
 	if (flags & (MF_SPECIAL|MF_MONITOR))
-		return 73;  
+		return 73; // FF0
 
 	if (flags & MF_PUSHABLE)
-		return 112;  
+		return 112; // 0F0
 
 	if (flags & (MF_SPRING))
-		return 181;  
+		return 181; // F0F
 
 	if (flags & (MF_NOCLIP))
-		return 152;  
+		return 152; // 00F
 
-	return 0;  
+	return 0; // FFF
 }
 
 void R_DrawThingBoundingBox(vissprite_t *vis)
 {
-
+	// radius offsets
 	fixed_t rs = vis->scale;
 	fixed_t rc = vis->xscale;
 
-
+	// translated coordinates
 	fixed_t tx = vis->gx;
 	fixed_t ty = vis->gy;
 
@@ -220,24 +220,24 @@ void R_DrawThingBoundingBox(vissprite_t *vis)
 		.color = R_GetBoundingBoxColor(vis->mobj),
 	};
 
+	// 1--3
+	// |  |
+	// 0--2
 
+	// left
 
+	draw_bbox_col(&bb, 0, tx, ty); // bottom
+	draw_bbox_col(&bb, 1, tx - rc, ty + rs); // top
 
-
-
-
-	draw_bbox_col(&bb, 0, tx, ty);  
-	draw_bbox_col(&bb, 1, tx - rc, ty + rs);  
-
-
+	// right
 
 	tx += rs;
 	ty += rc;
 
-	draw_bbox_col(&bb, 2, tx, ty);  
-	draw_bbox_col(&bb, 3, tx - rc, ty + rs);  
+	draw_bbox_col(&bb, 2, tx, ty); // bottom
+	draw_bbox_col(&bb, 3, tx - rc, ty + rs); // top
 
-
+	// connect all four columns
 
 	draw_bbox_row(&bb, 0, 1);
 	draw_bbox_row(&bb, 1, 3);
@@ -247,13 +247,13 @@ void R_DrawThingBoundingBox(vissprite_t *vis)
 
 static boolean is_tangible (mobj_t *thing)
 {
-
+	// These objects can never touch another
 	if (thing->flags & (MF_NOCLIPTHING))
 	{
 		return false;
 	}
 
-
+	// These objects probably do nothing! :D
 	if ((thing->flags & (MF_SPECIAL|MF_SOLID|MF_SHOOTABLE
 					|MF_PUSHABLE|MF_BOSS|MF_MISSILE|MF_SPRING
 					|MF_BOUNCE|MF_MONITOR|MF_FIRE|MF_ENEMY
@@ -274,19 +274,19 @@ boolean R_ThingBoundingBoxVisible(mobj_t *thing)
 	switch (thing->type)
 	{
 		default:
-
-
-
+			// First person / awayviewmobj -- rendering a bbox
+			// too close to the viewpoint causes anomalies
+			// and these are exactly on the viewpoint!
 			if (thing != r_viewmobj)
 			{
 				break;
 			}
-
+			// FALLTHRU
 
 		case MT_SKYBOX:
-
-
-
+			// Ditto for skybox viewpoint but because they
+			// are rendered using portals in Software,
+			// r_viewmobj does not point here.
 			return false;
 
 		case MT_RING:
@@ -294,9 +294,9 @@ boolean R_ThingBoundingBoxVisible(mobj_t *thing)
 		case MT_NIGHTSSTAR:
 		case MT_NIGHTSCHIP:
 		case MT_COIN:
-
-
-
+			// Rings and similar objects are often placed
+			// in large amounts, so they are handled
+			// separately from other tangible objects.
 			ring = true;
 			break;
 	}

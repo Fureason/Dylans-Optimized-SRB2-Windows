@@ -19,33 +19,33 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-  
-                               
-  
-                                     
-                                    
-                                              
-                                                               
-                                                                     
-            
-  
-                                                                      
-                                                          
-  
-                                          
-  
-                                                          
-  
-                                                                       
-  
-                                                                     
-                                     
-   
+/*
+ * XPM (X PixMap) image loader:
+ *
+ * Supports the XPMv3 format, EXCEPT:
+ * - hotspot coordinates are ignored
+ * - only colour ('c') colour symbols are used
+ * - rgb.txt is not used (for portability), so only RGB colours
+ *   are recognized (#rrggbb etc) - only a few basic colour names are
+ *   handled
+ *
+ * The result is an 8bpp indexed surface if possible, otherwise 32bpp.
+ * The colourkey is correctly set if transparency is used.
+ *
+ * Besides the standard API, also provides
+ *
+ *     SDL_Surface *IMG_ReadXPMFromArray(const char **xpm)
+ *
+ * that reads the image data from an XPM file included in the C source.
+ *
+ * TODO: include rgb.txt here. The full table (from solaris 2.6) only
+ * requires about 13K in binary form.
+ */
 
 #if 0
 #include "SDL_image.h"
 #else
-
+// SDLCALL terms removed from original SDL_image declarations
 int IMG_isXPM(SDL_RWops *src);
 SDL_Surface *IMG_LoadXPM_RW(SDL_RWops *src);
 SDL_Surface *IMG_ReadXPMFromArray(const char **xpm);
@@ -55,7 +55,7 @@ SDL_Surface *IMG_ReadXPMFromArray(const char **xpm);
 
 #ifdef LOAD_XPM
 
- 
+/* See if an image is contained in a data source */
 int IMG_isXPM(SDL_RWops *src)
 {
     Sint64 start;
@@ -75,7 +75,7 @@ int IMG_isXPM(SDL_RWops *src)
     return(is_XPM);
 }
 
- 
+/* Hash table to look up colors from pixel strings */
 #define STARTING_HASH_SIZE 256
 
 struct hash_entry {
@@ -86,7 +86,7 @@ struct hash_entry {
 
 struct color_hash {
     struct hash_entry **table;
-    struct hash_entry *entries;  
+    struct hash_entry *entries; /* array of all entries */
     struct hash_entry *next_free;
     size_t size;
     size_t maxnum;
@@ -108,20 +108,20 @@ static struct color_hash *create_colorhash(size_t maxnum)
     size_t bytes, s;
     struct color_hash *hash;
 
-                                                           
-                         
+    /* we know how many entries we need, so we can allocate
+       everything here */
     hash = (struct color_hash *)SDL_calloc(1, sizeof(*hash));
     if (!hash)
         return NULL;
 
-     
+    /* use power-of-2 sized hash table for decoding speed */
     for (s = STARTING_HASH_SIZE; s < maxnum; s <<= 1)
         ;
     hash->size = s;
     hash->maxnum = maxnum;
 
     bytes = hash->size * sizeof(struct hash_entry **);
-     
+    /* Check for overflow */
     if ((bytes / sizeof(struct hash_entry **)) != hash->size) {
         IMG_SetError("memory allocation overflow");
         SDL_free(hash);
@@ -134,7 +134,7 @@ static struct color_hash *create_colorhash(size_t maxnum)
     }
 
     bytes = maxnum * sizeof(struct hash_entry);
-     
+    /* Check for overflow */
     if ((bytes / sizeof(struct hash_entry)) != maxnum) {
         IMG_SetError("memory allocation overflow");
         SDL_free(hash->table);
@@ -163,7 +163,7 @@ static int add_colorhash(struct color_hash *hash,
     return 1;
 }
 
- 
+/* fast lookup that works if cpp == 1 */
 #define QUICK_COLORHASH(hash, key) ((hash)->table[*(const Uint8 *)(key)]->color)
 
 static Uint32 get_colorhash(struct color_hash *hash, const char *key, int cpp)
@@ -174,7 +174,7 @@ static Uint32 get_colorhash(struct color_hash *hash, const char *key, int cpp)
             return entry->color;
         entry = entry->next;
     }
-    return 0;        
+    return 0;       /* garbage in - garbage out */
 }
 
 static void free_colorhash(struct color_hash *hash)
@@ -188,13 +188,13 @@ static void free_colorhash(struct color_hash *hash)
     }
 }
 
-  
-                                                   
-                          
-   
+/*
+ * convert colour spec to RGB (in 0xrrggbb format).
+ * return 1 if successful.
+ */
 static int color_to_rgb(const char *spec, int speclen, Uint32 *rgb)
 {
-     
+    /* poor man's rgb.txt */
     static struct { const char *name; Uint32 rgb; } known[] = {
         { "none",                 0xFFFFFFFF },
         { "black",                0x000000 },
@@ -202,7 +202,7 @@ static int color_to_rgb(const char *spec, int speclen, Uint32 *rgb)
         { "red",                  0xFF0000 },
         { "green",                0x00FF00 },
         { "blue",                 0x0000FF },
- 
+/* This table increases the size of the library by 40K, so it's disabled by default */
 #ifdef EXTENDED_XPM_COLORS
         { "aliceblue",            0xf0f8ff },
         { "antiquewhite",         0xfaebd7 },
@@ -881,7 +881,7 @@ static int color_to_rgb(const char *spec, int speclen, Uint32 *rgb)
         { "yellow3",              0xCDCD00 },
         { "yellow4",              0x8B8B00 },
         { "yellowgreen",          0x9acd32 },
-#endif  
+#endif /* EXTENDED_XPM_COLORS */
         {"none",                  0xFFFFFF}
     };
 
@@ -928,11 +928,11 @@ static char *linebuf;
 static int buflen;
 static const char *error;
 
-  
-                                  
-                                                                      
-                                                     
-   
+/*
+ * Read next line from the source.
+ * If len > 0, it's assumed to be at least len chars (for efficiency).
+ * Return NULL and set error upon EOF or parse error.
+ */
 static const char *get_next_line(const char ***lines, SDL_RWops *src, int len)
 {
     char *linebufnew;
@@ -949,7 +949,7 @@ static const char *get_next_line(const char ***lines, SDL_RWops *src, int len)
             }
         } while (c != '"');
         if (len) {
-            len += 4;    
+            len += 4;   /* "\",\n\0" */
             if (len > buflen){
                 buflen = len;
                 linebufnew = (char *)SDL_realloc(linebuf, buflen);
@@ -1004,7 +1004,7 @@ do {                            \
           ++(p);                    \
 } while (0)
 
- 
+/* read XPM from either array or RWops */
 static SDL_Surface *load_xpm(const char **xpm, SDL_RWops *src)
 {
     Sint64 start = 0;
@@ -1035,22 +1035,22 @@ static SDL_Surface *load_xpm(const char **xpm, SDL_RWops *src)
     line = get_next_line(xpmlines, src, 0);
     if (!line)
         goto done;
-      
-                                                         
-      
-                                                                   
-      
-                                                               
-                                                                   
-               
-       
+    /*
+     * The header string of an XPMv3 image has the format
+     *
+     * <width> <height> <ncolors> <cpp> [ <hotspot_x> <hotspot_y> ]
+     *
+     * where the hotspot coords are intended for mouse cursors.
+     * Right now we don't use the hotspots but it should be handled
+     * one day.
+     */
     if (SDL_sscanf(line, "%d %d %lu %d", &w, &h, &ncolors, &cpp) != 4
        || w <= 0 || h <= 0 || ncolors <= 0 || cpp <= 0) {
         error = "Invalid format description";
         goto done;
     }
 
-     
+    /* Check for allocation overflow */
     if ((size_t)(ncolors * cpp)/cpp != ncolors) {
         error = "Invalid color specification";
         goto done;
@@ -1062,7 +1062,7 @@ static SDL_Surface *load_xpm(const char **xpm, SDL_RWops *src)
     }
     nextkey = keystrings;
 
-     
+    /* Create the new surface */
     if (ncolors <= 256) {
         indexed = 1;
         image = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 8,
@@ -1075,11 +1075,11 @@ static SDL_Surface *load_xpm(const char **xpm, SDL_RWops *src)
                          0xff0000, 0x00ff00, 0x0000ff, 0);
     }
     if (!image) {
-         
+        /* Hmm, some SDL error (out of memory?) */
         goto done;
     }
 
-     
+    /* Read the colors */
     colors = create_colorhash(ncolors);
     if (!colors) {
         error = "Out of memory";
@@ -1093,7 +1093,7 @@ static SDL_Surface *load_xpm(const char **xpm, SDL_RWops *src)
 
         p = line + cpp + 1;
 
-         
+        /* parse a colour definition */
         for (;;) {
             char nametype;
             const char *colname;
@@ -1110,7 +1110,7 @@ static SDL_Surface *load_xpm(const char **xpm, SDL_RWops *src)
             colname = p;
             SKIPNONSPACE(p);
             if (nametype == 's')
-                continue;       
+                continue;      /* skip symbolic colour names */
 
             if (!color_to_rgb(colname, (int)(p - colname), &rgb))
                 continue;
@@ -1133,7 +1133,7 @@ static SDL_Surface *load_xpm(const char **xpm, SDL_RWops *src)
         }
     }
 
-     
+    /* Read the pixels */
     pixels_len = w * cpp;
     dst = (Uint8 *)image->pixels;
     for (y = 0; y < h; y++) {
@@ -1142,7 +1142,7 @@ static SDL_Surface *load_xpm(const char **xpm, SDL_RWops *src)
             goto done;
 
         if (indexed) {
-             
+            /* optimization for some common cases */
             if (cpp == 1)
                 for (x = 0; x < w; x++)
                     dst[x] = (Uint8)QUICK_COLORHASH(colors,
@@ -1179,11 +1179,11 @@ done:
     return(image);
 }
 
- 
+/* Load a XPM type image from an RWops datasource */
 SDL_Surface *IMG_LoadXPM_RW(SDL_RWops *src)
 {
     if ( !src ) {
-         
+        /* The error message has been set in SDL_RWFromFile */
         return NULL;
     }
     return load_xpm(NULL, src);
@@ -1198,16 +1198,16 @@ SDL_Surface *IMG_ReadXPMFromArray(const char **xpm)
     return load_xpm(xpm, NULL);
 }
 
-#else   
+#else  /* not LOAD_XPM */
 
- 
+/* See if an image is contained in a data source */
 int IMG_isXPM(SDL_RWops *src)
 {
     return(0);
 }
 
 
- 
+/* Load a XPM type image from an SDL datasource */
 SDL_Surface *IMG_LoadXPM_RW(SDL_RWops *src)
 {
     return(NULL);
@@ -1217,4 +1217,4 @@ SDL_Surface *IMG_ReadXPMFromArray(const char **xpm)
 {
     return NULL;
 }
-#endif  
+#endif /* not LOAD_XPM */

@@ -29,8 +29,8 @@ NOPROFILE= Yes
 
 CLEANFILES+= pngtest.o pngtest pnglibconf.h
 
-
-
+# Pre-built configuration
+# See scripts/pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT= scripts/pnglibconf.h.prebuilt
 
 .c.o:

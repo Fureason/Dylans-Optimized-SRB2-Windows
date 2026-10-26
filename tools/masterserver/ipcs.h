@@ -13,7 +13,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 
 #ifndef _IPCS_H_
 #define _IPCS_H_
@@ -32,14 +32,14 @@ typedef int socklen_t;
 #include <winsock.h>
 #define close closesocket
 #else
-#include <arpa/inet.h>    
+#include <arpa/inet.h>   // inet_addr(),...
 #endif
 
 #ifndef SOCKET
 #define SOCKET u_int
 #endif
 
-
+// ================================ DEFINITIONS ===============================
 
 #define PACKET_SIZE 1024
 #define MAX_CLIENT    512
@@ -87,18 +87,18 @@ typedef int socklen_t;
 
 #define UDP_RECV_MSG                 300
 #define TIMEOUT_MSG                  301
-#define HTTP_REQUEST_MSG       875770417     
-#define SEND_HTTP_REQUEST_MSG  875770418     
-#define TEXT_REQUEST_MSG       825373494     
-#define SEND_TEXT_REQUEST_MSG  825373495     
-#define RSS92_REQUEST_MSG      825373496     
-#define SEND_RSS92_REQUEST_MSG 825373497     
-#define RSS10_REQUEST_MSG      825373744     
-#define SEND_RSS10_REQUEST_MSG 825373745     
-#define ADD_PSERVER_MSG        0xabacab81     
+#define HTTP_REQUEST_MSG       875770417    // "4321"
+#define SEND_HTTP_REQUEST_MSG  875770418    // "4322"
+#define TEXT_REQUEST_MSG       825373494    // "1236"
+#define SEND_TEXT_REQUEST_MSG  825373495    // "1237"
+#define RSS92_REQUEST_MSG      825373496    // "1238"
+#define SEND_RSS92_REQUEST_MSG 825373497    // "1239"
+#define RSS10_REQUEST_MSG      825373744    // "1240"
+#define SEND_RSS10_REQUEST_MSG 825373745    // "1241"
+#define ADD_PSERVER_MSG        0xabacab81    // this number just need to be different than the others
 #define REMOVE_PSERVER_MSG     0xabacab82
 
-
+// Sent FROM Client
 #define LIVE_AUTH_USER				 600
 #define LIVE_AUTH_KEY				 601
 #define LIVE_GET_USER				 602
@@ -106,14 +106,14 @@ typedef int socklen_t;
 #define LIVE_UPDATE_PUBLIC_KEY		 604
 #define LIVE_AUTH_PUBLIC_KEY		 605
 
-
+// Sent TO Client
 #define LIVE_INVALID_KEY			 800
 #define LIVE_INVALID_USER			 801
 #define LIVE_AUTHORISED_KEY			 802
 #define	LIVE_SEND_USER				 803
 #define LIVE_VALIDATED_USER			 804
 
-
+// Location Types
 #define LIVE_LOCATION_SP			 100
 #define LIVE_LOCATION_MENU			 101
 #define LIVE_LOCATION_MP_JOIN		 102
@@ -132,16 +132,16 @@ typedef int socklen_t;
 #pragma pack(1)
 #endif
 
-
+// Keep this structure 8 bytes aligned (current size is 80)
 typedef struct
 {
-	char header[16];  
+	char header[16]; // information such as password
 	char ip[16];
 	char port[8];
 	char name[32];
 	INT32 room;
-	char version[8];  
-	char key[32];  
+	char version[8]; // format is: x.yy.z (like 1.30.2 or 1.31)
+	char key[32]; // Secret key for linking dedicated servers to accounts
 } ATTRPACK msg_server_t;
 
 typedef struct
@@ -274,8 +274,8 @@ public:
 	~CClientSocket(void);
 };
 
+// ================================== PROTOS ==================================
 
-
-
+// ================================== EXTERNS =================================
 
 #endif

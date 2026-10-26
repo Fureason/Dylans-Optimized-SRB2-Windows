@@ -1,6 +1,6 @@
-   
-                   
-   
+/**
+ * Hints test suite
+ */
 
 #include <stdio.h>
 
@@ -62,11 +62,11 @@ SDL_COMPILE_TIME_ASSERT(HintsEnum, SDL_arraysize(_HintsEnum) == SDL_arraysize(_H
 
 const int _numHintsEnum = SDL_arraysize(_HintsEnum);
 
- 
+/* Test case functions */
 
-   
-                             
-   
+/**
+ * @brief Call to SDL_GetHint
+ */
 int hints_getHint(void *arg)
 {
     const char *result1;
@@ -93,9 +93,9 @@ static void SDLCALL hints_testHintChanged(void *userdata, const char *name, cons
     *(char **)userdata = hint ? SDL_strdup(hint) : NULL;
 }
 
-   
-                             
-   
+/**
+ * @brief Call to SDL_SetHint
+ */
 int hints_setHint(void *arg)
 {
     const char *testHint = "SDL_AUTOMATED_TEST_HINT";
@@ -106,18 +106,18 @@ int hints_setHint(void *arg)
     SDL_bool result;
     int i, j;
 
-     
+    /* Create random values to set */
     value = SDLTest_RandomAsciiStringOfSize(10);
 
     for (i = 0; i < _numHintsEnum; i++) {
-         
+        /* Capture current value */
         originalValue = SDL_GetHint(_HintsEnum[i]);
         SDLTest_AssertPass("Call to SDL_GetHint(%s)", _HintsEnum[i]);
 
-         
+        /* Copy the original value, since it will be freed when we set it again */
         originalValue = originalValue ? SDL_strdup(originalValue) : NULL;
 
-         
+        /* Set value (twice) */
         for (j = 1; j <= 2; j++) {
             result = SDL_SetHint(_HintsEnum[i], value);
             SDLTest_AssertPass("Call to SDL_SetHint(%s, %s) (iteration %i)", _HintsEnum[i], value, j);
@@ -134,7 +134,7 @@ int hints_setHint(void *arg)
                 value);
         }
 
-         
+        /* Reset original value */
         result = SDL_SetHint(_HintsEnum[i], originalValue);
         SDLTest_AssertPass("Call to SDL_SetHint(%s, originalValue)", _HintsEnum[i]);
         SDLTest_AssertCheck(
@@ -146,7 +146,7 @@ int hints_setHint(void *arg)
 
     SDL_free(value);
 
-     
+    /* Set default value in environment */
     SDL_setenv(testHint, "original", 1);
 
     SDLTest_AssertPass("Call to SDL_GetHint() after saving and restoring hint");
@@ -193,7 +193,7 @@ int hints_setHint(void *arg)
         "testValue = %s, expected \"original\"",
         testValue);
 
-     
+    /* Make sure callback functionality works past a reset */
     SDLTest_AssertPass("Call to SDL_AddHintCallback()");
     callbackValue = NULL;
     SDL_AddHintCallback(testHint, hints_testHintChanged, &callbackValue);
@@ -241,9 +241,9 @@ int hints_setHint(void *arg)
     return TEST_COMPLETED;
 }
 
- 
+/* ================= Test References ================== */
 
- 
+/* Hints test cases */
 static const SDLTest_TestCaseReference hintsTest1 = {
     (SDLTest_TestCaseFp)hints_getHint, "hints_getHint", "Call to SDL_GetHint", TEST_ENABLED
 };
@@ -252,12 +252,12 @@ static const SDLTest_TestCaseReference hintsTest2 = {
     (SDLTest_TestCaseFp)hints_setHint, "hints_setHint", "Call to SDL_SetHint", TEST_ENABLED
 };
 
- 
+/* Sequence of Hints test cases */
 static const SDLTest_TestCaseReference *hintsTests[] = {
     &hintsTest1, &hintsTest2, NULL
 };
 
- 
+/* Hints test suite (global) */
 SDLTest_TestSuiteReference hintsTestSuite = {
     "Hints",
     NULL,

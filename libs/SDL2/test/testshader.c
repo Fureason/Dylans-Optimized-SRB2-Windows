@@ -9,7 +9,7 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* This is a simple example of using GLSL shaders with SDL */
 
 #include "SDL.h"
 
@@ -39,9 +39,9 @@ typedef struct
 
 static ShaderData shaders[NUM_SHADERS] = {
 
-     
+    /* SHADER_COLOR */
     { 0, 0, 0,
-       
+      /* vertex shader */
       "varying vec4 v_color;\n"
       "\n"
       "void main()\n"
@@ -49,7 +49,7 @@ static ShaderData shaders[NUM_SHADERS] = {
       "    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;\n"
       "    v_color = gl_Color;\n"
       "}",
-       
+      /* fragment shader */
       "varying vec4 v_color;\n"
       "\n"
       "void main()\n"
@@ -57,9 +57,9 @@ static ShaderData shaders[NUM_SHADERS] = {
       "    gl_FragColor = v_color;\n"
       "}" },
 
-     
+    /* SHADER_TEXTURE */
     { 0, 0, 0,
-       
+      /* vertex shader */
       "varying vec4 v_color;\n"
       "varying vec2 v_texCoord;\n"
       "\n"
@@ -69,7 +69,7 @@ static ShaderData shaders[NUM_SHADERS] = {
       "    v_color = gl_Color;\n"
       "    v_texCoord = vec2(gl_MultiTexCoord0);\n"
       "}",
-       
+      /* fragment shader */
       "varying vec4 v_color;\n"
       "varying vec2 v_texCoord;\n"
       "uniform sampler2D tex0;\n"
@@ -79,9 +79,9 @@ static ShaderData shaders[NUM_SHADERS] = {
       "    gl_FragColor = texture2D(tex0, v_texCoord) * v_color;\n"
       "}" },
 
-     
+    /* SHADER_TEXCOORDS */
     { 0, 0, 0,
-       
+      /* vertex shader */
       "varying vec2 v_texCoord;\n"
       "\n"
       "void main()\n"
@@ -89,7 +89,7 @@ static ShaderData shaders[NUM_SHADERS] = {
       "    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;\n"
       "    v_texCoord = vec2(gl_MultiTexCoord0);\n"
       "}",
-       
+      /* fragment shader */
       "varying vec2 v_texCoord;\n"
       "\n"
       "void main()\n"
@@ -184,27 +184,27 @@ static SDL_bool CompileShaderProgram(ShaderData *data)
 
     glGetError();
 
-     
+    /* Create one program object to rule them all */
     data->program = glCreateProgramObjectARB();
 
-     
+    /* Create the vertex shader */
     data->vert_shader = glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
     if (!CompileShader(data->vert_shader, data->vert_source)) {
         return SDL_FALSE;
     }
 
-     
+    /* Create the fragment shader */
     data->frag_shader = glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
     if (!CompileShader(data->frag_shader, data->frag_source)) {
         return SDL_FALSE;
     }
 
-     
+    /* ... and in the darkness bind them */
     if (!LinkProgram(data)) {
         return SDL_FALSE;
     }
 
-     
+    /* Set up some uniform variables */
     glUseProgramObjectARB(data->program);
     for (i = 0; i < num_tmus_bound; ++i) {
         char tex_name[5];
@@ -232,7 +232,7 @@ static SDL_bool InitShaders()
 {
     int i;
 
-     
+    /* Check for shader support */
     shaders_supported = SDL_FALSE;
     if (SDL_GL_ExtensionSupported("GL_ARB_shader_objects") &&
         SDL_GL_ExtensionSupported("GL_ARB_shading_language_100") &&
@@ -270,7 +270,7 @@ static SDL_bool InitShaders()
         return SDL_FALSE;
     }
 
-     
+    /* Compile all the shaders */
     for (i = 0; i < NUM_SHADERS; ++i) {
         if (!CompileShaderProgram(&shaders[i])) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unable to compile shader!\n");
@@ -278,7 +278,7 @@ static SDL_bool InitShaders()
         }
     }
 
-     
+    /* We're done! */
     return SDL_TRUE;
 }
 
@@ -291,7 +291,7 @@ static void QuitShaders()
     }
 }
 
- 
+/* Quick utility function for texture creation */
 static int
 power_of_two(int input)
 {
@@ -312,16 +312,16 @@ SDL_GL_LoadTexture(SDL_Surface *surface, GLfloat *texcoord)
     SDL_Rect area;
     SDL_BlendMode saved_mode;
 
-     
+    /* Use the surface width and height expanded to powers of 2 */
     w = power_of_two(surface->w);
     h = power_of_two(surface->h);
-    texcoord[0] = 0.0f;                     
-    texcoord[1] = 0.0f;                     
-    texcoord[2] = (GLfloat)surface->w / w;  
-    texcoord[3] = (GLfloat)surface->h / h;  
+    texcoord[0] = 0.0f;                    /* Min X */
+    texcoord[1] = 0.0f;                    /* Min Y */
+    texcoord[2] = (GLfloat)surface->w / w; /* Max X */
+    texcoord[3] = (GLfloat)surface->h / h; /* Max Y */
 
     image = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 32,
-#if SDL_BYTEORDER == SDL_LIL_ENDIAN      
+#if SDL_BYTEORDER == SDL_LIL_ENDIAN     /* OpenGL RGBA masks */
                                  0x000000FF,
                                  0x0000FF00, 0x00FF0000, 0xFF000000
 #else
@@ -333,21 +333,21 @@ SDL_GL_LoadTexture(SDL_Surface *surface, GLfloat *texcoord)
         return 0;
     }
 
-     
+    /* Save the alpha blending attributes */
     SDL_GetSurfaceBlendMode(surface, &saved_mode);
     SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
 
-     
+    /* Copy the surface into the GL texture image */
     area.x = 0;
     area.y = 0;
     area.w = surface->w;
     area.h = surface->h;
     SDL_BlitSurface(surface, &area, image, &area);
 
-     
+    /* Restore the alpha blending attributes */
     SDL_SetSurfaceBlendMode(surface, saved_mode);
 
-     
+    /* Create an OpenGL texture for the image */
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -355,25 +355,25 @@ SDL_GL_LoadTexture(SDL_Surface *surface, GLfloat *texcoord)
     glTexImage2D(GL_TEXTURE_2D,
                  0,
                  GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
-    SDL_FreeSurface(image);  
+    SDL_FreeSurface(image); /* No longer needed */
 
     return texture;
 }
 
- 
-void InitGL(int Width, int Height)  
+/* A general OpenGL initialization function.    Sets all of the initial parameters. */
+void InitGL(int Width, int Height) /* We call this right after our OpenGL window is created. */
 {
     GLdouble aspect;
 
     glViewport(0, 0, Width, Height);
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);  
-    glClearDepth(1.0);                     
-    glDepthFunc(GL_LESS);                  
-    glEnable(GL_DEPTH_TEST);               
-    glShadeModel(GL_SMOOTH);               
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f); /* This Will Clear The Background Color To Black */
+    glClearDepth(1.0);                    /* Enables Clearing Of The Depth Buffer */
+    glDepthFunc(GL_LESS);                 /* The Type Of Depth Test To Do */
+    glEnable(GL_DEPTH_TEST);              /* Enables Depth Testing */
+    glShadeModel(GL_SMOOTH);              /* Enables Smooth Color Shading */
 
     glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();  
+    glLoadIdentity(); /* Reset The Projection Matrix */
 
     aspect = (GLdouble)Width / Height;
     glOrtho(-3.0, 3.0, -3.0 / aspect, 3.0 / aspect, 0.0, 1.0);
@@ -381,10 +381,10 @@ void InitGL(int Width, int Height)
     glMatrixMode(GL_MODELVIEW);
 }
 
- 
+/* The main drawing function. */
 void DrawGLScene(SDL_Window *window, GLuint texture, GLfloat *texcoord)
 {
-     
+    /* Texture coordinate lookup, to make it simple */
     enum
     {
         MINX,
@@ -393,29 +393,29 @@ void DrawGLScene(SDL_Window *window, GLuint texture, GLfloat *texcoord)
         MAXY
     };
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  
-    glLoadIdentity();                                    
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); /* Clear The Screen And The Depth Buffer */
+    glLoadIdentity();                                   /* Reset The View */
 
-    glTranslatef(-1.5f, 0.0f, 0.0f);  
+    glTranslatef(-1.5f, 0.0f, 0.0f); /* Move Left 1.5 Units */
 
-     
-    glBegin(GL_POLYGON);             
-    glColor3f(1.0f, 0.0f, 0.0f);     
-    glVertex3f(0.0f, 1.0f, 0.0f);    
-    glColor3f(0.0f, 1.0f, 0.0f);     
-    glVertex3f(1.0f, -1.0f, 0.0f);   
-    glColor3f(0.0f, 0.0f, 1.0f);     
-    glVertex3f(-1.0f, -1.0f, 0.0f);  
-    glEnd();                         
+    /* draw a triangle (in smooth coloring mode) */
+    glBegin(GL_POLYGON);            /* start drawing a polygon */
+    glColor3f(1.0f, 0.0f, 0.0f);    /* Set The Color To Red */
+    glVertex3f(0.0f, 1.0f, 0.0f);   /* Top */
+    glColor3f(0.0f, 1.0f, 0.0f);    /* Set The Color To Green */
+    glVertex3f(1.0f, -1.0f, 0.0f);  /* Bottom Right */
+    glColor3f(0.0f, 0.0f, 1.0f);    /* Set The Color To Blue */
+    glVertex3f(-1.0f, -1.0f, 0.0f); /* Bottom Left */
+    glEnd();                        /* we're done with the polygon (smooth color interpolation) */
 
-    glTranslatef(3.0f, 0.0f, 0.0f);  
+    glTranslatef(3.0f, 0.0f, 0.0f); /* Move Right 3 Units */
 
-     
+    /* Enable blending */
     glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-     
+    /* draw a textured square (quadrilateral) */
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, texture);
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -423,23 +423,23 @@ void DrawGLScene(SDL_Window *window, GLuint texture, GLfloat *texcoord)
         glUseProgramObjectARB(shaders[current_shader].program);
     }
 
-    glBegin(GL_QUADS);  
+    glBegin(GL_QUADS); /* start drawing a polygon (4 sided) */
     glTexCoord2f(texcoord[MINX], texcoord[MINY]);
-    glVertex3f(-1.0f, 1.0f, 0.0f);  
+    glVertex3f(-1.0f, 1.0f, 0.0f); /* Top Left */
     glTexCoord2f(texcoord[MAXX], texcoord[MINY]);
-    glVertex3f(1.0f, 1.0f, 0.0f);  
+    glVertex3f(1.0f, 1.0f, 0.0f); /* Top Right */
     glTexCoord2f(texcoord[MAXX], texcoord[MAXY]);
-    glVertex3f(1.0f, -1.0f, 0.0f);  
+    glVertex3f(1.0f, -1.0f, 0.0f); /* Bottom Right */
     glTexCoord2f(texcoord[MINX], texcoord[MAXY]);
-    glVertex3f(-1.0f, -1.0f, 0.0f);  
-    glEnd();                         
+    glVertex3f(-1.0f, -1.0f, 0.0f); /* Bottom Left */
+    glEnd();                        /* done with the polygon */
 
     if (shaders_supported) {
         glUseProgramObjectARB(0);
     }
     glDisable(GL_TEXTURE_2D);
 
-     
+    /* swap buffers to display, since we're double buffered. */
     SDL_GL_SwapWindow(window);
 }
 
@@ -451,16 +451,16 @@ int main(int argc, char **argv)
     GLuint texture;
     GLfloat texcoords[4];
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize SDL for video output */
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unable to initialize SDL: %s\n", SDL_GetError());
         exit(1);
     }
 
-     
+    /* Create a 640x480 OpenGL screen */
     window = SDL_CreateWindow("Shader Demo", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_OPENGL);
     if (window == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unable to create OpenGL window: %s\n", SDL_GetError());
@@ -483,7 +483,7 @@ int main(int argc, char **argv)
     texture = SDL_GL_LoadTexture(surface, texcoords);
     SDL_FreeSurface(surface);
 
-     
+    /* Loop, drawing and checking events */
     InitGL(640, 480);
     if (InitShaders()) {
         SDL_Log("Shaders supported, press SPACE to cycle them.\n");
@@ -494,7 +494,7 @@ int main(int argc, char **argv)
     while (!done) {
         DrawGLScene(window, texture, texcoords);
 
-         
+        /* This could go in a separate function */
         {
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
@@ -517,7 +517,7 @@ int main(int argc, char **argv)
     return 1;
 }
 
-#else  
+#else /* HAVE_OPENGL */
 
 int main(int argc, char *argv[])
 {
@@ -525,6 +525,6 @@ int main(int argc, char *argv[])
     return 1;
 }
 
-#endif  
+#endif /* HAVE_OPENGL */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

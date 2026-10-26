@@ -11,23 +11,23 @@ PNGLIB_BASENAME= libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@
 
 ACLOCAL_AMFLAGS = -I scripts
 
-
+# test programs - run on make check, make distcheck
 check_PROGRAMS= pngtest pngunknown pngstest pngvalid pngimage pngcp
 if HAVE_CLOCK_GETTIME
 check_PROGRAMS += timepng
 endif
 
-
+# Utilities - installed
 bin_PROGRAMS= pngfix png-fix-itxt
 
-
-
-
-
-
-
-
-
+# This ensures that pnglibconf.h gets built at the start of 'make all' or
+# 'make check', but it does not add dependencies to the individual programs,
+# this is done below.
+#
+# IMPORTANT: always add the object modules of new programs to the list below
+# because otherwise the sequence 'configure; make new-program' will *sometimes*
+# result in the installed (system) pnglibconf.h being used and the result is
+# always wrong and always very confusing.
 BUILT_SOURCES = pnglibconf.h
 
 pngtest_SOURCES = pngtest.c
@@ -56,8 +56,8 @@ png_fix_itxt_SOURCES = contrib/tools/png-fix-itxt.c
 pngcp_SOURCES = contrib/tools/pngcp.c
 pngcp_LDADD = libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@.la
 
-
-
+# Generally these are single line shell scripts to run a test with a particular
+# set of parameters:
 TESTS =\
    tests/pngtest\
    tests/pngtest-badpngs\
@@ -77,17 +77,17 @@ TESTS =\
    tests/pngunknown-sTER tests/pngunknown-save tests/pngunknown-vpAg\
    tests/pngimage-quick tests/pngimage-full
 
-
+# man pages
 dist_man_MANS= libpng.3 libpngpf.3 png.5
 
-
+# generate the -config scripts if required
 binconfigs= libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@-config
 EXTRA_SCRIPTS= libpng-config libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@-config
 bin_SCRIPTS= @binconfigs@
 
-
+# rules to build libpng, only build the old library on request
 lib_LTLIBRARIES=libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@.la
-
+# EXTRA_LTLIBRARIES= libpng.la
 libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@_la_SOURCES = png.c pngerror.c\
 	pngget.c pngmem.c pngpread.c pngread.c pngrio.c pngrtran.c pngrutil.c\
 	pngset.c pngtrans.c pngwio.c pngwrite.c pngwtran.c pngwutil.c\
@@ -120,7 +120,7 @@ libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@_la_LDFLAGS = -no-undefined -export-dynamic \
 	-version-number @PNGLIB_MAJOR@@PNGLIB_MINOR@:@PNGLIB_RELEASE@:0
 
 if HAVE_LD_VERSION_SCRIPT
-
+#   Versioned symbols and restricted exports
 if HAVE_SOLARIS_LD
   libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@_la_LDFLAGS += -Wl,-M -Wl,libpng.vers
 else
@@ -129,24 +129,24 @@ endif
 
   libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@_la_DEPENDENCIES = libpng.vers
 else
-
+#   Only restricted exports when possible
   libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@_la_LDFLAGS += -export-symbols libpng.sym
   libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@_la_DEPENDENCIES = libpng.sym
 endif
 
-
+#distribute headers in /usr/include/libpng/*
 pkgincludedir= $(includedir)/$(PNGLIB_BASENAME)
 pkginclude_HEADERS= png.h pngconf.h
 nodist_pkginclude_HEADERS= pnglibconf.h
 
-
-
+# pkg-config stuff, note that libpng.pc is always required in order
+# to get the correct library
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@.pc
 
-
-
-
+# Extra source distribution files, '${srcdir}' is used below to stop build files
+# from those directories being included.  This only works if the configure is
+# not done in the source directory!
 EXTRA_DIST= \
 	ANNOUNCE AUTHORS CHANGES INSTALL LICENSE README TODO TRADEMARK \
 	pngtest.png pngbar.png pngnow.png pngbar.jpg autogen.sh \
@@ -165,17 +165,17 @@ CLEANFILES= *.tf? pngout.png libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@.pc \
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 config.guess config.h.in \
 config.sub configure depcomp install-sh ltmain.sh missing
 
-
-
-
+# PNG_COPTS give extra options for the C compiler to be used on all compilation
+# steps (unless targe_CFLAGS is specified; that will take precedence over
+# AM_CFLAGS)
 PNG_COPTS = @PNG_COPTS@
 AM_CFLAGS = ${PNG_COPTS}
 
-
-
-
-
-
+# DFNCPP is normally just CPP - the C preprocessor - but on Solaris and maybe
+# other operating systems (NeXT?) the C preprocessor selected by configure
+# checks input tokens for validity - effectively it performs part of the ANSI-C
+# parsing - and therefore fails with the .df files.  configure.ac has special
+# checks for this and sets DFNCPP appropriately.
 DFNCPP = @DFNCPP@
 
 SUFFIXES = .chk .out
@@ -199,9 +199,9 @@ libpng.vers: scripts/vers.out
 	cp $? $@
 
 if DO_PNG_PREFIX
-
-
-
+# Rename functions in scripts/prefix.out with a PNG_PREFIX prefix.
+# Rename macros in scripts/macro.lst from PNG_PREFIXpng_ to PNG_ (the actual
+# implementation of the macro).
 pnglibconf.h: pnglibconf.out scripts/prefix.out scripts/macro.lst
 	rm -f $@
 	$(AWK) 's==0 && NR>1{print prev}\
@@ -221,7 +221,7 @@ pnglibconf.h: pnglibconf.out
 	rm -f $@
 	cp $? $@
 
-pngprefix.h:  
+pngprefix.h: # is empty
 	:>$@
 endif
 
@@ -232,11 +232,11 @@ $(srcdir)/scripts/pnglibconf.h.prebuilt:
 	@echo "AND set PNG_ZLIB_VERNUM to 0 (you MUST do this)" >&2
 	@exit 1
 
-
-
-
-
-
+# The following is necessary to ensure that the local pnglibconf.h is used, not
+# an installed one (this can happen immediately after on a clean system if
+# 'make test' is the first thing the user does.)  Only files which include
+# one of the png source files (typically png.h or pngpriv.h) need to be listed
+# here:
 pngtest.o: pnglibconf.h
 
 contrib/libtests/makepng.o: pnglibconf.h
@@ -252,9 +252,9 @@ contrib/tools/makesRGB.o: pnglibconf.h
 contrib/tools/pngfix.o: pnglibconf.h
 contrib/tools/pngcp.o: pnglibconf.h
 
-
-
-
+# We must use -DPNG_NO_USE_READ_MACROS here even when the library may actually
+# be built with PNG_USE_READ_MACROS; this prevents the read macros from
+# interfering with the symbol file format.
 SYMBOL_CFLAGS = -DPNGLIB_LIBNAME='PNG@PNGLIB_MAJOR@@PNGLIB_MINOR@_0'\
 		-DPNGLIB_VERSION='@PNGLIB_VERSION@'\
 		-DSYMBOL_PREFIX='$(SYMBOL_PREFIX)'\
@@ -273,7 +273,7 @@ endif
 	rm -f $*.tf1
 	mv $*.tf2 $@
 
-
+# The .c file for pnglibconf.h is machine generated
 pnglibconf.c: scripts/pnglibconf.dfa scripts/options.awk pngconf.h pngusr.dfa $(DFA_XTRA)
 	rm -f $@ $*.tf[45]
 	$(AWK) -f ${srcdir}/scripts/options.awk out=$*.tf4 version=search\
@@ -283,7 +283,7 @@ pnglibconf.c: scripts/pnglibconf.dfa scripts/options.awk pngconf.h pngusr.dfa $(
 	rm $*.tf4
 	mv $*.tf5 $@
 
-
+# Symbol checks (.def and .out files should match)
 scripts/symbols.chk: scripts/checksym.awk scripts/symbols.def scripts/symbols.out
 
 .out.chk:
@@ -292,8 +292,8 @@ scripts/symbols.chk: scripts/checksym.awk scripts/symbols.def scripts/symbols.ou
 	    of="$*.new" $< >&2
 	mv $*.new $@
 
-
-
+# used on demand to regenerate the standard header, CPPFLAGS should
+# be empty - no non-standard defines
 scripts/pnglibconf.c: scripts/pnglibconf.dfa scripts/options.awk pngconf.h
 	rm -f $@ pnglibconf.tf[67]
 	test -z "$(CPPFLAGS)"
@@ -311,16 +311,16 @@ $(libpng@PNGLIB_MAJOR@@PNGLIB_MINOR@_la_OBJECTS): png.h pngconf.h \
 
 test: check-am
 
-
+# Extra checks
 check: scripts/symbols.chk
 
-
+# Don't distribute the generated script files
 dist-hook:
 	cd '$(top_distdir)'; rm -f $(SCRIPT_CLEANFILES)
 
-
-
-
+# Make links between installed files with release-specific names and the generic
+# file names.  If this install rule is run the generic names will be deleted and
+# recreated - this has obvious issues for systems with multiple installations.
 
 install-header-links:
 	@set -ex; cd '$(DESTDIR)$(includedir)'; for f in $(HEADERS); do \
@@ -336,10 +336,10 @@ install-libpng-pc:
 uninstall-libpng-pc:
 	rm -f '$(DESTDIR)$(pkgconfigdir)/libpng.pc'
 
-
-
-
-
+# EXT_LIST is a list of the possibly library directory extensions, this exists
+# because we can't find a good way of discovering the file extensions that are
+# actually installed on a given system, so instead we check for every extension
+# we have seen.
 
 EXT_LIST = a dll.a so so.@PNGLIB_MAJOR@@PNGLIB_MINOR@.@PNGLIB_RELEASE@ la sl dylib
 
@@ -364,8 +364,8 @@ uninstall-libpng-config:
 	rm -f '$(DESTDIR)$(bindir)/libpng-config'
 
 if DO_INSTALL_LINKS
-
-
+# If --enable-unversioned-links is specified the header and lib file links
+# will be automatically made on a 'make install':
 
 install-data-hook: install-header-links
 uninstall-hook: uninstall-header-links
@@ -374,20 +374,20 @@ uninstall-hook: uninstall-library-links
 endif
 
 if DO_INSTALL_LIBPNG_PC
-
+# Likewise, --install-pc causes libpng.pc to be constructed:
 
 install-data-hook: install-libpng-pc
 uninstall-hook: uninstall-libpng-pc
 endif
 
 if DO_INSTALL_LIBPNG_CONFIG
-
+# And --install-config:
 
 install-exec-hook: install-libpng-config
 uninstall-hook: uninstall-libpng-config
 endif
 
-
-
-
+# The following addition ensures that 'make all' always builds the test programs
+# too.  It used to, but some change either in libpng or configure stopped this
+# working.
 all-am: $(check_PROGRAMS)

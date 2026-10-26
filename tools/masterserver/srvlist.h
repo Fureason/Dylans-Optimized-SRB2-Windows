@@ -13,7 +13,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 
 #ifndef SRVLIST_H
 #define SRVLIST_H
@@ -26,7 +26,7 @@ enum ServerType
 	ST_TEMPORARY,
 };
 
-
+//=============================================================================
 
 class CItem
 {
@@ -35,17 +35,17 @@ protected:
 	CItem *next;
 public:
 	CItem();
-	virtual ~CItem() {};  
+	virtual ~CItem() {}; // destructor must exist and be virtual
 	virtual void print() = 0;
 };
 
-
+//=============================================================================
 
 class CList
 {
 protected:
 	CItem *list;
-	CItem *current;  
+	CItem *current; // the current item we are pointing on (for getfirst/getnext)
 public:
 	CList();
 	virtual ~CList();
@@ -56,7 +56,7 @@ public:
 	void show();
 };
 
-
+//=============================================================================
 
 class CInetAddr
 {
@@ -71,7 +71,7 @@ public:
 	const char *getPort();
 };
 
-
+//=============================================================================
 
 class CPlayerItem : public CItem, public CInetAddr
 {
@@ -84,16 +84,16 @@ public:
 	char *getString();
 };
 
-
+//=============================================================================
 
 class CPlayerList : public CList
 {
 };
 
+//=============================================================================
 
-
-#define REG_TIME_SIZE 24    
-#define GUID_SIZE 24-1  
+#define REG_TIME_SIZE 24   //1970-00-00T00:00:00.0+00:00
+#define GUID_SIZE 24-1 // format is 12700000000105000
 
 class CServerItem : public CItem, public CInetAddr
 {
@@ -101,7 +101,7 @@ class CServerItem : public CItem, public CInetAddr
 
 private:
 	char hostname[32];
-	char version[8];  
+	char version[8]; // format is: x.yy.z (like 1.30.2 or 1.31)
 	CPlayerList players_list;
 	char reg_time[REG_TIME_SIZE];
 	char guid[GUID_SIZE+1];
@@ -119,7 +119,7 @@ public:
 	const char *getGuid();
 };
 
-
+//=============================================================================
 
 class CServerList : public CList
 {

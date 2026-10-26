@@ -22,27 +22,27 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-  
-           
-   
+/*
+ * includes
+ */
 #include "SDL.h"
 
 #ifndef SDL_HAPTIC_DISABLED
 
 static SDL_Haptic *haptic;
 
-   
-                                                      
-                                       
-                                           
-   
+/**
+ * @brief The entry point of this force feedback demo.
+ * @param[in] argc Number of arguments.
+ * @param[in] argv Array of argc arguments.
+ */
 int main(int argc, char **argv)
 {
     int i;
     char *name;
     int index;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     name = NULL;
@@ -65,16 +65,16 @@ int main(int argc, char **argv)
         }
     }
 
-     
+    /* Initialize the force feedbackness */
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_JOYSTICK |
              SDL_INIT_HAPTIC);
     SDL_Log("%d Haptic devices detected.\n", SDL_NumHaptics());
     if (SDL_NumHaptics() > 0) {
-         
+        /* We'll just use index or the first force feedback device found */
         if (name == NULL) {
             i = (index != -1) ? index : 0;
         }
-         
+        /* Try to find matching device */
         else {
             for (i = 0; i < SDL_NumHaptics(); i++) {
                 if (SDL_strstr(SDL_HapticName(i), name) != NULL) {
@@ -101,7 +101,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-     
+    /* We only want force feedback errors. */
     SDL_ClearError();
 
     if (SDL_HapticRumbleSupported(haptic) == SDL_FALSE) {
@@ -128,7 +128,7 @@ int main(int argc, char **argv)
     }
     SDL_Delay(2000);
 
-     
+    /* Quit */
     if (haptic != NULL) {
         SDL_HapticClose(haptic);
     }

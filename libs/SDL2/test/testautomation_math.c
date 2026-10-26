@@ -1,6 +1,6 @@
-   
-                  
-   
+/**
+ * Math test suite
+ */
 
 #include <float.h>
 #include <math.h>
@@ -8,16 +8,16 @@
 #include "SDL.h"
 #include "SDL_test.h"
 
- 
+/* ================= Test Constants ================== */
 
- 
+/* Range tests parameters */
 #define RANGE_TEST_ITERATIONS 10000000
 #define RANGE_TEST_STEP       ((Uint32)(SDL_MAX_UINT32 / RANGE_TEST_ITERATIONS))
 
- 
+/* Margin of error for imprecise tests */
 #define EPSILON 1.0E-10
 
- 
+/* Euler constant (used in exp/log) */
 #ifndef M_E
 #define EULER 2.7182818284590450907955982984276488423347473144531250
 #else
@@ -26,49 +26,49 @@
 
 #define IS_INFINITY(V) fpclassify(V) == FP_INFINITE
 
- 
+/* Square root of 3 (used in atan2) */
 #define SQRT3 1.7320508075688771931766041234368458390235900878906250
 
- 
+/* ================= Test Structs ================== */
 
-   
-                                                
-   
+/**
+ * Stores a single input and the expected result
+ */
 typedef struct
 {
     double input;
     double expected;
 } d_to_d;
 
-   
-                                                  
-   
+/**
+ * Stores a pair of inputs and the expected result
+ */
 typedef struct
 {
     double x_input, y_input;
     double expected;
 } dd_to_d;
 
-  
-                                                                                  
-                                                                                    
-                              
-  
+/*
+    NB: You cannot create an array of these structures containing INFINITY or NAN.
+    On platforms such as OS/2, they are defined as 'extern const double' making them
+    not compile-time constant.
+*/
 
- 
+/* ================= Test Helpers ================== */
 
 typedef double(SDLCALL *d_to_d_func)(double);
 typedef double(SDLCALL *dd_to_d_func)(double, double);
 
-   
-                                                                                   
-                                      
-  
-                                                              
-                                     
-                                           
-                                                  
-   
+/**
+ * \brief Runs all the cases on a given function with a signature double -> double.
+ * The result is expected to be exact.
+ *
+ * \param func_name, a printable name for the tested function.
+ * \param func, the function to call.
+ * \param cases, an array of all the cases.
+ * \param cases_size, the size of the cases array.
+ */
 static int
 helper_dtod(const char *func_name, d_to_d_func func,
             const d_to_d *cases, const size_t cases_size)
@@ -86,15 +86,15 @@ helper_dtod(const char *func_name, d_to_d_func func,
     return TEST_COMPLETED;
 }
 
-   
-                                                                                   
-                                                     
-  
-                                                              
-                                     
-                                           
-                                                  
-   
+/**
+ * \brief Runs all the cases on a given function with a signature double -> double.
+ * Checks if the result between expected +/- EPSILON.
+ *
+ * \param func_name, a printable name for the tested function.
+ * \param func, the function to call.
+ * \param cases, an array of all the cases.
+ * \param cases_size, the size of the cases array.
+ */
 static int
 helper_dtod_inexact(const char *func_name, d_to_d_func func,
                     const d_to_d *cases, const size_t cases_size)
@@ -115,15 +115,15 @@ helper_dtod_inexact(const char *func_name, d_to_d_func func,
     return TEST_COMPLETED;
 }
 
-   
-                                                                 
-                                                                  
-  
-                                                              
-                                     
-                                           
-                                                  
-   
+/**
+ * \brief Runs all the cases on a given function with a signature
+ * (double, double) -> double. The result is expected to be exact.
+ *
+ * \param func_name, a printable name for the tested function.
+ * \param func, the function to call.
+ * \param cases, an array of all the cases.
+ * \param cases_size, the size of the cases array.
+ */
 static int
 helper_ddtod(const char *func_name, dd_to_d_func func,
              const dd_to_d *cases, const size_t cases_size)
@@ -141,15 +141,15 @@ helper_ddtod(const char *func_name, dd_to_d_func func,
     return TEST_COMPLETED;
 }
 
-   
-                                                                 
-                                                                                 
-  
-                                                              
-                                     
-                                           
-                                                  
-   
+/**
+ * \brief Runs all the cases on a given function with a signature
+ * (double, double) -> double. Checks if the result between expected +/- EPSILON.
+ *
+ * \param func_name, a printable name for the tested function.
+ * \param func, the function to call.
+ * \param cases, an array of all the cases.
+ * \param cases_size, the size of the cases array.
+ */
 static int
 helper_ddtod_inexact(const char *func_name, dd_to_d_func func,
                      const dd_to_d *cases, const size_t cases_size)
@@ -170,15 +170,15 @@ helper_ddtod_inexact(const char *func_name, dd_to_d_func func,
     return TEST_COMPLETED;
 }
 
-   
-                                                                                      
-  
-                                                                                      
-                                  
-  
-                                                              
-                                     
-   
+/**
+ * \brief Runs a range of values on a given function with a signature double -> double
+ *
+ * This function is only meant to test functions that returns the input value if it is
+ * integral: f(x) -> x for x in N.
+ *
+ * \param func_name, a printable name for the tested function.
+ * \param func, the function to call.
+ */
 static int
 helper_range(const char *func_name, d_to_d_func func)
 {
@@ -192,13 +192,13 @@ helper_range(const char *func_name, d_to_d_func func)
 
     for (i = 0; i < RANGE_TEST_ITERATIONS; i++, test_value += RANGE_TEST_STEP) {
         double result;
-         
+        /* These are tested elsewhere */
         if (isnan(test_value) || isinf(test_value)) {
             continue;
         }
 
         result = func(test_value);
-        if (result != test_value) {  
+        if (result != test_value) { /* Only log failures to save performances */
             SDLTest_AssertCheck(SDL_FALSE,
                                 "%s(%.1f), expected %.1f, got %.1f",
                                 func_name, test_value,
@@ -210,14 +210,14 @@ helper_range(const char *func_name, d_to_d_func func)
     return TEST_COMPLETED;
 }
 
- 
+/* ================= Test Case Implementation ================== */
 
- 
+/* SDL_floor tests functions */
 
-   
-                       
-                                        
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: Infinity is returned as-is.
+ */
 static int
 floor_infCases(void *args)
 {
@@ -236,10 +236,10 @@ floor_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                  
-                                    
-   
+/**
+ * Inputs: +/-0.0.
+ * Expected: Zero is returned as-is.
+ */
 static int
 floor_zeroCases(void *args)
 {
@@ -250,10 +250,10 @@ floor_zeroCases(void *args)
     return helper_dtod("Floor", SDL_floor, zero_cases, SDL_arraysize(zero_cases));
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 floor_nanCase(void *args)
 {
@@ -264,10 +264,10 @@ floor_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                           
-                                               
-   
+/**
+ * Inputs: integral values.
+ * Expected: the input value is returned as-is.
+ */
 static int
 floor_roundNumbersCases(void *args)
 {
@@ -284,10 +284,10 @@ floor_roundNumbersCases(void *args)
     return helper_dtod("Floor", SDL_floor, round_cases, SDL_arraysize(round_cases));
 }
 
-   
-                             
-                                                  
-   
+/**
+ * Inputs: fractional values.
+ * Expected: the lower integral value is returned.
+ */
 static int
 floor_fractionCases(void *args)
 {
@@ -306,22 +306,22 @@ floor_fractionCases(void *args)
     return helper_dtod("Floor", SDL_floor, frac_cases, SDL_arraysize(frac_cases));
 }
 
-   
-                                               
-                                               
-   
+/**
+ * Inputs: values in the range [0, UINT32_MAX].
+ * Expected: the input value is returned as-is.
+ */
 static int
 floor_rangeTest(void *args)
 {
     return helper_range("Floor", SDL_floor);
 }
 
- 
+/* SDL_ceil tests functions */
 
-   
-                       
-                                        
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: Infinity is returned as-is.
+ */
 static int
 ceil_infCases(void *args)
 {
@@ -340,10 +340,10 @@ ceil_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                  
-                                    
-   
+/**
+ * Inputs: +/-0.0.
+ * Expected: Zero is returned as-is.
+ */
 static int
 ceil_zeroCases(void *args)
 {
@@ -354,10 +354,10 @@ ceil_zeroCases(void *args)
     return helper_dtod("Ceil", SDL_ceil, zero_cases, SDL_arraysize(zero_cases));
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 ceil_nanCase(void *args)
 {
@@ -368,10 +368,10 @@ ceil_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                           
-                                               
-   
+/**
+ * Inputs: integral values.
+ * Expected: the input value is returned as-is.
+ */
 static int
 ceil_roundNumbersCases(void *args)
 {
@@ -388,10 +388,10 @@ ceil_roundNumbersCases(void *args)
     return helper_dtod("Ceil", SDL_ceil, round_cases, SDL_arraysize(round_cases));
 }
 
-   
-                             
-                                                   
-   
+/**
+ * Inputs: fractional values.
+ * Expected: the higher integral value is returned.
+ */
 static int
 ceil_fractionCases(void *args)
 {
@@ -410,22 +410,22 @@ ceil_fractionCases(void *args)
     return helper_dtod("Ceil", SDL_ceil, frac_cases, SDL_arraysize(frac_cases));
 }
 
-   
-                                               
-                                               
-   
+/**
+ * Inputs: values in the range [0, UINT32_MAX].
+ * Expected: the input value is returned as-is.
+ */
 static int
 ceil_rangeTest(void *args)
 {
     return helper_range("Ceil", SDL_ceil);
 }
 
- 
+/* SDL_trunc tests functions */
 
-   
-                       
-                                        
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: Infinity is returned as-is.
+ */
 static int
 trunc_infCases(void *args)
 {
@@ -444,10 +444,10 @@ trunc_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                  
-                                    
-   
+/**
+ * Inputs: +/-0.0.
+ * Expected: Zero is returned as-is.
+ */
 static int
 trunc_zeroCases(void *args)
 {
@@ -458,10 +458,10 @@ trunc_zeroCases(void *args)
     return helper_dtod("Trunc", SDL_trunc, zero_cases, SDL_arraysize(zero_cases));
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 trunc_nanCase(void *args)
 {
@@ -472,10 +472,10 @@ trunc_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                           
-                                               
-   
+/**
+ * Inputs: integral values.
+ * Expected: the input value is returned as-is.
+ */
 static int
 trunc_roundNumbersCases(void *args)
 {
@@ -492,10 +492,10 @@ trunc_roundNumbersCases(void *args)
     return helper_dtod("Trunc", SDL_trunc, round_cases, SDL_arraysize(round_cases));
 }
 
-   
-                             
-                                           
-   
+/**
+ * Inputs: fractional values.
+ * Expected: the integral part is returned.
+ */
 static int
 trunc_fractionCases(void *args)
 {
@@ -514,22 +514,22 @@ trunc_fractionCases(void *args)
     return helper_dtod("Trunc", SDL_trunc, frac_cases, SDL_arraysize(frac_cases));
 }
 
-   
-                                               
-                                               
-   
+/**
+ * Inputs: values in the range [0, UINT32_MAX].
+ * Expected: the input value is returned as-is.
+ */
 static int
 trunc_rangeTest(void *args)
 {
     return helper_range("Trunc", SDL_trunc);
 }
 
- 
+/* SDL_round tests functions */
 
-   
-                       
-                                        
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: Infinity is returned as-is.
+ */
 static int
 round_infCases(void *args)
 {
@@ -548,10 +548,10 @@ round_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                  
-                                    
-   
+/**
+ * Inputs: +/-0.0.
+ * Expected: Zero is returned as-is.
+ */
 static int
 round_zeroCases(void *args)
 {
@@ -562,10 +562,10 @@ round_zeroCases(void *args)
     return helper_dtod("Round", SDL_round, zero_cases, SDL_arraysize(zero_cases));
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 round_nanCase(void *args)
 {
@@ -576,10 +576,10 @@ round_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                           
-                                               
-   
+/**
+ * Inputs: integral values.
+ * Expected: the input value is returned as-is.
+ */
 static int
 round_roundNumbersCases(void *args)
 {
@@ -596,10 +596,10 @@ round_roundNumbersCases(void *args)
     return helper_dtod("Round", SDL_round, round_cases, SDL_arraysize(round_cases));
 }
 
-   
-                             
-                                                    
-   
+/**
+ * Inputs: fractional values.
+ * Expected: the nearest integral value is returned.
+ */
 static int
 round_fractionCases(void *args)
 {
@@ -618,22 +618,22 @@ round_fractionCases(void *args)
     return helper_dtod("Round", SDL_round, frac_cases, SDL_arraysize(frac_cases));
 }
 
-   
-                                               
-                                               
-   
+/**
+ * Inputs: values in the range [0, UINT32_MAX].
+ * Expected: the input value is returned as-is.
+ */
 static int
 round_rangeTest(void *args)
 {
     return helper_range("Round", SDL_round);
 }
 
- 
+/* SDL_fabs tests functions */
 
-   
-                       
-                                           
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: Positive Infinity is returned.
+ */
 static int
 fabs_infCases(void *args)
 {
@@ -652,10 +652,10 @@ fabs_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                  
-                                       
-   
+/**
+ * Inputs: +/-0.0.
+ * Expected: Positive zero is returned.
+ */
 static int
 fabs_zeroCases(void *args)
 {
@@ -666,10 +666,10 @@ fabs_zeroCases(void *args)
     return helper_dtod("Fabs", SDL_fabs, zero_cases, SDL_arraysize(zero_cases));
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 fabs_nanCase(void *args)
 {
@@ -680,22 +680,22 @@ fabs_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                               
-                                               
-   
+/**
+ * Inputs: values in the range [0, UINT32_MAX].
+ * Expected: the input value is returned as-is.
+ */
 static int
 fabs_rangeTest(void *args)
 {
     return helper_range("Fabs", SDL_fabs);
 }
 
- 
+/* SDL_copysign tests functions */
 
-   
-                                 
-                                                       
-   
+/**
+ * Inputs: (+/-Infinity, +/-1.0).
+ * Expected: Infinity with the sign of 1.0 is returned.
+ */
 static int
 copysign_infCases(void *args)
 {
@@ -724,10 +724,10 @@ copysign_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                            
-                                                  
-   
+/**
+ * Inputs: (+/-0.0, +/-1.0).
+ * Expected: 0.0 with the sign of 1.0 is returned.
+ */
 static int
 copysign_zeroCases(void *args)
 {
@@ -740,11 +740,11 @@ copysign_zeroCases(void *args)
     return helper_ddtod("Copysign", SDL_copysign, zero_cases, SDL_arraysize(zero_cases));
 }
 
-   
-                         
-                                                  
-                                                                                                    
-   
+/**
+ * Inputs: (NAN, +/-1.0).
+ * Expected: NAN with the sign of 1.0 is returned.
+ * NOTE: On some platforms signed NAN is not supported, so we only check if the result is still NAN.
+ */
 static int
 copysign_nanCases(void *args)
 {
@@ -762,10 +762,10 @@ copysign_nanCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                       
-                                                              
-   
+/**
+ * Inputs: values in the range [0, UINT32_MAX], +/-1.0.
+ * Expected: the input value with the sign of 1.0 is returned.
+ */
 static int
 copysign_rangeTest(void *args)
 {
@@ -778,12 +778,12 @@ copysign_rangeTest(void *args)
 
     for (i = 0; i < RANGE_TEST_ITERATIONS; i++, test_value += RANGE_TEST_STEP) {
         double result;
-         
+        /* These are tested elsewhere */
         if (isnan(test_value) || isinf(test_value)) {
             continue;
         }
 
-         
+        /* Only log failures to save performances */
         result = SDL_copysign(test_value, 1.0);
         if (result != test_value) {
             SDLTest_AssertCheck(SDL_FALSE,
@@ -803,12 +803,12 @@ copysign_rangeTest(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* SDL_fmod tests functions */
 
-   
-                                 
-                             
-   
+/**
+ * Inputs: (+/-Infinity, +/-1.0).
+ * Expected: NAN is returned.
+ */
 static int
 fmod_divOfInfCases(void *args)
 {
@@ -837,10 +837,10 @@ fmod_divOfInfCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                 
-                                   
-   
+/**
+ * Inputs: (+/-1.0, +/-Infinity).
+ * Expected: 1.0 is returned as-is.
+ */
 static int
 fmod_divByInfCases(void *args)
 {
@@ -869,10 +869,10 @@ fmod_divByInfCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                            
-                                    
-   
+/**
+ * Inputs: (+/-0.0, +/-1.0).
+ * Expected: Zero is returned as-is.
+ */
 static int
 fmod_divOfZeroCases(void *args)
 {
@@ -885,10 +885,10 @@ fmod_divOfZeroCases(void *args)
     return helper_ddtod("Fmod", SDL_fmod, zero_cases, SDL_arraysize(zero_cases));
 }
 
-   
-                            
-                             
-   
+/**
+ * Inputs: (+/-1.0, +/-0.0).
+ * Expected: NAN is returned.
+ */
 static int
 fmod_divByZeroCases(void *args)
 {
@@ -917,10 +917,10 @@ fmod_divByZeroCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                             
-                             
-   
+/**
+ * Inputs: all permutation of NAN and +/-1.0.
+ * Expected: NAN is returned.
+ */
 static int
 fmod_nanCases(void *args)
 {
@@ -949,10 +949,10 @@ fmod_nanCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                    
-                                            
-   
+/**
+ * Inputs: values within the domain of the function.
+ * Expected: the correct result is returned.
+ */
 static int
 fmod_regularCases(void *args)
 {
@@ -965,10 +965,10 @@ fmod_regularCases(void *args)
     return helper_ddtod("Fmod", SDL_fmod, regular_cases, SDL_arraysize(regular_cases));
 }
 
-   
-                                                              
-                                              
-   
+/**
+ * Inputs: values in the range [0, UINT32_MAX] divided by 1.0.
+ * Expected: Positive zero is always returned.
+ */
 static int
 fmod_rangeTest(void *args)
 {
@@ -981,12 +981,12 @@ fmod_rangeTest(void *args)
 
     for (i = 0; i < RANGE_TEST_ITERATIONS; i++, test_value += RANGE_TEST_STEP) {
         double result;
-         
+        /* These are tested elsewhere */
         if (isnan(test_value) || isinf(test_value)) {
             continue;
         }
 
-         
+        /* Only log failures to save performances */
         result = SDL_fmod(test_value, 1.0);
         if (0.0 != result) {
             SDLTest_AssertCheck(SDL_FALSE,
@@ -998,12 +998,12 @@ fmod_rangeTest(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* SDL_exp tests functions */
 
-   
-                       
-                                        
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: Infinity is returned as-is.
+ */
 static int
 exp_infCases(void *args)
 {
@@ -1022,10 +1022,10 @@ exp_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                  
-                             
-   
+/**
+ * Inputs: +/-0.0.
+ * Expected: 1.0 is returned.
+ */
 static int
 exp_zeroCases(void *args)
 {
@@ -1036,11 +1036,11 @@ exp_zeroCases(void *args)
     return helper_dtod("Exp", SDL_exp, zero_cases, SDL_arraysize(zero_cases));
 }
 
-   
-                                              
-                                  
-                                                                   
-   
+/**
+ * Input: 710.0 (overflows for 64bits double).
+ * Expected: Infinity is returned.
+ * NOTE: This test is skipped for double types larger than 64 bits.
+ */
 static int
 exp_overflowCase(void *args)
 {
@@ -1057,10 +1057,10 @@ exp_overflowCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-             
-                                
-   
+/**
+ * Input: 1.0
+ * Expected: The euler constant.
+ */
 static int
 exp_baseCase(void *args)
 {
@@ -1072,14 +1072,14 @@ exp_baseCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                    
-                                            
-   
+/**
+ * Inputs: values within the domain of the function.
+ * Expected: the correct result is returned.
+ */
 static int
 exp_regularCases(void *args)
 {
-     
+    /* Hexadecimal floating constants are not supported on C89 compilers */
     const d_to_d regular_cases[] = {
         { -101.0, 1.36853947117385291381565719268793547578002532127613087E-44 },
         { -15.73, 0.00000014741707833928422931856502906683425990763681 },
@@ -1094,12 +1094,12 @@ exp_regularCases(void *args)
     return helper_dtod("Exp", SDL_exp, regular_cases, SDL_arraysize(regular_cases));
 }
 
- 
+/* SDL_log tests functions */
 
-   
-                                        
-                                                         
-   
+/**
+ * Inputs: Positive Infinity and +/-0.0.
+ * Expected: Positive and negative Infinity respectively.
+ */
 static int
 log_limitCases(void *args)
 {
@@ -1123,10 +1123,10 @@ log_limitCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                      
-                                      
-   
+/**
+ * Inputs: 1.0 and the Euler constant.
+ * Expected: 0.0 and 1.0 respectively.
+ */
 static int
 log_baseCases(void *args)
 {
@@ -1145,10 +1145,10 @@ log_baseCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                    
-                             
-   
+/**
+ * Inputs: NAN and a negative value.
+ * Expected: NAN is returned.
+ */
 static int
 log_nanCases(void *args)
 {
@@ -1167,10 +1167,10 @@ log_nanCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                    
-                                            
-   
+/**
+ * Inputs: values within the domain of the function.
+ * Expected: the correct result is returned.
+ */
 static int
 log_regularCases(void *args)
 {
@@ -1184,12 +1184,12 @@ log_regularCases(void *args)
     return helper_dtod("Log", SDL_log, regular_cases, SDL_arraysize(regular_cases));
 }
 
- 
+/* SDL_log10 tests functions */
 
-   
-                                        
-                                                         
-   
+/**
+ * Inputs: Positive Infinity and +/-0.0.
+ * Expected: Positive and negative Infinity respectively.
+ */
 static int
 log10_limitCases(void *args)
 {
@@ -1213,10 +1213,10 @@ log10_limitCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                     
-                                                
-   
+/**
+ * Inputs: Powers of ten from 0 to 9.
+ * Expected: the exact power of ten is returned.
+ */
 static int
 log10_baseCases(void *args)
 {
@@ -1235,10 +1235,10 @@ log10_baseCases(void *args)
     return helper_dtod("Log10", SDL_log10, base_cases, SDL_arraysize(base_cases));
 }
 
-   
-                                    
-                             
-   
+/**
+ * Inputs: NAN and a negative value.
+ * Expected: NAN is returned.
+ */
 static int
 log10_nanCases(void *args)
 {
@@ -1257,10 +1257,10 @@ log10_nanCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                    
-                                            
-   
+/**
+ * Inputs: values within the domain of the function.
+ * Expected: the correct result is returned.
+ */
 static int
 log10_regularCases(void *args)
 {
@@ -1274,14 +1274,14 @@ log10_regularCases(void *args)
     return helper_dtod_inexact("Log10", SDL_log10, regular_cases, SDL_arraysize(regular_cases));
 }
 
- 
+/* SDL_pow tests functions */
 
- 
+/* Tests with positive and negative infinities as exponents */
 
-   
-                               
-                             
-   
+/**
+ * Inputs: (-1.0, +/-Infinity).
+ * Expected: 1.0 is returned.
+ */
 static int
 pow_baseNOneExpInfCases(void *args)
 {
@@ -1299,10 +1299,10 @@ pow_baseNOneExpInfCases(void *args)
 
     return TEST_COMPLETED;
 }
-   
-                               
-                                  
-   
+/**
+ * Inputs: (+/-0.0, -Infinity).
+ * Expected: Infinity is returned.
+ */
 static int
 pow_baseZeroExpNInfCases(void *args)
 {
@@ -1321,10 +1321,10 @@ pow_baseZeroExpNInfCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                  
-                                                 
-   
+/**
+ * Inputs: (x, +/-Infinity) where x is not +/-0.0.
+ * Expected: 0.0 when x < 1, Infinity when x > 1.
+ */
 static int
 pow_expInfCases(void *args)
 {
@@ -1353,12 +1353,12 @@ pow_expInfCases(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* Tests with positive and negative infinities as base */
 
-   
-                                                        
-                                                             
-   
+/**
+ * Inputs: (Positive Infinity, x) where x is not +/-0.0.
+ * Expected: 0.0 when x is < 0, positive Infinity when x > 0.
+ */
 static int
 pow_basePInfCases(void *args)
 {
@@ -1387,14 +1387,14 @@ pow_basePInfCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                        
-            
-                                           
-                                                                   
-                                                        
-                                                                                 
-   
+/**
+ * Inputs: (Negative Infinity, x) where x is not +/-0.0.
+ * Expected:
+ * - -0.0 when x is a negative odd integer,
+ * - 0.0 when x is a negative even integer or negative non-integer,
+ * - Negative Infinity when x is a positive odd integer,
+ * - Positive Infinity when x is a positive even integer or positive non-integer.
+ */
 static int
 pow_baseNInfCases(void *args)
 {
@@ -1433,14 +1433,14 @@ pow_baseNInfCases(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* Tests related to NAN */
 
-   
-          
-                              
-                                     
-                             
-   
+/**
+ * Inputs:
+ * - finite and negative base,
+ * - finite and non-integer exponent.
+ * Expected: NAN is returned.
+ */
 static int
 pow_badOperationCase(void *args)
 {
@@ -1451,10 +1451,10 @@ pow_badOperationCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                     
-                             
-   
+/**
+ * Inputs: (1.0, NAN)
+ * Expected: 1.0 is returned.
+ */
 static int
 pow_base1ExpNanCase(void *args)
 {
@@ -1465,10 +1465,10 @@ pow_base1ExpNanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                        
-                             
-   
+/**
+ * Inputs: (NAN, +/-0.0)
+ * Expected: 1.0 is returned.
+ */
 static int
 pow_baseNanExp0Cases(void *args)
 {
@@ -1487,10 +1487,10 @@ pow_baseNanExp0Cases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                         
-                             
-   
+/**
+ * Inputs: NAN as base, exponent or both.
+ * Expected: NAN is returned.
+ */
 static int
 pow_nanArgsCases(void *args)
 {
@@ -1514,14 +1514,14 @@ pow_nanArgsCases(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* Tests with positive and negative zeros as base */
 
-   
-                                               
-            
-                                                
-                                   
-   
+/**
+ * Inputs: (-0.0, x) where x is an odd integer.
+ * Expected:
+ * - Negative Infinity with a negative exponent,
+ * - -0.0 with a positive exponent.
+ */
 static int
 pow_baseNZeroExpOddCases(void *args)
 {
@@ -1540,12 +1540,12 @@ pow_baseNZeroExpOddCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                              
-            
-                                  
-                                                
-   
+/**
+ * Inputs: (0.0, x) where x is an odd integer.
+ * Expected:
+ * - 0.0 with a positive exponent,
+ * - Positive Infinity with a negative exponent.
+ */
 static int
 pow_basePZeroExpOddCases(void *args)
 {
@@ -1564,14 +1564,14 @@ pow_basePZeroExpOddCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                    
-                     
-                            
-            
-                                                   
-                                     
-   
+/**
+ * Inputs: (-0.0, x), with x either:
+ * - finite and even,
+ * - finite and non-integer.
+ * Expected:
+ * - Positive Infinity if the exponent is negative,
+ * - 0.0 if the exponent is positive.
+ */
 static int
 pow_baseNZeroCases(void *args)
 {
@@ -1600,14 +1600,14 @@ pow_baseNZeroCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                   
-                     
-                            
-            
-                                                   
-                                     
-   
+/**
+ * Inputs: (0.0, x), with x either:
+ * - finite and even,
+ * - finite and non-integer.
+ * Expected:
+ * - Positive Infinity if the exponent is negative,
+ * - 0.0 if the exponent is positive.
+ */
 static int
 pow_basePZeroCases(void *args)
 {
@@ -1636,12 +1636,12 @@ pow_basePZeroCases(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* Remaining tests */
 
-   
-                                                    
-                                            
-   
+/**
+ * Inputs: values within the domain of the function.
+ * Expected: the correct result is returned.
+ */
 static int
 pow_regularCases(void *args)
 {
@@ -1656,10 +1656,10 @@ pow_regularCases(void *args)
     return helper_ddtod("Pow", SDL_pow, regular_cases, SDL_arraysize(regular_cases));
 }
 
-   
-                                            
-                                            
-   
+/**
+ * Inputs: (2.0, x), with x in range [0, 8].
+ * Expected: the correct result is returned.
+ */
 static int
 pow_powerOfTwo(void *args)
 {
@@ -1676,10 +1676,10 @@ pow_powerOfTwo(void *args)
     return helper_ddtod("Pow", SDL_pow, power_of_two_cases, SDL_arraysize(power_of_two_cases));
 }
 
-   
-                                                                      
-                                    
-   
+/**
+ * Inputs: values in the range [0, UINT32_MAX] to the power of +/-0.0.
+ * Expected: 1.0 is always returned.
+ */
 static int
 pow_rangeTest(void *args)
 {
@@ -1692,12 +1692,12 @@ pow_rangeTest(void *args)
 
     for (i = 0; i < RANGE_TEST_ITERATIONS; i++, test_value += RANGE_TEST_STEP) {
         double result;
-         
+        /* These are tested elsewhere */
         if (isnan(test_value) || isinf(test_value)) {
             continue;
         }
 
-         
+        /* Only log failures to save performances */
         result = SDL_pow(test_value, 0.0);
         if (result != 1.0) {
             SDLTest_AssertCheck(SDL_FALSE,
@@ -1717,12 +1717,12 @@ pow_rangeTest(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* SDL_sqrt tests functions */
 
-   
-                            
-                                           
-   
+/**
+ * Input: Positive Infinity.
+ * Expected: Positive Infinity is returned.
+ */
 static int
 sqrt_infCase(void *args)
 {
@@ -1733,10 +1733,10 @@ sqrt_infCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 sqrt_nanCase(void *args)
 {
@@ -1747,10 +1747,10 @@ sqrt_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                     
-                             
-   
+/**
+ * Inputs: values outside the domain of the function.
+ * Expected: NAN is returned.
+ */
 static int
 sqrt_outOfDomainCases(void *args)
 {
@@ -1774,10 +1774,10 @@ sqrt_outOfDomainCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                          
-                                               
-   
+/**
+ * Inputs: +/-0.0 and 1.0.
+ * Expected: the input value is returned as-is.
+ */
 static int
 sqrt_baseCases(void *args)
 {
@@ -1789,10 +1789,10 @@ sqrt_baseCases(void *args)
     return helper_dtod("Sqrt", SDL_sqrt, base_cases, SDL_arraysize(base_cases));
 }
 
-   
-                                                    
-                                            
-   
+/**
+ * Inputs: values within the domain of the function.
+ * Expected: the correct result is returned.
+ */
 static int
 sqrt_regularCases(void *args)
 {
@@ -1808,12 +1808,12 @@ sqrt_regularCases(void *args)
     return helper_dtod_inexact("Sqrt", SDL_sqrt, regular_cases, SDL_arraysize(regular_cases));
 }
 
- 
+/* SDL_scalbn tests functions */
 
-   
-                           
-                                        
-   
+/**
+ * Input: (+/-Infinity, 1).
+ * Expected: Infinity is returned as-is.
+ */
 static int
 scalbn_infCases(void *args)
 {
@@ -1832,10 +1832,10 @@ scalbn_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                       
-                                    
-   
+/**
+ * Inputs: (+/-0.0, 1).
+ * Expected: Zero is returned as-is.
+ */
 static int
 scalbn_baseZeroCases(void *args)
 {
@@ -1854,10 +1854,10 @@ scalbn_baseZeroCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                
-                                 
-   
+/**
+ * Input: (x, 0)
+ * Expected: x is returned as-is.
+ */
 static int
 scalbn_expZeroCase(void *args)
 {
@@ -1868,10 +1868,10 @@ scalbn_expZeroCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                   
-                             
-   
+/**
+ * Input: (NAN, x).
+ * Expected: NAN is returned.
+ */
 static int
 scalbn_nanCase(void *args)
 {
@@ -1882,11 +1882,11 @@ scalbn_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                    
-                                            
-                                                    
-   
+/**
+ * Inputs: values inside the domain of the function.
+ * Expected: the correct result is returned.
+ * NOTE: This test depends on SDL_pow and FLT_RADIX.
+ */
 static int
 scalbn_regularCases(void *args)
 {
@@ -1919,12 +1919,12 @@ scalbn_regularCases(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* SDL_cos tests functions */
 
-   
-                       
-                             
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: NAN is returned.
+ */
 static int
 cos_infCases(void *args)
 {
@@ -1943,10 +1943,10 @@ cos_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 cos_nanCase(void *args)
 {
@@ -1957,10 +1957,10 @@ cos_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                            
-                                        
-   
+/**
+ * Inputs: +/-0.0 and +/-Pi.
+ * Expected: +1.0 and -1.0 respectively.
+ */
 static int
 cos_regularCases(void *args)
 {
@@ -1973,10 +1973,10 @@ cos_regularCases(void *args)
     return helper_dtod("Cos", SDL_cos, regular_cases, SDL_arraysize(regular_cases));
 }
 
-   
-                                                                      
-                                                         
-   
+/**
+ * Inputs: Angles between 1/10 and 9/10 of Pi (positive and negative).
+ * Expected: The correct result is returned (+/-EPSILON).
+ */
 static int
 cos_precisionTest(void *args)
 {
@@ -2003,10 +2003,10 @@ cos_precisionTest(void *args)
     return helper_dtod_inexact("Cos", SDL_cos, precision_cases, SDL_arraysize(precision_cases));
 }
 
-   
-                                               
-                                                 
-   
+/**
+ * Inputs: Values in the range [0, UINT32_MAX].
+ * Expected: A value between 0 and 1 is returned.
+ */
 static int
 cos_rangeTest(void *args)
 {
@@ -2019,12 +2019,12 @@ cos_rangeTest(void *args)
 
     for (i = 0; i < RANGE_TEST_ITERATIONS; i++, test_value += RANGE_TEST_STEP) {
         double result;
-         
+        /* These are tested elsewhere */
         if (isnan(test_value) || isinf(test_value)) {
             continue;
         }
 
-         
+        /* Only log failures to save performances */
         result = SDL_cos(test_value);
         if (result < -1.0 || result > 1.0) {
             SDLTest_AssertCheck(SDL_FALSE,
@@ -2036,12 +2036,12 @@ cos_rangeTest(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* SDL_sin tests functions */
 
-   
-                       
-                             
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: NAN is returned.
+ */
 static int
 sin_infCases(void *args)
 {
@@ -2060,10 +2060,10 @@ sin_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 sin_nanCase(void *args)
 {
@@ -2074,10 +2074,10 @@ sin_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                              
-                                            
-   
+/**
+ * Inputs: +/-0.0 and +/-Pi/2.
+ * Expected: +/-0.0 and +/-1.0 respectively.
+ */
 static int
 sin_regularCases(void *args)
 {
@@ -2090,11 +2090,11 @@ sin_regularCases(void *args)
     return helper_dtod("Sin", SDL_sin, regular_cases, SDL_arraysize(regular_cases));
 }
 
-   
-                                                                       
-                                                         
-                                                
-   
+/**
+ * Inputs: Angles between 1/10 and 10/10 of Pi (positive and negative).
+ * Expected: The correct result is returned (+/-EPSILON).
+ * NOTE: +/-Pi/2 is tested in the regular cases.
+ */
 static int
 sin_precisionTest(void *args)
 {
@@ -2121,10 +2121,10 @@ sin_precisionTest(void *args)
     return helper_dtod_inexact("Sin", SDL_sin, precision_cases, SDL_arraysize(precision_cases));
 }
 
-   
-                                               
-                                                 
-   
+/**
+ * Inputs: Values in the range [0, UINT32_MAX].
+ * Expected: A value between 0 and 1 is returned.
+ */
 static int
 sin_rangeTest(void *args)
 {
@@ -2137,12 +2137,12 @@ sin_rangeTest(void *args)
 
     for (i = 0; i < RANGE_TEST_ITERATIONS; i++, test_value += RANGE_TEST_STEP) {
         double result;
-         
+        /* These are tested elsewhere */
         if (isnan(test_value) || isinf(test_value)) {
             continue;
         }
 
-         
+        /* Only log failures to save performances */
         result = SDL_sin(test_value);
         if (result < -1.0 || result > 1.0) {
             SDLTest_AssertCheck(SDL_FALSE,
@@ -2154,12 +2154,12 @@ sin_rangeTest(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* SDL_tan tests functions */
 
-   
-                       
-                             
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: NAN is returned.
+ */
 static int
 tan_infCases(void *args)
 {
@@ -2178,10 +2178,10 @@ tan_infCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 tan_nanCase(void *args)
 {
@@ -2192,10 +2192,10 @@ tan_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                  
-                                    
-   
+/**
+ * Inputs: +/-0.0.
+ * Expected: Zero is returned as-is.
+ */
 static int
 tan_zeroCases(void *args)
 {
@@ -2206,11 +2206,11 @@ tan_zeroCases(void *args)
     return helper_dtod("Tan", SDL_tan, regular_cases, SDL_arraysize(regular_cases));
 }
 
-   
-                                                                       
-                                                         
-                                                                       
-   
+/**
+ * Inputs: Angles between 1/11 and 10/11 of Pi (positive and negative).
+ * Expected: The correct result is returned (+/-EPSILON).
+ * NOTE: +/-Pi/2 is intentionally avoided as it returns garbage values.
+ */
 static int
 tan_precisionTest(void *args)
 {
@@ -2239,12 +2239,12 @@ tan_precisionTest(void *args)
     return helper_dtod_inexact("Tan", SDL_tan, precision_cases, SDL_arraysize(precision_cases));
 }
 
- 
+/* SDL_acos tests functions */
 
-   
-                  
-                                     
-   
+/**
+ * Inputs: +/-1.0.
+ * Expected: 0.0 and Pi respectively.
+ */
 static int
 acos_limitCases(void *args)
 {
@@ -2263,10 +2263,10 @@ acos_limitCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                
-                             
-   
+/**
+ * Inputs: Values outside the domain of [-1, 1].
+ * Expected: NAN is returned.
+ */
 static int
 acos_outOfDomainCases(void *args)
 {
@@ -2285,10 +2285,10 @@ acos_outOfDomainCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 acos_nanCase(void *args)
 {
@@ -2299,10 +2299,10 @@ acos_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                         
-                                                         
-   
+/**
+ * Inputs: Values between -0.9 and 0.9 with steps of 0.1.
+ * Expected: The correct result is returned (+/-EPSILON).
+ */
 static int
 acos_precisionTest(void *args)
 {
@@ -2331,12 +2331,12 @@ acos_precisionTest(void *args)
     return helper_dtod_inexact("Acos", SDL_acos, precision_cases, SDL_arraysize(precision_cases));
 }
 
- 
+/* SDL_asin tests functions */
 
-   
-                  
-                                 
-   
+/**
+ * Inputs: +/-1.0.
+ * Expected: +/-Pi/2 is returned.
+ */
 static int
 asin_limitCases(void *args)
 {
@@ -2355,10 +2355,10 @@ asin_limitCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                
-                             
-   
+/**
+ * Inputs: Values outside the domain of [-1, 1].
+ * Expected: NAN is returned.
+ */
 static int
 asin_outOfDomainCases(void *args)
 {
@@ -2377,10 +2377,10 @@ asin_outOfDomainCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 asin_nanCase(void *args)
 {
@@ -2391,10 +2391,10 @@ asin_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                         
-                                                         
-   
+/**
+ * Inputs: Values between -0.9 and 0.9 with steps of 0.1.
+ * Expected: The correct result is returned (+/-EPSILON).
+ */
 static int
 asin_precisionTest(void *args)
 {
@@ -2423,12 +2423,12 @@ asin_precisionTest(void *args)
     return helper_dtod_inexact("Asin", SDL_asin, precision_cases, SDL_arraysize(precision_cases));
 }
 
- 
+/* SDL_atan tests functions */
 
-   
-                       
-                                 
-   
+/**
+ * Inputs: +/-Infinity.
+ * Expected: +/-Pi/2 is returned.
+ */
 static int
 atan_limitCases(void *args)
 {
@@ -2449,10 +2449,10 @@ atan_limitCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                  
-                                    
-   
+/**
+ * Inputs: +/-0.0.
+ * Expected: Zero is returned as-is.
+ */
 static int
 atan_zeroCases(void *args)
 {
@@ -2471,10 +2471,10 @@ atan_zeroCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-              
-                             
-   
+/**
+ * Input: NAN.
+ * Expected: NAN is returned.
+ */
 static int
 atan_nanCase(void *args)
 {
@@ -2485,10 +2485,10 @@ atan_nanCase(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                                                                         
-                                                         
-   
+/**
+ * Inputs: Values corresponding to angles between 9Pi/20 and -9Pi/20 with steps of Pi/20.
+ * Expected: The correct result is returned (+/-EPSILON).
+ */
 static int
 atan_precisionTest(void *args)
 {
@@ -2515,17 +2515,17 @@ atan_precisionTest(void *args)
     return helper_dtod_inexact("Atan", SDL_atan, precision_cases, SDL_arraysize(precision_cases));
 }
 
- 
+/* SDL_atan2 tests functions */
 
- 
+/* Zero cases */
 
-   
-                            
-            
-                                                  
-                                                
-                                                   
-   
+/**
+ * Inputs: (+/-0.0, +/-0.0).
+ * Expected:
+ * - Zero if the second argument is positive zero.
+ * - Pi if the second argument is negative zero.
+ * - The sign is inherited from the first argument.
+ */
 static int
 atan2_bothZeroCases(void *args)
 {
@@ -2538,13 +2538,13 @@ atan2_bothZeroCases(void *args)
     return helper_ddtod("SDL_atan2", SDL_atan2, cases, SDL_arraysize(cases));
 }
 
-   
-                            
-            
-                                             
-                                           
-                                                   
-   
+/**
+ * Inputs: (+/-0.0, +/-1.0).
+ * Expected:
+ * - Zero if the second argument is positive.
+ * - Pi if the second argument is negative.
+ * - The sign is inherited from the first argument.
+ */
 static int
 atan2_yZeroCases(void *args)
 {
@@ -2557,10 +2557,10 @@ atan2_yZeroCases(void *args)
     return helper_ddtod("SDL_atan2", SDL_atan2, cases, SDL_arraysize(cases));
 }
 
-   
-                            
-                                                      
-   
+/**
+ * Inputs: (+/-1.0, +/-0.0).
+ * Expected: Pi/2 with the sign of the first argument.
+ */
 static int
 atan2_xZeroCases(void *args)
 {
@@ -2573,16 +2573,16 @@ atan2_xZeroCases(void *args)
     return helper_ddtod("SDL_atan2", SDL_atan2, cases, SDL_arraysize(cases));
 }
 
- 
+/* Infinity cases */
 
-   
-                                      
-            
-                          
-                           
-                           
-                        
-   
+/**
+ * Inputs: (+/-Infinity, +/-Infinity).
+ * Expected:
+ * - (+int, +inf) -> Pi/4,
+ * - (+int, -inf) -> 3Pi/4,
+ * - (-int, +inf) -> -Pi/4,
+ * - (-int, -inf) -> Pi.
+ */
 static int
 atan2_bothInfCases(void *args)
 {
@@ -2611,10 +2611,10 @@ atan2_bothInfCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                 
-                                                      
-   
+/**
+ * Inputs: (+/-Infinity, +/-1.0).
+ * Expected: Pi/2 with the sign of the first argument.
+ */
 static int
 atan2_yInfCases(void *args)
 {
@@ -2643,12 +2643,12 @@ atan2_yInfCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                 
-            
-                             
-                             
-   
+/**
+ * Inputs: (+/-1.0, +/-Infinity).
+ * Expected:
+ * - (+/-1.0, +inf) -> +/-0.0
+ * - (+/-1.0, -inf) -> +/-Pi.
+ */
 static int
 atan2_xInfCases(void *args)
 {
@@ -2677,12 +2677,12 @@ atan2_xInfCases(void *args)
     return TEST_COMPLETED;
 }
 
- 
+/* Miscelanious cases */
 
-   
-                                                  
-                             
-   
+/**
+ * Inputs: NAN as either or both of the arguments.
+ * Expected: NAN is returned.
+ */
 static int
 atan2_nanCases(void *args)
 {
@@ -2706,10 +2706,10 @@ atan2_nanCases(void *args)
     return TEST_COMPLETED;
 }
 
-   
-                                        
-                                             
-   
+/**
+ * Inputs: (y, x) with x and y positive.
+ * Expected: Angle in the top right quadrant.
+ */
 static int
 atan2_topRightQuadrantTest(void *args)
 {
@@ -2721,10 +2721,10 @@ atan2_topRightQuadrantTest(void *args)
     return helper_ddtod_inexact("SDL_atan2", SDL_atan2, top_right_cases, SDL_arraysize(top_right_cases));
 }
 
-   
-                                                 
-                                            
-   
+/**
+ * Inputs: (y, x) with x negative and y positive.
+ * Expected: Angle in the top left quadrant.
+ */
 static int
 atan2_topLeftQuadrantTest(void *args)
 {
@@ -2736,10 +2736,10 @@ atan2_topLeftQuadrantTest(void *args)
     return helper_ddtod_inexact("SDL_atan2", SDL_atan2, top_left_cases, SDL_arraysize(top_left_cases));
 }
 
-   
-                                                 
-                                                
-   
+/**
+ * Inputs: (y, x) with x positive and y negative.
+ * Expected: Angle in the bottom right quadrant.
+ */
 static int
 atan2_bottomRightQuadrantTest(void *args)
 {
@@ -2751,10 +2751,10 @@ atan2_bottomRightQuadrantTest(void *args)
     return helper_ddtod_inexact("SDL_atan2", SDL_atan2, bottom_right_cases, SDL_arraysize(bottom_right_cases));
 }
 
-   
-                                        
-                                               
-   
+/**
+ * Inputs: (y, x) with x and y negative.
+ * Expected: Angle in the bottom left quadrant.
+ */
 static int
 atan2_bottomLeftQuadrantTest(void *args)
 {
@@ -2766,9 +2766,9 @@ atan2_bottomLeftQuadrantTest(void *args)
     return helper_ddtod_inexact("SDL_atan2", SDL_atan2, bottom_left_cases, SDL_arraysize(bottom_left_cases));
 }
 
- 
+/* ================= Test References ================== */
 
- 
+/* SDL_floor test cases */
 
 static const SDLTest_TestCaseReference floorTestInf = {
     (SDLTest_TestCaseFp)floor_infCases, "floor_infCases",
@@ -2795,7 +2795,7 @@ static const SDLTest_TestCaseReference floorTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_ceil test cases */
 
 static const SDLTest_TestCaseReference ceilTestInf = {
     (SDLTest_TestCaseFp)ceil_infCases, "ceil_infCases",
@@ -2822,7 +2822,7 @@ static const SDLTest_TestCaseReference ceilTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_trunc test cases */
 
 static const SDLTest_TestCaseReference truncTestInf = {
     (SDLTest_TestCaseFp)trunc_infCases, "trunc_infCases",
@@ -2849,7 +2849,7 @@ static const SDLTest_TestCaseReference truncTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_round test cases */
 
 static const SDLTest_TestCaseReference roundTestInf = {
     (SDLTest_TestCaseFp)round_infCases, "round_infCases",
@@ -2876,7 +2876,7 @@ static const SDLTest_TestCaseReference roundTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_fabs test cases */
 
 static const SDLTest_TestCaseReference fabsTestInf = {
     (SDLTest_TestCaseFp)fabs_infCases, "fabs_infCases",
@@ -2895,7 +2895,7 @@ static const SDLTest_TestCaseReference fabsTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_copysign test cases */
 
 static const SDLTest_TestCaseReference copysignTestInf = {
     (SDLTest_TestCaseFp)copysign_infCases, "copysign_infCases",
@@ -2914,7 +2914,7 @@ static const SDLTest_TestCaseReference copysignTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_fmod test cases */
 
 static const SDLTest_TestCaseReference fmodTestDivOfInf = {
     (SDLTest_TestCaseFp)fmod_divOfInfCases, "fmod_divOfInfCases",
@@ -2945,7 +2945,7 @@ static const SDLTest_TestCaseReference fmodTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_exp test cases */
 
 static const SDLTest_TestCaseReference expTestInf = {
     (SDLTest_TestCaseFp)exp_infCases, "exp_infCases",
@@ -2968,7 +2968,7 @@ static const SDLTest_TestCaseReference expTestRegular = {
     "Checks a set of regular values", TEST_ENABLED
 };
 
- 
+/* SDL_log test cases */
 
 static const SDLTest_TestCaseReference logTestLimit = {
     (SDLTest_TestCaseFp)log_limitCases, "log_limitCases",
@@ -2987,7 +2987,7 @@ static const SDLTest_TestCaseReference logTestRegular = {
     "Checks a set of regular values", TEST_ENABLED
 };
 
- 
+/* SDL_log10 test cases */
 
 static const SDLTest_TestCaseReference log10TestLimit = {
     (SDLTest_TestCaseFp)log10_limitCases, "log10_limitCases",
@@ -3006,7 +3006,7 @@ static const SDLTest_TestCaseReference log10TestRegular = {
     "Checks a set of regular values", TEST_ENABLED
 };
 
- 
+/* SDL_pow test cases */
 
 static const SDLTest_TestCaseReference powTestExpInf1 = {
     (SDLTest_TestCaseFp)pow_baseNOneExpInfCases, "pow_baseNOneExpInfCases",
@@ -3073,7 +3073,7 @@ static const SDLTest_TestCaseReference powTestRange = {
     "Checks a range of positive integer to the power of 0", TEST_ENABLED
 };
 
- 
+/* SDL_sqrt test cases */
 
 static const SDLTest_TestCaseReference sqrtTestInf = {
     (SDLTest_TestCaseFp)sqrt_infCase, "sqrt_infCase",
@@ -3096,7 +3096,7 @@ static const SDLTest_TestCaseReference sqrtTestRegular = {
     "Checks a set of regular values", TEST_ENABLED
 };
 
- 
+/* SDL_scalbn test cases */
 
 static const SDLTest_TestCaseReference scalbnTestInf = {
     (SDLTest_TestCaseFp)scalbn_infCases, "scalbn_infCases",
@@ -3119,7 +3119,7 @@ static const SDLTest_TestCaseReference scalbnTestRegular = {
     "Checks a set of regular cases", TEST_ENABLED
 };
 
- 
+/* SDL_cos test cases */
 
 static const SDLTest_TestCaseReference cosTestInf = {
     (SDLTest_TestCaseFp)cos_infCases, "cos_infCases",
@@ -3142,7 +3142,7 @@ static const SDLTest_TestCaseReference cosTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_sin test cases */
 
 static const SDLTest_TestCaseReference sinTestInf = {
     (SDLTest_TestCaseFp)sin_infCases, "sin_infCases",
@@ -3165,7 +3165,7 @@ static const SDLTest_TestCaseReference sinTestRange = {
     "Checks a range of positive integer", TEST_ENABLED
 };
 
- 
+/* SDL_tan test cases */
 
 static const SDLTest_TestCaseReference tanTestInf = {
     (SDLTest_TestCaseFp)tan_infCases, "tan_infCases",
@@ -3184,7 +3184,7 @@ static const SDLTest_TestCaseReference tanTestPrecision = {
     "Checks tangent precision", TEST_ENABLED
 };
 
- 
+/* SDL_acos test cases */
 
 static const SDLTest_TestCaseReference acosTestLimit = {
     (SDLTest_TestCaseFp)acos_limitCases, "acos_limitCases",
@@ -3203,7 +3203,7 @@ static const SDLTest_TestCaseReference acosTestPrecision = {
     "Checks acos precision", TEST_ENABLED
 };
 
- 
+/* SDL_asin test cases */
 
 static const SDLTest_TestCaseReference asinTestLimit = {
     (SDLTest_TestCaseFp)asin_limitCases, "asin_limitCases",
@@ -3222,7 +3222,7 @@ static const SDLTest_TestCaseReference asinTestPrecision = {
     "Checks asin precision", TEST_ENABLED
 };
 
- 
+/* SDL_atan test cases */
 
 static const SDLTest_TestCaseReference atanTestLimit = {
     (SDLTest_TestCaseFp)atan_limitCases, "atan_limitCases",
@@ -3241,7 +3241,7 @@ static const SDLTest_TestCaseReference atanTestPrecision = {
     "Checks atan precision", TEST_ENABLED
 };
 
- 
+/* SDL_atan2 test cases */
 
 static const SDLTest_TestCaseReference atan2TestZero1 = {
     (SDLTest_TestCaseFp)atan2_bothZeroCases, "atan2_bothZeroCases",

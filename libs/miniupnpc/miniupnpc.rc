@@ -12,11 +12,11 @@ VS_VERSION_INFO		VERSIONINFO
 #endif
   FILEOS		VOS__WINDOWS32
   FILETYPE		VFT_DLL
-  FILESUBTYPE	VFT2_UNKNOWN	 
+  FILESUBTYPE	VFT2_UNKNOWN	// not used
 BEGIN
   BLOCK "StringFileInfo"
   BEGIN
-    BLOCK "04090000"   
+    BLOCK "04090000"  /* Lang = US English, Charset = ASCII */
     BEGIN
       VALUE "FileDescription",	"MiniUPnPc library\0"
       VALUE "FileVersion",	LIBMINIUPNPC_DOTTED_VERSION "\0"
@@ -31,6 +31,6 @@ BEGIN
   END
   BLOCK "VarFileInfo"
   BEGIN
-      VALUE "Translation", 0x0409, 0   
+      VALUE "Translation", 0x0409, 0  /* US English, ASCII */
   END
 END

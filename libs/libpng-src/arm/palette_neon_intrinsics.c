@@ -20,7 +20,7 @@
 #  include <arm_neon.h>
 #endif
 
- 
+/* Build an RGBA8 palette from the separate RGB and alpha palettes. */
 void
 png_riffle_palette_neon(png_structrp png_ptr)
 {
@@ -32,7 +32,7 @@ png_riffle_palette_neon(png_structrp png_ptr)
 
    png_debug(1, "in png_riffle_palette_neon");
 
-    
+   /* Initially black, opaque. */
    uint8x16x4_t w = {{
       vdupq_n_u8(0x00),
       vdupq_n_u8(0x00),
@@ -40,9 +40,9 @@ png_riffle_palette_neon(png_structrp png_ptr)
       vdupq_n_u8(0xff),
    }};
 
-                                                          
-                                                   
-      
+   /* First, riffle the RGB colours into an RGBA8 palette.
+    * The alpha component is set to opaque for now.
+    */
    for (i = 0; i < 256; i += 16)
    {
       uint8x16x3_t v = vld3q_u8((png_const_bytep)(palette + i));
@@ -52,12 +52,12 @@ png_riffle_palette_neon(png_structrp png_ptr)
       vst4q_u8(riffled_palette + (i << 2), w);
    }
 
-    
+   /* Fix up the missing transparency values. */
    for (i = 0; i < num_trans; i++)
       riffled_palette[(i << 2) + 3] = trans_alpha[i];
 }
 
- 
+/* Expands a palettized row into RGBA8. */
 int
 png_do_expand_palette_rgba8_neon(png_structrp png_ptr, png_row_infop row_info,
     png_const_bytep row, png_bytepp ssp, png_bytepp ddp)
@@ -73,10 +73,10 @@ png_do_expand_palette_rgba8_neon(png_structrp png_ptr, png_row_infop row_info,
    if (row_width < pixels_per_chunk)
       return 0;
 
-                                                                    
-                                                                    
-                                              
-      
+   /* This function originally gets the last byte of the output row.
+    * The NEON part writes forward from a given position, so we have
+    * to seek this back by 4 pixels x 4 bytes.
+    */
    *ddp = *ddp - ((pixels_per_chunk * sizeof(png_uint_32)) - 1);
 
    for (i = 0; i < row_width; i += pixels_per_chunk)
@@ -91,17 +91,17 @@ png_do_expand_palette_rgba8_neon(png_structrp png_ptr, png_row_infop row_info,
    }
    if (i != row_width)
    {
-       
+      /* Remove the amount that wasn't processed. */
       i -= pixels_per_chunk;
    }
 
-    
+   /* Decrement output pointers. */
    *ssp = *ssp - i;
    *ddp = *ddp - (i << 2);
    return i;
 }
 
- 
+/* Expands a palettized row into RGB8. */
 int
 png_do_expand_palette_rgb8_neon(png_structrp png_ptr, png_row_infop row_info,
     png_const_bytep row, png_bytepp ssp, png_bytepp ddp)
@@ -116,7 +116,7 @@ png_do_expand_palette_rgb8_neon(png_structrp png_ptr, png_row_infop row_info,
    if (row_width <= pixels_per_chunk)
       return 0;
 
-    
+   /* Seeking this back by 8 pixels x 3 bytes. */
    *ddp = *ddp - ((pixels_per_chunk * sizeof(png_color)) - 1);
 
    for (i = 0; i < row_width; i += pixels_per_chunk)
@@ -136,14 +136,14 @@ png_do_expand_palette_rgb8_neon(png_structrp png_ptr, png_row_infop row_info,
 
    if (i != row_width)
    {
-       
+      /* Remove the amount that wasn't processed. */
       i -= pixels_per_chunk;
    }
 
-    
+   /* Decrement output pointers. */
    *ssp = *ssp - i;
    *ddp = *ddp - ((i << 1) + i);
    return i;
 }
 
-#endif  
+#endif /* PNG_ARM_NEON_IMPLEMENTATION */

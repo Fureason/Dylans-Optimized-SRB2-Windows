@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple program:  draw a RGB triangle, with texture  */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -32,7 +32,7 @@ static int sprite_w, sprite_h;
 
 int done;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -46,7 +46,7 @@ int LoadSprite(const char *file)
     int i;
 
     for (i = 0; i < state->num_windows; ++i) {
-         
+        /* This does the SDL_LoadBMP step repeatedly, but that's OK for test code. */
         sprites[i] = LoadTexture(state->renderers[i], file, SDL_TRUE, &sprite_w, &sprite_h);
         if (!sprites[i]) {
             return -1;
@@ -58,7 +58,7 @@ int LoadSprite(const char *file)
         }
     }
 
-     
+    /* We're ready to roll. :) */
     return 0;
 }
 
@@ -67,7 +67,7 @@ void loop()
     int i;
     SDL_Event event;
 
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
 
         if (event.type == SDL_MOUSEMOTION) {
@@ -109,7 +109,7 @@ void loop()
             float d;
             int cx, cy;
 
-             
+            /* Query the sizes */
             SDL_RenderGetViewport(renderer, &viewport);
             SDL_zeroa(verts);
             cx = viewport.x + viewport.w / 2;
@@ -167,10 +167,10 @@ int main(int argc, char *argv[])
     const char *icon = "icon.bmp";
     Uint32 then, now, frames;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -213,14 +213,14 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-     
+    /* Create the windows, initialize the renderers, and load the textures */
     sprites =
         (SDL_Texture **)SDL_malloc(state->num_windows * sizeof(*sprites));
     if (sprites == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Out of memory!\n");
         quit(2);
     }
-     
+    /* Create the windows and initialize the renderers */
     for (i = 0; i < state->num_windows; ++i) {
         SDL_Renderer *renderer = state->renderers[i];
         SDL_SetRenderDrawBlendMode(renderer, blendMode);
@@ -236,7 +236,7 @@ int main(int argc, char *argv[])
 
     srand((unsigned int)time(NULL));
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         double fps = ((double)frames * 1000) / (now - then);
@@ -262,4 +262,4 @@ int main(int argc, char *argv[])
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

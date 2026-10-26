@@ -3,7 +3,7 @@ cp ../../../*.h .
 cp ../../../*.c .
 rm pnggccrd.c pngvcrd.c
 rm example.c pngtest.c pngr*.c pngpread.c
-
+# Change the next 2 lines if zlib is somewhere else.
 cp ../../../../zlib/*.h .
 cp ../../../../zlib/*.c .
 rm inf*.[ch]

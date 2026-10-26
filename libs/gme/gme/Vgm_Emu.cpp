@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Vgm_Emu.h"
 
@@ -19,7 +19,7 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #include "blargg_source.h"
 
-double const fm_gain = 3.0;  
+double const fm_gain = 3.0; // FM emulators are internally quieter to avoid 16-bit overflow
 double const rolloff = 0.990;
 double const oversample_factor = 1.5;
 
@@ -34,14 +34,14 @@ Vgm_Emu::Vgm_Emu()
 	};
 	set_voice_types( types );
 	
-	set_silence_lookahead( 1 );  
+	set_silence_lookahead( 1 ); // tracks should already be trimmed
 	
 	set_equalizer( make_equalizer( -14.0, 80 ) );
 }
 
 Vgm_Emu::~Vgm_Emu() { }
 
-
+// Track info
 
 static byte const* skip_gd3_str( byte const* in, byte const* end )
 {
@@ -63,7 +63,7 @@ static byte const* get_gd3_str( byte const* in, byte const* end, char* field )
 		len = min( len, (int) Gme_File::max_field_ );
 		field [len] = 0;
 		for ( int i = 0; i < len; i++ )
-			field [i] = (in [i * 2 + 1] ? '?' : in [i * 2]);  
+			field [i] = (in [i * 2 + 1] ? '?' : in [i * 2]); // TODO: convert to utf-8
 	}
 	return mid;
 }
@@ -131,8 +131,8 @@ static void get_vgm_length( Vgm_Emu::header_t const& h, track_info_t* out )
 		}
 		else
 		{
-			out->length = length;  
-			out->intro_length = length;  
+			out->length = length; // 1000 / 44100 (VGM files used 44100 as timebase)
+			out->intro_length = length; // make it clear that track is no longer than length
 			out->loop_length = 0;
 		}
 	}
@@ -209,7 +209,7 @@ static gme_type_t_ const gme_vgz_type_ = { "Sega SMS/Genesis", 1, &new_vgm_emu, 
 gme_type_t const gme_vgz_type = &gme_vgz_type_;
 
 
-
+// Setup
 
 void Vgm_Emu::set_tempo_( double t )
 {
@@ -217,11 +217,11 @@ void Vgm_Emu::set_tempo_( double t )
 	{
 		vgm_rate = (long) (44100 * t + 0.5);
 		blip_time_factor = (long) floor( double (1L << blip_time_bits) / vgm_rate * psg_rate + 0.5 );
-
-
-
-
-
+		//debug_printf( "blip_time_factor: %ld\n", blip_time_factor );
+		//debug_printf( "vgm_rate: %ld\n", vgm_rate );
+		// TODO: remove? calculates vgm_rate more accurately (above differs at most by one Hz only)
+		//blip_time_factor = (long) floor( double (1L << blip_time_bits) * psg_rate / 44100 / t + 0.5 );
+		//vgm_rate = (long) floor( double (1L << blip_time_bits) * psg_rate / blip_time_factor + 0.5 );
 		
 		fm_time_factor = 2 + (long) floor( fm_rate * (1L << fm_time_bits) / vgm_rate + 0.5 );
 	}
@@ -262,7 +262,7 @@ void Vgm_Emu::mute_voices_( int mask )
 		{
 			int m = mask & 0x3F;
 			if ( mask & 0x20 )
-				m |= 0x01E0;  
+				m |= 0x01E0; // channels 5-8
 			if ( mask & 0x40 )
 				m |= 0x3E00;
 			ym2413.mute_voices( m );
@@ -283,7 +283,7 @@ blargg_err_t Vgm_Emu::load_mem_( byte const* new_data, long new_size )
 	
 	check( get_le32( h.version ) <= 0x150 );
 	
-
+	// psg rate
 	psg_rate = get_le32( h.psg_rate );
 	if ( !psg_rate )
 		psg_rate = 3579545;
@@ -292,7 +292,7 @@ blargg_err_t Vgm_Emu::load_mem_( byte const* new_data, long new_size )
 	data     = new_data;
 	data_end = new_data + new_size;
 	
-
+	// get loop
 	loop_begin = data_end;
 	if ( get_le32( h.loop_offset ) )
 		loop_begin = &data [get_le32( h.loop_offset ) + offsetof (header_t,loop_offset)];
@@ -307,7 +307,7 @@ blargg_err_t Vgm_Emu::load_mem_( byte const* new_data, long new_size )
 	static const char* const psg_names [] = { "Square 1", "Square 2", "Square 3", "Noise" };
 	set_voice_names( uses_fm ? fm_names : psg_names );
 	
-
+	// do after FM in case output buffer is changed
 	return Classic_Emu::setup_buffer( psg_rate );
 }
 
@@ -362,7 +362,7 @@ blargg_err_t Vgm_Emu::setup_fm()
 	return 0;
 }
 
-
+// Emulation
 
 blargg_err_t Vgm_Emu::start_track_( int track )
 {

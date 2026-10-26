@@ -1,23 +1,23 @@
- 
-                   
-                                                             
-                               
-                                                      
-                                                          
+/* $Id: portlistingparse.c,v 1.11 2020/03/22 22:43:44 nanard Exp $ */
+/* MiniUPnP project
+ * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
+ * (c) 2011-2020 Thomas Bernard
+ * This software is subject to the conditions detailed
+ * in the LICENCE file provided within the distribution */
 #include <string.h>
 #include <stdlib.h>
 #ifdef DEBUG
 #include <stdio.h>
-#endif  
+#endif /* DEBUG */
 #include "portlistingparse.h"
 #include "minixml.h"
 
 #if defined(__HAIKU__)
- 
+/* rename our private function because Haiku already defines a atoui() function */
 #define atoui atoui2
 #endif 
 
- 
+/* list of the elements */
 static const struct {
 	const portMappingElt code;
 	const char * const str;
@@ -34,7 +34,7 @@ static const struct {
 	{ PortMappingEltNone, NULL}
 };
 
- 
+/* Helper function */
 static UNSIGNED_INTEGER
 atoui(const char * p, int l)
 {
@@ -51,7 +51,7 @@ atoui(const char * p, int l)
 	return r;
 }
 
- 
+/* Start element handler */
 static void
 startelt(void * d, const char * name, int l)
 {
@@ -72,19 +72,19 @@ startelt(void * d, const char * name, int l)
 		pm = calloc(1, sizeof(struct PortMapping));
 		if(pm == NULL)
 		{
-			 
+			/* malloc error */
 #ifdef DEBUG
 			fprintf(stderr, "%s: error allocating memory",
 			        "startelt");
-#endif  
+#endif /* DEBUG */
 			return;
 		}
-		pm->l_next = pdata->l_head;	 
+		pm->l_next = pdata->l_head;	/* insert in list */
 		pdata->l_head = pm;
 	}
 }
 
- 
+/* End element handler */
 static void
 endelt(void * d, const char * name, int l)
 {
@@ -94,7 +94,7 @@ endelt(void * d, const char * name, int l)
 	pdata->curelt = PortMappingEltNone;
 }
 
- 
+/* Data handler */
 static void
 data(void * d, const char * data, int l)
 {
@@ -143,8 +143,8 @@ data(void * d, const char * data, int l)
 }
 
 
-                                                           
-   
+/* Parse the PortMappingList XML document for IGD version 2
+ */
 void
 ParsePortListing(const char * buffer, int bufsize,
                  struct PortMappingParserData * pdata)
@@ -152,7 +152,7 @@ ParsePortListing(const char * buffer, int bufsize,
 	struct xmlparser parser;
 
 	memset(pdata, 0, sizeof(struct PortMappingParserData));
-	 
+	/* init xmlparser */
 	parser.xmlstart = buffer;
 	parser.xmlsize = bufsize;
 	parser.data = pdata;
@@ -169,7 +169,7 @@ FreePortListing(struct PortMappingParserData * pdata)
 	struct PortMapping * pm;
 	while((pm = pdata->l_head) != NULL)
 	{
-		 
+		/* remove from list */
 		pdata->l_head = pm->l_next;
 		free(pm);
 	}

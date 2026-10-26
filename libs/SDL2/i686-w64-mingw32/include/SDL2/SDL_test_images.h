@@ -19,19 +19,19 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-   
-                           
-  
-                                        
-  
-                                                                           
-   
+/**
+ *  \file SDL_test_images.h
+ *
+ *  Include file for SDL test framework.
+ *
+ *  This code is a part of the SDL2_test library, not the main SDL library.
+ */
 
-  
+/*
 
-                               
+ Defines some images for tests.
 
-  
+*/
 
 #ifndef SDL_test_images_h_
 #define SDL_test_images_h_
@@ -39,22 +39,22 @@
 #include "SDL.h"
 
 #include "begin_code.h"
- 
+/* Set up for C function definitions, even when using C++ */
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-   
-                       
-   
+/**
+ *Type for test images.
+ */
 typedef struct SDLTest_SurfaceImage_s {
   int width;
   int height;
-  unsigned int bytes_per_pixel;  
+  unsigned int bytes_per_pixel; /* 3:RGB, 4:RGBA */
   const char *pixel_data;
 } SDLTest_SurfaceImage_t;
 
- 
+/* Test images */
 SDL_Surface *SDLTest_ImageBlit(void);
 SDL_Surface *SDLTest_ImageBlitColor(void);
 SDL_Surface *SDLTest_ImageBlitAlpha(void);
@@ -67,12 +67,12 @@ SDL_Surface *SDLTest_ImageFace(void);
 SDL_Surface *SDLTest_ImagePrimitives(void);
 SDL_Surface *SDLTest_ImagePrimitivesBlend(void);
 
- 
+/* Ends C function definitions when using C++ */
 #ifdef __cplusplus
 }
 #endif
 #include "close_code.h"
 
-#endif  
+#endif /* SDL_test_images_h_ */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

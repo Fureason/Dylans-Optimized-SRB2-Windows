@@ -1,13 +1,13 @@
- 
- 
- 
- 
- 
+{*******************************************************}
+{                                                       }
+{       Borland Delphi Supplemental Components          }
+{       ZLIB Data Compression Interface Unit            }
+{                                                       }
 {       Copyright (c) 1997,99 Borland Corporation       }
- 
- 
+{                                                       }
+{*******************************************************}
 
- 
+{ Updated for zlib 1.2.x by Cosmin Truta <cosmint@cs.ubbcluj.ro> }
 
 unit ZLib;
 
@@ -19,29 +19,29 @@ type
   TAlloc = function (AppData: Pointer; Items, Size: Integer): Pointer; cdecl;
   TFree = procedure (AppData, Block: Pointer); cdecl;
 
-
+  // Internal structure.  Ignore.
   TZStreamRec = packed record
-    next_in: PChar;        
-    avail_in: Integer;     
-    total_in: Longint;     
+    next_in: PChar;       // next input byte
+    avail_in: Integer;    // number of bytes available at next_in
+    total_in: Longint;    // total nb of input bytes read so far
 
-    next_out: PChar;       
-    avail_out: Integer;    
-    total_out: Longint;    
+    next_out: PChar;      // next output byte should be put here
+    avail_out: Integer;   // remaining free space at next_out
+    total_out: Longint;   // total nb of bytes output so far
 
-    msg: PChar;            
-    internal: Pointer;     
+    msg: PChar;           // last error message, NULL if no error
+    internal: Pointer;    // not visible by applications
 
-    zalloc: TAlloc;        
-    zfree: TFree;          
-    AppData: Pointer;      
+    zalloc: TAlloc;       // used to allocate the internal state
+    zfree: TFree;         // used to free the internal state
+    AppData: Pointer;     // private data object passed to zalloc and zfree
 
-    data_type: Integer;    
-    adler: Longint;        
-    reserved: Longint;     
+    data_type: Integer;   // best guess about the data type: ascii or binary
+    adler: Longint;       // adler32 value of the uncompressed data
+    reserved: Longint;    // reserved for future use
   end;
 
-
+  // Abstract ancestor class
   TCustomZlibStream = class(TStream)
   private
     FStrm: TStream;
@@ -55,29 +55,29 @@ type
     constructor Create(Strm: TStream);
   end;
 
-                                                                             
-                                               
+{ TCompressionStream compresses data on the fly as data is written to it, and
+  stores the compressed data to another stream.
 
-                                                                            
-                                                                       
-                          
+  TCompressionStream is write-only and strictly sequential. Reading from the
+  stream will raise an exception. Using Seek to move the stream pointer
+  will raise an exception.
 
-                                                                          
-                                                                         
-                               
+  Output data is cached internally, written to the output stream only when
+  the internal output buffer is full.  All pending output data is flushed
+  when the stream is destroyed.
 
-                                                                   
-                                                   
+  The Position property returns the number of uncompressed bytes of
+  data that have been written to the stream so far.
 
-                                                                         
-                                                                              
-                                                                           
-        
+  CompressionRate returns the on-the-fly percentage by which the original
+  data has been compressed:  (1 - (CompressedBytes / UncompressedBytes)) * 100
+  If raw data size = 100 and compressed data size = 25, the CompressionRate
+  is 75%
 
-                                                                          
-                                                                       
-                                                                         
-                           
+  The OnProgress event is called each time the output buffer is filled and
+  written to the output stream.  This is useful for updating a progress
+  indicator when you are writing a large chunk of data to the compression
+  stream in a single call.}
 
 
   TCompressionLevel = (clNone, clFastest, clDefault, clMax);
@@ -95,23 +95,23 @@ type
     property OnProgress;
   end;
 
-                                                                            
+{ TDecompressionStream decompresses data on the fly as data is read from it.
 
-                                                                            
-                                                                              
-                                                                        
-                                                                             
-                                                                              
-                                                                             
-                                     
+  Compressed data comes from a separate source stream.  TDecompressionStream
+  is read-only and unidirectional; you can seek forward in the stream, but not
+  backwards.  The special case of setting the stream position to zero is
+  allowed.  Seeking forward decompresses data until the requested position in
+  the uncompressed data has been reached.  Seeking backwards, seeking relative
+  to the end of the stream, requesting the size of the stream, and writing to
+  the stream will raise an exception.
 
-                                                                             
-                                        
+  The Position property returns the number of bytes of uncompressed data that
+  have been read from the stream so far.
 
-                                                                       
-                                                                                
-                                                                         
-                                                                      
+  The OnProgress event is called each time the internal input buffer of
+  compressed data is exhausted and the next block is read from the input stream.
+  This is useful for updating a progress indicator when you are reading a
+  large chunk of data from the decompression stream in a single call.}
 
   TDecompressionStream = class(TCustomZlibStream)
   public
@@ -125,29 +125,29 @@ type
 
 
 
-                                                             
-                                     
-                                         
-                                                                          
-                                               
+{ CompressBuf compresses data, buffer to buffer, in one call.
+   In: InBuf = ptr to compressed data
+       InBytes = number of bytes in InBuf
+  Out: OutBuf = ptr to newly allocated buffer containing decompressed data
+       OutBytes = number of bytes in OutBuf   }
 procedure CompressBuf(const InBuf: Pointer; InBytes: Integer;
                       out OutBuf: Pointer; out OutBytes: Integer);
 
 
-                                                                 
-                                     
-                                         
-                                                                
-                                                                          
-                                               
+{ DecompressBuf decompresses data, buffer to buffer, in one call.
+   In: InBuf = ptr to compressed data
+       InBytes = number of bytes in InBuf
+       OutEstimate = zero, or est. size of the decompressed data
+  Out: OutBuf = ptr to newly allocated buffer containing decompressed data
+       OutBytes = number of bytes in OutBuf   }
 procedure DecompressBuf(const InBuf: Pointer; InBytes: Integer;
  OutEstimate: Integer; out OutBuf: Pointer; out OutBytes: Integer);
 
-                                                                       
-                                     
-                                         
-                                                                         
-                                              
+{ DecompressToUserBuf decompresses data, buffer to buffer, in one call.
+   In: InBuf = ptr to compressed data
+       InBytes = number of bytes in InBuf
+  Out: OutBuf = ptr to user-allocated buffer to contain decompressed data
+       BufSize = number of bytes in OutBuf   }
 procedure DecompressToUserBuf(const InBuf: Pointer; InBytes: Integer;
   const OutBuf: Pointer; BufSize: Integer);
 
@@ -197,17 +197,17 @@ const
   Z_DEFLATED = 8;
 
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
+{$L adler32.obj}
+{$L compress.obj}
+{$L crc32.obj}
+{$L deflate.obj}
+{$L infback.obj}
+{$L inffast.obj}
+{$L inflate.obj}
+{$L inftrees.obj}
+{$L trees.obj}
+{$L uncompr.obj}
+{$L zutil.obj}
 
 procedure adler32; external;
 procedure compressBound; external;
@@ -237,13 +237,13 @@ end;
 
 
 
-
+// deflate compresses data
 function deflateInit_(var strm: TZStreamRec; level: Integer; version: PChar;
   recsize: Integer): Integer; external;
 function deflate(var strm: TZStreamRec; flush: Integer): Integer; external;
 function deflateEnd(var strm: TZStreamRec): Integer; external;
 
-
+// inflate decompresses data
 function inflateInit_(var strm: TZStreamRec; version: PChar;
   recsize: Integer): Integer; external;
 function inflate(var strm: TZStreamRec; flush: Integer): Integer; external;
@@ -253,7 +253,7 @@ function inflateReset(var strm: TZStreamRec): Integer; external;
 
 function zlibAllocMem(AppData: Pointer; Items, Size: Integer): Pointer; cdecl;
 begin
-
+//  GetMem(Result, Items*Size);
   Result := AllocMem(Items * Size);
 end;
 
@@ -262,25 +262,25 @@ begin
   FreeMem(Block);
 end;
 
-                                            
-     
-                 
-                  
-                                             
-     
+{function zlibCheck(code: Integer): Integer;
+begin
+  Result := code;
+  if code < 0 then
+    raise EZlibError.Create('error');    //!!
+end;}
 
 function CCheck(code: Integer): Integer;
 begin
   Result := code;
   if code < 0 then
-    raise ECompressionError.Create('error');  
+    raise ECompressionError.Create('error'); //!!
 end;
 
 function DCheck(code: Integer): Integer;
 begin
   Result := code;
   if code < 0 then
-    raise EDecompressionError.Create('error');   
+    raise EDecompressionError.Create('error');  //!!
 end;
 
 procedure CompressBuf(const InBuf: Pointer; InBytes: Integer;
@@ -384,7 +384,7 @@ begin
   end;
 end;
 
-
+// TCustomZlibStream
 
 constructor TCustomZLibStream.Create(Strm: TStream);
 begin
@@ -401,7 +401,7 @@ begin
 end;
 
 
-
+// TCompressionStream
 
 constructor TCompressionStream.Create(CompressionLevel: TCompressionLevel;
   Dest: TStream);
@@ -478,7 +478,7 @@ begin
 end;
 
 
-
+// TDecompressionStream
 
 constructor TDecompressionStream.Create(Source: TStream);
 begin

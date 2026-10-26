@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_anigif.h
+/// \brief Animated GIF creation movie mode.
 
 #ifndef __M_ANIGIF_H__
 #define __M_ANIGIF_H__

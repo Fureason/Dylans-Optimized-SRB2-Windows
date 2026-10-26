@@ -14,16 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Last changed in libpng 1.6.35 [July 15, 2018]
+#
+# Revisions by Glenn Randers-Pehrson, 2017:
+# 1. Build only the library, not the tools (changed "make -j$(nproc) all" to
+#     "make -j$(nproc) libpng16.la").
+# 2. Disabled WARNING and WRITE options in pnglibconf.dfa.
+# 3. Build zlib alongside libpng
+################################################################################
 
-
-
-
-
-
-
-
-
-
+# Disable logging via library build configuration control.
 cat scripts/pnglibconf.dfa | \
   sed -e "s/option STDIO/option STDIO disabled/" \
       -e "s/option WARNING /option WARNING disabled/" \
@@ -31,19 +31,19 @@ cat scripts/pnglibconf.dfa | \
 > scripts/pnglibconf.dfa.temp
 mv scripts/pnglibconf.dfa.temp scripts/pnglibconf.dfa
 
-
+# build the libpng library.
 autoreconf -f -i
 ./configure --with-libpng-prefix=OSS_FUZZ_
 make -j$(nproc) clean
 make -j$(nproc) libpng16.la
 
-
+# build libpng_read_fuzzer.
 $CXX $CXXFLAGS -std=c++11 -I. \
      $SRC/libpng/contrib/oss-fuzz/libpng_read_fuzzer.cc \
      -o $OUT/libpng_read_fuzzer \
      -lFuzzingEngine .libs/libpng16.a -lz
 
-
+# add seed corpus.
 find $SRC/libpng -name "*.png" | grep -v crashers | \
      xargs zip $OUT/libpng_read_fuzzer_seed_corpus.zip
 

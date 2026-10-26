@@ -8,13 +8,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  d_main.c
+/// \brief Main program, simply calls D_SRB2Main and D_SRB2Loop, the high level loop.
 
 #include "../doomdef.h"
 #include "../m_argv.h"
 #include "../d_main.h"
-#include "../m_misc.h" 
+#include "../m_misc.h"/* path shit */
 #include "../i_system.h"
 #include "../netcode/d_clisrv.h"
 
@@ -26,7 +26,7 @@
 #include <errno.h>
 #endif
 
-#include "time.h"  
+#include "time.h" // For log timestamps
 
 #ifdef LOGMESSAGES
 FILE *logstream = NULL;
@@ -104,7 +104,7 @@ static void InitLogging(void)
 					"%s"PATHSEP DEFAULTDIR PATHSEP"%s"PATHSEP, logdir, reldir);
 		}
 		else
-#endif 
+#endif/*DEFAULTDIR*/
 		{
 			left = snprintf(logfilename, sizeof logfilename,
 					"."PATHSEP"%s"PATHSEP, reldir);
@@ -124,27 +124,27 @@ static void InitLogging(void)
 	if (logdir)
 		link = va("%s/"DEFAULTDIR"/latest-log.txt", logdir);
 	else
-#endif 
+#endif/*DEFAULTDIR*/
 		link = "latest-log.txt";
 	unlink(link);
 	if (symlink(logfilename, link) == -1)
 	{
 		I_OutputMsg("Error symlinking latest-log.txt: %s\n", strerror(errno));
 	}
-#else 
+#else/*defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON)*/
 	logstream = fopen(customfile ? logfilename : "latest-log.txt", "wt+");
-#endif 
+#endif/*defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON)*/
 }
 #endif
 
 
-                            
+/**	\brief	The main function
 
-                          
-                          
+	\param	argc	number of arg
+	\param	*argv	string table
 
-            
-  
+	\return	int
+*/
 #if defined (__GNUC__) && (__GNUC__ >= 4)
 #pragma GCC diagnostic ignored "-Wmissing-noreturn"
 #endif
@@ -152,16 +152,16 @@ static void InitLogging(void)
 int main(int argc, char **argv)
 {
 	myargc = argc;
-	myargv = argv;  
+	myargv = argv; /// \todo pull out path to exe from this string
 
 	dedicated = true;
 
 #ifdef LOGMESSAGES
 	if (!M_CheckParm("-nolog"))
 		InitLogging();
-#endif 
+#endif/*LOGMESSAGES*/
 
-
+	//I_OutputMsg("I_StartupSystem() ...\n");
 	I_StartupSystem();
 #if defined (_WIN32)
 	LoadLibraryA("exchndl.dll");
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-
+	// startup SRB2
 	CONS_Printf("Setting up SRB2...\n");
 	D_SRB2Main();
 #ifdef LOGMESSAGES
@@ -178,14 +178,14 @@ int main(int argc, char **argv)
 		CONS_Printf("Logfile: %s\n", logfilename);
 #endif
 	CONS_Printf("Entering main game loop...\n");
-
+	// never return
 	D_SRB2Loop();
 
 #ifdef BUGTRAP
-
+	// This is safe even if BT didn't start.
 	ShutdownBugTrap();
 #endif
 
-
+	// return to OS
 	return 0;
 }

@@ -1,6 +1,6 @@
+// Sinclair Spectrum AY music file emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef AY_EMU_H
 #define AY_EMU_H
 
@@ -11,7 +11,7 @@
 class Ay_Emu : private Ay_Cpu, public Classic_Emu {
 	typedef Ay_Cpu cpu;
 public:
-
+	// AY file header
 	enum { header_size = 0x14 };
 	struct header_t
 	{
@@ -56,7 +56,7 @@ private:
 	bool spectrum_mode;
 	bool cpc_mode;
 	
-
+	// large items
 	struct {
 		byte padding1 [0x100];
 		byte ram [0x10000 + 0x100];

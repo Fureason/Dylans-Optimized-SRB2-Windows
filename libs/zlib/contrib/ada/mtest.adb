@@ -5,10 +5,10 @@
 --                                                            --
 --  Open source license information is in the zlib.ads file.  --
 ----------------------------------------------------------------
-
-
-
-
+--  Continuous test for ZLib multithreading. If the test would fail
+--  we should provide thread safe allocation routines for the Z_Stream.
+--
+--  $Id: mtest.adb,v 1.4 2004/07/23 07:49:54 vagul Exp $
 
 with ZLib;
 with Ada.Streams;
@@ -48,17 +48,17 @@ procedure MTest is
         (Item : out Ada.Streams.Stream_Element_Array;
          Last : out Ada.Streams.Stream_Element_Offset);
 
-
-
-
+      -------------
+      -- Further --
+      -------------
 
       procedure Further (Item : in Stream_Element_Array) is
 
          procedure Compare (Item : in Stream_Element_Array);
 
-
-
-
+         -------------
+         -- Compare --
+         -------------
 
          procedure Compare (Item : in Stream_Element_Array) is
             Next_First : Stream_Element_Offset := Compare_First + Item'Length;

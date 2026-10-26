@@ -1,6 +1,6 @@
-
-
-
+# entries grouped with CMake are expanded by CMake
+# ${foo} entries are left alone by CMake and much
+# later are used by pkg-config.
 prefix=@CMAKE_INSTALL_PREFIX@
 exec_prefix=${prefix}
 lib_suffix=@LIB_SUFFIX@

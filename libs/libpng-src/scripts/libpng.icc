@@ -6,11 +6,11 @@
 // For conditions of distribution and use, see the disclaimer
 // and license in png.h
 //
-
-
-
-
-
+// Notes:
+//   All modules are compiled in C mode
+//   Tested with IBM VAC++ 4.0 under Win32
+//   Expected to work with IBM VAC++ 4.0 or later under OS/2 and Win32
+//   Can be easily adapted for IBM VAC++ 4.0 or later under AIX
 
 option incl(searchpath, "../zlib"), opt(level, "2"),
  link(libsearchpath, "../zlib")

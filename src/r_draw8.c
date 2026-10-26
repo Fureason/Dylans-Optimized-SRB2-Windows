@@ -7,21 +7,21 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
+/// \file  r_draw8.c
+/// \brief 8bpp span/column drawer functions
+/// \note  no includes because this is included as part of r_draw.c
 
+// ==========================================================================
+// COLUMNS
+// ==========================================================================
 
+// A column is a vertical slice/span of a wall texture that uses
+// a has a constant z depth from top to bottom.
+//
 
-
-
-
-
-
-
-
-
-
-                                      
-                                                                  
-  
+/**	\brief The R_DrawColumn_8 function
+	Experiment to make software go faster. Taken from the Boom source
+*/
 void R_DrawColumn_8(void)
 {
 	INT32 count;
@@ -31,7 +31,7 @@ void R_DrawColumn_8(void)
 
 	count = dc_yh - dc_yl;
 
-	if (count < 0)  
+	if (count < 0) // Zero length, column does not exceed a pixel.
 		return;
 
 #ifdef RANGECHECK
@@ -39,22 +39,22 @@ void R_DrawColumn_8(void)
 		return;
 #endif
 
-
+	// Framebuffer destination address.
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
 	count++;
 
-
+	// Determine scaling, which is the only mapping to be done.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
-
+	// Inner loop that does the actual texture mapping, e.g. a DDA-like scaling.
+	// This is as fast as it gets.
 	{
 		register const UINT8 *source = dc_source;
 		register const lighttable_t *colormap = dc_colormap;
 		register INT32 heightmask = dc_texheight-1;
-		if (dc_texheight & heightmask)    
+		if (dc_texheight & heightmask)   // not a power of 2 -- killough
 		{
 			heightmask++;
 			heightmask <<= FRACBITS;
@@ -67,13 +67,13 @@ void R_DrawColumn_8(void)
 
 			do
 			{
-
-
-
+				// Re-map color indices from wall texture column
+				//  using a lighting/special effects LUT.
+				// heightmask is the Tutti-Frutti fix
 				*dest = colormap[source[frac>>FRACBITS]];
 				dest += vid.width;
 
-
+				// Avoid overflow.
 				if (fracstep > 0x7FFFFFFF - frac)
 					frac += fracstep - heightmask;
 				else
@@ -85,7 +85,7 @@ void R_DrawColumn_8(void)
 		}
 		else
 		{
-			while ((count -= 2) >= 0)  
+			while ((count -= 2) >= 0) // texture height is a power of 2
 			{
 				*dest = colormap[source[(frac>>FRACBITS) & heightmask]];
 				dest += vid.width;
@@ -100,14 +100,14 @@ void R_DrawColumn_8(void)
 	}
 }
 
-   
-                                                  
-  
-                                                                             
-                                                                               
-                                                                             
-                       
-   
+/**
+ * Draw a sky column without vertically tiling it.
+ *
+ * Ordinary walls intentionally wrap their texture coordinates, but doing the
+ * same for a sky makes a second copy appear above or below short sky textures.
+ * Hardware rendering clamps those edges, so software should extend the first
+ * or last row as well.
+ */
 void R_DrawSkyColumn_8(void)
 {
 	INT32 count = dc_yh - dc_yl;
@@ -145,9 +145,9 @@ void R_DrawSkyColumn_8(void)
 	} while (count--);
 }
 
-                                             
-                                                                                                    
-  
+/**	\brief The R_DrawColumnClamped_8 function
+	Same as R_DrawColumn_8, but prevents artifacts from showing up (caused by fixed-point imprecisions)
+*/
 void R_DrawColumnClamped_8(void)
 {
 	INT32 count;
@@ -157,7 +157,7 @@ void R_DrawColumnClamped_8(void)
 
 	count = dc_yh - dc_yl;
 
-	if (count < 0)  
+	if (count < 0) // Zero length, column does not exceed a pixel.
 		return;
 
 #ifdef RANGECHECK
@@ -165,23 +165,23 @@ void R_DrawColumnClamped_8(void)
 		return;
 #endif
 
-
+	// Framebuffer destination address.
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
 	count++;
 
-
+	// Determine scaling, which is the only mapping to be done.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
-
+	// Inner loop that does the actual texture mapping, e.g. a DDA-like scaling.
+	// This is as fast as it gets.
 	{
 		const UINT8 *source = dc_source;
 		const lighttable_t *colormap = dc_colormap;
 		INT32 heightmask = dc_texheight-1;
 		INT32 idx;
-		if (dc_texheight & heightmask)    
+		if (dc_texheight & heightmask)   // not a power of 2 -- killough
 		{
 			heightmask++;
 			heightmask <<= FRACBITS;
@@ -194,15 +194,15 @@ void R_DrawColumnClamped_8(void)
 
 			do
 			{
-
-
-
+				// Re-map color indices from wall texture column
+				//  using a lighting/special effects LUT.
+				// heightmask is the Tutti-Frutti fix
 				idx = frac>>FRACBITS;
 				if (idx >= 0 && idx < dc_postlength)
 					*dest = colormap[source[idx]];
 				dest += vid.width;
 
-
+				// Avoid overflow.
 				if (fracstep > 0x7FFFFFFF - frac)
 					frac += fracstep - heightmask;
 				else
@@ -214,7 +214,7 @@ void R_DrawColumnClamped_8(void)
 		}
 		else
 		{
-			while ((count -= 2) >= 0)  
+			while ((count -= 2) >= 0) // texture height is a power of 2
 			{
 				idx = (frac>>FRACBITS) & heightmask;
 				if (idx >= 0 && idx < dc_postlength)
@@ -246,7 +246,7 @@ void R_Draw2sMultiPatchColumn_8(void)
 
 	count = dc_yh - dc_yl;
 
-	if (count < 0)  
+	if (count < 0) // Zero length, column does not exceed a pixel.
 		return;
 
 #ifdef RANGECHECK
@@ -254,23 +254,23 @@ void R_Draw2sMultiPatchColumn_8(void)
 		return;
 #endif
 
-
+	// Framebuffer destination address.
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
 	count++;
 
-
+	// Determine scaling, which is the only mapping to be done.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
-
+	// Inner loop that does the actual texture mapping, e.g. a DDA-like scaling.
+	// This is as fast as it gets.
 	{
 		register const UINT8 *source = dc_source;
 		register const lighttable_t *colormap = dc_colormap;
 		register INT32 heightmask = dc_texheight-1;
 		register UINT8 val;
-		if (dc_texheight & heightmask)    
+		if (dc_texheight & heightmask)   // not a power of 2 -- killough
 		{
 			heightmask++;
 			heightmask <<= FRACBITS;
@@ -283,9 +283,9 @@ void R_Draw2sMultiPatchColumn_8(void)
 
 			do
 			{
-
-
-
+				// Re-map color indices from wall texture column
+				//  using a lighting/special effects LUT.
+				// heightmask is the Tutti-Frutti fix
 				val = source[frac>>FRACBITS];
 
 				if (val != TRANSPARENTPIXEL)
@@ -293,7 +293,7 @@ void R_Draw2sMultiPatchColumn_8(void)
 
 				dest += vid.width;
 
-
+				// Avoid overflow.
 				if (fracstep > 0x7FFFFFFF - frac)
 					frac += fracstep - heightmask;
 				else
@@ -305,7 +305,7 @@ void R_Draw2sMultiPatchColumn_8(void)
 		}
 		else
 		{
-			while ((count -= 2) >= 0)  
+			while ((count -= 2) >= 0) // texture height is a power of 2
 			{
 				val = source[(frac>>FRACBITS) & heightmask];
 				if (val != TRANSPARENTPIXEL)
@@ -337,7 +337,7 @@ void R_Draw2sMultiPatchTranslucentColumn_8(void)
 
 	count = dc_yh - dc_yl;
 
-	if (count < 0)  
+	if (count < 0) // Zero length, column does not exceed a pixel.
 		return;
 
 #ifdef RANGECHECK
@@ -345,24 +345,24 @@ void R_Draw2sMultiPatchTranslucentColumn_8(void)
 		return;
 #endif
 
-
+	// Framebuffer destination address.
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
 	count++;
 
-
+	// Determine scaling, which is the only mapping to be done.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
-
+	// Inner loop that does the actual texture mapping, e.g. a DDA-like scaling.
+	// This is as fast as it gets.
 	{
 		register const UINT8 *source = dc_source;
 		register const UINT8 *transmap = dc_transmap;
 		register const lighttable_t *colormap = dc_colormap;
 		register INT32 heightmask = dc_texheight-1;
 		register UINT8 val;
-		if (dc_texheight & heightmask)    
+		if (dc_texheight & heightmask)   // not a power of 2 -- killough
 		{
 			heightmask++;
 			heightmask <<= FRACBITS;
@@ -375,9 +375,9 @@ void R_Draw2sMultiPatchTranslucentColumn_8(void)
 
 			do
 			{
-
-
-
+				// Re-map color indices from wall texture column
+				//  using a lighting/special effects LUT.
+				// heightmask is the Tutti-Frutti fix
 				val = source[frac>>FRACBITS];
 
 				if (val != TRANSPARENTPIXEL)
@@ -385,7 +385,7 @@ void R_Draw2sMultiPatchTranslucentColumn_8(void)
 
 				dest += vid.width;
 
-
+				// Avoid overflow.
 				if (fracstep > 0x7FFFFFFF - frac)
 					frac += fracstep - heightmask;
 				else
@@ -397,7 +397,7 @@ void R_Draw2sMultiPatchTranslucentColumn_8(void)
 		}
 		else
 		{
-			while ((count -= 2) >= 0)  
+			while ((count -= 2) >= 0) // texture height is a power of 2
 			{
 				val = source[(frac>>FRACBITS) & heightmask];
 				if (val != TRANSPARENTPIXEL)
@@ -420,16 +420,16 @@ void R_Draw2sMultiPatchTranslucentColumn_8(void)
 	}
 }
 
-                                           
-                                                                  
-  
+/**	\brief The R_DrawShadeColumn_8 function
+	Experiment to make software go faster. Taken from the Boom source
+*/
 void R_DrawShadeColumn_8(void)
 {
 	register INT32 count;
 	register UINT8 *dest;
 	register fixed_t frac, fracstep;
 
-
+	// check out coords for src*
 	if ((dc_yl < 0) || (dc_x >= vid.width))
 		return;
 
@@ -444,11 +444,11 @@ void R_DrawShadeColumn_8(void)
 
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
-
+	// Looks familiar.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
+	// Here we do an additional index re-mapping.
 	do
 	{
 		*dest = colormaps[(dc_source[frac>>FRACBITS] <<8) + (*dest)];
@@ -457,11 +457,11 @@ void R_DrawShadeColumn_8(void)
 	} while (count--);
 }
 
-                                                 
-                                                                     
-                                                                     
-                     
-  
+/**	\brief The R_DrawTranslucentColumn_8 function
+	I've made an asm routine for the transparency, because it slows down
+	a lot in 640x480 with big sprites (bfg on all screen, or transparent
+	walls on fullscreen)
+*/
 void R_DrawTranslucentColumn_8(void)
 {
 	register INT32 count;
@@ -470,7 +470,7 @@ void R_DrawTranslucentColumn_8(void)
 
 	count = dc_yh - dc_yl + 1;
 
-	if (count <= 0)  
+	if (count <= 0) // Zero length, column does not exceed a pixel.
 		return;
 
 #ifdef RANGECHECK
@@ -480,12 +480,12 @@ void R_DrawTranslucentColumn_8(void)
 
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
-
+	// Looks familiar.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
-
+	// Inner loop that does the actual texture mapping, e.g. a DDA-like scaling.
+	// This is as fast as it gets.
 	{
 		register const UINT8 *source = dc_source;
 		register const UINT8 *transmap = dc_transmap;
@@ -505,9 +505,9 @@ void R_DrawTranslucentColumn_8(void)
 
 			do
 			{
-
-
-
+				// Re-map color indices from wall texture column
+				// using a lighting/special effects LUT.
+				// heightmask is the Tutti-Frutti fix
 				*dest = *(transmap + (colormap[source[frac>>FRACBITS]]<<8) + (*dest));
 				dest += vid.width;
 				if ((frac += fracstep) >= heightmask)
@@ -517,7 +517,7 @@ void R_DrawTranslucentColumn_8(void)
 		}
 		else
 		{
-			while ((count -= 2) >= 0)  
+			while ((count -= 2) >= 0) // texture height is a power of 2
 			{
 				*dest = *(transmap + (colormap[source[(frac>>FRACBITS)&heightmask]]<<8) + (*dest));
 				dest += vid.width;
@@ -532,9 +532,9 @@ void R_DrawTranslucentColumn_8(void)
 	}
 }
 
-                                                        
-                                                                                                               
-  
+/**	\brief The R_DrawTranslucentColumnClamped_8 function
+	Same as R_DrawTranslucentColumn_8, but prevents artifacts from showing up (caused by fixed-point imprecisions)
+*/
 void R_DrawTranslucentColumnClamped_8(void)
 {
 	INT32 count;
@@ -543,7 +543,7 @@ void R_DrawTranslucentColumnClamped_8(void)
 
 	count = dc_yh - dc_yl + 1;
 
-	if (count <= 0)  
+	if (count <= 0) // Zero length, column does not exceed a pixel.
 		return;
 
 #ifdef RANGECHECK
@@ -553,12 +553,12 @@ void R_DrawTranslucentColumnClamped_8(void)
 
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
-
+	// Looks familiar.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
-
+	// Inner loop that does the actual texture mapping, e.g. a DDA-like scaling.
+	// This is as fast as it gets.
 	{
 		const UINT8 *source = dc_source;
 		const UINT8 *transmap = dc_transmap;
@@ -579,9 +579,9 @@ void R_DrawTranslucentColumnClamped_8(void)
 
 			do
 			{
-
-
-
+				// Re-map color indices from wall texture column
+				// using a lighting/special effects LUT.
+				// heightmask is the Tutti-Frutti fix
 				idx = frac>>FRACBITS;
 				if (idx >= 0 && idx < dc_postlength)
 					*dest = *(transmap + (colormap[source[idx]]<<8) + (*dest));
@@ -593,7 +593,7 @@ void R_DrawTranslucentColumnClamped_8(void)
 		}
 		else
 		{
-			while ((count -= 2) >= 0)  
+			while ((count -= 2) >= 0) // texture height is a power of 2
 			{
 				idx = (frac>>FRACBITS)&heightmask;
 				if (idx >= 0 && idx < dc_postlength)
@@ -616,11 +616,11 @@ void R_DrawTranslucentColumnClamped_8(void)
 	}
 }
 
-
-
-
-
-
+// Hack: A cut-down copy of R_DrawTranslucentColumn_8 that does not read texture
+// data since something about calculating the texture reading address for drop shadows is broken.
+// dc_texturemid and dc_iscale get wrong values for drop shadows, however those are not strictly
+// needed for the current design of the shadows, so this function bypasses the issue
+// by not using those variables at all.
 void R_DrawDropShadowColumn_8(void)
 {
 	register INT32 count;
@@ -628,13 +628,13 @@ void R_DrawDropShadowColumn_8(void)
 
 	count = dc_yh - dc_yl + 1;
 
-	if (count <= 0)  
+	if (count <= 0) // Zero length, column does not exceed a pixel.
 		return;
 
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
 	{
-#define DSCOLOR 31  
+#define DSCOLOR 31 // palette index for the color of the shadow
 		register const UINT8 *transmap_offset = dc_transmap + (dc_colormap[DSCOLOR] << 8);
 #undef DSCOLOR
 		while ((count -= 2) >= 0)
@@ -649,10 +649,10 @@ void R_DrawDropShadowColumn_8(void)
 	}
 }
 
-                                                           
-                                                                                    
-                             
-  
+/**	\brief The R_DrawTranslatedTranslucentColumn_8 function
+	Spiffy function. Not only does it colormap a sprite, but does translucency as well.
+	Uber-kudos to Cyan Helkaraxe
+*/
 void R_DrawTranslatedTranslucentColumn_8(void)
 {
 	register INT32 count;
@@ -661,17 +661,17 @@ void R_DrawTranslatedTranslucentColumn_8(void)
 
 	count = dc_yh - dc_yl + 1;
 
-	if (count <= 0)  
+	if (count <= 0) // Zero length, column does not exceed a pixel.
 		return;
 
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
-
+	// Looks familiar.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
-
+	// Inner loop that does the actual texture mapping, e.g. a DDA-like scaling.
+	// This is as fast as it gets.
 	{
 		register INT32 heightmask = dc_texheight - 1;
 		if (dc_texheight & heightmask)
@@ -688,9 +688,9 @@ void R_DrawTranslatedTranslucentColumn_8(void)
 
 			do
 			{
-
-
-
+				// Re-map color indices from wall texture column
+				//  using a lighting/special effects LUT.
+				// heightmask is the Tutti-Frutti fix
 
 				*dest = *(dc_transmap + (dc_colormap[dc_translation[dc_source[frac>>FRACBITS]]]<<8) + (*dest));
 
@@ -702,7 +702,7 @@ void R_DrawTranslatedTranslucentColumn_8(void)
 		}
 		else
 		{
-			while ((count -= 2) >= 0)  
+			while ((count -= 2) >= 0) // texture height is a power of 2
 			{
 				*dest = *(dc_transmap + (dc_colormap[dc_translation[dc_source[(frac>>FRACBITS)&heightmask]]]<<8) + (*dest));
 				dest += vid.width;
@@ -717,11 +717,11 @@ void R_DrawTranslatedTranslucentColumn_8(void)
 	}
 }
 
-                                                
-                                                                     
+/**	\brief The R_DrawTranslatedColumn_8 function
+	Draw columns up to 128 high but remap the green ramp to other colors
 
-                                    
-  
+  \warning STILL NOT IN ASM, TO DO..
+*/
 void R_DrawTranslatedColumn_8(void)
 {
 	register INT32 count;
@@ -739,18 +739,18 @@ void R_DrawTranslatedColumn_8(void)
 
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
-
+	// Looks familiar.
 	fracstep = dc_iscale;
 	frac = dc_texturemid + FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
 
-
+	// Here we do an additional index re-mapping.
 	do
 	{
-
-
-
-
-
+		// Translation tables are used
+		//  to map certain colorramps to other ones,
+		//  used with PLAY sprites.
+		// Thus the "green" ramp of the player 0 sprite
+		//  is mapped to gray, red, black/indigo.
 		*dest = dc_colormap[dc_translation[dc_source[frac>>FRACBITS]]];
 
 		dest += vid.width;
@@ -759,16 +759,16 @@ void R_DrawTranslatedColumn_8(void)
 	} while (count--);
 }
 
-
-
-
+// ==========================================================================
+// SPANS
+// ==========================================================================
 
 #define SPANSIZE 16
 #define INVSPAN 0.0625f
 
-                                    
-                       
-  
+/**	\brief The R_DrawSpan_8 function
+	Draws the actual span.
+*/
 void R_DrawSpan_8 (void)
 {
 	fixed_t xposition;
@@ -785,13 +785,13 @@ void R_DrawSpan_8 (void)
 	xposition = ds_xfrac; yposition = ds_yfrac;
 	xstep = ds_xstep; ystep = ds_ystep;
 
-
-
-
-
-
-
-
+	// SoM: we only need 6 bits for the integer part (0 thru 63) so the rest
+	// can be used for the fraction part. This allows calculation of the memory address in the
+	// texture with two shifts, an OR and one AND. (see below)
+	// for texture sizes > 64 the amount of precision we can allow will decrease, but only by one
+	// bit per power of two (obviously)
+	// Ok, because I was able to eliminate the variable spot below, this function is now FASTER
+	// than the original span renderer. Whodathunkit?
 	xposition <<= nflatshiftup; yposition <<= nflatshiftup;
 	xstep <<= nflatshiftup; ystep <<= nflatshiftup;
 
@@ -804,9 +804,9 @@ void R_DrawSpan_8 (void)
 
 	while (count >= 8)
 	{
-
-
-
+		// SoM: Why didn't I see this earlier? the spot variable is a waste now because we don't
+		// have the uber complicated math to calculate it now, so that was a memory write we didn't
+		// need!
 		dest[0] = colormap[source[(((UINT32)yposition >> nflatyshift) & nflatmask) | ((UINT32)xposition >> nflatxshift)]];
 		xposition += xstep;
 		yposition += ystep;
@@ -850,12 +850,12 @@ void R_DrawSpan_8 (void)
 	}
 }
 
-                                          
-                         
-  
+/**	\brief The R_DrawTiltedSpan_8 function
+	Draw slopes! Holy sheit!
+*/
 void R_DrawTiltedSpan_8(void)
 {
-
+	// x1, x2 = ds_x1, ds_x2
 	int width = ds_x2 - ds_x1;
 	double iz, uz, vz;
 	UINT32 u, v;
@@ -878,10 +878,10 @@ void R_DrawTiltedSpan_8(void)
 
 	dest = &topleft[ds_y*vid.width + ds_x1];
 	source = ds_source;
+	//colormap = ds_colormap;
 
-
-#if 0	 
-
+#if 0	// The "perfect" reference version of this routine. Pretty slow.
+		// Use it only to see how things are supposed to look.
 	i = 0;
 	do
 	{
@@ -905,7 +905,7 @@ void R_DrawTiltedSpan_8(void)
 	izstep = ds_sz.x * SPANSIZE;
 	uzstep = ds_su.x * SPANSIZE;
 	vzstep = ds_sv.x * SPANSIZE;
-
+	//x1 = 0;
 	width++;
 
 	while (width >= SPANSIZE)
@@ -972,12 +972,12 @@ void R_DrawTiltedSpan_8(void)
 #endif
 }
 
-                                                     
-                                     
-  
+/**	\brief The R_DrawTiltedTranslucentSpan_8 function
+	Like DrawTiltedSpan, but translucent
+*/
 void R_DrawTiltedTranslucentSpan_8(void)
 {
-
+	// x1, x2 = ds_x1, ds_x2
 	int width = ds_x2 - ds_x1;
 	double iz, uz, vz;
 	UINT32 u, v;
@@ -1000,10 +1000,10 @@ void R_DrawTiltedTranslucentSpan_8(void)
 
 	dest = &topleft[ds_y*vid.width + ds_x1];
 	source = ds_source;
+	//colormap = ds_colormap;
 
-
-#if 0	 
-
+#if 0	// The "perfect" reference version of this routine. Pretty slow.
+		// Use it only to see how things are supposed to look.
 	i = 0;
 	do
 	{
@@ -1026,7 +1026,7 @@ void R_DrawTiltedTranslucentSpan_8(void)
 	izstep = ds_sz.x * SPANSIZE;
 	uzstep = ds_su.x * SPANSIZE;
 	vzstep = ds_sv.x * SPANSIZE;
-
+	//x1 = 0;
 	width++;
 
 	while (width >= SPANSIZE)
@@ -1093,12 +1093,12 @@ void R_DrawTiltedTranslucentSpan_8(void)
 #endif
 }
 
-                                               
-                                              
-  
+/**	\brief The R_DrawTiltedWaterSpan_8 function
+	Like DrawTiltedTranslucentSpan, but for water
+*/
 void R_DrawTiltedWaterSpan_8(void)
 {
-
+	// x1, x2 = ds_x1, ds_x2
 	int width = ds_x2 - ds_x1;
 	double iz, uz, vz;
 	UINT32 u, v;
@@ -1123,10 +1123,10 @@ void R_DrawTiltedWaterSpan_8(void)
 	dest = &topleft[ds_y*vid.width + ds_x1];
 	dsrc = screens[1] + (ds_y+ds_bgofs)*vid.width + ds_x1;
 	source = ds_source;
+	//colormap = ds_colormap;
 
-
-#if 0	 
-
+#if 0	// The "perfect" reference version of this routine. Pretty slow.
+		// Use it only to see how things are supposed to look.
 	i = 0;
 	do
 	{
@@ -1149,7 +1149,7 @@ void R_DrawTiltedWaterSpan_8(void)
 	izstep = ds_sz.x * SPANSIZE;
 	uzstep = ds_su.x * SPANSIZE;
 	vzstep = ds_sv.x * SPANSIZE;
-
+	//x1 = 0;
 	width++;
 
 	while (width >= SPANSIZE)
@@ -1218,7 +1218,7 @@ void R_DrawTiltedWaterSpan_8(void)
 
 void R_DrawTiltedSplat_8(void)
 {
-
+	// x1, x2 = ds_x1, ds_x2
 	int width = ds_x2 - ds_x1;
 	double iz, uz, vz;
 	UINT32 u, v;
@@ -1243,10 +1243,10 @@ void R_DrawTiltedSplat_8(void)
 
 	dest = &topleft[ds_y*vid.width + ds_x1];
 	source = ds_source;
+	//colormap = ds_colormap;
 
-
-#if 0	 
-
+#if 0	// The "perfect" reference version of this routine. Pretty slow.
+		// Use it only to see how things are supposed to look.
 	i = 0;
 	do
 	{
@@ -1273,7 +1273,7 @@ void R_DrawTiltedSplat_8(void)
 	izstep = ds_sz.x * SPANSIZE;
 	uzstep = ds_su.x * SPANSIZE;
 	vzstep = ds_sv.x * SPANSIZE;
-
+	//x1 = 0;
 	width++;
 
 	while (width >= SPANSIZE)
@@ -1348,7 +1348,7 @@ void R_DrawTiltedSplat_8(void)
 
 void R_DrawTiltedTranslucentSplat_8(void)
 {
-
+	// x1, x2 = ds_x1, ds_x2
 	int width = ds_x2 - ds_x1;
 	double iz, uz, vz;
 	UINT32 u, v;
@@ -1373,10 +1373,10 @@ void R_DrawTiltedTranslucentSplat_8(void)
 
 	dest = &topleft[ds_y*vid.width + ds_x1];
 	source = ds_source;
+	//colormap = ds_colormap;
 
-
-#if 0	 
-
+#if 0	// The "perfect" reference version of this routine. Pretty slow.
+		// Use it only to see how things are supposed to look.
 	i = 0;
 	do
 	{
@@ -1403,7 +1403,7 @@ void R_DrawTiltedTranslucentSplat_8(void)
 	izstep = ds_sz.x * SPANSIZE;
 	uzstep = ds_su.x * SPANSIZE;
 	vzstep = ds_sv.x * SPANSIZE;
-
+	//x1 = 0;
 	width++;
 
 	while (width >= SPANSIZE)
@@ -1476,9 +1476,9 @@ void R_DrawTiltedTranslucentSplat_8(void)
 #endif
 }
 
-                                     
-                                                      
-  
+/**	\brief The R_DrawSplat_8 function
+	Just like R_DrawSpan_8, but skips transparent pixels.
+*/
 void R_DrawSplat_8 (void)
 {
 	fixed_t xposition;
@@ -1496,13 +1496,13 @@ void R_DrawSplat_8 (void)
 	xposition = ds_xfrac; yposition = ds_yfrac;
 	xstep = ds_xstep; ystep = ds_ystep;
 
-
-
-
-
-
-
-
+	// SoM: we only need 6 bits for the integer part (0 thru 63) so the rest
+	// can be used for the fraction part. This allows calculation of the memory address in the
+	// texture with two shifts, an OR and one AND. (see below)
+	// for texture sizes > 64 the amount of precision we can allow will decrease, but only by one
+	// bit per power of two (obviously)
+	// Ok, because I was able to eliminate the variable spot below, this function is now FASTER
+	// than the original span renderer. Whodathunkit?
 	xposition <<= nflatshiftup; yposition <<= nflatshiftup;
 	xstep <<= nflatshiftup; ystep <<= nflatshiftup;
 
@@ -1512,12 +1512,12 @@ void R_DrawSplat_8 (void)
 
 	while (count >= 8)
 	{
-
-
-
-
-
-
+		// SoM: Why didn't I see this earlier? the spot variable is a waste now because we don't
+		// have the uber complicated math to calculate it now, so that was a memory write we didn't
+		// need!
+		//
+		// <Callum> 4194303 = (2048x2048)-1 (2048x2048 is maximum flat size)
+		// Why decimal? 0x3FFFFF == 4194303... ~Golden
 		val = (((UINT32)yposition >> nflatyshift) & nflatmask) | ((UINT32)xposition >> nflatxshift);
 		val &= 0x3FFFFF;
 		val = source[val];
@@ -1596,9 +1596,9 @@ void R_DrawSplat_8 (void)
 	}
 }
 
-                                                
-                                             
-  
+/**	\brief The R_DrawTranslucentSplat_8 function
+	Just like R_DrawSplat_8, but is translucent!
+*/
 void R_DrawTranslucentSplat_8 (void)
 {
 	fixed_t xposition;
@@ -1616,13 +1616,13 @@ void R_DrawTranslucentSplat_8 (void)
 	xposition = ds_xfrac; yposition = ds_yfrac;
 	xstep = ds_xstep; ystep = ds_ystep;
 
-
-
-
-
-
-
-
+	// SoM: we only need 6 bits for the integer part (0 thru 63) so the rest
+	// can be used for the fraction part. This allows calculation of the memory address in the
+	// texture with two shifts, an OR and one AND. (see below)
+	// for texture sizes > 64 the amount of precision we can allow will decrease, but only by one
+	// bit per power of two (obviously)
+	// Ok, because I was able to eliminate the variable spot below, this function is now FASTER
+	// than the original span renderer. Whodathunkit?
 	xposition <<= nflatshiftup; yposition <<= nflatshiftup;
 	xstep <<= nflatshiftup; ystep <<= nflatshiftup;
 
@@ -1632,9 +1632,9 @@ void R_DrawTranslucentSplat_8 (void)
 
 	while (count >= 8)
 	{
-
-
-
+		// SoM: Why didn't I see this earlier? the spot variable is a waste now because we don't
+		// have the uber complicated math to calculate it now, so that was a memory write we didn't
+		// need!
 		val = source[(((UINT32)yposition >> nflatyshift) & nflatmask) | ((UINT32)xposition >> nflatxshift)];
 		if (val != TRANSPARENTPIXEL)
 			dest[0] = *(ds_transmap + (colormap[val] << 8) + dest[0]);
@@ -1697,9 +1697,9 @@ void R_DrawTranslucentSplat_8 (void)
 	}
 }
 
-                                           
-                                                
-  
+/**	\brief The R_DrawFloorSprite_8 function
+	Just like R_DrawSplat_8, but for floor sprites.
+*/
 void R_DrawFloorSprite_8 (void)
 {
 	fixed_t xposition;
@@ -1718,13 +1718,13 @@ void R_DrawFloorSprite_8 (void)
 	xposition = ds_xfrac; yposition = ds_yfrac;
 	xstep = ds_xstep; ystep = ds_ystep;
 
-
-
-
-
-
-
-
+	// SoM: we only need 6 bits for the integer part (0 thru 63) so the rest
+	// can be used for the fraction part. This allows calculation of the memory address in the
+	// texture with two shifts, an OR and one AND. (see below)
+	// for texture sizes > 64 the amount of precision we can allow will decrease, but only by one
+	// bit per power of two (obviously)
+	// Ok, because I was able to eliminate the variable spot below, this function is now FASTER
+	// than the original span renderer. Whodathunkit?
 	xposition <<= nflatshiftup; yposition <<= nflatshiftup;
 	xstep <<= nflatshiftup; ystep <<= nflatshiftup;
 
@@ -1735,9 +1735,9 @@ void R_DrawFloorSprite_8 (void)
 
 	while (count >= 8)
 	{
-
-
-
+		// SoM: Why didn't I see this earlier? the spot variable is a waste now because we don't
+		// have the uber complicated math to calculate it now, so that was a memory write we didn't
+		// need!
 		val = (((UINT32)yposition >> nflatyshift) & nflatmask) | ((UINT32)xposition >> nflatxshift);
 		val = source[val];
 		if (val & 0xFF00)
@@ -1808,9 +1808,9 @@ void R_DrawFloorSprite_8 (void)
 	}
 }
 
-                                                     
-                                                   
-  
+/**	\brief The R_DrawTranslucentFloorSplat_8 function
+	Just like R_DrawFloorSprite_8, but is translucent!
+*/
 void R_DrawTranslucentFloorSprite_8 (void)
 {
 	fixed_t xposition;
@@ -1829,13 +1829,13 @@ void R_DrawTranslucentFloorSprite_8 (void)
 	xposition = ds_xfrac; yposition = ds_yfrac;
 	xstep = ds_xstep; ystep = ds_ystep;
 
-
-
-
-
-
-
-
+	// SoM: we only need 6 bits for the integer part (0 thru 63) so the rest
+	// can be used for the fraction part. This allows calculation of the memory address in the
+	// texture with two shifts, an OR and one AND. (see below)
+	// for texture sizes > 64 the amount of precision we can allow will decrease, but only by one
+	// bit per power of two (obviously)
+	// Ok, because I was able to eliminate the variable spot below, this function is now FASTER
+	// than the original span renderer. Whodathunkit?
 	xposition <<= nflatshiftup; yposition <<= nflatshiftup;
 	xstep <<= nflatshiftup; ystep <<= nflatshiftup;
 
@@ -1846,9 +1846,9 @@ void R_DrawTranslucentFloorSprite_8 (void)
 
 	while (count >= 8)
 	{
-
-
-
+		// SoM: Why didn't I see this earlier? the spot variable is a waste now because we don't
+		// have the uber complicated math to calculate it now, so that was a memory write we didn't
+		// need!
 		val = source[(((UINT32)yposition >> nflatyshift) & nflatmask) | ((UINT32)xposition >> nflatxshift)];
 		if (val & 0xFF00)
 			dest[0] = *(ds_transmap + (colormap[translation[val & 0xFF]] << 8) + dest[0]);
@@ -1911,12 +1911,12 @@ void R_DrawTranslucentFloorSprite_8 (void)
 	}
 }
 
-                                                 
-                             
-  
+/**	\brief The R_DrawTiltedFloorSprite_8 function
+	Draws a tilted floor sprite.
+*/
 void R_DrawTiltedFloorSprite_8(void)
 {
-
+	// x1, x2 = ds_x1, ds_x2
 	int width = ds_x2 - ds_x1;
 	double iz, uz, vz;
 	UINT32 u, v;
@@ -1949,7 +1949,7 @@ void R_DrawTiltedFloorSprite_8(void)
 	izstep = ds_sz.x * SPANSIZE;
 	uzstep = ds_su.x * SPANSIZE;
 	vzstep = ds_sv.x * SPANSIZE;
-
+	//x1 = 0;
 	width++;
 
 	while (width >= SPANSIZE)
@@ -2020,12 +2020,12 @@ void R_DrawTiltedFloorSprite_8(void)
 	}
 }
 
-                                                            
-                                           
-  
+/**	\brief The R_DrawTiltedTranslucentFloorSprite_8 function
+	Draws a tilted, translucent, floor sprite.
+*/
 void R_DrawTiltedTranslucentFloorSprite_8(void)
 {
-
+	// x1, x2 = ds_x1, ds_x2
 	int width = ds_x2 - ds_x1;
 	double iz, uz, vz;
 	UINT32 u, v;
@@ -2058,7 +2058,7 @@ void R_DrawTiltedTranslucentFloorSprite_8(void)
 	izstep = ds_sz.x * SPANSIZE;
 	uzstep = ds_su.x * SPANSIZE;
 	vzstep = ds_sv.x * SPANSIZE;
-
+	//x1 = 0;
 	width++;
 
 	while (width >= SPANSIZE)
@@ -2129,9 +2129,9 @@ void R_DrawTiltedTranslucentFloorSprite_8(void)
 	}
 }
 
-                                               
-                                         
-  
+/**	\brief The R_DrawTranslucentSpan_8 function
+	Draws the actual span with translucency.
+*/
 void R_DrawTranslucentSpan_8 (void)
 {
 	fixed_t xposition;
@@ -2149,13 +2149,13 @@ void R_DrawTranslucentSpan_8 (void)
 	xposition = ds_xfrac; yposition = ds_yfrac;
 	xstep = ds_xstep; ystep = ds_ystep;
 
-
-
-
-
-
-
-
+	// SoM: we only need 6 bits for the integer part (0 thru 63) so the rest
+	// can be used for the fraction part. This allows calculation of the memory address in the
+	// texture with two shifts, an OR and one AND. (see below)
+	// for texture sizes > 64 the amount of precision we can allow will decrease, but only by one
+	// bit per power of two (obviously)
+	// Ok, because I was able to eliminate the variable spot below, this function is now FASTER
+	// than the original span renderer. Whodathunkit?
 	xposition <<= nflatshiftup; yposition <<= nflatshiftup;
 	xstep <<= nflatshiftup; ystep <<= nflatshiftup;
 
@@ -2165,9 +2165,9 @@ void R_DrawTranslucentSpan_8 (void)
 
 	while (count >= 8)
 	{
-
-
-
+		// SoM: Why didn't I see this earlier? the spot variable is a waste now because we don't
+		// have the uber complicated math to calculate it now, so that was a memory write we didn't
+		// need!
 		dest[0] = *(ds_transmap + (colormap[source[(((UINT32)yposition >> nflatyshift) & nflatmask) | ((UINT32)xposition >> nflatxshift)]] << 8) + dest[0]);
 		xposition += xstep;
 		yposition += ystep;
@@ -2226,13 +2226,13 @@ void R_DrawWaterSpan_8(void)
 
 	size_t count;
 
-
-
-
-
-
-
-
+	// SoM: we only need 6 bits for the integer part (0 thru 63) so the rest
+	// can be used for the fraction part. This allows calculation of the memory address in the
+	// texture with two shifts, an OR and one AND. (see below)
+	// for texture sizes > 64 the amount of precision we can allow will decrease, but only by one
+	// bit per power of two (obviously)
+	// Ok, because I was able to eliminate the variable spot below, this function is now FASTER
+	// than the original span renderer. Whodathunkit?
 	xposition = ds_xfrac << nflatshiftup; yposition = (ds_yfrac + ds_waterofs) << nflatshiftup;
 	xstep = ds_xstep << nflatshiftup; ystep = ds_ystep << nflatshiftup;
 
@@ -2244,9 +2244,9 @@ void R_DrawWaterSpan_8(void)
 
 	while (count >= 8)
 	{
-
-
-
+		// SoM: Why didn't I see this earlier? the spot variable is a waste now because we don't
+		// have the uber complicated math to calculate it now, so that was a memory write we didn't
+		// need!
 		dest[0] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
 		xposition += xstep;
 		yposition += ystep;
@@ -2290,9 +2290,9 @@ void R_DrawWaterSpan_8(void)
 	}
 }
 
-                                       
-                                    
-  
+/**	\brief The R_DrawFogSpan_8 function
+	Draws the actual span with fogging.
+*/
 void R_DrawFogSpan_8(void)
 {
 	UINT8 *colormap;
@@ -2323,9 +2323,9 @@ void R_DrawFogSpan_8(void)
 	}
 }
 
-                                             
-                                  
-  
+/**	\brief The R_DrawTiltedFogSpan_8 function
+	Draws a tilted span with fogging.
+*/
 void R_DrawTiltedFogSpan_8(void)
 {
 	int width = ds_x2 - ds_x1;
@@ -2342,9 +2342,9 @@ void R_DrawTiltedFogSpan_8(void)
 	} while (--width >= 0);
 }
 
-                                              
-                          
-  
+/**	\brief The R_DrawSolidColorSpan_8 function
+	Draws a solid color span.
+*/
 void R_DrawSolidColorSpan_8(void)
 {
 	size_t count = (ds_x2 - ds_x1 + 1);
@@ -2355,9 +2355,9 @@ void R_DrawSolidColorSpan_8(void)
 	memset(dest, source, count);
 }
 
-                                                   
-                                      
-  
+/**	\brief The R_DrawTransSolidColorSpan_8 function
+	Draws a translucent solid color span.
+*/
 void R_DrawTransSolidColorSpan_8(void)
 {
 	size_t count = (ds_x2 - ds_x1 + 1);
@@ -2374,9 +2374,9 @@ void R_DrawTransSolidColorSpan_8(void)
 	}
 }
 
-                                                    
-                                 
-  
+/**	\brief The R_DrawTiltedSolidColorSpan_8 function
+	Draws a tilted solid color span.
+*/
 void R_DrawTiltedSolidColorSpan_8(void)
 {
 	int width = ds_x2 - ds_x1;
@@ -2393,9 +2393,9 @@ void R_DrawTiltedSolidColorSpan_8(void)
 	} while (--width >= 0);
 }
 
-                                                         
-                                                 
-  
+/**	\brief The R_DrawTiltedTransSolidColorSpan_8 function
+	Draws a tilted and translucent solid color span.
+*/
 void R_DrawTiltedTransSolidColorSpan_8(void)
 {
 	int width = ds_x2 - ds_x1;
@@ -2413,9 +2413,9 @@ void R_DrawTiltedTransSolidColorSpan_8(void)
 	} while (--width >= 0);
 }
 
-                                                   
-                                
-  
+/**	\brief The R_DrawWaterSolidColorSpan_8 function
+	Draws a water solid color span.
+*/
 void R_DrawWaterSolidColorSpan_8(void)
 {
 	UINT8 source = ds_source[0];
@@ -2433,9 +2433,9 @@ void R_DrawWaterSolidColorSpan_8(void)
 	}
 }
 
-                                                         
-                                       
-  
+/**	\brief The R_DrawTiltedWaterSolidColorSpan_8 function
+	Draws a tilted water solid color span.
+*/
 void R_DrawTiltedWaterSolidColorSpan_8(void)
 {
 	int width = ds_x2 - ds_x1;
@@ -2453,9 +2453,9 @@ void R_DrawTiltedWaterSolidColorSpan_8(void)
 	} while (--width >= 0);
 }
 
-                                         
-          
-  
+/**	\brief The R_DrawFogColumn_8 function
+	Fog wall.
+*/
 void R_DrawFogColumn_8(void)
 {
 	INT32 count;
@@ -2463,7 +2463,7 @@ void R_DrawFogColumn_8(void)
 
 	count = dc_yh - dc_yl;
 
-
+	// Zero length, column does not exceed a pixel.
 	if (count < 0)
 		return;
 
@@ -2472,23 +2472,23 @@ void R_DrawFogColumn_8(void)
 		I_Error("R_DrawFogColumn_8: %d to %d at %d", dc_yl, dc_yh, dc_x);
 #endif
 
-
+	// Framebuffer destination address.
 	dest = &topleft[dc_yl*vid.width + dc_x];
 
-
+	// Determine scaling, which is the only mapping to be done.
 	do
 	{
-
+		// Simple. Apply the colormap to what's already on the screen.
 		*dest = dc_colormap[*dest];
 		dest += vid.width;
 	} while (count--);
 }
 
-                                           
-                                                  
+/**	\brief The R_DrawShadeColumn_8 function
+	This is for 3D floors that cast shadows on walls.
 
-                                                                             
-  
+	This function just cuts the column up into sections and calls R_DrawColumn_8
+*/
 void R_DrawColumnShadowed_8(void)
 {
 	INT32 count, realyh, i, height, bheight = 0, solid = 0;
@@ -2497,7 +2497,7 @@ void R_DrawColumnShadowed_8(void)
 
 	count = dc_yh - dc_yl;
 
-
+	// Zero length, column does not exceed a pixel.
 	if (count < 0)
 		return;
 
@@ -2506,11 +2506,11 @@ void R_DrawColumnShadowed_8(void)
 		I_Error("R_DrawColumnShadowed_8: %d to %d at %d", dc_yl, dc_yh, dc_x);
 #endif
 
-
+	// This runs through the lightlist from top to bottom and cuts up the column accordingly.
 	for (i = 0; i < dc_numlights; i++)
 	{
-
-
+		// If the height of the light is above the column, get the colormap
+		// anyway because the lighting of the top should be affected.
 		solid = dc_lightlist[i].flags & FOF_CUTSOLIDS;
 
 		height = dc_lightlist[i].height >> LIGHTSCALESHIFT;
@@ -2519,10 +2519,10 @@ void R_DrawColumnShadowed_8(void)
 			bheight = dc_lightlist[i].botheight >> LIGHTSCALESHIFT;
 			if (bheight < height)
 			{
-
-
-
-
+				// confounded slopes sometimes allow partial invertedness,
+				// even including cases where the top and bottom heights
+				// should actually be the same!
+				// swap the height values as a workaround for this quirk
 				INT32 temp = height;
 				height = bheight;
 				bheight = temp;
@@ -2535,12 +2535,12 @@ void R_DrawColumnShadowed_8(void)
 				dc_yl = bheight;
 			continue;
 		}
-
+		// Found a break in the column!
 		dc_yh = height;
 
 		if (dc_yh > realyh)
 			dc_yh = realyh;
-		(colfuncs[BASEDRAWFUNC])();		 
+		(colfuncs[BASEDRAWFUNC])();		// R_DrawColumn_8 for the appropriate architecture
 		if (solid)
 			dc_yl = bheight;
 		else
@@ -2550,5 +2550,5 @@ void R_DrawColumnShadowed_8(void)
 	}
 	dc_yh = realyh;
 	if (dc_yl <= realyh)
-		(colfuncs[BASEDRAWFUNC])();		 
+		(colfuncs[BASEDRAWFUNC])();		// R_DrawWallColumn_8 for the appropriate architecture
 }

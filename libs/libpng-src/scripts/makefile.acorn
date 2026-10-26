@@ -1,7 +1,7 @@
+# Project:   libpng
 
 
-
-
+# Toolflags:
 CCflags = -c -depend !Depend -IC:,Zlib: -g -throwback  -DRISCOS  -fnah
 C++flags = -c -depend !Depend -IC: -throwback
 Linkflags = -aif -c++ -o $@
@@ -10,7 +10,7 @@ CMHGflags =
 LibFileflags = -c -l -o $@
 Squeezeflags = -o $@
 
-
+# Final targets:
 @.libpng-lib:   @.o.png @.o.pngerror @.o.pngrio @.o.pngwio @.o.pngmem \
 	@.o.pngpread @.o.pngset @.o.pngget @.o.pngread @.o.pngrtran \
 	@.o.pngrutil @.o.pngtrans @.o.pngwrite @.o.pngwtran @.o.pngwutil
@@ -32,7 +32,7 @@ Test: @.pngtest
 	<Prefix$Dir>.pngtest
 	@remove <Prefix$Dir>.pngtest
 
-
+#It would be nice if you could stop "make" listing from here on!
 @.pngtest:   @.o.pngtest @.libpng-lib C:o.Stubs Zlib:zlib_lib
 	Link $(Linkflags) @.o.pngtest @.libpng-lib C:o.Stubs Zlib:zlib_lib
 
@@ -43,15 +43,15 @@ Test: @.pngtest
 .c.o:
 	cc $(ccflags) -o $@ $<
 
-
+# See scripts.mak.libpngconf for how to generate this:
 @.h.libpngconf: @.scripts.h.libpngconf
 	copy @.scripts.h.libpngconf $@
 
-
+# Static dependencies:
 @.o.png @.o.pngerror @.o.pngrio @.o.pngwio @.o.pngmem \
 @.o.pngpread @.o.pngset @.o.pngget @.o.pngread @.o.pngrtran \
 @.o.pngrutil @.o.pngtrans @.o.pngwrite @.o.pngwtran @.o.pngwutil \
 @.o.pngtest: @.h.libpngconf
 
 
-
+# Dynamic dependencies:

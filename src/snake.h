@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  snake.h
+/// \brief Snake minigame for the download screen.
 
 #ifndef __SNAKE__
 #define __SNAKE__

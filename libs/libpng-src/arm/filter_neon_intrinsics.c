@@ -15,8 +15,8 @@
 
 #ifdef PNG_READ_SUPPORTED
 
- 
-#if PNG_ARM_NEON_IMPLEMENTATION == 1  
+/* This code requires -mfpu=neon on the command line: */
+#if PNG_ARM_NEON_IMPLEMENTATION == 1 /* intrinsics code from pngpriv.h */
 
 #if defined(_MSC_VER) && defined(_M_ARM64)
 #  include <arm64_neon.h>
@@ -24,24 +24,24 @@
 #  include <arm_neon.h>
 #endif
 
-                                                                              
-                                                                               
-                                                                           
-                                                        
-   
+/* libpng row pointers are not necessarily aligned to any particular boundary,
+ * however this code will only work with appropriate alignment.  arm/arm_init.c
+ * checks for this (and will not compile unless it is done). This code uses
+ * variants of png_aligncast to avoid compiler warnings.
+ */
 #define png_ptr(type,pointer) png_aligncast(type *,pointer)
 #define png_ptrc(type,pointer) png_aligncastconst(const type *,pointer)
 
-                                                                             
-                                                                         
-                                                                              
-                                 
-  
-                                                                             
-                                                                       
-                                                                               
-                         
-   
+/* The following relies on a variable 'temp_pointer' being declared with type
+ * 'type'.  This is written this way just to hide the GCC strict aliasing
+ * warning; note that the code is safe because there never is an alias between
+ * the input and output pointers.
+ *
+ * When compiling with MSVC ARM64, the png_ldr macro can't be passed directly
+ * to vst4_lane_u32, because of an internal compiler error inside MSVC.
+ * To avoid this compiler bug, we use a temporary variable (vdest_val) to store
+ * the result of png_ldr.
+ */
 #define png_ldr(type,pointer)\
    (temp_pointer = png_ptr(type,pointer), *temp_pointer)
 
@@ -263,17 +263,17 @@ paeth(uint8x8_t a, uint8x8_t b, uint8x8_t c)
    uint8x8_t d, e;
    uint16x8_t p1, pa, pb, pc;
 
-   p1 = vaddl_u8(a, b);  
-   pc = vaddl_u8(c, c);  
-   pa = vabdl_u8(b, c);  
-   pb = vabdl_u8(a, c);  
-   pc = vabdq_u16(p1, pc);  
+   p1 = vaddl_u8(a, b); /* a + b */
+   pc = vaddl_u8(c, c); /* c * 2 */
+   pa = vabdl_u8(b, c); /* pa */
+   pb = vabdl_u8(a, c); /* pb */
+   pc = vabdq_u16(p1, pc); /* pc */
 
-   p1 = vcleq_u16(pa, pb);  
-   pa = vcleq_u16(pa, pc);  
-   pb = vcleq_u16(pb, pc);  
+   p1 = vcleq_u16(pa, pb); /* pa <= pb */
+   pa = vcleq_u16(pa, pc); /* pa <= pc */
+   pb = vcleq_u16(pb, pc); /* pb <= pc */
 
-   p1 = vandq_u16(p1, pa);  
+   p1 = vandq_u16(p1, pa); /* pa <= pb && pa <= pc */
 
    d = vmovn_u16(pb);
    e = vmovn_u16(p1);
@@ -397,6 +397,6 @@ png_read_filter_row_paeth4_neon(png_row_infop row_info, png_bytep row,
    }
 }
 
-#endif  
-#endif  
-#endif  
+#endif /* PNG_ARM_NEON_OPT > 0 */
+#endif /* PNG_ARM_NEON_IMPLEMENTATION == 1 (intrinsics) */
+#endif /* READ */

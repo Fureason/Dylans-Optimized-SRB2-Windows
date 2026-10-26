@@ -9,12 +9,12 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
-                                                                                 
-                                                                                 
-                                                                                 
-                                                                                 
-                                                                                 
-                                                                                  
+/********************************************************************************
+ *                                                                              *
+ * Test of the overlay used for moved pictures, test more closed to real life.  *
+ * Running trojan moose :) Coded by Mike Gorchak.                               *
+ *                                                                              *
+ ********************************************************************************/
 
 #include <stdlib.h>
 
@@ -33,7 +33,7 @@
 #define MOOSEFRAME_SIZE   (MOOSEPIC_W * MOOSEPIC_H)
 #define MOOSEFRAMES_COUNT 10
 
-   
+/* *INDENT-OFF* */ /* clang-format off */
 SDL_Color MooseColors[84] = {
     {49, 49, 49, SDL_ALPHA_OPAQUE}
     , {66, 24, 0, SDL_ALPHA_OPAQUE}
@@ -140,7 +140,7 @@ SDL_Color MooseColors[84] = {
     , {231, 231, 231, SDL_ALPHA_OPAQUE}
     , {239, 206, 173, SDL_ALPHA_OPAQUE}
 };
-   
+/* *INDENT-ON* */ /* clang-format on */
 
 Uint8 MooseFrame[MOOSEFRAMES_COUNT][MOOSEFRAME_SIZE * 2];
 SDL_Texture *MooseTexture;
@@ -153,7 +153,7 @@ int i;
 SDL_bool done = SDL_FALSE;
 static int fpsdelay;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -247,7 +247,7 @@ int main(int argc, char **argv)
     int scale = 5;
     char *filename = NULL;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -316,7 +316,7 @@ int main(int argc, char **argv)
         quit(1);
     }
 
-     
+    /* load the trojan moose images */
     filename = GetResourceFilename(NULL, "moose.dat");
     if (filename == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Out of memory\n");
@@ -335,7 +335,7 @@ int main(int argc, char **argv)
 
     SDL_RWclose(handle);
 
-     
+    /* Create the window and renderer */
     window_w = MOOSEPIC_W * scale;
     window_h = MOOSEPIC_H * scale;
     window = SDL_CreateWindow("Happy Moose",
@@ -362,8 +362,8 @@ int main(int argc, char **argv)
         SDL_free(RawMooseData);
         quit(5);
     }
-     
-     
+    /* Uncomment this to check vertex color with a YUV texture */
+    /* SDL_SetTextureColorMod(MooseTexture, 0xff, 0x80, 0x80); */
 
     for (i = 0; i < MOOSEFRAMES_COUNT; i++) {
         Uint8 MooseFrameRGB[MOOSEFRAME_SIZE * 3];
@@ -385,7 +385,7 @@ int main(int argc, char **argv)
 
     SDL_free(RawMooseData);
 
-     
+    /* set the start frame */
     i = 0;
     if (nodelay) {
         fpsdelay = 0;
@@ -398,10 +398,10 @@ int main(int argc, char **argv)
     displayrect.w = window_w;
     displayrect.h = window_h;
 
-     
+    /* Ignore key up events, they don't even get filtered */
     SDL_EventState(SDL_KEYUP, SDL_IGNORE);
 
-     
+    /* Loop, waiting for QUIT or RESIZE */
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(loop, nodelay ? 0 : fps, 1);
 #else
@@ -415,4 +415,4 @@ int main(int argc, char **argv)
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

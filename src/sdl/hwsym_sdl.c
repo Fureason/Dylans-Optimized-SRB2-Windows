@@ -13,14 +13,14 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-
-
-
-
-
-
-
-
+/// \file
+/// \brief Tool for dynamic referencing of hardware rendering functions
+///
+///	Declaration and definition of the HW rendering
+///	functions do have the same name. Originally, the
+///	implementation was stored in a separate library.
+///	For SDL, we need some function to return the addresses,
+///	otherwise we have a conflict with the compiler.
 
 #include "hwsym_sdl.h"
 #include "../doomdef.h"
@@ -41,7 +41,7 @@
 #include "SDL_loadso.h"
 #endif
 
-#define  _CREATE_DLL_   
+#define  _CREATE_DLL_  // necessary for Unix AND Windows
 
 #ifdef HWRENDER
 #include "../hardware/hw_drv.h"
@@ -58,18 +58,18 @@
 #define GETFUNC(func) \
 	else if (0 == strcmp(#func, funcName)) \
 		funcPointer = &func \
+//
+//
+/**	\brief	The *hwSym function
 
+	Stupid function to return function addresses
 
-                              
+	\param	funcName	the name of the function
+	\param	handle	an object to look in(NULL for self)
 
-                                             
-
-                                         
-                                                  
-
-             
-  
-
+	\return	void
+*/
+//
 void *hwSym(const char *funcName,void *handle)
 {
 	void *funcPointer = NULL;
@@ -116,10 +116,10 @@ void *hwSym(const char *funcName,void *handle)
 	GETFUNC(ClearLightTables);
 	GETFUNC(SetScreenPalette);
 
-#else  
+#else //HWRENDER
 	if (0 == strcmp("FinishUpdate", funcName))
-		return funcPointer;  
-#endif  
+		return funcPointer; //&FinishUpdate;
+#endif //!HWRENDER
 #ifdef STATIC3DS
 	GETFUNC(Startup);
 	GETFUNC(AddSfx);
@@ -152,14 +152,14 @@ void *hwSym(const char *funcName,void *handle)
 	return funcPointer;
 }
 
-                               
+/**	\brief	The *hwOpen function
 
-                                      
+	\param	hwfile	Open a handle to the SO
 
-                     
+	\return	Handle to SO
 
 
-  
+*/
 
 void *hwOpen(const char *hwfile)
 {
@@ -174,14 +174,14 @@ void *hwOpen(const char *hwfile)
 #endif
 }
 
-                               
+/**	\brief	The hwClose function
 
-                                         
+	\param	handle	Close the handle of the SO
 
-             
+	\return	void
 
 
-  
+*/
 
 void hwClose(void *handle)
 {

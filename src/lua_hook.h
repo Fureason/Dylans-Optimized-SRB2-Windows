@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_hook.h
+/// \brief hooks for Lua scripting
 
 #include "r_defs.h"
 #include "d_player.h"
@@ -19,87 +19,87 @@
 
 extern consvar_t cv_luahitchlog;
 
-  
-                                                                             
-                                                                              
-                                                                          
-              
-  
+/*
+Do you know what an 'X Macro' is? Such a macro is called over each element of
+a list and expands the input. I use it for the hook lists because both an enum
+and array of hook names need to be kept in order. The X Macro handles this
+automatically.
+*/
 
 #define MOBJ_HOOK_LIST(X) \
-	X (MobjSpawn), \
-	X (MobjCollide), \
-	X (MobjLineCollide), \
-	X (MobjMoveCollide), \
-	X (TouchSpecial), \
-	X (MobjFuse), \
-	X (MobjThinker), \
-	X (BossThinker), \
-	X (ShouldDamage), \
-	X (MobjDamage), \
-	X (MobjDeath), \
-	X (BossDeath), \
-	X (MobjRemoved), \
-	X (BotRespawn), \
-	X (MobjMoveBlocked), \
-	X (MapThingSpawn), \
-	X (FollowMobj), \
-	X (HurtMsg), \
+	X (MobjSpawn),/* P_SpawnMobj */\
+	X (MobjCollide),/* PIT_CheckThing */\
+	X (MobjLineCollide),/* ditto */\
+	X (MobjMoveCollide),/* tritto */\
+	X (TouchSpecial),/* P_TouchSpecialThing */\
+	X (MobjFuse),/* when mobj->fuse runs out */\
+	X (MobjThinker),/* P_MobjThinker, P_SceneryThinker */\
+	X (BossThinker),/* P_GenericBossThinker */\
+	X (ShouldDamage),/* P_DamageMobj (Should mobj take damage?) */\
+	X (MobjDamage),/* P_DamageMobj (Mobj actually takes damage!) */\
+	X (MobjDeath),/* P_KillMobj */\
+	X (BossDeath),/* A_BossDeath */\
+	X (MobjRemoved),/* P_RemoveMobj */\
+	X (BotRespawn),/* B_CheckRespawn */\
+	X (MobjMoveBlocked),/* P_XYMovement (when movement is blocked) */\
+	X (MapThingSpawn),/* P_SpawnMapThing */\
+	X (FollowMobj),/* P_PlayerAfterThink Smiles mobj-following */\
+	X (HurtMsg),/* imhurttin */\
 
 #define HOOK_LIST(X) \
-	X (NetVars), \
-	X (MapChange), \
+	X (NetVars),/* add to archive table (netsave) */\
+	X (MapChange),/* (before map load) */\
 	X (MapLoad),\
-	X (PlayerJoin), \
-	X (PreThinkFrame) ,\
-	X (ThinkFrame), \
-	X (PostThinkFrame), \
-	X (JumpSpecial), \
-	X (AbilitySpecial), \
-	X (SpinSpecial), \
-	X (JumpSpinSpecial), \
-	X (BotTiccmd), \
-	X (PlayerMsg), \
-	X (PlayerSpawn), \
-	X (ShieldSpawn), \
-	X (ShieldSpecial), \
-	X (PlayerCanDamage), \
+	X (PlayerJoin),/* Got_AddPlayer */\
+	X (PreThinkFrame)/* frame (before mobj and player thinkers) */,\
+	X (ThinkFrame),/* frame (after mobj and player thinkers) */\
+	X (PostThinkFrame),/* frame (at end of tick, ie after overlays, precipitation, specials) */\
+	X (JumpSpecial),/* P_DoJumpStuff (Any-jumping) */\
+	X (AbilitySpecial),/* P_DoJumpStuff (Double-jumping) */\
+	X (SpinSpecial),/* P_DoSpinAbility (Spin button effect) */\
+	X (JumpSpinSpecial),/* P_DoJumpStuff (Spin button effect (mid-air)) */\
+	X (BotTiccmd),/* B_BuildTiccmd */\
+	X (PlayerMsg),/* chat messages */\
+	X (PlayerSpawn),/* G_SpawnPlayer */\
+	X (ShieldSpawn),/* P_SpawnShieldOrb */\
+	X (ShieldSpecial),/* shield abilities */\
+	X (PlayerCanDamage),/* P_PlayerCanDamage */\
 	X (PlayerQuit),\
-	X (IntermissionThinker), \
-	X (TeamSwitch), \
-	X (ViewpointSwitch), \
-	X (SeenPlayer), \
-	X (PlayerThink), \
+	X (IntermissionThinker),/* Y_Ticker */\
+	X (TeamSwitch),/* team switching in... uh... *what* speak, spit it the fuck out */\
+	X (ViewpointSwitch),/* spy mode (no trickstabs) */\
+	X (SeenPlayer),/* MT_NAMECHECK */\
+	X (PlayerThink),/* P_PlayerThink */\
 	X (GameQuit),\
-	X (PlayerCmd), \
+	X (PlayerCmd),/* building the player's ticcmd struct (Ported from SRB2Kart) */\
 	X (MusicChange),\
-	X (PlayerHeight), \
+	X (PlayerHeight),/* override player height */\
 	X (PlayerCanEnterSpinGaps),\
 	X (AddonLoaded),\
 	X (KeyDown),\
 	X (KeyUp),\
 
 #define STRING_HOOK_LIST(X) \
-	X (BotAI), \
+	X (BotAI),/* B_BuildTailsTiccmd by skin name */\
 	X (LinedefExecute),\
-	X (ShouldJingleContinue), \
+	X (ShouldJingleContinue),/* should jingle of the given music continue playing */\
 
 #define HUD_HOOK_LIST(X) \
 	X (game),\
-	X (scores), \
-	X (title), \
+	X (scores),/* emblems/multiplayer list */\
+	X (title),/* titlescreen */\
 	X (titlecard),\
 	X (intermission),\
 	X (continue),\
 	X (playersetup),\
 
-  
-                                                                            
-                                                                         
-                                                                          
-                                                                            
-                                     
-  
+/*
+I chose to access the hook enums through a macro as well. This could provide
+a hint to lookup the macro's definition instead of the enum's definition.
+(Since each enumeration is not defined in the source code, but by the list
+macros above, it is not greppable.) The name passed to the macro can also be
+grepped and found in the lists above.
+*/
 
 #define   MOBJ_HOOK(name)   mobjhook_ ## name
 #define        HOOK(name)       hook_ ## name
@@ -115,7 +115,7 @@ ENUM (STRING_HOOK);
 
 #undef ENUM
 
- 
+/* dead simple, LUA_HOOK(GameQuit) */
 #define LUA_HOOK(type) LUA_HookVoid(HOOK(type))
 #define LUA_HUDHOOK(type,drawlist) LUA_HookHUD(HUD_HOOK(type),(drawlist))
 
@@ -138,7 +138,7 @@ void LUA_HookInt(INT32 integer, int hook);
 void LUA_HookBool(boolean value, int hook);
 int  LUA_HookPlayer(player_t *, int hook);
 int  LUA_HookTiccmd(player_t *, ticcmd_t *, int hook);
-int  LUA_HookKey(event_t *event, int hook);  
+int  LUA_HookKey(event_t *event, int hook); // Hooks for key events
 
 void LUA_HookPreThinkFrame(void);
 void LUA_HookThinkFrame(void);

@@ -18,5 +18,5 @@
 #define PNG_INTERNAL_CALLBACK(type, name, args, attributes)\
         PNG_DFN "@" name "@"
 
-#define PNGPREFIX_H  
+#define PNGPREFIX_H /* self generation */
 #include "../pngpriv.h"

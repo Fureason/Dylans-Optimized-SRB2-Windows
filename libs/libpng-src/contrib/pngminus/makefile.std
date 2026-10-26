@@ -1,24 +1,24 @@
+# Makefile for PngMinus (png2pnm and pnm2png)
+# Linux / Unix
 
-
-
-
+#CC=cc
 CC=gcc
 LD=$(CC)
 
 RM=rm -f
 
-
-
-
-
+#PNGPATH = /usr/local
+#PNGINC = -I$(PNGPATH)/include/libpng12
+#PNGLIB = -L$(PNGPATH)/lib -lpng12
+#PNGLIBS = $(PNGPATH)/lib/libpng12.a
 PNGINC = -I../..
 PNGLIB = -L../.. -lpng
 PNGLIBS = ../../libpng.a
 
-
-
-
-
+#ZPATH = /usr/local
+#ZINC = -I$(ZPATH)/include
+#ZLIB = -L$(ZPATH)/lib -lz
+#ZLIBS = $(ZPATH)/lib/libz.a
 ZINC = -I../../../zlib
 ZLIB = -L../../../zlib -lz
 ZLIBS = ../../../zlib/libz.a
@@ -31,9 +31,9 @@ O=.o
 L=.a
 E=
 
+# dependencies
 
-
-
+#all: png2pnm$(E) pnm2png$(E)
 all: png2pnm$(E) pnm2png$(E) png2pnm-static$(E) pnm2png-static$(E)
 
 png2pnm$(O): png2pnm$(C)
@@ -62,4 +62,4 @@ clean:
 	$(RM) png2pnm-static$(E)
 	$(RM) pnm2png-static$(E)
 
-
+# End of makefile for png2pnm / pnm2png

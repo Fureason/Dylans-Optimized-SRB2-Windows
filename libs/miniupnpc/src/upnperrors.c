@@ -1,4 +1,4 @@
- 
+/* $Id: upnperrors.c,v 1.11 2023/05/29 21:59:15 nanard Exp $ */
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * Project : miniupnp
  * Author : Thomas BERNARD

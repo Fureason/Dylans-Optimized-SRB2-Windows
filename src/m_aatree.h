@@ -8,16 +8,16 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  m_aatree.h
+/// \brief AA trees code
 
 #ifndef __M_AATREE__
 #define __M_AATREE__
 
 #include "doomtype.h"
 
-
-#define AATREE_ZUSER	1		 
+// Flags for AA trees.
+#define AATREE_ZUSER	1		// Treat values as z_zone-allocated blocks and set their user fields
 
 typedef struct aatree_s aatree_t;
 typedef void (*aatree_iter_t)(INT32 key, void *value);

@@ -16,14 +16,14 @@ function createWindow(url) {
 }
 
 function onLaunched(launchData) {
-
-
-
-
-
-
-
-
+  // Send and XHR to get the URL to load from a configuration file.
+  // Normally you won't need to do this; just call:
+  //
+  // chrome.app.window.create('<your url>', {...});
+  //
+  // In the SDK we want to be able to load different URLs (for different
+  // toolchain/config combinations) from the commandline, so we to read
+  // this information from the file "run_package_config".
   var xhr = new XMLHttpRequest();
   xhr.open('GET', 'run_package_config', true);
   xhr.onload = function() {
@@ -31,7 +31,7 @@ function onLaunched(launchData) {
     createWindow(makeURL.apply(null, toolchain_config));
   };
   xhr.onerror = function() {
-
+    // Can't find the config file, just load the default.
     createWindow('index.html');
   };
   xhr.send();

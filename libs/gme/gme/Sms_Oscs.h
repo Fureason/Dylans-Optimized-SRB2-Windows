@@ -1,6 +1,6 @@
+// Private oscillators used by Sms_Apu
 
-
-
+// Sms_Snd_Emu 0.1.4
 #ifndef SMS_OSCS_H
 #define SMS_OSCS_H
 
@@ -9,7 +9,7 @@
 
 struct Sms_Osc
 {
-	Blip_Buffer* outputs [4];  
+	Blip_Buffer* outputs [4]; // NULL, right, left, center
 	Blip_Buffer* output;
 	int output_select;
 	

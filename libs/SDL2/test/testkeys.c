@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Print out all the scancodes we have, just to verify them */
 
 #include <stdio.h>
 #include <ctype.h>
@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 {
     SDL_Scancode scancode;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {

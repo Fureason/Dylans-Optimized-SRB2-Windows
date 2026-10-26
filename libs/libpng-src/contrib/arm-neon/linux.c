@@ -28,9 +28,9 @@ png_have_neon(png_structp png_ptr)
 
    if (f != NULL)
    {
-                                                                                
-                                                                                
-         
+      /* This is a simple state machine which reads the input byte-by-byte until
+       * it gets a match on the 'neon' feature or reaches the end of the stream.
+       */
       static const char ch_feature[] = { 70, 69, 65, 84, 85, 82, 69, 83 };
       static const char ch_neon[] = { 78, 69, 79, 78 };
 
@@ -46,9 +46,9 @@ png_have_neon(png_structp png_ptr)
 
          if (ch == EOF)
          {
-                                                                           
-                                       
-               
+            /* EOF means error or end-of-file, return false; neon at EOF is
+             * assumed to be a mistake.
+             */
             fclose(f);
             return 0;
          }
@@ -56,16 +56,16 @@ png_have_neon(png_structp png_ptr)
          switch (state)
          {
             case StartLine:
-                
-               if (ch <= 32)  
+               /* Match spaces at the start of line */
+               if (ch <= 32) /* skip control characters and space */
                   break;
 
                counter=0;
                state = Feature;
-                
+               /* FALLTHROUGH */
 
             case Feature:
-                
+               /* Match 'FEATURE', ASCII case insensitive. */
                if ((ch & ~0x20) == ch_feature[counter])
                {
                   if (++counter == (sizeof ch_feature))
@@ -73,13 +73,13 @@ png_have_neon(png_structp png_ptr)
                   break;
                }
 
-                
+               /* did not match 'feature' */
                state = SkipLine;
-                
+               /* FALLTHROUGH */
 
             case SkipLine:
             skipLine:
-                
+               /* Skip everything until we see linefeed or carriage return */
                if (ch != 10 && ch != 13)
                   break;
 
@@ -87,33 +87,33 @@ png_have_neon(png_structp png_ptr)
                break;
 
             case Colon:
-                
+               /* Match any number of space or tab followed by ':' */
                if (ch == 32 || ch == 9)
                   break;
 
-               if (ch == 58)  
+               if (ch == 58) /* i.e. ':' */
                {
                   state = StartTag;
                   break;
                }
 
-                                                                            
-                                   
-                  
+               /* Either a bad line format or a 'feature' prefix followed by
+                * other characters.
+                */
                state = SkipLine;
                goto skipLine;
 
             case StartTag:
-                
+               /* Skip space characters before a tag */
                if (ch == 32 || ch == 9)
                   break;
 
                state = Neon;
                counter = 0;
-                
+               /* FALLTHROUGH */
 
             case Neon:
-                
+               /* Look for 'neon' tag */
                if ((ch & ~0x20) == ch_neon[counter])
                {
                   if (++counter == (sizeof ch_neon))
@@ -122,10 +122,10 @@ png_have_neon(png_structp png_ptr)
                }
 
                state = SkipTag;
-                
+               /* FALLTHROUGH */
 
             case SkipTag:
-                
+               /* Skip non-space characters */
                if (ch == 10 || ch == 13)
                   state = StartLine;
 
@@ -134,9 +134,9 @@ png_have_neon(png_structp png_ptr)
                break;
 
             case HaveNeon:
-                                                                             
-                                                 
-                  
+               /* Have seen a 'neon' prefix, but there must be a space or new
+                * line character to terminate it.
+                */
                if (ch == 10 || ch == 13 || ch == 32 || ch == 9)
                {
                   fclose(f);

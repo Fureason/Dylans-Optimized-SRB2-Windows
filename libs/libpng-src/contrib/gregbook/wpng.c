@@ -95,7 +95,7 @@
 #if defined(__MSDOS__) || defined(__OS2__)
 #  define DOS_OS2_W32
 #elif defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
-#  ifndef __GNUC__    
+#  ifndef __GNUC__   /* treat Win32 native ports of gcc as Unix environments */
 #    define DOS_OS2_W32
 #  endif
 #endif
@@ -103,41 +103,41 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <setjmp.h>      
+#include <setjmp.h>     /* for jmpbuf declaration in writepng.h */
 #include <time.h>
 
 #ifdef DOS_OS2_W32
-#  include <io.h>        
-#  include <fcntl.h>     
+#  include <io.h>       /* for isatty(), setmode() prototypes */
+#  include <fcntl.h>    /* O_BINARY for fdopen() without text translation */
 #  ifdef __EMX__
 #    ifndef getch
-#      define getch() _read_kbd(0, 1, 0)     
+#      define getch() _read_kbd(0, 1, 0)    /* need getche() */
 #    endif
-#  else  
+#  else /* !__EMX__ */
 #    ifdef __GO32__
 #      include <pc.h>
-#      define getch() getkey()   
+#      define getch() getkey()  /* GRR:  need getche() */
 #    else
-#      include <conio.h>         
+#      include <conio.h>        /* for getche() console input */
 #    endif
-#  endif  
+#  endif /* ?__EMX__ */
 #  define FGETS(buf,len,stream)  dos_kbd_gets(buf,len)
 #else
-#  include <unistd.h>            
+#  include <unistd.h>           /* for isatty() prototype */
 #  define FGETS fgets
 #endif
 
- 
+/* #define DEBUG  :  this enables the Trace() macros */
 
-                                                                        
-                                                                          
-                                                                          
+/* #define FORBID_LATIN1_CTRL  :  this requires the user to re-enter any
+   text that includes control characters discouraged by the PNG spec; text
+   that includes an escape character (27) must be re-entered regardless */
 
-#include "writepng.h"    
+#include "writepng.h"   /* typedefs, common macros, writepng prototypes */
 
 
 
- 
+/* local prototypes */
 
 static int  wpng_isvalid_latin1(uch *p, int len);
 static void wpng_cleanup(void);
@@ -148,7 +148,7 @@ static void wpng_cleanup(void);
 
 
 
-static mainprog_info wpng_info;    
+static mainprog_info wpng_info;   /* lone global */
 
 
 
@@ -158,7 +158,7 @@ int main(int argc, char **argv)
     FILE *keybd;
 #endif
 #ifdef sgi
-    FILE *tmpfile;       
+    FILE *tmpfile;      /* or we could just use keybd, since no overlap */
     char tmpline[80];
 #endif
     char *inname = NULL, outname[256];
@@ -169,9 +169,9 @@ int main(int argc, char **argv)
     int error = 0;
     int text = FALSE;
     int maxval;
-    double LUT_exponent;                 
-    double CRT_exponent = 2.2;           
-    double default_display_exponent;     
+    double LUT_exponent;                /* just the lookup table */
+    double CRT_exponent = 2.2;          /* just the monitor */
+    double default_display_exponent;    /* whole display system */
     double default_gamma = 0.0;
 
 
@@ -187,26 +187,26 @@ int main(int argc, char **argv)
     wpng_info.gamma = 0.0;
 
 
-                                                                         
-                                                                        
-                                                                       
-                                                                        
-                                                                        
-                                                                           
-                                                                        
-                                                     
+    /* First get the default value for our display-system exponent, i.e.,
+     * the product of the CRT exponent and the exponent corresponding to
+     * the frame-buffer's lookup table (LUT), if any.  If the PNM image
+     * looks correct on the user's display system, its file gamma is the
+     * inverse of this value.  (Note that this is not an exhaustive list
+     * of LUT values--e.g., OpenStep has a lot of weird ones--but it should
+     * cover 99% of the current possibilities.  This section must ensure
+     * that default_display_exponent is positive.) */
 
 #if defined(NeXT)
-     
+    /* third-party utilities can modify the default LUT exponent */
     LUT_exponent = 1.0 / 2.2;
-      
-                                                           
-                                        
-       
+    /*
+    if (some_next_function_that_returns_gamma(&next_gamma))
+        LUT_exponent = 1.0 / next_gamma;
+     */
 #elif defined(sgi)
     LUT_exponent = 1.0 / 1.7;
-                                                          
-                                                         
+    /* there doesn't seem to be any documented function to
+     * get the "gamma" value, so we do it the hard way */
     tmpfile = fopen("/etc/config/system.glGammaVal", "r");
     if (tmpfile) {
         double sgi_gamma;
@@ -219,22 +219,22 @@ int main(int argc, char **argv)
     }
 #elif defined(Macintosh)
     LUT_exponent = 1.8 / 2.61;
-      
-                                                         
-                                        
-       
+    /*
+    if (some_mac_function_that_returns_gamma(&mac_gamma))
+        LUT_exponent = mac_gamma / 2.61;
+     */
 #else
-    LUT_exponent = 1.0;    
+    LUT_exponent = 1.0;   /* assume no LUT:  most PCs */
 #endif
 
-     
+    /* the defaults above give 1.0, 1.3, 1.5 and 2.2, respectively: */
     default_display_exponent = LUT_exponent * CRT_exponent;
 
 
-                                                                             
-                                                                              
-                                                                          
-                                                  
+    /* If the user has set the SCREEN_GAMMA environment variable as suggested
+     * (somewhat imprecisely) in the libpng documentation, use that; otherwise
+     * use the default value we just calculated.  Either way, the user may
+     * override this via a command-line option. */
 
     if ((p = getenv("SCREEN_GAMMA")) != NULL) {
         double exponent = atof(p);
@@ -247,7 +247,7 @@ int main(int argc, char **argv)
         default_gamma = 1.0 / default_display_exponent;
 
 
-     
+    /* Now parse the command line for options and the PNM filename. */
 
     while (*++argv && !error) {
         if (!strncmp(*argv, "-i", 2)) {
@@ -276,7 +276,7 @@ int main(int argc, char **argv)
                 if (strlen(bgstr) != 7 || bgstr[0] != '#')
                     ++error;
                 else {
-                    unsigned r, g, b;   
+                    unsigned r, g, b;  /* this way quiets compiler warnings */
 
                     sscanf(bgstr+1, "%2x%2x%2x", &r, &g, &b);
                     wpng_info.bg_red   = (uch)r;
@@ -288,15 +288,15 @@ int main(int argc, char **argv)
         } else {
             if (**argv != '-') {
                 inname = *argv;
-                if (argv[1])    
+                if (argv[1])   /* shouldn't be any more args after filename */
                     ++error;
             } else
-                ++error;    
+                ++error;   /* not expecting any other options */
         }
     }
 
 
-     
+    /* open the input and output files, or register an error and abort */
 
     if (!inname) {
         if (isatty(0)) {
@@ -305,7 +305,7 @@ int main(int argc, char **argv)
             ++error;
         } else {
 #ifdef DOS_OS2_W32
-             
+            /* some buggy C libraries require BOTH setmode() and fdopen(bin) */
             setmode(fileno(stdin), O_BINARY);
             setmode(fileno(stdout), O_BINARY);
 #endif
@@ -343,13 +343,13 @@ int main(int argc, char **argv)
         } else {
             wpng_info.pnmtype = (int)(pnmchar - '0');
             if (wpng_info.pnmtype != 8)
-                wpng_info.have_bg = FALSE;   
+                wpng_info.have_bg = FALSE;  /* no need for bg if opaque */
             do {
-                fgets(pnmline, 256, wpng_info.infile);   
+                fgets(pnmline, 256, wpng_info.infile);  /* lose any comments */
             } while (pnmline[0] == '#');
             sscanf(pnmline, "%ld %ld", &wpng_info.width, &wpng_info.height);
             do {
-                fgets(pnmline, 256, wpng_info.infile);   
+                fgets(pnmline, 256, wpng_info.infile);  /* more comment lines */
             } while (pnmline[0] == '#');
             sscanf(pnmline, "%d", &maxval);
             if (wpng_info.width <= 0L || wpng_info.height <= 0L ||
@@ -359,10 +359,10 @@ int main(int argc, char **argv)
                   ":  only positive width/height, maxval == 255 allowed \n");
                 ++error;
             }
-            wpng_info.sample_depth = 8;   
+            wpng_info.sample_depth = 8;  /* <==> maxval 255 */
 
             if (!wpng_info.filter) {
-                 
+                /* make outname from inname */
                 if ((p = strrchr(inname, '.')) == NULL ||
                     (p - inname) != (len - 4))
                 {
@@ -373,7 +373,7 @@ int main(int argc, char **argv)
                     strncpy(outname, inname, len);
                     strcpy(outname+len, ".png");
                 }
-                 
+                /* check if outname already exists; if not, open */
                 if ((wpng_info.outfile = fopen(outname, "rb")) != NULL) {
                     fprintf(stderr, PROGNAME ":  output file exists [%s]\n",
                       outname);
@@ -397,7 +397,7 @@ int main(int argc, char **argv)
     }
 
 
-     
+    /* if we had any errors, print usage and die horrible death...arrr! */
 
     if (error) {
         fprintf(stderr, "\n%s %s:  %s\n", PROGNAME, VERSION, APPNAME);
@@ -431,9 +431,9 @@ int main(int argc, char **argv)
     }
 
 
-                                                                       
-                                                                           
-                
+    /* prepare the text buffers for libpng's use; note that even though
+     * PNG's png_text struct includes a length field, we don't have to fill
+     * it out */
 
     if (text &&
 #ifndef DOS_OS2_W32
@@ -446,7 +446,7 @@ int main(int argc, char **argv)
         fprintf(stderr,
           "Enter text info (no more than 72 characters per line);\n");
         fprintf(stderr, "to skip a field, hit the <Enter> key.\n");
-         
+        /* note:  just <Enter> leaves len == 1 */
 
         do {
             valid = TRUE;
@@ -469,7 +469,7 @@ int main(int argc, char **argv)
                     wpng_info.have_text &= ~TEXT_TITLE;
                     valid = FALSE;
 #else
-                    if (p[result] == 27) {     
+                    if (p[result] == 27) {    /* escape character */
                         wpng_info.have_text &= ~TEXT_TITLE;
                         valid = FALSE;
                     }
@@ -499,7 +499,7 @@ int main(int argc, char **argv)
                     wpng_info.have_text &= ~TEXT_AUTHOR;
                     valid = FALSE;
 #else
-                    if (p[result] == 27) {     
+                    if (p[result] == 27) {    /* escape character */
                         wpng_info.have_text &= ~TEXT_AUTHOR;
                         valid = FALSE;
                     }
@@ -516,7 +516,7 @@ int main(int argc, char **argv)
                 fprintf(stderr, "    [%d] ", i);
                 fflush(stderr);
                 if (FGETS(p, 74, keybd) && (len = strlen(p)) > 1)
-                    p += len;    
+                    p += len;   /* now points at NULL; char before is newline */
                 else
                     break;
             }
@@ -539,7 +539,7 @@ int main(int argc, char **argv)
                     wpng_info.have_text &= ~TEXT_DESC;
                     valid = FALSE;
 #else
-                    if (p[result] == 27) {     
+                    if (p[result] == 27) {    /* escape character */
                         wpng_info.have_text &= ~TEXT_DESC;
                         valid = FALSE;
                     }
@@ -569,7 +569,7 @@ int main(int argc, char **argv)
                     wpng_info.have_text &= ~TEXT_COPY;
                     valid = FALSE;
 #else
-                    if (p[result] == 27) {     
+                    if (p[result] == 27) {    /* escape character */
                         wpng_info.have_text &= ~TEXT_COPY;
                         valid = FALSE;
                     }
@@ -599,7 +599,7 @@ int main(int argc, char **argv)
                     wpng_info.have_text &= ~TEXT_EMAIL;
                     valid = FALSE;
 #else
-                    if (p[result] == 27) {     
+                    if (p[result] == 27) {    /* escape character */
                         wpng_info.have_text &= ~TEXT_EMAIL;
                         valid = FALSE;
                     }
@@ -629,7 +629,7 @@ int main(int argc, char **argv)
                     wpng_info.have_text &= ~TEXT_URL;
                     valid = FALSE;
 #else
-                    if (p[result] == 27) {     
+                    if (p[result] == 27) {    /* escape character */
                         wpng_info.have_text &= ~TEXT_URL;
                         valid = FALSE;
                     }
@@ -649,7 +649,7 @@ int main(int argc, char **argv)
     }
 
 
-     
+    /* allocate libpng stuff, initialize transformations, write pre-IDAT data */
 
     if ((rc = writepng_init(&wpng_info)) != 0) {
         switch (rc) {
@@ -673,8 +673,8 @@ int main(int argc, char **argv)
     }
 
 
-                                                                             
-                                               
+    /* free textbuf, since it's a completely local variable and all text info
+     * has just been written to the PNG file */
 
     if (text && textbuf) {
         free(textbuf);
@@ -682,20 +682,20 @@ int main(int argc, char **argv)
     }
 
 
-                                                                             
-                                                                             
-                                                                               
+    /* calculate rowbytes on basis of image type; note that this becomes much
+     * more complicated if we choose to support PBM type, ASCII PNM types, or
+     * 16-bit-per-sample binary data [currently not an official NetPBM type] */
 
     if (wpng_info.pnmtype == 5)
         rowbytes = wpng_info.width;
     else if (wpng_info.pnmtype == 6)
         rowbytes = wpng_info.width * 3;
-    else  
+    else /* if (wpng_info.pnmtype == 8) */
         rowbytes = wpng_info.width * 4;
 
 
-                                                                              
-                                                
+    /* read and write the image, either in its entirety (if writing interlaced
+     * PNG) or row by row (if non-interlaced) */
 
     fprintf(stderr, "Encoding image data...\n");
     fflush(stderr);
@@ -705,7 +705,7 @@ int main(int argc, char **argv)
         ulg bytes;
         ulg image_bytes;
 
-         
+        /* Guard against integer overflow */
         if (wpng_info_height > ((size_t)(-1)/rowbytes ||
             wpng_info_height > ((ulg)(-1)/rowbytes) {
             fprintf(stderr, PROGNAME ":  image_data buffer too large\n");
@@ -740,7 +740,7 @@ int main(int argc, char **argv)
             exit(2);
         }
 
-    } else   {
+    } else /* not interlaced:  write progressively (row by row) */ {
         long j;
         ulg bytes;
 
@@ -783,7 +783,7 @@ int main(int argc, char **argv)
     }
 
 
-     
+    /* OK, we're done (successfully):  clean up all resources and quit */
 
     fprintf(stderr, "Done.\n");
     fflush(stderr);
@@ -804,10 +804,10 @@ static int wpng_isvalid_latin1(uch *p, int len)
 
     for (i = 0;  i < len;  ++i) {
         if (p[i] == 10 || (p[i] > 31 && p[i] < 127) || p[i] > 160)
-            continue;            
+            continue;           /* character is completely OK */
         if (result < 0 || (p[result] != 27 && p[i] == 27))
-            result = i;          
-    }                            
+            result = i;         /* mark location of first questionable one */
+    }                           /*  or of first escape character (bad) */
 
     return result;
 }
@@ -852,14 +852,14 @@ static char *dos_kbd_gets(char *buf, int len)
         buf[count++] = ch = getche();
     } while (ch != '\r' && count < len-1);
 
-    buf[count--] = '\0';         
-    if (buf[count] == '\r')      
+    buf[count--] = '\0';        /* terminate string */
+    if (buf[count] == '\r')     /* Enter key makes CR, so change to newline */
         buf[count] = '\n';
 
-    fprintf(stderr, "\n");       
+    fprintf(stderr, "\n");      /* Enter key does *not* cause a newline */
     fflush(stderr);
 
     return buf;
 }
 
-#endif  
+#endif /* DOS_OS2_W32 */

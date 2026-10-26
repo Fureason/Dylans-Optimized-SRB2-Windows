@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  lua_hooklib.c
+/// \brief hooks for Lua scripting
 
 #include "doomdef.h"
 #include "doomstat.h"
@@ -21,15 +21,15 @@
 #include "lua_script.h"
 #include "lua_libs.h"
 #include "lua_hook.h"
-#include "lua_hud.h"  
+#include "lua_hud.h" // hud_running errors
 
 #include "m_perfstats.h"
-#include "netcode/d_netcmd.h"  
-#include "i_system.h"  
+#include "netcode/d_netcmd.h" // for cv_perfstats
+#include "i_system.h" // I_GetPreciseTime
 
-                                                                            
-                                             
-                                                                               
+/* =========================================================================
+                                  ABSTRACTION
+   ========================================================================= */
 
 #define LIST(id, M) \
 	static const char * const id [] = { M (TOSTR)  NULL }
@@ -55,14 +55,14 @@ static hook_t hookIds[HOOK(MAX)];
 static hook_t hudHookIds[HUD_HOOK(MAX)];
 static hook_t mobjHookIds[NUMMOBJTYPES][MOBJ_HOOK(MAX)];
 
-
+// Lua tables are used to lookup string hook ids.
 static stringhook_t stringHooks[STRING_HOOK(MAX)];
 
-
+// This will be indexed by hook id, the value of which fetches the registry.
 static int * hookRefs;
 static int   nextid;
 
-
+// After a hook errors once, don't print the error again.
 static UINT8 * hooksErrored;
 
 static int errorRef;
@@ -133,7 +133,7 @@ static void add_string_hook(lua_State *L, int type)
 		case STRING_HOOK(BotAI):
 		case STRING_HOOK(ShouldJingleContinue):
 			if (lua_isstring(L, 3))
-			{  
+			{ // lowercase copy
 				string = Z_StrDup(lua_tostring(L, 3));
 				strlwr(string);
 			}
@@ -198,12 +198,12 @@ static void add_hook_ref(lua_State *L, int idx)
 
 	Z_Realloc(hookRefs, (nextid + 1) * sizeof *hookRefs, PU_STATIC, &hookRefs);
 
-
+	// set the hook function in the registry.
 	lua_pushvalue(L, idx);
 	hookRefs[nextid++] = luaL_ref(L, LUA_REGISTRYINDEX);
 }
 
-
+// Takes hook, function, and additional arguments (mobj type to act on, etc.)
 static int lib_addHook(lua_State *L)
 {
 	const char * name;
@@ -215,7 +215,7 @@ static int lib_addHook(lua_State *L)
 	name = luaL_checkstring(L, 1);
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
-	 
+	/* this is a very special case */
 	if (( type = hook_in_list(name, stringHookNames) ) < STRING_HOOK(MAX))
 	{
 		add_string_hook(L, type);
@@ -237,7 +237,7 @@ static int lib_addHook(lua_State *L)
 		return luaL_argerror(L, 1, lua_pushfstring(L, "invalid hook " LUA_QS, name));
 	}
 
-	add_hook_ref(L, 2); 
+	add_hook_ref(L, 2);/* the function */
 
 	return 0;
 }
@@ -252,8 +252,8 @@ int LUA_HookLib(lua_State *L)
 	return 0;
 }
 
- 
-int lib_hudadd(lua_State *L); 
+/* TODO: remove in next backwards incompatible release */
+int lib_hudadd(lua_State *L);/* yeah compiler */
 int lib_hudadd(lua_State *L)
 {
 	if (!lua_lumploading)
@@ -271,22 +271,22 @@ typedef struct Hook_State Hook_State;
 typedef void (*Hook_Callback)(Hook_State *);
 
 struct Hook_State {
-	INT32        status; 
+	INT32        status;/* return status to calling function */
 	void       * userdata;
 	int          hook_type;
-	mobjtype_t   mobj_type; 
-	const char * string; 
-	int          top; 
-	int          id; 
-	int          values; 
-	int          results; 
-	Hook_Callback results_handler; 
-	const char * profile_name; 
+	mobjtype_t   mobj_type;/* >0 if mobj hook */
+	const char * string;/* used to fetch table, ran first if set */
+	int          top;/* index of last argument passed to hook */
+	int          id;/* id to fetch ref */
+	int          values;/* num arguments passed to hook */
+	int          results;/* num values returned by hook */
+	Hook_Callback results_handler;/* callback when hook successfully returns */
+	const char * profile_name;/* non-NULL for hooks worth attributing in hitch logs */
 };
 
 enum {
-	EINDEX = 1, 
-	SINDEX = 2, 
+	EINDEX = 1,/* error handler */
+	SINDEX = 2,/* string itself is pushed in case of string hook */
 };
 
 static void push_error_handler(void)
@@ -294,7 +294,7 @@ static void push_error_handler(void)
 	lua_getref(gL, errorRef);
 }
 
- 
+/* repush hook string */
 static void push_string(void)
 {
 	lua_pushvalue(gL, SINDEX);
@@ -453,7 +453,7 @@ static int call_single_hook_no_copy(Hook_State *hook)
 	}
 	else
 	{
-		 
+		/* print the error message once */
 		if (cv_debug & DBG_LUA || !in_bit_array(hooksErrored, hook->id))
 		{
 			CONS_Alert(CONS_WARNING, "%s\n", lua_tostring(gL, -1));
@@ -519,9 +519,9 @@ static int call_mapped(Hook_State *hook, const hook_t *map)
 		if (profile)
 		{
 			precise_t elapsed = I_GetPreciseTime() - started;
-			                                                                    
-                                                                        
-                                               
+			/* During an explicitly armed sample, attribute moderately expensive
+			 * hooks too. Several sub-millisecond hooks can dominate one tic when
+			 * an add-on pack registers many of them. */
 			if (elapsed >= I_GetPrecisePrecision()/10000)
 			{
 				lua_getinfo(gL, ">S", &ar);
@@ -548,7 +548,7 @@ static int call_string_hooks(Hook_State *hook)
 
 	lua_getref(gL, map->ref);
 
-	 
+	/* call generic string hooks first */
 	calls += call_hook_table_for(hook, map->numGeneric);
 
 	push_string();
@@ -587,7 +587,7 @@ static void call_hud_hooks
 		int        results,
 		Hook_Callback results_handler
 ){
-	hud_running = true;  
+	hud_running = true; // local hook
 	init_hook_call(hook, results, results_handler);
 	call_mapped(hook, &hudHookIds[hook->hook_type]);
 	hud_running = false;
@@ -612,7 +612,7 @@ static int call_hooks
 	}
 	else if (hook->mobj_type > 0)
 	{
-		 
+		/* call generic mobj hooks first */
 		calls += call_mobj_type_hooks(hook, MT_NULL);
 
 		if (hook->mobj_type < NUMMOBJTYPES)
@@ -628,9 +628,9 @@ static int call_hooks
 	return calls;
 }
 
-                                                                            
-                                                  
-                                                                               
+/* =========================================================================
+                            COMMON RESULT HANDLERS
+   ========================================================================= */
 
 #define res_none NULL
 
@@ -651,15 +651,15 @@ static void res_force(Hook_State *hook)
 	if (!lua_isnil(gL, -1))
 	{
 		if (lua_toboolean(gL, -1))
-			hook->status = 1;  
+			hook->status = 1; // Force yes
 		else
-			hook->status = 2;  
+			hook->status = 2; // Force no
 	}
 }
 
-                                                                            
-                                                
-                                                                               
+/* =========================================================================
+                               GENERALISED HOOKS
+   ========================================================================= */
 
 int LUA_HookMobj(mobj_t *mobj, int hook_type)
 {
@@ -789,13 +789,13 @@ int LUA_HookCharacterHUD
 	return hook.status;
 }
 
-                                                                            
-                                                
-                                                                               
+/* =========================================================================
+                               SPECIALIZED HOOKS
+   ========================================================================= */
 
 static void hook_think_frame(int type)
 {
-
+	// variables used by perf stats
 	int hook_index = 0;
 	precise_t time_taken = 0;
 
@@ -808,10 +808,10 @@ static void hook_think_frame(int type)
 	{
 		init_hook_call(&hook, 0, res_none);
 
-		                                                                      
-                                                                          
-                                                                          
-                                                                      
+		/* Normal play does not need a timer, duplicate Lua function or source
+		 * lookup for every callback. Keep a tight dispatch path until an actual
+		 * hitch arms the short attribution window (or the user explicitly opens
+		 * Lua perfstats). Hook order and return behaviour are unchanged. */
 		if (cv_perfstats.value < 3
 		&& (!cv_luahitchlog.value || !PS_DeepProfileActive()))
 		{
@@ -830,15 +830,15 @@ static void hook_think_frame(int type)
 
 			get_hook(&hook, map->ids, k);
 
-			                                                                      
-                                                                        
-                                                                         
-                                                  
+			/* Capture this once. A hitch raised from inside the hook can arm deep
+			 * profiling before it returns. Re-evaluating the condition afterward
+			 * would then subtract an uninitialised zero start time and report the
+			 * machine uptime as a multi-hour Lua stall. */
 			profile_hook = cv_perfstats.value >= 3
 				|| (cv_luahitchlog.value && PS_DeepProfileActive());
 			if (profile_hook)
 			{
-				lua_pushvalue(gL, -1); 
+				lua_pushvalue(gL, -1);/* need the function again */
 				time_taken = I_GetPreciseTime();
 			}
 
@@ -1001,9 +1001,9 @@ static void res_botai(Hook_State *hook)
 
 	int fields = 0;
 
-
+	// This turns forward, backward, left, right, jump, and spin into a proper ticcmd for tails.
 	if (lua_istable(gL, -8)) {
-		lua_pushnil(gL);  
+		lua_pushnil(gL); // key
 		while (lua_next(gL, -9)) {
 #define CHECK(n, f) (checkbotkey(f) ? (k[(n)-1] = 1) : 0)
 			if (
@@ -1014,12 +1014,12 @@ static void res_botai(Hook_State *hook)
 			){
 				if (8 <= ++fields)
 				{
-					lua_pop(gL, 2);  
+					lua_pop(gL, 2); // pop key and value
 					break;
 				}
 			}
 
-			lua_pop(gL, 1);  
+			lua_pop(gL, 1); // pop value
 #undef CHECK
 		}
 	} else {
@@ -1077,21 +1077,21 @@ int LUA_HookPlayerMsg(int source, int target, int flags, char *msg)
 	Hook_State hook;
 	if (prepare_hook(&hook, false, HOOK(PlayerMsg)))
 	{
-		LUA_PushUserdata(gL, &players[source], META_PLAYER);  
-		if (flags & 2  ) {  
-			lua_pushinteger(gL, 3);  
-			lua_pushnil(gL);  
-		} else if (target == -1) {  
-			lua_pushinteger(gL, 1);  
-			lua_pushnil(gL);  
-		} else if (target == 0) {  
-			lua_pushinteger(gL, 0);  
-			lua_pushnil(gL);  
-		} else {  
-			lua_pushinteger(gL, 2);  
-			LUA_PushUserdata(gL, &players[target-1], META_PLAYER);  
+		LUA_PushUserdata(gL, &players[source], META_PLAYER); // Source player
+		if (flags & 2 /*HU_CSAY*/) { // csay TODO: make HU_CSAY accessible outside hu_stuff.c
+			lua_pushinteger(gL, 3); // type
+			lua_pushnil(gL); // target
+		} else if (target == -1) { // sayteam
+			lua_pushinteger(gL, 1); // type
+			lua_pushnil(gL); // target
+		} else if (target == 0) { // say
+			lua_pushinteger(gL, 0); // type
+			lua_pushnil(gL); // target
+		} else { // sayto
+			lua_pushinteger(gL, 2); // type
+			LUA_PushUserdata(gL, &players[target-1], META_PLAYER); // target
 		}
-		lua_pushstring(gL, msg);  
+		lua_pushstring(gL, msg); // msg
 		call_hooks(&hook, 1, res_true);
 	}
 	return hook.status;
@@ -1116,16 +1116,16 @@ void LUA_HookNetArchive(lua_CFunction archFunc)
 	const hook_t * map = &hookIds[HOOK(NetVars)];
 	Hook_State hook = {0};
 
-	                                                                        
-                                                                           
-                                                                        
-                                                          
+	/* NetVars preserves the existing Lua stack instead of going through the
+	 * normal prepare_hook path. Initialise the fields that path normally owns
+	 * so hitch attribution never treats an indeterminate profile_name as a
+	 * string while a joining client loads a network save. */
 	hook.hook_type = HOOK(NetVars);
 	hook.profile_name = hookNames[HOOK(NetVars)];
-	 
+	/* this is a remarkable case where the stack isn't reset */
 	if (map->numHooks > 0)
 	{
-
+		// stack: tables
 		I_Assert(lua_gettop(gL) > 0);
 		I_Assert(lua_istable(gL, -1));
 
@@ -1134,17 +1134,17 @@ void LUA_HookNetArchive(lua_CFunction archFunc)
 
 		begin_hook_values(&hook);
 
-
+		// tables becomes an upvalue of archFunc
 		lua_pushvalue(gL, -1);
 		lua_pushcclosure(gL, archFunc, 1);
-
+		// stack: tables, archFunc
 
 		init_hook_call(&hook, 0, res_none);
 		call_mapped(&hook, map);
 
-		lua_pop(gL, 1);  
-		lua_remove(gL, EINDEX);  
-
+		lua_pop(gL, 1); // pop archFunc
+		lua_remove(gL, EINDEX); // pop error handler
+		// stack: tables
 	}
 }
 
@@ -1189,8 +1189,8 @@ void LUA_HookPlayerQuit(player_t *plr, kickreason_t reason)
 	Hook_State hook;
 	if (prepare_hook(&hook, 0, HOOK(PlayerQuit)))
 	{
-		LUA_PushUserdata(gL, plr, META_PLAYER);  
-		lua_pushinteger(gL, reason);  
+		LUA_PushUserdata(gL, plr, META_PLAYER); // Player that quit
+		lua_pushinteger(gL, reason); // Reason for quitting
 		call_hooks(&hook, 0, res_none);
 	}
 }
@@ -1219,7 +1219,7 @@ int LUA_HookViewpointSwitch(player_t *player, player_t *newdisplayplayer, boolea
 		LUA_PushUserdata(gL, newdisplayplayer, META_PLAYER);
 		lua_pushboolean(gL, forced);
 
-		hud_running = true;  
+		hud_running = true; // local hook
 		call_hooks(&hook, 1, res_force);
 		hud_running = false;
 	}
@@ -1234,7 +1234,7 @@ int LUA_HookSeenPlayer(player_t *player, player_t *seenfriend)
 		LUA_PushUserdata(gL, player, META_PLAYER);
 		LUA_PushUserdata(gL, seenfriend, META_PLAYER);
 
-		hud_running = true;  
+		hud_running = true; // local hook
 		call_hooks(&hook, 1, res_false);
 		hud_running = false;
 	}
@@ -1250,7 +1250,7 @@ int LUA_HookShouldJingleContinue(player_t *player, const char *musname)
 		LUA_PushUserdata(gL, player, META_PLAYER);
 		push_string();
 
-		hud_running = true;  
+		hud_running = true; // local hook
 		call_hooks(&hook, 1, res_true);
 		hud_running = false;
 	}
@@ -1267,7 +1267,7 @@ static void update_music_name(struct MusicChange *musicchange)
 	if (length < 7)
 	{
 		strcpy(musicchange->newname, new);
-		lua_pushvalue(gL, -6); 
+		lua_pushvalue(gL, -6);/* may as well keep it for next call */
 	}
 	else
 	{
@@ -1283,25 +1283,25 @@ static void res_musicchange(Hook_State *hook)
 {
 	struct MusicChange *musicchange = hook->userdata;
 
-
+	// output 1: true, false, or string musicname override
 	if (lua_isstring(gL, -6))
 		update_music_name(musicchange);
 	else if (lua_isboolean(gL, -6) && lua_toboolean(gL, -6))
 		hook->status = true;
 
-
+	// output 2: mflags override
 	if (lua_isnumber(gL, -5))
 		*musicchange->mflags = lua_tonumber(gL, -5);
-
+	// output 3: looping override
 	if (lua_isboolean(gL, -4))
 		*musicchange->looping = lua_toboolean(gL, -4);
-
+	// output 4: position override
 	if (lua_isnumber(gL, -3))
 		*musicchange->position = lua_tonumber(gL, -3);
-
+	// output 5: prefadems override
 	if (lua_isnumber(gL, -2))
 		*musicchange->prefadems = lua_tonumber(gL, -2);
-
+	// output 6: fadeinms override
 	if (lua_isnumber(gL, -1))
 		*musicchange->fadeinms = lua_tonumber(gL, -1);
 }
@@ -1318,11 +1318,11 @@ int LUA_HookMusicChange(const char *oldname, struct MusicChange *param)
 	if (prepare_hook(&hook, false, type))
 	{
 		init_hook_call(&hook, 6, res_musicchange);
-		hook.values = 7; 
+		hook.values = 7;/* values pushed later */
 		hook.userdata = param;
 
-		lua_pushstring(gL, oldname); 
-		lua_pushstring(gL, param->newname); 
+		lua_pushstring(gL, oldname);/* the only constant value */
+		lua_pushstring(gL, param->newname);/* semi constant */
 
 		for (k = 0; k < map->numHooks; ++k)
 		{
@@ -1350,9 +1350,9 @@ static void res_playerheight(Hook_State *hook)
 	if (!lua_isnil(gL, -1))
 	{
 		fixed_t returnedheight = lua_tonumber(gL, -1);
-
-
-
+		// 0 height has... strange results, but it's not problematic like negative heights are.
+		// when an object's height is set to a negative number directly with lua, it's forced to 0 instead.
+		// here, I think it's better to ignore negatives so that they don't replace any results of previous hooks!
 		if (returnedheight >= 0)
 			hook->status = returnedheight;
 	}

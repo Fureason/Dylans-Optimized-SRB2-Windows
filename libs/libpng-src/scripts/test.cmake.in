@@ -1,4 +1,4 @@
-
+# test.cmake.in
 
 # Copyright (C) 2016 Glenn Randers-Pehrson
 # Written by Roger Leigh, 2016
@@ -15,7 +15,7 @@ foreach(file ${TEST_FILES})
   list(APPEND NATIVE_TEST_FILES "${native_file}")
 endforeach()
 
-
+# Add the directory containing libpng to the PATH (Windows only)
 if(WIN32)
   get_filename_component(LIBPNG_DIR "${LIBPNG}" PATH)
   file(TO_NATIVE_PATH "${LIBPNG_DIR}" LIBPNG_DIR)

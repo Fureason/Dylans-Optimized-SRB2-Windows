@@ -42,7 +42,7 @@ SDL_Cursor *cursor = NULL;
 SDL_bool relative_mode = SDL_FALSE;
 int highlighted_mode = -1;
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -50,7 +50,7 @@ quit(int rc)
     exit(rc);
 }
 
- 
+/* Draws the modes menu, and stores the mode index under the mouse in highlighted_mode */
 static void
 draw_modes_menu(SDL_Window *window, SDL_Renderer *renderer, SDL_Rect viewport)
 {
@@ -66,7 +66,7 @@ draw_modes_menu(SDL_Window *window, SDL_Renderer *renderer, SDL_Rect viewport)
     int table_top;
     SDL_Point mouse_pos = { -1, -1 };
 
-     
+    /* Get mouse position */
     if (SDL_GetMouseFocus() == window) {
         int window_x, window_y;
         float logical_x, logical_y;
@@ -95,7 +95,7 @@ draw_modes_menu(SDL_Window *window, SDL_Renderer *renderer, SDL_Rect viewport)
 
     table_top = y;
 
-     
+    /* Clear the cached mode under the mouse */
     if (window == SDL_GetMouseFocus()) {
         highlighted_mode = -1;
     }
@@ -110,11 +110,11 @@ draw_modes_menu(SDL_Window *window, SDL_Renderer *renderer, SDL_Rect viewport)
         (void)SDL_snprintf(text, sizeof(text), "%d: %dx%d@%dHz",
                            i, mode.w, mode.h, mode.refresh_rate);
 
-         
+        /* Update column width */
         text_length = (int)SDL_strlen(text);
         column_chars = SDL_max(column_chars, text_length);
 
-         
+        /* Check if under mouse */
         cell_rect.x = x;
         cell_rect.y = y;
         cell_rect.w = text_length * FONT_CHARACTER_SIZE;
@@ -123,7 +123,7 @@ draw_modes_menu(SDL_Window *window, SDL_Renderer *renderer, SDL_Rect viewport)
         if (SDL_PointInRect(&mouse_pos, &cell_rect)) {
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
-             
+            /* Update cached mode under the mouse */
             if (window == SDL_GetMouseFocus()) {
                 highlighted_mode = i;
             }
@@ -135,7 +135,7 @@ draw_modes_menu(SDL_Window *window, SDL_Renderer *renderer, SDL_Rect viewport)
         y += lineHeight;
 
         if (y + lineHeight > (viewport.y + viewport.h)) {
-             
+            /* Advance to next column */
             x += (column_chars + 1) * FONT_CHARACTER_SIZE;
             y = table_top;
             column_chars = 0;
@@ -147,7 +147,7 @@ void loop()
 {
     int i;
     SDL_Event event;
-     
+    /* Check for events */
     while (SDL_PollEvent(&event)) {
         SDLTest_CommonEvent(state, &event, &done);
 
@@ -255,12 +255,12 @@ int main(int argc, char *argv[])
 {
     int i;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     SDL_assert(SDL_arraysize(cursorNames) == SDL_NUM_SYSTEM_CURSORS);
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
         SDL_RenderClear(renderer);
     }
 
-     
+    /* Main render loop */
     done = 0;
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(loop, 0, 1);
@@ -292,8 +292,8 @@ int main(int argc, char *argv[])
     SDL_FreeCursor(cursor);
 
     quit(0);
-     
+    /* keep the compiler happy ... */
     return 0;
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

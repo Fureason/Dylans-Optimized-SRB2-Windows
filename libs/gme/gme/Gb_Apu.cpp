@@ -1,4 +1,4 @@
-
+// Gb_Snd_Emu 0.1.5. http://www.slack.net/~ant/
 
 #include "Gb_Apu.h"
 
@@ -73,8 +73,8 @@ void Gb_Apu::output( Blip_Buffer* center, Blip_Buffer* left, Blip_Buffer* right 
 
 void Gb_Apu::update_volume()
 {
-
-
+	// TODO: doesn't handle differing left/right global volume (support would
+	// require modification to all oscillator code)
 	int data = regs [vol_reg - start_addr];
 	double vol = (max( data & 7, data >> 4 & 7 ) + 1) * volume_unit;
 	square_synth.volume( vol );
@@ -82,19 +82,19 @@ void Gb_Apu::update_volume()
 }
 
 static unsigned char const powerup_regs [0x20] = {
-	0x80,0x3F,0x00,0xFF,0xBF,  
-	0xFF,0x3F,0x00,0xFF,0xBF,  
-	0x7F,0xFF,0x9F,0xFF,0xBF,  
-	0xFF,0xFF,0x00,0x00,0xBF,  
-	0x00,  
-	0x77,  
-	0x80,  
+	0x80,0x3F,0x00,0xFF,0xBF, // square 1
+	0xFF,0x3F,0x00,0xFF,0xBF, // square 2
+	0x7F,0xFF,0x9F,0xFF,0xBF, // wave
+	0xFF,0xFF,0x00,0x00,0xBF, // noise
+	0x00, // left/right enables
+	0x77, // master volume
+	0x80, // power
 	0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF
 };
 
 void Gb_Apu::set_tempo( double t )
 {
-	frame_period = 4194304 / 256;  
+	frame_period = 4194304 / 256; // 256 Hz
 	if ( t != 1.0 )
 		frame_period = blip_time_t (frame_period / t);
 }
@@ -112,15 +112,15 @@ void Gb_Apu::reset()
 	noise.bits = 1;
 	wave.wave_pos = 0;
 	
-
+	// avoid click at beginning
 	regs [vol_reg - start_addr] = 0x77;
 	update_volume();
 	
-	regs [status_reg - start_addr] = 0x01;  
+	regs [status_reg - start_addr] = 0x01; // force power
 	write_register( 0, status_reg, 0x00 );
 	
 	static unsigned char const initial_wave [] = {
-		0x84,0x40,0x43,0xAA,0x2D,0x78,0x92,0x3C,  
+		0x84,0x40,0x43,0xAA,0x2D,0x78,0x92,0x3C, // wave table
 		0x60,0x59,0x59,0xB0,0x34,0xB8,0x2E,0xDA
 	};
 	memcpy( wave.wave, initial_wave, sizeof wave.wave );
@@ -128,7 +128,7 @@ void Gb_Apu::reset()
 
 void Gb_Apu::run_until( blip_time_t end_time )
 {
-	require( end_time >= last_time );  
+	require( end_time >= last_time ); // end_time must not be before previous time
 	if ( end_time == last_time )
 		return;
 	
@@ -138,13 +138,13 @@ void Gb_Apu::run_until( blip_time_t end_time )
 		if ( time > end_time )
 			time = end_time;
 		
-
+		// run oscillators
 		for ( int i = 0; i < osc_count; ++i )
 		{
 			Gb_Osc& osc = *oscs [i];
 			if ( osc.output )
 			{
-				osc.output->set_modified();  
+				osc.output->set_modified(); // TODO: misses optimization opportunities?
 				int playing = false;
 				if ( osc.enabled && osc.volume &&
 						(!(osc.regs [4] & osc.len_enabled_mask) || osc.length) )
@@ -165,7 +165,7 @@ void Gb_Apu::run_until( blip_time_t end_time )
 		
 		next_frame_time += frame_period;
 		
-
+		// 256 Hz actions
 		square1.clock_length();
 		square2.clock_length();
 		wave.clock_length();
@@ -174,14 +174,14 @@ void Gb_Apu::run_until( blip_time_t end_time )
 		frame_count = (frame_count + 1) & 3;
 		if ( frame_count == 0 )
 		{
-
+			// 64 Hz actions
 			square1.clock_envelope();
 			square2.clock_envelope();
 			noise.clock_envelope();
 		}
 		
 		if ( frame_count & 1 )
-			square1.clock_sweep();  
+			square1.clock_sweep(); // 128 Hz action
 	}
 }
 
@@ -214,9 +214,9 @@ void Gb_Apu::write_register( blip_time_t time, unsigned addr, int data )
 	{
 		write_osc( reg / 5, reg, data );
 	}
-	else if ( addr == vol_reg && data != old_reg )  
+	else if ( addr == vol_reg && data != old_reg ) // global volume
 	{
-
+		// return all oscs to 0
 		for ( int i = 0; i < osc_count; i++ )
 		{
 			Gb_Osc& osc = *oscs [i];
@@ -234,14 +234,14 @@ void Gb_Apu::write_register( blip_time_t time, unsigned addr, int data )
 		if ( wave.outputs [3] )
 			other_synth.offset( time, -30, wave.outputs [3] );
 		
-
+		// oscs will update with new amplitude when next run
 	}
 	else if ( addr == 0xFF25 || addr == status_reg )
 	{
 		int mask = (regs [status_reg - start_addr] & 0x80) ? ~0 : 0;
 		int flags = regs [0xFF25 - start_addr] & mask;
 		
-
+		// left/right assignments
 		for ( int i = 0; i < osc_count; i++ )
 		{
 			Gb_Osc& osc = *oscs [i];
@@ -271,7 +271,7 @@ void Gb_Apu::write_register( blip_time_t time, unsigned addr, int data )
 			}
 			else
 			{
-
+				//debug_printf( "APU powered on\n" );
 			}
 		}
 	}

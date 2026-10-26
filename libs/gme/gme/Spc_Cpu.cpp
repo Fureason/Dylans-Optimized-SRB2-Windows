@@ -1,6 +1,6 @@
+// Core SPC emulation: CPU, timers, SMP registers, memory
 
-
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Snes_Spc.h"
 
@@ -23,11 +23,11 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 #define REGS        (m.smp_regs [0])
 #define REGS_IN     (m.smp_regs [1])
 
-
+// (n ? n : 256)
 #define IF_0_THEN_256( n ) ((uint8_t) ((n) - 1) + 1)
 
-
-
+// Note: SPC_MORE_ACCURACY exists mainly so I can run my validation tests, which
+// do crazy echo buffer accesses.
 #ifndef SPC_MORE_ACCURACY
 	#define SPC_MORE_ACCURACY 0
 #endif
@@ -37,7 +37,7 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 #endif
 
 
-
+//// Timers
 
 #if SPC_DISABLE_TEMPO
 	#define TIMER_DIV( t, n ) ((n) >> t->prescaler)
@@ -76,7 +76,7 @@ inline Snes_Spc::Timer* Snes_Spc::run_timer( Timer* t, rel_time_t time )
 }
 
 
-
+//// ROM
 
 void Snes_Spc::enable_rom( int enable )
 {
@@ -86,12 +86,12 @@ void Snes_Spc::enable_rom( int enable )
 		if ( enable )
 			memcpy( m.hi_ram, &RAM [rom_addr], sizeof m.hi_ram );
 		memcpy( &RAM [rom_addr], (enable ? m.rom : m.hi_ram), rom_size );
-
+		// TODO: ROM can still get overwritten when DSP writes to echo buffer
 	}
 }
 
 
-
+//// DSP
 
 #if SPC_LESS_ACCURATE
 	int const max_reg_time = 29;
@@ -180,7 +180,7 @@ inline void Snes_Spc::dsp_write( int data, rel_time_t time )
 }
 
 
-
+//// Memory access extras
 
 #if SPC_MORE_ACCURACY
 	#define MEM_ACCESS( time, addr ) \
@@ -191,8 +191,8 @@ inline void Snes_Spc::dsp_write( int data, rel_time_t time )
 		}\
 	}
 #elif !defined (NDEBUG)
-
-
+	// Debug-only check for read/write within echo buffer, since this might result in
+	// inaccurate emulation due to the DSP not being caught up to the present.
 	
 	bool Snes_Spc::check_echo_access( int addr )
 	{
@@ -219,7 +219,7 @@ inline void Snes_Spc::dsp_write( int data, rel_time_t time )
 #endif
 
 
-
+//// CPU write
 
 #if SPC_MORE_ACCURACY
 static unsigned char const glitch_probs [3] [256] =
@@ -277,11 +277,11 @@ static unsigned char const glitch_probs [3] [256] =
 };
 #endif
 
+// Read/write handlers are divided into multiple functions to keep rarely-used
+// functionality separate so often-used functionality can be optimized better
+// by compiler.
 
-
-
-
-
+// If write isn't preceded by read, data has this added to it
 int const no_read_before_write = 0x2000;
 
 void Snes_Spc::cpu_write_smp_reg_( int data, rel_time_t time, int addr )
@@ -297,24 +297,24 @@ void Snes_Spc::cpu_write_smp_reg_( int data, rel_time_t time, int addr )
 		{
 			t = run_timer( t, time );
 			#if SPC_MORE_ACCURACY
-
-
+				// Insane behavior when target is written just after counter is
+				// clocked and counter matches new period and new period isn't 1, 2, 4, or 8
 				if ( t->divider == (period & 0xFF) &&
 						t->next_time == time + TIMER_MUL( t, 1 ) &&
 						((period - 1) | ~0x0F) & period )
 				{
-
+					//debug_printf( "SPC pathological timer target write\n" );
 					
-
-
+					// If the period is 3, 5, or 9, there's a probability this behavior won't occur,
+					// based on the previous period
 					int prob = 0xFF;
 					int old_period = t->period & 0xFF;
 					if ( period == 3 ) prob = glitch_probs [0] [old_period];
 					if ( period == 5 ) prob = glitch_probs [1] [old_period];
 					if ( period == 9 ) prob = glitch_probs [2] [old_period];
 					
-
-
+					// The glitch suppresses incrementing of one of the counter bits, based on
+					// the lowest set bit in the new period
 					int b = 1;
 					while ( !(period & b) )
 						b <<= 1;
@@ -338,7 +338,7 @@ void Snes_Spc::cpu_write_smp_reg_( int data, rel_time_t time, int addr )
 			run_timer( &m.timers [addr - r_t0out], time - 1 )->counter = 0;
 		break;
 	
-
+	// Registers that act like RAM
 	case 0x8:
 	case 0x9:
 		REGS_IN [addr] = (uint8_t) data;
@@ -350,7 +350,7 @@ void Snes_Spc::cpu_write_smp_reg_( int data, rel_time_t time, int addr )
 		break;
 	
 	case r_control:
-
+		// port clears
 		if ( data & 0x10 )
 		{
 			REGS_IN [r_cpuio0] = 0;
@@ -362,7 +362,7 @@ void Snes_Spc::cpu_write_smp_reg_( int data, rel_time_t time, int addr )
 			REGS_IN [r_cpuio3] = 0;
 		}
 		
-
+		// timers
 		{
 			for ( int i = 0; i < timer_count; i++ )
 			{
@@ -387,7 +387,7 @@ void Snes_Spc::cpu_write_smp_reg_( int data, rel_time_t time, int addr )
 
 void Snes_Spc::cpu_write_smp_reg( int data, rel_time_t time, int addr )
 {
-	if ( addr == r_dspdata )  
+	if ( addr == r_dspdata ) // 99%
 		dsp_write( data, time );
 	else
 		cpu_write_smp_reg_( data, time, addr );
@@ -399,12 +399,12 @@ void Snes_Spc::cpu_write_high( int data, int i, rel_time_t time )
 	{
 		m.hi_ram [i] = (uint8_t) data;
 		if ( m.rom_enabled )
-			RAM [i + rom_addr] = m.rom [i];  
+			RAM [i + rom_addr] = m.rom [i]; // restore overwritten ROM
 	}
 	else
 	{
 		assert( RAM [i + rom_addr] == (uint8_t) data );
-		RAM [i + rom_addr] = cpu_pad_fill;  
+		RAM [i + rom_addr] = cpu_pad_fill; // restore overwritten padding
 		cpu_write( data, i + rom_addr - 0x10000, time );
 	}
 }
@@ -415,50 +415,50 @@ void Snes_Spc::cpu_write( int data, int addr, rel_time_t time )
 {
 	MEM_ACCESS( time, addr )
 	
-
+	// RAM
 	RAM [addr] = (uint8_t) data;
 	int reg = addr - 0xF0;
-	if ( reg >= 0 )  
+	if ( reg >= 0 ) // 64%
 	{
-
-		if ( reg < reg_count )  
+		// $F0-$FF
+		if ( reg < reg_count ) // 87%
 		{
 			REGS [reg] = (uint8_t) data;
 			
-
+			// Ports
 			#ifdef SPC_PORT_WRITE_HOOK
 				if ( (unsigned) (reg - r_cpuio0) < port_count )
 					SPC_PORT_WRITE_HOOK( m.spc_time + time, (reg - r_cpuio0),
 							(uint8_t) data, &REGS [r_cpuio0] );
 			#endif
 			
-
-			if ( reg != 2 && (reg < 4 || reg > 7) )  
+			// Registers other than $F2 and $F4-$F7
+			if ( reg != 2 && (reg < 4 || reg > 7) ) // 36%
 				cpu_write_smp_reg( data, time, reg );
 		}
-
+		// High mem/address wrap-around
 		else
 		{
 			reg -= rom_addr - 0xF0;
-			if ( reg >= 0 )  
+			if ( reg >= 0 ) // 1% in IPL ROM area or address wrapped around
 				cpu_write_high( data, reg, time );
 		}
 	}
 }
 
 
-
+//// CPU read
 
 inline int Snes_Spc::cpu_read_smp_reg( int reg, rel_time_t time )
 {
 	int result = REGS_IN [reg];
 	reg -= r_dspaddr;
-
-	if ( (unsigned) reg <= 1 )  
+	// DSP addr and data
+	if ( (unsigned) reg <= 1 ) // 4% 0xF2 and 0xF3
 	{
 		result = REGS [r_dspaddr];
 		if ( (unsigned) reg == 1 )
-			result = dsp_read( time );  
+			result = dsp_read( time ); // 0xF3
 	}
 	return result;
 }
@@ -467,18 +467,18 @@ int Snes_Spc::cpu_read( int addr, rel_time_t time )
 {
 	MEM_ACCESS( time, addr )
 	
-
+	// RAM
 	int result = RAM [addr];
 	int reg = addr - 0xF0;
-	if ( reg >= 0 )  
+	if ( reg >= 0 ) // 40%
 	{
 		reg -= 0x10;
-		if ( (unsigned) reg >= 0xFF00 )  
+		if ( (unsigned) reg >= 0xFF00 ) // 21%
 		{
 			reg += 0x10 - r_t0out;
 			
-
-			if ( (unsigned) reg < timer_count )  
+			// Timers
+			if ( (unsigned) reg < timer_count ) // 90%
 			{
 				Timer* t = &m.timers [reg];
 				if ( time >= t->next_time )
@@ -486,12 +486,12 @@ int Snes_Spc::cpu_read( int addr, rel_time_t time )
 				result = t->counter;
 				t->counter = 0;
 			}
-
-			else if ( reg < 0 )  
+			// Other registers
+			else if ( reg < 0 ) // 10%
 			{
 				result = cpu_read_smp_reg( reg + r_t0out, time );
 			}
-			else  
+			else // 1%
 			{
 				assert( reg + (r_t0out + 0xF0 - 0x10000) < 0x100 );
 				result = cpu_read( reg + (r_t0out + 0xF0 - 0x10000), time );
@@ -503,9 +503,9 @@ int Snes_Spc::cpu_read( int addr, rel_time_t time )
 }
 
 
+//// Run
 
-
-
+// Prefix and suffix for CPU emulator function
 #define SPC_CPU_RUN_FUNC \
 BOOST::uint8_t* Snes_Spc::run_until_( time_t end_time )\
 {\
@@ -527,37 +527,37 @@ BOOST::uint8_t* Snes_Spc::run_until_( time_t end_time )\
 	return &REGS [r_cpuio0];\
 }
 
-int const cpu_lag_max = 12 - 1;  
+int const cpu_lag_max = 12 - 1; // DIV YA,X takes 12 clocks
 
 void Snes_Spc::end_frame( time_t end_time )
 {
-
-
+	// Catch CPU up to as close to end as possible. If final instruction
+	// would exceed end, does NOT execute it and leaves m.spc_time < end.
 	if ( end_time > m.spc_time )
 		run_until_( end_time );
 	
 	m.spc_time     -= end_time;
 	m.extra_clocks += end_time;
 	
-
-
-
+	// Greatest number of clocks early that emulation can stop early due to
+	// not being able to execute current instruction without going over
+	// allowed time.
 	assert( -cpu_lag_max <= m.spc_time && m.spc_time <= 0 );
 	
-
+	// Catch timers up to CPU
 	for ( int i = 0; i < timer_count; i++ )
 		run_timer( &m.timers [i], 0 );
 	
-
+	// Catch DSP up to CPU
 	if ( m.dsp_time < 0 )
 	{
 		RUN_DSP( 0, max_reg_time );
 	}
 	
-
+	// Save any extra samples beyond what should be generated
 	if ( m.buf_begin )
 		save_extra();
 }
 
-
+// Inclusion here allows static memory access functions and better optimization
 #include "Spc_Cpu.h"

@@ -1,4 +1,4 @@
- 
+/* $Id: miniupnpcmodule.c,v 1.38 2021/11/09 18:46:49 nanard Exp $*/
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * Project : miniupnp
  * Author : Thomas BERNARD
@@ -17,7 +17,7 @@
 #include <winsock2.h>
 #endif
 
- 
+/* for compatibility with Python < 2.4 */
 #ifndef Py_RETURN_NONE
 #define Py_RETURN_NONE return Py_INCREF(Py_None), Py_None
 #endif
@@ -30,7 +30,7 @@
 #define Py_RETURN_FALSE return Py_INCREF(Py_False), Py_False
 #endif
 
- 
+/* for compatibility with Python < 3.0 */
 #ifndef PyVarObject_HEAD_INIT
 #define PyVarObject_HEAD_INIT(type, size) \
     PyObject_HEAD_INIT(type) size,
@@ -42,13 +42,13 @@
 
 typedef struct {
     PyObject_HEAD
-     
+    /* Type-specific fields go here. */
 	struct UPNPDev * devlist;
 	struct UPNPUrls urls;
 	struct IGDdatas data;
-	unsigned int discoverdelay;	 
-	unsigned int localport;		 
-	char lanaddr[40];	 
+	unsigned int discoverdelay;	/* value passed to upnpDiscover() */
+	unsigned int localport;		/* value passed to upnpDiscover() */
+	char lanaddr[40];	/* our ip address on the LAN */
 	char * multicastif;
 	char * minissdpdsocket;
 } UPnPObject;
@@ -58,10 +58,10 @@ static PyMemberDef UPnP_members[] = {
 	 READONLY, "ip address on the LAN"
 	},
 	{"discoverdelay", T_UINT, offsetof(UPnPObject, discoverdelay),
-	 0 , "value in ms used to wait for SSDP responses"
+	 0/*READWRITE*/, "value in ms used to wait for SSDP responses"
 	},
 	{"localport", T_UINT, offsetof(UPnPObject, localport),
-	 0 ,
+	 0/*READWRITE*/,
 	    "If localport is set to UPNP_LOCAL_PORT_SAME(1) "
 	    "SSDP packets will be sent from the source port "
 	    "1900 (same as destination port), if set to "
@@ -69,7 +69,7 @@ static PyMemberDef UPnP_members[] = {
 	    "port, any other value will be attempted as the "
 	    "source port"
 	},
-	 
+	/* T_STRING is always readonly :( */
 	{"multicastif", T_STRING, offsetof(UPnPObject, multicastif),
 	 0, "IP of the network interface to be used for multicast operations"
 	},
@@ -131,15 +131,15 @@ UPnP_discover(UPnPObject *self)
 		self->devlist = 0;
 	}
 	Py_BEGIN_ALLOW_THREADS
-	self->devlist = upnpDiscover((int)self->discoverdelay ,
+	self->devlist = upnpDiscover((int)self->discoverdelay/*timeout in ms*/,
 	                             self->multicastif,
 	                             self->minissdpdsocket,
 	                             (int)self->localport,
-	                             0 ,
-	                             2 ,
+	                             0/*ip v6*/,
+	                             2/* TTL */,
 	                             &error);
 	Py_END_ALLOW_THREADS
-	 
+	/* Py_RETURN_NONE ??? */
 	if (self->devlist != NULL) {
 		struct UPNPDev * dev;
 		int i = 0;
@@ -176,7 +176,7 @@ Py_END_ALLOW_THREADS
 	}
 	else
 	{
-		 
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, "No UPnP device discovered");
 		return NULL;
 	}
@@ -262,7 +262,7 @@ Py_END_ALLOW_THREADS
 		return Py_BuildValue("(s,i,s)", status, (int)uptime, lastconnerror);
 #endif
 	} else {
-		 
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, strupnperror(r));
 		return NULL;
 	}
@@ -282,7 +282,7 @@ Py_END_ALLOW_THREADS
 	if(r==UPNPCOMMAND_SUCCESS) {
 		return Py_BuildValue("s", connectionType);
 	} else {
-		 
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, strupnperror(r));
 		return NULL;
 	}
@@ -302,15 +302,15 @@ Py_END_ALLOW_THREADS
 	if(r==UPNPCOMMAND_SUCCESS) {
 		return Py_BuildValue("s", externalIPAddress);
 	} else {
-		 
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, strupnperror(r));
 		return NULL;
 	}
 }
 
-                                                                           
-                                            
-                                
+/* AddPortMapping(externalPort, protocol, internalHost, internalPort, desc,
+ *                remoteHost, leaseDuration)
+ * protocol is 'UDP' or 'TCP' */
 static PyObject *
 UPnP_addportmapping(UPnPObject *self, PyObject *args)
 {
@@ -347,18 +347,18 @@ Py_END_ALLOW_THREADS
 	}
 	else
 	{
-
-
-
-		 
+		// TODO: RAISE an Exception. See upnpcommands.h for errors codes.
+		// upnperrors.c
+		//Py_RETURN_FALSE;
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, strupnperror(r));
 		return NULL;
 	}
 }
 
-                                                                              
-                                
-                                
+/* AddAnyPortMapping(externalPort, protocol, internalHost, internalPort, desc,
+ *                   remoteHost)
+ * protocol is 'UDP' or 'TCP' */
 static PyObject *
 UPnP_addanyportmapping(UPnPObject *self, PyObject *args)
 {
@@ -385,15 +385,15 @@ Py_END_ALLOW_THREADS
 	if(r==UPNPCOMMAND_SUCCESS) {
 		return Py_BuildValue("i", atoi(reservedPort));
 	} else {
-		 
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, strupnperror(r));
 		return NULL;
 	}
 }
 
 
-                                                   
-                          
+/* DeletePortMapping(extPort, proto, removeHost='')
+ * proto = 'UDP', 'TCP' */
 static PyObject *
 UPnP_deleteportmapping(UPnPObject *self, PyObject *args)
 {
@@ -412,14 +412,14 @@ Py_END_ALLOW_THREADS
 	if(r==UPNPCOMMAND_SUCCESS) {
 		Py_RETURN_TRUE;
 	} else {
-		 
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, strupnperror(r));
 		return NULL;
 	}
 }
 
-                                                        
-                          
+/* DeletePortMappingRange(extPort, proto, removeHost='')
+ * proto = 'UDP', 'TCP' */
 static PyObject *
 UPnP_deleteportmappingrange(UPnPObject *self, PyObject *args)
 {
@@ -443,7 +443,7 @@ Py_END_ALLOW_THREADS
 	if(r==UPNPCOMMAND_SUCCESS) {
 		Py_RETURN_TRUE;
 	} else {
-		 
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, strupnperror(r));
 		return NULL;
 	}
@@ -466,14 +466,14 @@ Py_END_ALLOW_THREADS
 		return Py_BuildValue("i", (int)n);
 #endif
 	} else {
-		 
+		/* TODO: have our own exception type ! */
 		PyErr_SetString(PyExc_Exception, strupnperror(r));
 		return NULL;
 	}
 }
 
-                                                      
-                            
+/* GetSpecificPortMapping(ePort, proto, remoteHost='')
+ * proto = 'UDP' or 'TCP' */
 static PyObject *
 UPnP_getspecificportmapping(UPnPObject *self, PyObject *args)
 {
@@ -513,7 +513,7 @@ Py_END_ALLOW_THREADS
 	}
 }
 
- 
+/* GetGenericPortMapping(index) */
 static PyObject *
 UPnP_getgenericportmapping(UPnPObject *self, PyObject *args)
 {
@@ -528,7 +528,7 @@ UPnP_getgenericportmapping(UPnPObject *self, PyObject *args)
 	char desc[80];
 	char enabled[6];
 	char rHost[64];
-	char duration[16];	 
+	char duration[16];	/* lease duration */
 	unsigned int dur;
 	if(!PyArg_ParseTuple(args, "i", &i))
 		return NULL;
@@ -565,7 +565,7 @@ Py_END_ALLOW_THREADS
 	}
 }
 
- 
+/* miniupnpc.UPnP object Method Table */
 static PyMethodDef UPnP_methods[] = {
     {"discover", (PyCFunction)UPnP_discover, METH_NOARGS,
      "discover UPnP IGD devices on the network"
@@ -615,76 +615,76 @@ static PyMethodDef UPnP_methods[] = {
 	{"getgenericportmapping", (PyCFunction)UPnP_getgenericportmapping, METH_VARARGS,
 	 "get all details about the port mapping at index"
 	},
-    {NULL}   
+    {NULL}  /* Sentinel */
 };
 
 static PyTypeObject UPnPType = {
     PyVarObject_HEAD_INIT(NULL,
-    0)                          
-    "miniupnpc.UPnP",           
-    sizeof(UPnPObject),         
-    0,                          
-    (destructor)UPnPObject_dealloc, 
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    Py_TPFLAGS_DEFAULT,         
-    "UPnP objects",             
-    0,		                    
-    0,		                    
-    0,		                    
-    0,		                    
-    0,		                    
-    0,		                    
-    UPnP_methods,               
-    UPnP_members,               
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    0,                          
-    (initproc)UPnP_init,        
-    0,                          
+    0)                         /*ob_size*/
+    "miniupnpc.UPnP",          /*tp_name*/
+    sizeof(UPnPObject),        /*tp_basicsize*/
+    0,                         /*tp_itemsize*/
+    (destructor)UPnPObject_dealloc,/*tp_dealloc*/
+    0,                         /*tp_print*/
+    0,                         /*tp_getattr*/
+    0,                         /*tp_setattr*/
+    0,                         /*tp_compare*/
+    0,                         /*tp_repr*/
+    0,                         /*tp_as_number*/
+    0,                         /*tp_as_sequence*/
+    0,                         /*tp_as_mapping*/
+    0,                         /*tp_hash */
+    0,                         /*tp_call*/
+    0,                         /*tp_str*/
+    0,                         /*tp_getattro*/
+    0,                         /*tp_setattro*/
+    0,                         /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT,        /*tp_flags*/
+    "UPnP objects",            /* tp_doc */
+    0,		                   /* tp_traverse */
+    0,		                   /* tp_clear */
+    0,		                   /* tp_richcompare */
+    0,		                   /* tp_weaklistoffset */
+    0,		                   /* tp_iter */
+    0,		                   /* tp_iternext */
+    UPnP_methods,              /* tp_methods */
+    UPnP_members,              /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)UPnP_init,       /* tp_init */
+    0,                         /* tp_alloc */
 #ifndef _WIN32
-    PyType_GenericNew,        
+    PyType_GenericNew,/*UPnP_new,*/      /* tp_new */
 #else
-    0,                          
+    0,                         /* tp_new */
 #endif
-    0,                          
+    0,                         /* tp_free */
 };
 
- 
+/* module methods */
 static PyMethodDef miniupnpc_methods[] = {
-    {NULL}   
+    {NULL}  /* Sentinel */
 };
 
 #if PY_MAJOR_VERSION >= 3
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "miniupnpc",      
-    "miniupnpc module.",   
-    -1,                   
-    miniupnpc_methods,     
-    NULL,                 
-    NULL,                 
-    NULL,                 
-    NULL,                 
+    "miniupnpc",     /* m_name */
+    "miniupnpc module.",  /* m_doc */
+    -1,                  /* m_size */
+    miniupnpc_methods,    /* m_methods */
+    NULL,                /* m_reload */
+    NULL,                /* m_traverse */
+    NULL,                /* m_clear */
+    NULL,                /* m_free */
 };
 #endif
 
-#ifndef PyMODINIT_FUNC	 
+#ifndef PyMODINIT_FUNC	/* declarations for DLL import/export */
 #define PyMODINIT_FUNC void
 #endif
 
@@ -698,13 +698,13 @@ initminiupnpc(void)
     PyObject* m;
 
 #ifdef _WIN32
-     
+    /* initialize Winsock. */
     WSADATA wsaData;
     int nResult = WSAStartup(MAKEWORD(2,2), &wsaData);
 	if (nResult != 0)
 	{
-		                                                    
-                                                    
+		/* error code could be WSASYSNOTREADY WSASYSNOTREADY
+		 * WSASYSNOTREADY WSASYSNOTREADY WSASYSNOTREADY */
 #if PY_MAJOR_VERSION >= 3
         return 0;
 #else

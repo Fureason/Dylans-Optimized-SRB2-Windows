@@ -1,6 +1,6 @@
+// Konami SCC sound chip emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef KSS_SCC_APU_H
 #define KSS_SCC_APU_H
 
@@ -10,32 +10,32 @@
 
 class Scc_Apu {
 public:
-
+	// Set buffer to generate all sound into, or disable sound if NULL
 	void output( Blip_Buffer* );
 	
-
+	// Reset sound chip
 	void reset();
 	
-
+	// Write to register at specified time
 	enum { reg_count = 0x90 };
 	void write( blip_time_t time, int reg, int data );
 	
-
-
-
+	// Run sound to specified time, end current time frame, then start a new
+	// time frame at time 0. Time frames have no effect on emulation and each
+	// can be whatever length is convenient.
 	void end_frame( blip_time_t length );
 
-
+// Additional features
 	
-
-
+	// Set sound output of specific oscillator to buffer, where index is
+	// 0 to 4. If buffer is NULL, the specified oscillator is muted.
 	enum { osc_count = 5 };
 	void osc_output( int index, Blip_Buffer* );
 	
-
+	// Set overall volume (default is 1.0)
 	void volume( double );
 	
-
+	// Set treble equalization (see documentation)
 	void treble_eq( blip_eq_t const& );
 	
 public:

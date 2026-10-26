@@ -1,9 +1,9 @@
 LIBRARY
-
+; miniupnpc library
    miniupnpc
 
 EXPORTS
-
+; miniupnpc
    upnpDiscover
    upnpDiscoverDevice
    upnpDiscoverDevices
@@ -14,10 +14,10 @@ EXPORTS
    UPNP_GetIGDFromUrl
    GetUPNPUrls
    FreeUPNPUrls
-
+; miniwget
    miniwget
    miniwget_getaddr
-
+; upnpcommands
    UPNP_GetTotalBytesSent
    UPNP_GetTotalBytesReceived
    UPNP_GetTotalPacketsSent
@@ -41,8 +41,8 @@ EXPORTS
    UPNP_DeletePinhole
    UPNP_GetFirewallStatus
    UPNP_GetOutboundPinholeTimeout
-
+; upnperrors
    strupnperror
-
+; portlistingparse
    ParsePortListing
    FreePortListing

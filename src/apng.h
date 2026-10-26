@@ -55,7 +55,7 @@ apng_infop apng_create_info_struct (png_structp png_ptr);
 void apng_destroy_info_struct (png_structp png_ptr,
 		apng_infopp info_ptr_ptr);
 
- 
+/* Call the following functions in place of the libpng counterparts. */
 
 png_uint_32 apng_set_acTL (png_structp png_ptr, png_infop info_ptr,
 		apng_infop ainfo_ptr,
@@ -77,4 +77,4 @@ void apng_set_write_fn (png_structp png_ptr, apng_infop ainfo_ptr,
 void apng_set_set_acTL_fn (png_structp png_ptr, apng_infop ainfo_ptr,
 		apng_set_acTL_ptr set_acTL_fn);
 
-#endif 
+#endif/* APNG_H */

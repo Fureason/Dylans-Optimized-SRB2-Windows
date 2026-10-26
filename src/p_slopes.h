@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  p_slopes.c
+/// \brief ZDoom + Eternity Engine Slopes, ported and enhanced by Kalaron
 
 #ifndef P_SLOPES_H__
 #define P_SLOPES_H__
@@ -55,33 +55,33 @@ void P_CalculateSlopeVectors(pslope_t *slope);
 void P_InitSlopes(void);
 void P_SpawnSlopes(const boolean fromsave);
 
-
-
-
-
-
+//
+// P_CopySectorSlope
+//
+// Searches through tagged sectors and copies
+//
 void P_CopySectorSlope(line_t *line);
 
 pslope_t *P_SlopeById(UINT16 id);
 
-
+// Returns the height of the sloped plane at (x, y) as a fixed_t
 fixed_t P_GetSlopeZAt(const pslope_t *slope, fixed_t x, fixed_t y);
 
-
+// Like P_GetSlopeZAt but falls back to z if slope is NULL
 fixed_t P_GetZAt(const pslope_t *slope, fixed_t x, fixed_t y, fixed_t z);
 
-
+// Returns the height of the sector at (x, y)
 fixed_t P_GetSectorFloorZAt  (const sector_t *sector, fixed_t x, fixed_t y);
 fixed_t P_GetSectorCeilingZAt(const sector_t *sector, fixed_t x, fixed_t y);
 
-
+// Returns the height of the FOF at (x, y)
 fixed_t P_GetFFloorTopZAt   (const ffloor_t *ffloor, fixed_t x, fixed_t y);
 fixed_t P_GetFFloorBottomZAt(const ffloor_t *ffloor, fixed_t x, fixed_t y);
 
-
+// Returns the height of the light list at (x, y)
 fixed_t P_GetLightZAt(const lightlist_t *light, fixed_t x, fixed_t y);
 
-
+// Lots of physics-based bullshit
 void P_QuantizeMomentumToSlope(vector3_t *momentum, pslope_t *slope);
 void P_ReverseQuantizeMomentumToSlope(vector3_t *momentum, pslope_t *slope);
 void P_SlopeLaunch(mobj_t *mo);
@@ -91,7 +91,7 @@ void P_ButteredSlope(mobj_t *mo);
 
 pslope_t *P_MakeSlopeViaEquationConstants(const double a, const double b, const double c, const double d);
 
-
+/// Dynamic plane type enum for the thinker. Will have a different functionality depending on this.
 typedef enum {
 	DP_FRONTFLOOR,
 	DP_FRONTCEIL,
@@ -99,7 +99,7 @@ typedef enum {
 	DP_BACKCEIL,
 } dynplanetype_t;
 
-
+/// Permit slopes to be dynamically altered through a thinker.
 typedef struct
 {
 	thinker_t thinker;
@@ -122,4 +122,4 @@ typedef struct
 
 void T_DynamicSlopeLine (dynlineplanethink_t* th);
 void T_DynamicSlopeVert (dynvertexplanethink_t* th);
-#endif  
+#endif // #ifndef P_SLOPES_H__

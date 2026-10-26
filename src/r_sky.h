@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_sky.h
+/// \brief Sky rendering
 
 #ifndef __R_SKY__
 #define __R_SKY__
@@ -20,10 +20,10 @@
 #pragma interface
 #endif
 
-
+/// \brief SKY, store the number for name.
 #define SKYFLATNAME "F_SKY1"
 
-
+/// \brief The sky map is 256*128*4 maps.
 #define ANGLETOSKYSHIFT 22
 
 extern INT32 skytexture, skytexturemid;
@@ -33,7 +33,7 @@ extern INT32 skyflatnum;
 extern INT32 levelskynum;
 extern INT32 globallevelskynum;
 
-
+// call after skytexture is set to adapt for old/new skies
 void R_SetupSkyDraw(void);
 
 void R_SetSkyScale(void);

@@ -22,25 +22,25 @@ static float clip3(float x, float y, float z)
 static void RGBtoYUV(const Uint8 *rgb, int *yuv, SDL_YUV_CONVERSION_MODE mode, int monochrome, int luminance)
 {
     if (mode == SDL_YUV_CONVERSION_JPEG) {
-         
+        /* Full range YUV */
         yuv[0] = (int)(0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]);
         yuv[1] = (int)((rgb[2] - yuv[0]) * 0.565 + 128);
         yuv[2] = (int)((rgb[0] - yuv[0]) * 0.713 + 128);
     } else {
-
-
-
-
-
-
+        // This formula is from Microsoft's documentation:
+        // https://msdn.microsoft.com/en-us/library/windows/desktop/dd206750(v=vs.85).aspx
+        // L = Kr * R + Kb * B + (1 - Kr - Kb) * G
+        // Y =                   SDL_floor(2^(M-8) * (219*(L-Z)/S + 16) + 0.5);
+        // U = clip3(0, (2^M)-1, SDL_floor(2^(M-8) * (112*(B-L) / ((1-Kb)*S) + 128) + 0.5));
+        // V = clip3(0, (2^M)-1, SDL_floor(2^(M-8) * (112*(R-L) / ((1-Kr)*S) + 128) + 0.5));
         float S, Z, R, G, B, L, Kr, Kb, Y, U, V;
 
         if (mode == SDL_YUV_CONVERSION_BT709) {
-             
+            /* BT.709 */
             Kr = 0.2126f;
             Kb = 0.0722f;
         } else {
-             
+            /* BT.601 */
             Kr = 0.299f;
             Kb = 0.114f;
         }
@@ -137,7 +137,7 @@ static void ConvertRGBtoPlanar2x2(Uint32 format, Uint8 *src, int pitch, Uint8 *o
             *V = (Uint8)SDL_floorf((yuv[0][2] + yuv[1][2] + yuv[2][2] + yuv[3][2]) / 4.0f + 0.5f);
             V += UV_advance;
         }
-         
+        /* Last column */
         if (x == (w - 1)) {
             RGBtoYUV(rgb1, yuv[0], mode, monochrome, luminance);
             rgb1 += 3;
@@ -158,7 +158,7 @@ static void ConvertRGBtoPlanar2x2(Uint32 format, Uint8 *src, int pitch, Uint8 *o
         rgb1 += rgb_row_advance;
         rgb2 += rgb_row_advance;
     }
-     
+    /* Last row */
     if (y == (h - 1)) {
         for (x = 0; x < (w - 1); x += 2) {
             RGBtoYUV(rgb1, yuv[0], mode, monochrome, luminance);
@@ -175,7 +175,7 @@ static void ConvertRGBtoPlanar2x2(Uint32 format, Uint8 *src, int pitch, Uint8 *o
             *V = (Uint8)SDL_floorf((yuv[0][2] + yuv[1][2]) / 2.0f + 0.5f);
             V += UV_advance;
         }
-         
+        /* Last column */
         if (x == (w - 1)) {
             RGBtoYUV(rgb1, yuv[0], mode, monochrome, luminance);
             *Y1++ = (Uint8)yuv[0][0];
@@ -241,7 +241,7 @@ static void ConvertRGBtoPacked4(Uint32 format, Uint8 *src, int pitch, Uint8 *out
             *V = (Uint8)SDL_floorf((yuv[0][2] + yuv[1][2]) / 2.0f + 0.5f);
             V += 4;
         }
-         
+        /* Last column */
         if (x == (w - 1)) {
             RGBtoYUV(rgb, yuv[0], mode, monochrome, luminance);
             rgb += 3;
@@ -295,4 +295,4 @@ int CalculateYUVPitch(Uint32 format, int width)
     }
 }
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

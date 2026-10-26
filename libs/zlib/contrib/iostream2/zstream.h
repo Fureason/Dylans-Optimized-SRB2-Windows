@@ -19,10 +19,10 @@
 #ifndef ZSTREAM__H
 #define ZSTREAM__H
 
-  
-                                                                              
-                                                            
-   
+/*
+ * zstream.h - C++ interface to the 'zlib' general purpose compression library
+ * $Id: zstream.h 1.1 1997-06-25 12:00:56+02 tyge Exp tyge $
+ */
 
 #include <strstream.h>
 #include <string.h>
@@ -46,7 +46,7 @@ private:
     struct Val { unsigned char byte; size_t word; } val;
 };
 
-
+//  ----------------------------- izstream -----------------------------
 
 class izstream
 {
@@ -56,12 +56,12 @@ class izstream
         izstream(const char* name) : m_fp(0) { open(name); }
         ~izstream() { close(); }
 
-                                               
-                                                                         
-                                                                       
-                                                                       
-                                                                   
-           
+        /* Opens a gzip (.gz) file for reading.
+         * open() can be used to read a file which is not in gzip format;
+         * in this case read() will directly read from the file without
+         * decompression. errno can be checked to distinguish two error
+         * cases (if errno is zero, the zlib error is Z_MEM_ERROR).
+         */
         void open(const char* name) {
             if (m_fp) close();
             m_fp = ::gzopen(name, "rb");
@@ -73,27 +73,27 @@ class izstream
             m_fp = ::gzdopen(fileno(fp), "rb");
         }
 
-                                                                             
-                                                                             
-                                                              
-           
+        /* Flushes all pending input if necessary, closes the compressed file
+         * and deallocates all the (de)compression state. The return value is
+         * the zlib error number (see function error() below).
+         */
         int close() {
             int r = ::gzclose(m_fp);
             m_fp = 0; return r;
         }
 
-                                                                          
-           
+        /* Binary read the given number of bytes from the compressed file.
+         */
         int read(void* buf, size_t len) {
             return ::gzread(m_fp, buf, len);
         }
 
-                                                                             
-                                                                           
-                                                                                
-                                                                         
-                                       
-           
+        /* Returns the error message for the last error which occurred on the
+         * given compressed file. errnum is set to zlib error number. If an
+         * error occurred in the file system and not in the compression library,
+         * errnum is set to Z_ERRNO and the application may consult errno
+         * to get the exact error code.
+         */
         const char* error(int* errnum) {
             return ::gzerror(m_fp, errnum);
         }
@@ -104,21 +104,21 @@ class izstream
         gzFile m_fp;
 };
 
-  
-                                                                       
-                                                                             
-                            
-                                                         
-                                     
-   
+/*
+ * Binary read the given (array of) object(s) from the compressed file.
+ * If the input file was not in gzip format, read() copies the objects number
+ * of bytes into the buffer.
+ * returns the number of uncompressed bytes actually read
+ * (0 for end of file, -1 for error).
+ */
 template <class T, class Items>
 inline int read(izstream& zs, T* x, Items items) {
     return ::gzread(zs.fp(), x, items*sizeof(T));
 }
 
-  
-                                      
-   
+/*
+ * Binary input with the '>' operator.
+ */
 template <class T>
 inline izstream& operator>(izstream& zs, T& x) {
     ::gzread(zs.fp(), &x, sizeof(T));
@@ -132,9 +132,9 @@ inline zstringlen::zstringlen(izstream& zs) {
     else val.word = val.byte;
 }
 
-  
-                                                            
-   
+/*
+ * Read length of string + the string with the '>' operator.
+ */
 inline izstream& operator>(izstream& zs, char* x) {
     zstringlen len(zs);
     ::gzread(zs.fp(), x, len.value());
@@ -150,7 +150,7 @@ inline char* read_string(izstream& zs) {
     return x;
 }
 
-
+// ----------------------------- ozstream -----------------------------
 
 class ozstream
 {
@@ -169,11 +169,11 @@ class ozstream
             close();
         }
 
-                                               
-                                                            
-                                                              
-                                                             
-           
+        /* Opens a gzip (.gz) file for writing.
+         * The compression level parameter should be in 0..9
+         * errno can be checked to distinguish two error cases
+         * (if errno is zero, the zlib error is Z_MEM_ERROR).
+         */
         void open(const char* name, int level = Z_DEFAULT_COMPRESSION) {
             char mode[4] = "wb\0";
             if (level != Z_DEFAULT_COMPRESSION) mode[2] = '0'+level;
@@ -181,8 +181,8 @@ class ozstream
             m_fp = ::gzopen(name, mode);
         }
 
-                                    
-           
+        /* open from a FILE pointer.
+         */
         void open(FILE* fp, int level = Z_DEFAULT_COMPRESSION) {
             SET_BINARY_MODE(fp);
             char mode[4] = "wb\0";
@@ -191,10 +191,10 @@ class ozstream
             m_fp = ::gzdopen(fileno(fp), mode);
         }
 
-                                                                              
-                                                                             
-                                                              
-           
+        /* Flushes all pending output if necessary, closes the compressed file
+         * and deallocates all the (de)compression state. The return value is
+         * the zlib error number (see function error() below).
+         */
         int close() {
             if (m_os) {
                 ::gzwrite(m_fp, m_os->str(), m_os->pcount());
@@ -203,30 +203,30 @@ class ozstream
             int r = ::gzclose(m_fp); m_fp = 0; return r;
         }
 
-                                                                           
-           
+        /* Binary write the given number of bytes into the compressed file.
+         */
         int write(const void* buf, size_t len) {
             return ::gzwrite(m_fp, (voidp) buf, len);
         }
 
-                                                                             
-                                                                               
-                                                                             
-                                                                            
-                                                                               
-                               
-           
+        /* Flushes all pending output into the compressed file. The parameter
+         * _flush is as in the deflate() function. The return value is the zlib
+         * error number (see function gzerror below). flush() returns Z_OK if
+         * the flush_ parameter is Z_FINISH and all output could be flushed.
+         * flush() should be called only when strictly necessary because it can
+         * degrade compression.
+         */
         int flush(int _flush) {
             os_flush();
             return ::gzflush(m_fp, _flush);
         }
 
-                                                                             
-                                                                           
-                                                                                
-                                                                         
-                                       
-           
+        /* Returns the error message for the last error which occurred on the
+         * given compressed file. errnum is set to zlib error number. If an
+         * error occurred in the file system and not in the compression library,
+         * errnum is set to Z_ERRNO and the application may consult errno
+         * to get the exact error code.
+         */
         const char* error(int* errnum) {
             return ::gzerror(m_fp, errnum);
         }
@@ -255,19 +255,19 @@ class ozstream
         ostrstream* m_os;
 };
 
-  
-                                                                        
-                                                            
-                        
-   
+/*
+ * Binary write the given (array of) object(s) into the compressed file.
+ * returns the number of uncompressed bytes actually written
+ * (0 in case of error).
+ */
 template <class T, class Items>
 inline int write(ozstream& zs, const T* x, Items items) {
     return ::gzwrite(zs.fp(), (voidp) x, items*sizeof(T));
 }
 
-  
-                                       
-   
+/*
+ * Binary output with the '<' operator.
+ */
 template <class T>
 inline ozstream& operator<(ozstream& zs, const T& x) {
     ::gzwrite(zs.fp(), (voidp) &x, sizeof(T));
@@ -280,9 +280,9 @@ inline zstringlen::zstringlen(ozstream& zs, const char* x) {
     else zs < val;
 }
 
-  
-                                                             
-   
+/*
+ * Write length of string + the string with the '<' operator.
+ */
 inline ozstream& operator<(ozstream& zs, const char* x) {
     zstringlen len(zs, x);
     ::gzwrite(zs.fp(), (voidp) x, len.value());
@@ -295,9 +295,9 @@ inline ozstream& operator<(ozstream& zs, char* const& x) {
 }
 #endif
 
-  
-                                    
-   
+/*
+ * Ascii write with the << operator;
+ */
 template <class T>
 inline ostream& operator<<(ozstream& zs, const T& x) {
     zs.os_flush();

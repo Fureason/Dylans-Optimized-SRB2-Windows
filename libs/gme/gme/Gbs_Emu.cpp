@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Gbs_Emu.h"
 
@@ -52,7 +52,7 @@ void Gbs_Emu::unload()
 	Music_Emu::unload();
 }
 
-
+// Track info
 
 static void copy_gbs_fields( Gbs_Emu::header_t const& h, track_info_t* out )
 {
@@ -103,7 +103,7 @@ static Music_Emu* new_gbs_file() { return BLARGG_NEW Gbs_File; }
 static gme_type_t_ const gme_gbs_type_ = { "Game Boy", 0, &new_gbs_emu, &new_gbs_file, "GBS", 1 };
 gme_type_t const gme_gbs_type = &gme_gbs_type_;
 
-
+// Setup
 
 blargg_err_t Gbs_Emu::load_( Data_Reader& in )
 {
@@ -141,20 +141,20 @@ void Gbs_Emu::set_voice( int i, Blip_Buffer* c, Blip_Buffer* l, Blip_Buffer* r )
 	apu.osc_output( i, c, l, r );
 }
 
+// Emulation
 
-
-
+// see gb_cpu_io.h for read/write functions
 
 void Gbs_Emu::set_bank( int n )
 {
 	blargg_long addr = rom.mask_addr( n * (blargg_long) bank_size );
 	if ( addr == 0 && rom.size() > bank_size )
 	{
-
-
-
+		// TODO: what is the correct behavior? Current Game & Watch Gallery
+		// rip requires that this have no effect or set to bank 1.
+		//debug_printf( "Selected ROM bank 0\n" );
 		return;
-
+		//n = 1;
 	}
 	cpu::map_code( bank_size, bank_size, rom.at_addr( addr ) );
 }
@@ -169,20 +169,20 @@ void Gbs_Emu::update_timer()
 	}
 	else
 	{
-		play_period = 70224;  
+		play_period = 70224; // 59.73 Hz
 	}
 	if ( tempo() != 1.0 )
 		play_period = blip_time_t (play_period / tempo());
 }
 
 static BOOST::uint8_t const sound_data [Gb_Apu::register_count] = {
-	0x80, 0xBF, 0x00, 0x00, 0xBF,  
-	0x00, 0x3F, 0x00, 0x00, 0xBF,  
-	0x7F, 0xFF, 0x9F, 0x00, 0xBF,  
-	0x00, 0xFF, 0x00, 0x00, 0xBF,  
-	0x77, 0xF3, 0xF1,  
-	0, 0, 0, 0, 0, 0, 0, 0, 0,  
-	0xAC, 0xDD, 0xDA, 0x48, 0x36, 0x02, 0xCF, 0x16,  
+	0x80, 0xBF, 0x00, 0x00, 0xBF, // square 1
+	0x00, 0x3F, 0x00, 0x00, 0xBF, // square 2
+	0x7F, 0xFF, 0x9F, 0x00, 0xBF, // wave
+	0x00, 0xFF, 0x00, 0x00, 0xBF, // noise
+	0x77, 0xF3, 0xF1, // vin/volume, status, power mode
+	0, 0, 0, 0, 0, 0, 0, 0, 0, // unused
+	0xAC, 0xDD, 0xDA, 0x48, 0x36, 0x02, 0xCF, 0x16, // waveform data
 	0x2C, 0x04, 0xE5, 0x2C, 0xAC, 0xDD, 0xDA, 0x48
 };
 
@@ -207,7 +207,7 @@ blargg_err_t Gbs_Emu::start_track_( int track )
 	memset( ram, 0, 0x4000 );
 	memset( ram + 0x4000, 0xFF, 0x1F80 );
 	memset( ram + 0x5F80, 0, sizeof ram - 0x5F80 );
-	ram [hi_page] = 0;  
+	ram [hi_page] = 0; // joypad reads back as 0
 	
 	apu.reset();
 	for ( int i = 0; i < (int) sizeof sound_data; i++ )
@@ -262,7 +262,7 @@ blargg_err_t Gbs_Emu::run_clocks( blip_time_t& duration, int )
 				next_play += play_period;
 				cpu_jsr( get_le16( header_.play_addr ) );
 				GME_FRAME_HOOK( this );
-
+				// TODO: handle timer rates different than 60 Hz
 			}
 			else if ( cpu::r.pc > 0xFFFF )
 			{
@@ -282,7 +282,7 @@ blargg_err_t Gbs_Emu::run_clocks( blip_time_t& duration, int )
 	
 	duration = cpu_time;
 	next_play -= cpu_time;
-	if ( next_play < 0 )  
+	if ( next_play < 0 ) // could go negative if routine is taking too long to return
 		next_play = 0;
 	apu.end_frame( cpu_time );
 	

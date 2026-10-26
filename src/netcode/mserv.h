@@ -8,15 +8,15 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  mserv.h
+/// \brief Header file for the master server routines
 
 #ifndef _MSERV_H_
 #define _MSERV_H_
 
 #include "../i_threads.h"
 
-
+// lowered from 32 due to menu changes
 #define NUM_LIST_ROOMS 16
 
 #if defined(_MSC_VER)
@@ -25,11 +25,11 @@
 
 typedef union
 {
-	char buffer[16];  
+	char buffer[16]; // information such as password
 	UINT32 signature;
 } ATTRPACK msg_header_t;
 
-
+// Keep this structure 8 bytes aligned (current size is 80)
 typedef struct
 {
 	msg_header_t header;
@@ -37,7 +37,7 @@ typedef struct
 	char port[8];
 	char name[32];
 	INT32 room;
-	char version[8];  
+	char version[8]; // format is: x.yy.z (like 1.30.2 or 1.31)
 } ATTRPACK msg_server_t;
 
 typedef struct
@@ -62,7 +62,7 @@ typedef struct
 #pragma pack()
 #endif
 
-
+// ================================ GLOBALS ===============================
 
 extern consvar_t cv_masterserver, cv_servername;
 extern consvar_t cv_masterserver_update_rate;
@@ -98,7 +98,7 @@ extern msg_rooms_t room_list[NUM_LIST_ROOMS+1];
 
 void AddMServCommands(void);
 
- 
+/* HTTP */
 void HMS_set_api (char *api);
 int  HMS_fetch_rooms (int joining, int id);
 int  HMS_register (void);

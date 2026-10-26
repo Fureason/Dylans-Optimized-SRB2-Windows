@@ -40,12 +40,12 @@ gzfilebuf *gzfilebuf::open( const char *name,
     *p++ = 'b';
   }
 
-
+  // Hard code the compression level
   if ( io_mode & (ios::out|ios::app )) {
     *p++ = '9';
   }
 
-
+  // Put the end-of-string indicator
   *p = '\0';
 
   if ( (file = gzopen(name, char_mode)) == NULL )
@@ -82,12 +82,12 @@ gzfilebuf *gzfilebuf::attach( int file_descriptor,
     *p++ = 'b';
   }
 
-
+  // Hard code the compression level
   if ( io_mode & (ios::out|ios::app )) {
     *p++ = '9';
   }
 
-
+  // Put the end-of-string indicator
   *p = '\0';
 
   if ( (file = gzdopen(file_descriptor, char_mode)) == NULL )
@@ -134,11 +134,11 @@ streampos gzfilebuf::seekoff( streamoff off, ios::seek_dir dir, int which ) {
 
 int gzfilebuf::underflow() {
 
-
+  // If the file hasn't been opened for reading, error.
   if ( !is_open() || !(mode & ios::in) )
     return EOF;
 
-
+  // if a buffer doesn't exists, allocate one.
   if ( !base() ) {
 
     if ( (allocate()) == EOF )
@@ -157,11 +157,11 @@ int gzfilebuf::underflow() {
 
   }
 
-
+  // Attempt to fill the buffer.
 
   int result = fillbuf();
   if ( result == EOF ) {
-
+    // disable get area
     setg(0,0,0);
     return EOF;
   }

@@ -1,7 +1,7 @@
+# Makefile for creating Windows CE release archives, with the
+# mingw32ce compiler.
 
-
-
-
+# Last updated: 22-Jul-2008
 
 # Copyright (C) 2008 Vincent Torri
 
@@ -9,17 +9,17 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
-
-
-
-
-
-
-
-
-
-
+# To get some help, type
+#
+# make help
+#
+# To create the archives
+#
+# make
+#
+# To remove everything, type:
+#
+# make clean
 
 VERMAJ = 1
 VERMIN = 6

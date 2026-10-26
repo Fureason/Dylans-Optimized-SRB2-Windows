@@ -11,9 +11,9 @@ using System.Runtime.InteropServices;
 
 namespace DotZLib
 {
-
-
-
+	/// <summary>
+	/// Implements a compressed <see cref="Stream"/>, in GZip (.gz) format.
+	/// </summary>
 	public class GZipStream : Stream, IDisposable
 	{
         #region Dll Imports
@@ -44,12 +44,12 @@ namespace DotZLib
         #endregion
 
         #region Constructors
-
-
-
-
-
-
+        /// <summary>
+        /// Creates a new file as a writeable GZipStream
+        /// </summary>
+        /// <param name="fileName">The name of the compressed file to create</param>
+        /// <param name="level">The compression level to use when adding data</param>
+        /// <exception cref="ZLibException">If an error occurred in the internal zlib function</exception>
 		public GZipStream(string fileName, CompressLevel level)
 		{
             _isWriting = true;
@@ -58,11 +58,11 @@ namespace DotZLib
                 throw new ZLibException(-1, "Could not open " + fileName);
 		}
 
-
-
-
-
-
+        /// <summary>
+        /// Opens an existing file as a readable GZipStream
+        /// </summary>
+        /// <param name="fileName">The name of the file to open</param>
+        /// <exception cref="ZLibException">If an error occurred in the internal zlib function</exception>
         public GZipStream(string fileName)
         {
             _isWriting = false;
@@ -74,9 +74,9 @@ namespace DotZLib
         #endregion
 
         #region Access properties
-
-
-
+        /// <summary>
+        /// Returns true of this stream can be read from, false otherwise
+        /// </summary>
         public override bool CanRead
         {
             get
@@ -86,9 +86,9 @@ namespace DotZLib
         }
 
 
-
-
-
+        /// <summary>
+        /// Returns false.
+        /// </summary>
         public override bool CanSeek
         {
             get
@@ -97,9 +97,9 @@ namespace DotZLib
             }
         }
 
-
-
-
+        /// <summary>
+        /// Returns true if this tsream is writeable, false otherwise
+        /// </summary>
         public override bool CanWrite
         {
             get
@@ -111,23 +111,23 @@ namespace DotZLib
 
         #region Destructor & IDispose stuff
 
-
-
-
+        /// <summary>
+        /// Destroys this instance
+        /// </summary>
         ~GZipStream()
         {
             cleanUp(false);
         }
 
-
-
-
+        /// <summary>
+        /// Closes the external file handle
+        /// </summary>
         public void Dispose()
         {
             cleanUp(true);
         }
 
-
+        // Does the actual closing of the file handle.
         private void cleanUp(bool isDisposing)
         {
             if (!_isDisposed)
@@ -139,18 +139,18 @@ namespace DotZLib
         #endregion
 
         #region Basic reading and writing
-
-
-
-
-
-
-
-
-
-
-
-
+        /// <summary>
+        /// Attempts to read a number of bytes from the stream.
+        /// </summary>
+        /// <param name="buffer">The destination data buffer</param>
+        /// <param name="offset">The index of the first destination byte in <c>buffer</c></param>
+        /// <param name="count">The number of bytes requested</param>
+        /// <returns>The number of bytes read</returns>
+        /// <exception cref="ArgumentNullException">If <c>buffer</c> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">If <c>count</c> or <c>offset</c> are negative</exception>
+        /// <exception cref="ArgumentException">If <c>offset</c>  + <c>count</c> is &gt; buffer.Length</exception>
+        /// <exception cref="NotSupportedException">If this stream is not readable.</exception>
+        /// <exception cref="ObjectDisposedException">If this stream has been disposed.</exception>
         public override int Read(byte[] buffer, int offset, int count)
         {
             if (!CanRead) throw new NotSupportedException();
@@ -174,10 +174,10 @@ namespace DotZLib
             return result;
         }
 
-
-
-
-
+        /// <summary>
+        /// Attempts to read a single byte from the stream.
+        /// </summary>
+        /// <returns>The byte that was read, or -1 in case of error or End-Of-File</returns>
         public override int ReadByte()
         {
             if (!CanRead) throw new NotSupportedException();
@@ -185,17 +185,17 @@ namespace DotZLib
             return gzgetc(_gzFile);
         }
 
-
-
-
-
-
-
-
-
-
-
-
+        /// <summary>
+        /// Writes a number of bytes to the stream
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="count"></param>
+        /// <exception cref="ArgumentNullException">If <c>buffer</c> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">If <c>count</c> or <c>offset</c> are negative</exception>
+        /// <exception cref="ArgumentException">If <c>offset</c>  + <c>count</c> is &gt; buffer.Length</exception>
+        /// <exception cref="NotSupportedException">If this stream is not writeable.</exception>
+        /// <exception cref="ObjectDisposedException">If this stream has been disposed.</exception>
         public override void Write(byte[] buffer, int offset, int count)
         {
             if (!CanWrite) throw new NotSupportedException();
@@ -217,12 +217,12 @@ namespace DotZLib
             }
         }
 
-
-
-
-
-
-
+        /// <summary>
+        /// Writes a single byte to the stream
+        /// </summary>
+        /// <param name="value">The byte to add to the stream.</param>
+        /// <exception cref="NotSupportedException">If this stream is not writeable.</exception>
+        /// <exception cref="ObjectDisposedException">If this stream has been disposed.</exception>
         public override void WriteByte(byte value)
         {
             if (!CanWrite) throw new NotSupportedException();
@@ -235,43 +235,43 @@ namespace DotZLib
         #endregion
 
         #region Position & length stuff
-
-
-
-
-
+        /// <summary>
+        /// Not supported.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <exception cref="NotSupportedException">Always thrown</exception>
         public override void SetLength(long value)
         {
             throw new NotSupportedException();
         }
 
-
-
-
-
-
-
-
+        /// <summary>
+        ///  Not supported.
+        /// </summary>
+        /// <param name="offset"></param>
+        /// <param name="origin"></param>
+        /// <returns></returns>
+        /// <exception cref="NotSupportedException">Always thrown</exception>
         public override long Seek(long offset, SeekOrigin origin)
         {
             throw new NotSupportedException();
         }
 
-
-
-
-
-
+        /// <summary>
+        /// Flushes the <c>GZipStream</c>.
+        /// </summary>
+        /// <remarks>In this implementation, this method does nothing. This is because excessive
+        /// flushing may degrade the achievable compression rates.</remarks>
         public override void Flush()
         {
-
+            // left empty on purpose
         }
 
-
-
-
-
-
+        /// <summary>
+        /// Gets/sets the current position in the <c>GZipStream</c>. Not supported.
+        /// </summary>
+        /// <remarks>In this implementation this property is not supported</remarks>
+        /// <exception cref="NotSupportedException">Always thrown</exception>
         public override long Position
         {
             get
@@ -284,11 +284,11 @@ namespace DotZLib
             }
         }
 
-
-
-
-
-
+        /// <summary>
+        /// Gets the size of the stream. Not supported.
+        /// </summary>
+        /// <remarks>In this implementation this property is not supported</remarks>
+        /// <exception cref="NotSupportedException">Always thrown</exception>
         public override long Length
         {
             get

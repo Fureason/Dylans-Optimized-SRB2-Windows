@@ -25,30 +25,30 @@ timestamp='2018-03-08'
 # of the GNU General Public License, version 3 ("GPLv3").
 
 
+# Please send patches to <config-patches@gnu.org>.
+#
+# Configuration subroutine to validate and canonicalize a configuration type.
+# Supply the specified configuration type as an argument.
+# If it is invalid, we print an error message on stderr and exit with code 1.
+# Otherwise, we print the canonical config type on stdout and succeed.
 
+# You can get the latest version of this script from:
+# https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub
 
+# This file is supposed to be the same for all GNU packages
+# and recognize all the CPU types, system types and aliases
+# that are meaningful with *any* GNU software.
+# Each package is responsible for reporting which valid configurations
+# it does not support.  The user should be able to distinguish
+# a failure to support a valid configuration from a meaningless
+# configuration.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# The goal of this file is to map all the various variations of a given
+# machine specification into a single specification in the form:
+#	CPU_TYPE-MANUFACTURER-OPERATING_SYSTEM
+# or in some cases, the newer four-part form:
+#	CPU_TYPE-MANUFACTURER-KERNEL-OPERATING_SYSTEM
+# It is wrong to echo any other type of specification.
 
 me=`echo "$0" | sed -e 's,.*/,,'`
 
@@ -75,7 +75,7 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
 help="
 Try \`$me --help' for more information."
 
-
+# Parse command line
 while test $# -gt 0 ; do
   case $1 in
     --time-stamp | --time* | -t )
@@ -84,16 +84,16 @@ while test $# -gt 0 ; do
        echo "$version" ; exit ;;
     --help | --h* | -h )
        echo "$usage"; exit ;;
-    -- )      
+    -- )     # Stop option processing
        shift; break ;;
-    - )	 
+    - )	# Use stdin as input.
        break ;;
     -* )
        echo "$me: invalid option $1$help"
        exit 1 ;;
 
     *local*)
-
+       # First pass through any local machine types.
        echo "$1"
        exit ;;
 
@@ -110,8 +110,8 @@ case $# in
     exit 1;;
 esac
 
-
-
+# Separate what the user gave into CPU-COMPANY and OS or KERNEL-OS (if any).
+# Here we must recognize all the valid KERNEL-OS combinations.
 maybe_os=`echo "$1" | sed 's/^\(.*\)-\([^-]*-[^-]*\)$/\2/'`
 case $maybe_os in
   nto-qnx* | linux-gnu* | linux-android* | linux-dietlibc | linux-newlib* | \
@@ -134,13 +134,13 @@ case $maybe_os in
     ;;
 esac
 
-
-
-
-
+### Let's recognize common machines as not being operating systems so
+### that things like config.sub decstation-3100 work.  We also
+### recognize some manufacturers as not being operating systems, so we
+### can provide default operating systems below.
 case $os in
 	-sun*os*)
-
+		# Prevent following clause from handling this invalid input.
 		;;
 	-dec* | -mips* | -sequent* | -encore* | -pc532* | -sgi* | -sony* | \
 	-att* | -7300* | -3300* | -delta* | -motorola* | -sun[234]* | \
@@ -193,11 +193,11 @@ case $os in
 		basic_machine=`echo "$1" | sed -e 's/86-.*/86-pc/'`
 		;;
 	-sco3.2v[4-9]*)
-
+		# Don't forget version if it is 3.2v4 or newer.
 		basic_machine=`echo "$1" | sed -e 's/86-.*/86-pc/'`
 		;;
 	-sco5v6*)
-
+		# Don't forget version if it is 3.2v4 or newer.
 		basic_machine=`echo "$1" | sed -e 's/86-.*/86-pc/'`
 		;;
 	-sco*)
@@ -238,10 +238,10 @@ case $os in
 		;;
 esac
 
-
+# Decode aliases for certain CPU-COMPANY combinations.
 case $basic_machine in
-
-
+	# Recognize the basic CPU types without company name.
+	# Some are omitted here because they have special meanings below.
 	1750a | 580 \
 	| a29k \
 	| aarch64 | aarch64_be \
@@ -354,13 +354,13 @@ case $basic_machine in
 		basic_machine=armel-unknown
 		;;
 
-
-
-
+	# We use `pc' rather than `unknown'
+	# because (1) that's what they normally are, and
+	# (2) the word "unknown" tends to confuse beginning users.
 	i*86 | x86_64)
 	  basic_machine=$basic_machine-pc
 	  ;;
-
+	# Object if more than one company name word.
 	*-*-*)
 		echo Invalid configuration \`"$1"\': machine \`"$basic_machine"\' not recognized 1>&2
 		exit 1

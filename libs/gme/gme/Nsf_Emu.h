@@ -1,6 +1,6 @@
+// Nintendo NES/Famicom NSF music file emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef NSF_EMU_H
 #define NSF_EMU_H
 
@@ -11,11 +11,11 @@
 class Nsf_Emu : private Nes_Cpu, public Classic_Emu {
 	typedef Nes_Cpu cpu;
 public:
-
+	// Equalizer profiles for US NES and Japanese Famicom
 	static equalizer_t const nes_eq;
 	static equalizer_t const famicom_eq;
 	
-
+	// NSF file header
 	enum { header_size = 0x80 };
 	struct header_t
 	{
@@ -37,15 +37,15 @@ public:
 		byte unused [4];
 	};
 	
-
+	// Header for currently loaded file
 	header_t const& header() const { return header_; }
 	
 	static gme_type_t static_type() { return gme_nsf_type; }
 	
 public:
-
+	// deprecated
 	using Music_Emu::load;
-	blargg_err_t load( header_t const& h, Data_Reader& in )  
+	blargg_err_t load( header_t const& h, Data_Reader& in ) // use Remaining_Reader
 			{ return load_remaining_( &h, sizeof h, in ); }
 
 public:
@@ -69,7 +69,7 @@ protected:
 	double clock_rate_;
 	bool pal_only;
 	
-
+	// timing
 	Nes_Cpu::registers_t saved_state;
 	nes_time_t next_play;
 	nes_time_t play_period;

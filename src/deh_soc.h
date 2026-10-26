@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  deh_soc.h
+/// \brief Load SOC file and change tables and text
 
 #ifndef __DEH_SOC_H__
 #define __DEH_SOC_H__
@@ -31,10 +31,10 @@
 #include "r_textures.h"
 #include "r_draw.h"
 #include "r_picformats.h"
-#include "r_things.h"  
+#include "r_things.h" // R_Char2Frame
 #include "r_sky.h"
 #include "fastcmp.h"
-#include "lua_script.h"  
+#include "lua_script.h" // Reluctantly included for LUA_EvalMath
 #include "netcode/d_clisrv.h"
 
 #ifdef HWRENDER
@@ -43,10 +43,10 @@
 
 #include "info.h"
 #include "dehacked.h"
-#include "doomdef.h"  
+#include "doomdef.h" // HWRENDER
 
-
-
+// Crazy word-reading stuff
+/// \todo Put these in a seperate file or something.
 mobjtype_t get_mobjtype(const char *word);
 statenum_t get_state(const char *word);
 spritenum_t get_sprite(const char *word);
@@ -54,8 +54,8 @@ playersprite_t get_sprite2(const char *word);
 sfxenum_t get_sfx(const char *word);
 hudnum_t get_huditem(const char *word);
 menutype_t get_menutype(const char *word);
-
-
+//INT16 get_gametype(const char *word);
+//powertype_t get_power(const char *word);
 skincolornum_t get_skincolor(const char *word);
 
 void readwipes(MYFILE *f);

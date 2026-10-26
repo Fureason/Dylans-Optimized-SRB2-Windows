@@ -1,9 +1,9 @@
- 
-                   
-                                                             
-                               
-                                                      
-                                                          
+/* $Id: testupnpreplyparse.c,v 1.5 2017/12/12 11:18:46 nanard Exp $ */
+/* MiniUPnP project
+ * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
+ * (c) 2006-2017 Thomas Bernard
+ * This software is subject to the conditions detailed
+ * in the LICENCE file provided within the distribution */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -16,7 +16,7 @@ test_parsing(const char * buf, int len, FILE * f)
 	struct NameValueParserData pdata;
 	int ok = 1;
 	ParseNameValue(buf, len, &pdata);
-	 
+	/* check result */
 	if(f != NULL)
 	{
 		while(fgets(line, sizeof(line), f))
@@ -28,7 +28,7 @@ test_parsing(const char * buf, int len, FILE * f)
 			l = strlen(line);
 			while((l > 0) && ((line[l-1] == '\r') || (line[l-1] == '\n')))
 				line[--l] = '\0';
-			 
+			/* skip empty lines */
 			if(l == 0)
 				continue;
 			equal = strchr(line, '=');

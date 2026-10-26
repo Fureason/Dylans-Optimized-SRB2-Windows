@@ -11,9 +11,9 @@ using System.Diagnostics;
 namespace DotZLib
 {
 
-
-
-
+	/// <summary>
+	/// This class implements a circular buffer
+	/// </summary>
 	internal class CircularBuffer
 	{
         #region Private data
@@ -50,7 +50,7 @@ namespace DotZLib
 
         public bool Put(byte b)
         {
-            if (Size == _capacity)  
+            if (Size == _capacity) // no room
                 return false;
             _buffer[_tail++] = b;
             _tail %= _capacity;

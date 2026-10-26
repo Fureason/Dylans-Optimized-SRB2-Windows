@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_picformats.h
+/// \brief Patch generation.
 
 #ifndef __R_PICFORMATS__
 #define __R_PICFORMATS__
@@ -21,20 +21,20 @@ typedef enum
 {
 	PICFMT_NONE = 0,
 
-
+	// Doom formats
 	PICFMT_PATCH,
 	PICFMT_FLAT,
 	PICFMT_DOOMPATCH,
 
-
+	// PNG
 	PICFMT_PNG,
 
-
+	// 16bpp
 	PICFMT_PATCH16,
 	PICFMT_FLAT16,
 	PICFMT_DOOMPATCH16,
 
-
+	// 32bpp
 	PICFMT_PATCH32,
 	PICFMT_FLAT32,
 	PICFMT_DOOMPATCH32
@@ -55,26 +55,26 @@ enum
 	PICDEPTH_32BPP = 32
 };
 
-
+// Maximum allowed dimensions for a patch.
 #define MAX_PATCH_DIMENSIONS 8192
 
-
+// Minimum amount of bytes required for a valid patch lump header.
 #define MIN_PATCH_LUMP_HEADER_SIZE ((sizeof(INT16) * 4) + sizeof(INT32))
 
-
+// Minimum length of a valid Doom patch lump (a 1x1 patch).
 #define MIN_PATCH_LUMP_SIZE (MIN_PATCH_LUMP_HEADER_SIZE + 1)
 
 #define FIRST_PATCH_LUMP_COLUMN(width) ((sizeof(INT16) * 4) + ((width) * sizeof(INT32)))
 #define VALID_PATCH_LUMP_SIZE(lumplen, width) ((lumplen) >= FIRST_PATCH_LUMP_COLUMN(width))
 
-
+// Minimum size of a PNG file and the size of its signature.
 #define PNG_MIN_SIZE 67
 #define PNG_HEADER_SIZE 8
 
-                                                                             
-                                                                             
-                                                                       
-                              
+/* Keep PNG decoding within the dimensions supported by SRB2's internal patch
+ * format, while allowing modern high-resolution artwork.  The separate pixel
+ * limit prevents a small, highly-compressed PNG from expanding into an
+ * unreasonable allocation. */
 #define MAX_PNG_DIMENSIONS MAX_PATCH_DIMENSIONS
 #define MAX_PNG_PIXELS (32U * 1024U * 1024U)
 
@@ -108,12 +108,12 @@ boolean Picture_IsDoomPatchFormat(pictureformat_t format);
 boolean Picture_IsFlatFormat(pictureformat_t format);
 boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size);
 
-
+// Structs
 typedef enum
 {
-	ROTAXIS_X,  
-	ROTAXIS_Y,  
-	ROTAXIS_Z   
+	ROTAXIS_X, // Roll (the default)
+	ROTAXIS_Y, // Pitch
+	ROTAXIS_Z  // Yaw
 } rotaxis_t;
 
 typedef struct
@@ -150,9 +150,9 @@ boolean Picture_PNGDimensions(UINT8 *png, INT32 *width, INT32 *height, INT16 *to
 #define PICTURE_PNG_USELOOKUP
 #endif
 
-
+// SpriteInfo
 extern spriteinfo_t spriteinfo[NUMSPRITES];
 void R_LoadSpriteInfoLumps(UINT16 wadnum, UINT16 numlumps);
 void R_ParseSPRTINFOLump(UINT16 wadNum, UINT16 lumpNum);
 
-#endif  
+#endif // __R_PICFORMATS__

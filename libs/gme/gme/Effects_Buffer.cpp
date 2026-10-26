@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Effects_Buffer.h"
 
@@ -28,11 +28,11 @@ typedef blargg_long fixed_t;
 
 const unsigned echo_size = 4096;
 const unsigned echo_mask = echo_size - 1;
-BOOST_STATIC_ASSERT( (echo_size & echo_mask) == 0 );  
+BOOST_STATIC_ASSERT( (echo_size & echo_mask) == 0 ); // must be power of 2
 
 const unsigned reverb_size = 8192 * 2;
 const unsigned reverb_mask = reverb_size - 1;
-BOOST_STATIC_ASSERT( (reverb_size & reverb_mask) == 0 );  
+BOOST_STATIC_ASSERT( (reverb_size & reverb_mask) == 0 ); // must be power of 2
 
 Effects_Buffer::config_t::config_t()
 {
@@ -55,7 +55,7 @@ void Effects_Buffer::set_depth( double d )
 	c.reverb_delay      = 880 * 0.1f;
 	c.echo_delay        = 610 * 0.1f;
 	if ( f > 0.5 )
-		f = 0.5;  
+		f = 0.5; // TODO: more linear reduction of extreme reverb/echo
 	c.reverb_level      = 0.5f * f;
 	c.echo_level        = 0.30f * f;
 	c.delay_variance    = 180 * 0.1f;
@@ -134,7 +134,7 @@ void Effects_Buffer::config( const config_t& cfg )
 {
 	channels_changed();
 	
-
+	// clear echo and reverb buffers
 	if ( !config_.effects_enabled && cfg.effects_enabled && echo_buf.size() )
 	{
 		memset( &echo_buf [0], 0, echo_size * sizeof echo_buf [0] );
@@ -145,7 +145,7 @@ void Effects_Buffer::config( const config_t& cfg )
 	
 	if ( config_.effects_enabled )
 	{
-
+		// convert to internal format
 		
 		chans.pan_1_levels [0] = TO_FIXED( 1 ) - TO_FIXED( config_.pan_1 );
 		chans.pan_1_levels [1] = TO_FIXED( 2 ) - chans.pan_1_levels [0];
@@ -185,7 +185,7 @@ void Effects_Buffer::config( const config_t& cfg )
 	}
 	else
 	{
-
+		// set up outputs
 		for ( unsigned i = 0; i < chan_types_count; i++ )
 		{
 			channel_t& c = chan_types [i];
@@ -248,7 +248,7 @@ long Effects_Buffer::samples_avail() const
 
 long Effects_Buffer::read_samples( blip_sample_t* out, long total_samples )
 {
-	require( total_samples % 2 == 0 );  
+	require( total_samples % 2 == 0 ); // count must be even
 	
 	long remain = bufs [0].samples_avail();
 	if ( remain > (total_samples >> 1) )
@@ -259,7 +259,7 @@ long Effects_Buffer::read_samples( blip_sample_t* out, long total_samples )
 		int active_bufs = buf_count;
 		long count = remain;
 		
-
+		// optimizing mixing to skip any channels which had nothing added
 		if ( effect_remain )
 		{
 			if ( count > effect_remain )
@@ -302,7 +302,7 @@ long Effects_Buffer::read_samples( blip_sample_t* out, long total_samples )
 			if ( i < active_bufs )
 				bufs [i].remove_samples( count );
 			else
-				bufs [i].remove_silence( count );  
+				bufs [i].remove_silence( count ); // keep time synchronized
 		}
 	}
 	
@@ -315,7 +315,7 @@ void Effects_Buffer::mix_mono( blip_sample_t* out_, blargg_long count )
 	int const bass = BLIP_READER_BASS( bufs [0] );
 	BLIP_READER_BEGIN( c, bufs [0] );
 	
-
+	// unrolled loop
 	for ( blargg_long n = count >> 1; n; --n )
 	{
 		blargg_long cs0 = BLIP_READER_READ( c );

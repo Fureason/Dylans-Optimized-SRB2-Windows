@@ -1,8 +1,8 @@
+# Makefile for zlib
+# OpenWatcom large model
+# Last updated: 28-Dec-2005
 
-
-
-
-
+# To use, do "wmake -f watcom_l.mak"
 
 C_SOURCE =  adler32.c  compress.c crc32.c   deflate.c    &
 	    gzclose.c  gzlib.c    gzread.c  gzwrite.c    &

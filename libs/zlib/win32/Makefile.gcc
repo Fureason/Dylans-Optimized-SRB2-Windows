@@ -1,40 +1,40 @@
-
-
-
-
-
+# Makefile for zlib, derived from Makefile.dj2.
+# Modified for mingw32 by C. Spieler, 6/16/98.
+# Updated for zlib 1.2.x by Christian Spieler and Cosmin Truta, Mar-2003.
+# Last updated: Mar 2012.
+# Tested under Cygwin and MinGW.
 
 # Copyright (C) 1995-2003 Jean-loup Gailly.
 # For conditions of distribution and use, see copyright notice in zlib.h
 
+# To compile, or to compile and test, type from the top level zlib directory:
+#
+#   make -fwin32/Makefile.gcc;  make test testdll -fwin32/Makefile.gcc
+#
+# To install libz.a, zconf.h and zlib.h in the system directories, type:
+#
+#   make install -fwin32/Makefile.gcc
+#
+# BINARY_PATH, INCLUDE_PATH and LIBRARY_PATH must be set.
+#
+# To install the shared lib, append SHARED_MODE=1 to the make command :
+#
+#   make install -fwin32/Makefile.gcc SHARED_MODE=1
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Note:
+# If the platform is *not* MinGW (e.g. it is Cygwin or UWIN),
+# the DLL name should be changed from "zlib1.dll".
 
 STATICLIB = libz.a
 SHAREDLIB = zlib1.dll
 IMPLIB    = libz.dll.a
 
-
-
-
+#
+# Set to 1 if shared object needs to be installed
+#
 SHARED_MODE=0
 
-
+#LOC = -DZLIB_DEBUG -g
 
 PREFIX =
 CC = $(PREFIX)gcc
@@ -55,7 +55,7 @@ RCFLAGS = --define GCC_WINDRES
 STRIP = $(PREFIX)strip
 
 CP = cp -fp
-
+# If GNU install is available, replace $(CP) with install.
 INSTALL = $(CP)
 RM = rm -f
 

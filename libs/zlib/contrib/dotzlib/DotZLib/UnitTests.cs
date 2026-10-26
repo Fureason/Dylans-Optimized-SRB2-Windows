@@ -9,22 +9,22 @@ using System;
 using System.Collections;
 using System.IO;
 
-
-
+// uncomment the define below to include unit tests
+//#define nunit
 #if nunit
 using NUnit.Framework;
 
-
-
-
-
-
+// Unit tests for the DotZLib class library
+// ----------------------------------------
+//
+// Use this with NUnit 2 from http://www.nunit.org
+//
 
 namespace DotZLibTests
 {
     using DotZLib;
 
-
+    // helper methods
     internal class Utils
     {
         public static bool byteArrEqual( byte[] lhs, byte[] rhs )

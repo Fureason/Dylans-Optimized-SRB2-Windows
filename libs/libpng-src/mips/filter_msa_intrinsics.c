@@ -16,24 +16,24 @@
 
 #ifdef PNG_READ_SUPPORTED
 
- 
-#if PNG_MIPS_MSA_IMPLEMENTATION == 1  
+/* This code requires -mfpu=msa on the command line: */
+#if PNG_MIPS_MSA_IMPLEMENTATION == 1 /* intrinsics code from pngpriv.h */
 
 #include <msa.h>
 
-                                                                              
-                                                                                
-                                                                           
-                                                        
-   
+/* libpng row pointers are not necessarily aligned to any particular boundary,
+ * however this code will only work with appropriate alignment. mips/mips_init.c
+ * checks for this (and will not compile unless it is done). This code uses
+ * variants of png_aligncast to avoid compiler warnings.
+ */
 #define png_ptr(type,pointer) png_aligncast(type *,pointer)
 #define png_ptrc(type,pointer) png_aligncastconst(const type *,pointer)
 
-                                                                             
-                                                                         
-                                                                              
-                                 
-   
+/* The following relies on a variable 'temp_pointer' being declared with type
+ * 'type'.  This is written this way just to hide the GCC strict aliasing
+ * warning; note that the code is safe because there never is an alias between
+ * the input and output pointers.
+ */
 #define png_ldr(type,pointer)\
    (temp_pointer = png_ptr(type,pointer), *temp_pointer)
 
@@ -180,7 +180,7 @@
             SW(val1_m, pdst_sd_m + 4);                                 \
         }
     #endif
-#else   
+#else  // !(__mips_isa_rev >= 6)
    #define LW(psrc)                              \
    ( {                                           \
        uint8_t *psrc_lw_m = (uint8_t *) (psrc);  \
@@ -245,7 +245,7 @@
             :                                  \
         );                                     \
     }
-#endif   
+#endif  // (__mips_isa_rev >= 6)
 #endif
 
 #define LD_B(RTYPE, psrc) *((RTYPE *) (psrc))
@@ -679,7 +679,7 @@ void png_read_filter_row_paeth4_msa(png_row_infop row_info,
    SW(res0, nxt);
    nxt += 4;
 
-    
+   /* Remainder */
    rp_end = row_info->rowbytes - 4;
 
    for (count = 0; count < rp_end; count += 16)
@@ -756,7 +756,7 @@ void png_read_filter_row_paeth3_msa(png_row_infop row_info,
    nxt[0] = src1[2];
    nxt++;
 
-    
+   /* Remainder */
    rp_end = row_info->rowbytes - 3;
 
    for (count = 0; count < rp_end; count += 12)
@@ -803,6 +803,6 @@ void png_read_filter_row_paeth3_msa(png_row_infop row_info,
    }
 }
 
-#endif  
-#endif  
-#endif  
+#endif /* PNG_MIPS_MSA_OPT > 0 */
+#endif /* PNG_MIPS_MSA_IMPLEMENTATION == 1 (intrinsics) */
+#endif /* READ */

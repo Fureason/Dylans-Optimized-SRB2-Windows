@@ -8,11 +8,11 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 #
-
-
-
-
-
+# Generate a set of PNG test images.  The images are generated in a
+# sub-directory called 'tests' by default, however a command line argument will
+# change that name.  The generation requires a built version of makepng in the
+# current directory.
+#
 usage(){
    exec >&2
    echo "$0 [<directory>]"
@@ -30,7 +30,7 @@ test -x "$mp" || {
    usage
 }
 
-
+# Just one argument: the directory
 testdir="tests"
 test $# -gt 1 && {
    testdir="$1"
@@ -38,16 +38,16 @@ test $# -gt 1 && {
 }
 test $# -eq 0 || usage
 
-
+# Take care not to clobber something
 if test -e "$testdir"
 then
    test -d "$testdir" || usage
 else
-
+   # mkdir -p isn't portable, so do the following
    mkdir "$testdir" 2>/dev/null || mkdir -p "$testdir" || usage
 fi
 
-
+# This fails in a very satisfactory way if it's not accessible
 cd "$testdir"
 :>"test$$.png" || {
    exec >&2
@@ -62,8 +62,8 @@ rm "test$$.png" || {
    exit 1
 }
 
-
-
+# Now call makepng ($mp) to create every file we can think of with a
+# reasonable name
 doit(){
    for gamma in "" --sRGB --linear --1.8
    do
@@ -82,7 +82,7 @@ doit(){
       "$mp" $gamma "$1" "$2" "test-$1-$2$gname.png"
    done
 }
-
+#
 for ct in gray palette
 do
    for bd in 1 2 4 8
@@ -90,9 +90,9 @@ do
       doit "$ct" "$bd"
    done
 done
-
+#
 doit "gray" "16"
-
+#
 for ct in gray-alpha rgb rgb-alpha
 do
    for bd in 8 16

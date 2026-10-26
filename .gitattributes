@@ -1,4 +1,4 @@
-
+#Source code
 /Makefile text=auto
 /src/*.c text=auto
 /src/*.h text=auto
@@ -11,7 +11,7 @@
 /src/CMakeLists.txt text=auto
 *.mk -whitespace text=auto
 /comptime.sh text eol=lf
-
+# Windows EOL
 *.cs -crlf -whitespace
 *.bat -crlf -whitespace
 *.dev -crlf -whitespace
@@ -23,8 +23,8 @@
 *.csproj* -crlf -whitespace
 *.vcxproj* -crlf -whitespace
 *.manifest -crlf -whitespace
-
+# Patches
 /tools/SDL-1.2.14-gc/SDL-1.2.14-gc.patch -whitespace
-
+#Appveyor
 /appveyor.yml -crlf -whitespace
-
+# Other

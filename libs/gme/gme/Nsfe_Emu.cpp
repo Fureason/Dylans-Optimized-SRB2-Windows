@@ -1,4 +1,4 @@
-
+// Game_Music_Emu 0.6.0. http://www.slack.net/~ant/
 
 #include "Nsfe_Emu.h"
 
@@ -31,7 +31,7 @@ inline void Nsfe_Info::unload()
 	track_times.clear();
 }
 
-
+// TODO: if no playlist, treat as if there is a playlist that is just 1,2,3,4,5... ?
 void Nsfe_Info::disable_playlist( bool b )
 {
 	playlist_disabled = b;
@@ -47,12 +47,12 @@ int Nsfe_Info::remap_track( int track ) const
 	return track;
 }
 
-
+// Read multiple strings and separate into individual strings
 static blargg_err_t read_strs( Data_Reader& in, long size, blargg_vector<char>& chars,
 		blargg_vector<const char*>& strs )
 {
 	RETURN_ERR( chars.resize( size + 1 ) );
-	chars [size] = 0;  
+	chars [size] = 0; // in case last string doesn't have terminator
 	RETURN_ERR( in.read( &chars [0], size ) );
 	
 	RETURN_ERR( strs.resize( 128 ) );
@@ -69,8 +69,8 @@ static blargg_err_t read_strs( Data_Reader& in, long size, blargg_vector<char>& 
 	return strs.resize( count );
 }
 
-
-
+// Copy in to out, where out has out_max characters allocated. Truncate to
+// out_max - 1 characters.
 static void copy_str( const char* in, char* out, int out_max )
 {
 	out [out_max - 1] = 0;
@@ -94,7 +94,7 @@ blargg_err_t Nsfe_Info::load( Data_Reader& in, Nsf_Emu* nsf_emu )
 	int const nsfe_info_size = 16;
 	assert( offsetof (nsfe_info_t,unused [6]) == nsfe_info_size );
 	
-
+	// check header
 	byte signature [4];
 	blargg_err_t err = in.read( signature, sizeof signature );
 	if ( err )
@@ -102,34 +102,34 @@ blargg_err_t Nsfe_Info::load( Data_Reader& in, Nsf_Emu* nsf_emu )
 	if ( memcmp( signature, "NSFE", 4 ) )
 		return gme_wrong_file_type;
 	
-
+	// free previous info
 	track_name_data.clear();
 	track_names.clear();
 	playlist.clear();
 	track_times.clear();
 	
-
+	// default nsf header
 	static const Nsf_Emu::header_t base_header =
 	{
-		{'N','E','S','M','\x1A'}, 
-		1,                   
-		1, 1,                
-		{0,0},{0,0},{0,0},   
-		"","","",            
-		{0x1A, 0x41},        
-		{0,0,0,0,0,0,0,0},   
-		{0x20, 0x4E},        
-		0, 0,                
-		{0,0,0,0}            
+		{'N','E','S','M','\x1A'},// tag
+		1,                  // version
+		1, 1,               // track count, first track
+		{0,0},{0,0},{0,0},  // addresses
+		"","","",           // strings
+		{0x1A, 0x41},       // NTSC rate
+		{0,0,0,0,0,0,0,0},  // banks
+		{0x20, 0x4E},       // PAL rate
+		0, 0,               // flags
+		{0,0,0,0}           // unused
 	};
 	Nsf_Emu::header_t& header = info;
 	header = base_header;
 	
-
+	// parse tags
 	int phase = 0;
 	while ( phase != 3 )
 	{
-
+		// read size and tag
 		byte block_header [2] [4];
 		RETURN_ERR( in.read( block_header, sizeof block_header ) );
 		blargg_long size = get_le32( block_header [0] );
@@ -138,7 +138,7 @@ blargg_err_t Nsfe_Info::load( Data_Reader& in, Nsf_Emu* nsf_emu )
 		if ( size <= 0 )
 			return "Corrupt file";
 		
-
+		//debug_printf( "tag: %c%c%c%c\n", char(tag), char(tag>>8), char(tag>>16), char(tag>>24) );
 		
 		switch ( tag )
 		{
@@ -214,7 +214,7 @@ blargg_err_t Nsfe_Info::load( Data_Reader& in, Nsf_Emu* nsf_emu )
 				}
 				else
 				{
-					Subset_Reader sub( &in, size );  
+					Subset_Reader sub( &in, size ); // limit emu to nsf data
 					Remaining_Reader rem( &header, Nsf_Emu::header_size, &sub );
 					RETURN_ERR( nsf_emu->load( rem ) );
 					check( rem.remain() == 0 );
@@ -228,7 +228,7 @@ blargg_err_t Nsfe_Info::load( Data_Reader& in, Nsf_Emu* nsf_emu )
 				break;
 			
 			default:
-
+				// tags that can be skipped start with a lowercase character
 				check( islower( (tag >> 24) & 0xFF ) );
 				RETURN_ERR( in.skip( size ) );
 				break;
@@ -268,7 +268,7 @@ Nsfe_Emu::~Nsfe_Emu() { }
 void Nsfe_Emu::unload()
 {
 	if ( !loading )
-		info.unload();  
+		info.unload(); // TODO: extremely hacky!
 	Nsf_Emu::unload();
 }
 
@@ -309,7 +309,7 @@ blargg_err_t Nsfe_Emu::load_( Data_Reader& in )
 	if ( loading )
 		return Nsf_Emu::load_( in );
 	
-
+	// TODO: this hacky recursion-avoidance could have subtle problems
 	loading = true;
 	blargg_err_t err = info.load( in, this );
 	loading = false;

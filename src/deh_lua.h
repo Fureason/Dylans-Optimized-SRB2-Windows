@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  deh_lua.h
+/// \brief Lua SOC library
 
 #ifndef __DEH_LUA_H__
 #define __DEH_LUA_H__

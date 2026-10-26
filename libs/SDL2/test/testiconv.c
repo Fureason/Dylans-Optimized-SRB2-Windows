@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* quiet windows compiler warnings */
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS
 #endif
@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
     FILE *file;
     int errors = 0;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     fname = GetResourceFilename(argc > 1 ? argv[1] : NULL, "utf8.txt");
@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
     SDL_free(fname);
 
     while (fgets(buffer, sizeof(buffer), file)) {
-         
+        /* Convert to UCS-4 */
         size_t len;
         ucs4 =
             SDL_iconv_string("UCS-4", "UTF-8", buffer,

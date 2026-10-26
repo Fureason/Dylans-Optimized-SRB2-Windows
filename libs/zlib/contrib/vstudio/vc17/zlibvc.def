@@ -1,5 +1,5 @@
 LIBRARY
-
+; zlib data compression and ZIP file I/O library
 
 VERSION		1.3.1
 
@@ -92,7 +92,7 @@ EXPORTS
 
         fill_win32_filefunc                      @110
 
-
+; zlibwapi v1.2.4 added:
         fill_win32_filefunc64                   @111
         fill_win32_filefunc64A                  @112
         fill_win32_filefunc64W                  @113
@@ -114,7 +114,7 @@ EXPORTS
         zipOpenNewFileInZip4_64                 @135
         zipCloseFileInZipRaw64                  @136
 
-
+; zlib1 v1.2.4 added:
         adler32_combine                         @140
         crc32_combine                           @142
         deflateSetHeader                        @144
@@ -130,19 +130,19 @@ EXPORTS
         inflateReset2                           @159
         inflateUndermine                        @160
 
-
+; zlib1 v1.2.6 added:
         gzgetc_                                 @161
         inflateResetKeep                        @163
         deflateResetKeep                        @164
 
-
+; zlib1 v1.2.7 added:
         gzopen_w                                @165
 
-
+; zlib1 v1.2.8 added:
         inflateGetDictionary                    @166
         gzvprintf                               @167
 
-
+; zlib1 v1.2.9 added:
         inflateCodesUsed                        @168
         inflateValidate                         @169
         uncompress2                             @170
@@ -152,7 +152,7 @@ EXPORTS
         adler32_z                               @174
         crc32_z                                 @175
 
-
+; zlib1 v1.2.12 added:
 		crc32_combine_gen						@176
 		crc32_combine_gen64						@177
 		crc32_combine_op						@178

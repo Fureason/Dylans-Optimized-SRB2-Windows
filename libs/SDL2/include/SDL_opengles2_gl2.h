@@ -15,7 +15,7 @@ extern "C" {
 **   https://github.com/KhronosGroup/OpenGL-Registry
 */
 
- 
+/*#include <GLES2/gl2platform.h>*/
 
 #ifndef GL_APIENTRYP
 #define GL_APIENTRYP GL_APIENTRY*
@@ -25,21 +25,21 @@ extern "C" {
 #define GL_GLES_PROTOTYPES 1
 #endif
 
- 
+/* Generated on date 20220530 */
 
-                          
-             
-                  
-                                
-                       
-                                    
-                                             
-                                 
-   
+/* Generated C header for:
+ * API: gles2
+ * Profile: common
+ * Versions considered: 2\.[0-9]
+ * Versions emitted: .*
+ * Default extensions included: None
+ * Additional extensions included: _nomatch_^
+ * Extensions removed: _nomatch_^
+ */
 
 #ifndef GL_ES_VERSION_2_0
 #define GL_ES_VERSION_2_0 1
- 
+/*#include <KHR/khrplatform.h>*/
 typedef khronos_int8_t GLbyte;
 typedef khronos_float_t GLclampf;
 typedef khronos_int32_t GLfixed;
@@ -647,7 +647,7 @@ GL_APICALL void GL_APIENTRY glVertexAttrib4fv (GLuint index, const GLfloat *v);
 GL_APICALL void GL_APIENTRY glVertexAttribPointer (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
 GL_APICALL void GL_APIENTRY glViewport (GLint x, GLint y, GLsizei width, GLsizei height);
 #endif
-#endif  
+#endif /* GL_ES_VERSION_2_0 */
 
 #ifdef __cplusplus
 }

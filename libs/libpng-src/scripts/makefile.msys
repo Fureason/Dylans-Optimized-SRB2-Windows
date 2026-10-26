@@ -16,24 +16,24 @@
 prefix=/usr/local
 exec_prefix=$(prefix)
 
-
+# Library name:
 LIBNAME = libpng16
 PNGMAJ = 16
 RELEASE = 37
 
-
+# Shared library names:
 LIBSO=$(LIBNAME).dll
 LIBSOMAJ=$(LIBNAME).dll.$(PNGMAJ)
 LIBSOREL=$(PNGMAJ).$(RELEASE)
 OLDSO=libpng.dll
 
-
-
-
+# Where the zlib library and include files are located.
+#ZLIBLIB=../zlib
+#ZLIBINC=../zlib
 ZLIBLIB=/usr/local/lib
 ZLIBINC=/usr/local/include
 
-
+# Compiler, linker, lib and other tools
 CC = gcc
 LD = $(CC)
 AR_RC = ar rcs
@@ -43,15 +43,15 @@ RM_F = rm -rf
 MKDIR_P=mkdir -p
 LN_SF=ln -sf
 
-
-
+#ARCH = -march=pentium3
+#ARCH = -march=i686
 ARCH =
-CPPFLAGS =  
-CFLAGS = -W -Wall -O2 $(ARCH)  
+CPPFLAGS = # -DPNG_DEBUG=5
+CFLAGS = -W -Wall -O2 $(ARCH) # -g
 LDFLAGS =
 LIBS = -lz -lm
 
-
+# File extensions
 EXEEXT=.exe
 
 INCPATH=$(prefix)/include
@@ -59,14 +59,14 @@ LIBPATH=$(exec_prefix)/lib
 MANPATH=$(prefix)/man
 BINPATH=$(exec_prefix)/bin
 
-
-
-
-
-
-
-
-
+# override DESTDIR= on the make install command line to easily support
+# installing into a temporary location.  Example:
+#
+#    make install DESTDIR=/tmp/build/libpng
+#
+# If you're going to install into a temporary location
+# via DESTDIR, $(DESTDIR)$(prefix) must already exist before
+# you execute make install.
 
 DESTDIR=
 
@@ -75,16 +75,16 @@ DI=$(DESTDIR)$(INCPATH)
 DL=$(DESTDIR)$(LIBPATH)
 DM=$(DESTDIR)$(MANPATH)
 
-
-
+# Pre-built configuration
+# See scripts/pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT = scripts/pnglibconf.h.prebuilt
 
-
+# Variables
 OBJS =  png.o pngerror.o pngget.o pngmem.o pngpread.o \
 	pngread.o pngrio.o pngrtran.o pngrutil.o pngset.o \
 	pngtrans.o pngwio.o pngwrite.o pngwtran.o pngwutil.o
 
-
+# Targets
 all: static shared
 
 pnglibconf.h: $(PNGLIBCONF_H_PREBUILT)

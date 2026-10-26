@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  tic_command.h
+/// \brief Tic command handling
 
 #ifndef __D_TIC_COMMAND__
 #define __D_TIC_COMMAND__
@@ -18,8 +18,8 @@
 #include "../doomdef.h"
 #include "../doomtype.h"
 
-extern tic_t firstticstosend;  
-extern tic_t tictoclear;  
+extern tic_t firstticstosend; // min of the nettics
+extern tic_t tictoclear; // optimize d_clearticcmd
 
 extern ticcmd_t localcmds;
 extern ticcmd_t localcmds2;
@@ -35,7 +35,7 @@ void D_ResetConsistencyTracker(INT32 node);
 void PT_ClientCmd(SINT8 nodenum, INT32 netconsole);
 void PT_ServerTics(SINT8 node, INT32 netconsole);
 
-
+// send the client packet to the server
 void CL_SendClientCmd(void);
 
 void SV_SendTics(void);

@@ -91,7 +91,7 @@ typedef struct _mainprog_info {
     uch *image_data;
     uch **row_pointers;
     jmp_buf jmpbuf;
-    int passes;               
+    int passes;              /* not used */
     int pass;
     int rowbytes;
     int channels;
@@ -103,7 +103,7 @@ typedef struct _mainprog_info {
 } mainprog_info;
 
 
- 
+/* prototypes for public functions in readpng2.c */
 
 void readpng2_version_info(void);
 

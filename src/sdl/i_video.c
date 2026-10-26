@@ -17,8 +17,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file
+/// \brief SRB2 graphics stuff for SDL
 
 #include <stdlib.h>
 
@@ -43,10 +43,10 @@
 
 #ifdef HAVE_IMAGE
 #include "SDL_image.h"
-#elif defined (__unix__) || (!defined(__APPLE__) && defined (UNIXCOMMON))  
-#define LOAD_XPM  
-#include "IMG_xpm.c"  
-#define HAVE_IMAGE  
+#elif defined (__unix__) || (!defined(__APPLE__) && defined (UNIXCOMMON)) // Windows & Mac don't need this, as SDL will do it for us.
+#define LOAD_XPM //I want XPM!
+#include "IMG_xpm.c" //Alam: I don't want to add SDL_Image.dll/so
+#define HAVE_IMAGE //I have SDL_Image, sortof
 #endif
 
 #ifdef HAVE_IMAGE
@@ -88,24 +88,24 @@
 #ifdef HWRENDER
 #include "../hardware/hw_main.h"
 #include "../hardware/hw_drv.h"
-
+// For dynamic referencing of HW rendering functions
 #include "hwsym_sdl.h"
 #include "ogl_sdl.h"
 #endif
 
-
+// maximum number of windowed modes (see windowedModes[][])
 #define MAXWINMODES (22)
 
-          
-  
+/**	\brief
+*/
 static INT32 numVidModes = -1;
 
-          
-  
-static char vidModeName[33][32];  
+/**	\brief
+*/
+static char vidModeName[33][32]; // allow 33 different modes
 
 rendermode_t rendermode = render_soft;
-rendermode_t chosenrendermode = render_none;  
+rendermode_t chosenrendermode = render_none; // set by command line arguments
 
 static void VidWaitChanged(void);
 static void WindowedStyleChanged(void);
@@ -118,39 +118,39 @@ static CV_PossibleValue_t vsync_cons_t[] = {
 	{0, NULL}
 };
 
-
+// synchronize page flipping with screen refresh
 consvar_t cv_vidwait = CVAR_INIT ("vid_wait", "On", CV_SAVE | CV_CALL, vsync_cons_t, VidWaitChanged);
 static CV_PossibleValue_t windowedstyle_cons_t[] = {
 	{0, "Normal"},
 	{1, "Borderless Desktop"},
 	{0, NULL}
 };
-                                                                         
-                                                                           
-                                                                         
+/* Compatibility-only cvar for configs written by V5.52-V5.66. Borderless
+ * desktop duplicated the fullscreen presentation without being fullscreen,
+ * so new configs no longer save it and the menu no longer exposes it. */
 static consvar_t cv_windowedstyle = CVAR_INIT ("windowedstyle", "Normal", CV_CALL | CV_NOSHOWHELP,
 	windowedstyle_cons_t, WindowedStyleChanged);
 static consvar_t cv_stretch = CVAR_INIT ("stretch", "Off", CV_SAVE|CV_NOSHOWHELP, CV_OnOff, NULL);
 static consvar_t cv_alwaysgrabmouse = CVAR_INIT ("alwaysgrabmouse", "Off", CV_SAVE, CV_OnOff, NULL);
 
-UINT8 graphics_started = 0;  
+UINT8 graphics_started = 0; // Is used in console.c and screen.c
 
-
+// To disable fullscreen at startup; is set in VID_PrepareModeList
 boolean allow_fullscreen = false;
 static SDL_bool disable_fullscreen = SDL_FALSE;
 #define USE_FULLSCREEN (disable_fullscreen||!allow_fullscreen)?0:cv_fullscreen.value
 static SDL_bool disable_mouse = SDL_FALSE;
 #define USE_MOUSEINPUT (!disable_mouse && cv_usemouse.value && havefocus)
-#define MOUSE_MENU false  
+#define MOUSE_MENU false //(!disable_mouse && cv_usemouse.value && menuactive && !USE_FULLSCREEN)
 #define MOUSEBUTTONS_MAX MOUSEBUTTONS
 
-
+// first entry in the modelist which is not bigger than MAXVIDWIDTHxMAXVIDHEIGHT
 static      INT32          firstEntry = 0;
 
-
+// Total mouse motion X/Y offsets
 static      INT32        mousemovex = 0, mousemovey = 0;
 
-
+// SDL vars
 static      SDL_Surface *vidSurface = NULL;
 static      SDL_Surface *bufSurface = NULL;
 static      SDL_Surface *icoSurface = NULL;
@@ -173,7 +173,7 @@ static       SDL_bool    window_needs_first_present = SDL_FALSE;
 static       SDL_bool    software_gl_presenter = SDL_FALSE;
 #endif
 
-
+// SDL2 vars
 SDL_Window   *window;
 SDL_Renderer *renderer;
 static SDL_Texture  *texture;
@@ -187,11 +187,11 @@ static precise_t windows_sizemove_started;
 static precise_t windows_sizemove_finished;
 static HWND windows_sizemove_window;
 
-                                                                          
-                                                                            
-                                                                        
-                                                                              
-              
+/* DefWindowProc enters a modal message loop while the user drags a normal
+ * title bar. The engine cannot safely advance or render re-entrantly there,
+ * but a small Win32 timer can keep UDP acknowledgements, downloads, and
+ * master-server maintenance alive so moving the host window cannot disconnect
+ * clients. */
 static void SDLCALL Impl_WindowsMessageHook(void *userdata, void *nativewindow,
 	unsigned int message, Uint64 wparam, Sint64 lparam)
 {
@@ -244,38 +244,38 @@ boolean I_WindowManagerBlockedDuring(precise_t started, precise_t finished)
 }
 #endif
 
-
+// windowed video modes from which to choose from.
 static INT32 windowedModes[MAXWINMODES][2] =
 {
-	{2560,1440},  
-	{1920,1200},  
-	{1920,1080},  
-	{1680,1050},  
-	{1600,1200},  
-	{1600,1000},  
-	{1600, 900},  
-	{1536, 864},  
-	{1366, 768},  
-	{1440, 900},  
-	{1280,1024},  
-	{1280, 960},  
-	{1280, 800},  
-	{1280, 720},  
-	{1152, 864},  
-	{1024, 768},  
-	{ 960, 600},  
-	{ 800, 600},  
-	{ 640, 480},  
-	{ 640, 400},  
-	{ 320, 240},  
-	{ 320, 200},  
+	{2560,1440}, // 1.77
+	{1920,1200}, // 1.60,6.00
+	{1920,1080}, // 1.66
+	{1680,1050}, // 1.60,5.25
+	{1600,1200}, // 1.33
+	{1600,1000}, // 1.60,5.00
+	{1600, 900}, // 1.66
+	{1536, 864}, // 1.66,4.80
+	{1366, 768}, // 1.66
+	{1440, 900}, // 1.60,4.50
+	{1280,1024}, // 1.33?
+	{1280, 960}, // 1.33,4.00
+	{1280, 800}, // 1.60,4.00
+	{1280, 720}, // 1.66
+	{1152, 864}, // 1.33,3.60
+	{1024, 768}, // 1.33,3.20
+	{ 960, 600}, // 1.60,3.00
+	{ 800, 600}, // 1.33,2.50
+	{ 640, 480}, // 1.33,2.00
+	{ 640, 400}, // 1.60,2.00
+	{ 320, 240}, // 1.33,1.00
+	{ 320, 200}, // 1.60,1.00
 };
 
 static void Impl_VideoSetupSDLBuffer(void);
 static void Impl_VideoSetupBuffer(void);
 static void Impl_DestroySoftwareContext(void);
 static SDL_bool Impl_CreateWindow(SDL_bool fullscreen);
-
+//static void Impl_SetWindowName(const char *title);
 static void Impl_SetWindowIcon(void);
 
 static void Impl_ApplyWindowedStyle(INT32 width, INT32 height, SDL_bool reposition)
@@ -312,7 +312,7 @@ static void SDLSetMode(INT32 width, INT32 height, SDL_bool fullscreen, SDL_bool 
 			wasfullscreen = SDL_TRUE;
 			SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 		}
-		else  
+		else // windowed mode
 		{
 			if (wasfullscreen)
 			{
@@ -348,7 +348,7 @@ static void SDLSetMode(INT32 width, INT32 height, SDL_bool fullscreen, SDL_bool 
 			SDL_RenderClear(renderer);
 			SDL_RenderSetLogicalSize(renderer, width, height);
 		}
-
+		// Set up Texture
 		realwidth = width;
 		realheight = height;
 		if (texture != NULL)
@@ -374,7 +374,7 @@ static void SDLSetMode(INT32 width, INT32 height, SDL_bool fullscreen, SDL_bool 
 				I_Error("Failed to create the software screen texture: %s\n", SDL_GetError());
 		}
 
-
+		// Set up SW surface
 		if (vidSurface != NULL)
 		{
 			SDL_FreeSurface(vidSurface);
@@ -412,8 +412,8 @@ static void VidWaitChanged(void)
 
 static void WindowedStyleChanged(void)
 {
-	                                                                         
-                                                   
+	/* Accept the retired value from an older config, but always normalize it
+	 * to the only supported windowed presentation. */
 	if (cv_windowedstyle.value)
 		CV_StealthSetValue(&cv_windowedstyle, 0);
 
@@ -431,7 +431,7 @@ static INT32 Impl_SDL_Scancode_To_Keycode(SDL_Scancode code)
 {
 	if (code >= SDL_SCANCODE_A && code <= SDL_SCANCODE_Z)
 	{
-
+		// get lowercase ASCII
 		return code - SDL_SCANCODE_A + 'a';
 	}
 	if (code >= SDL_SCANCODE_1 && code <= SDL_SCANCODE_9)
@@ -448,7 +448,7 @@ static INT32 Impl_SDL_Scancode_To_Keycode(SDL_Scancode code)
 	}
 	switch (code)
 	{
-
+		// F11 and F12 are separated from the rest of the function keys
 		case SDL_SCANCODE_F11: return KEY_F11;
 		case SDL_SCANCODE_F12: return KEY_F12;
 
@@ -481,7 +481,7 @@ static INT32 Impl_SDL_Scancode_To_Keycode(SDL_Scancode code)
 		case SDL_SCANCODE_PERIOD:         return '.';
 		case SDL_SCANCODE_SLASH:          return '/';
 		case SDL_SCANCODE_CAPSLOCK:       return KEY_CAPSLOCK;
-		case SDL_SCANCODE_PRINTSCREEN:    return 0;  
+		case SDL_SCANCODE_PRINTSCREEN:    return 0; // undefined?
 		case SDL_SCANCODE_SCROLLLOCK:     return KEY_SCROLLLOCK;
 		case SDL_SCANCODE_PAUSE:          return KEY_PAUSE;
 		case SDL_SCANCODE_INSERT:         return KEY_INS;
@@ -496,7 +496,7 @@ static INT32 Impl_SDL_Scancode_To_Keycode(SDL_Scancode code)
 		case SDL_SCANCODE_UP:             return KEY_UPARROW;
 		case SDL_SCANCODE_NUMLOCKCLEAR:   return KEY_NUMLOCK;
 		case SDL_SCANCODE_KP_DIVIDE:      return KEY_KPADSLASH;
-		case SDL_SCANCODE_KP_MULTIPLY:    return '*';  
+		case SDL_SCANCODE_KP_MULTIPLY:    return '*'; // undefined?
 		case SDL_SCANCODE_KP_MINUS:       return KEY_MINUSPAD;
 		case SDL_SCANCODE_KP_PLUS:        return KEY_PLUSPAD;
 		case SDL_SCANCODE_KP_ENTER:       return KEY_ENTER;
@@ -546,14 +546,14 @@ static void SDLdoGrabMouse(void)
 {
 	SDL_ShowCursor(SDL_DISABLE);
 	SDL_SetWindowGrab(window, SDL_TRUE);
-	if (SDL_SetRelativeMouseMode(SDL_TRUE) == 0)  
-		wrapmouseok = SDL_TRUE;  
+	if (SDL_SetRelativeMouseMode(SDL_TRUE) == 0) // already warps mouse if successful
+		wrapmouseok = SDL_TRUE; // TODO: is wrapmouseok or HalfWarpMouse needed anymore?
 }
 
-                                                                            
-                                                                              
-                                                                          
-                                    
+/* Windows can leave SDL's relative-mouse flag set while the OS cursor is no
+ * longer captured after repeated Alt-Tab cycles. Toggle the mode on a genuine
+ * focus return so SDL rebuilds the platform grab instead of accepting the
+ * stale "already enabled" state. */
 static void SDLreacquireMouse(void)
 {
 	SDL_SetRelativeMouseMode(SDL_FALSE);
@@ -596,7 +596,7 @@ static void VID_Command_NumModes_f (void)
 	CONS_Printf(M_GetText("%d video mode(s) available(s)\n"), VID_NumModes());
 }
 
-
+// SDL2 doesn't have SDL_GetVideoSurface or a lot of the SDL_Surface flags that SDL 1.2 had
 static void SurfaceInfo(const SDL_Surface *infoSurface, const char *SurfaceText)
 {
 	INT32 vfBPP;
@@ -627,7 +627,7 @@ static void VID_Command_Info_f (void)
 #else
 #if 0
 	const SDL_VideoInfo *videoInfo;
-	videoInfo = SDL_GetVideoInfo();  
+	videoInfo = SDL_GetVideoInfo(); //Alam: Double-Check
 	if (videoInfo)
 	{
 		CONS_Printf("%s", M_GetText("Video Interface Capabilities:\n"));
@@ -635,8 +635,8 @@ static void VID_Command_Info_f (void)
 			CONS_Printf("%s", M_GetText(" Hardware surfaces\n"));
 		if (videoInfo->wm_available)
 			CONS_Printf("%s", M_GetText(" Window manager\n"));
-
-
+		//UnusedBits1  :6
+		//UnusedBits2  :1
 		if (videoInfo->blit_hw)
 			CONS_Printf("%s", M_GetText(" Accelerated blits HW-2-HW\n"));
 		if (videoInfo->blit_hw_CC)
@@ -654,12 +654,12 @@ static void VID_Command_Info_f (void)
 			CONS_Printf("%s", M_GetText(" Accelerated blits SW-2-HW with Alpha\n"));
 		if (videoInfo->blit_fill)
 			CONS_Printf("%s", M_GetText(" Accelerated Color filling\n"));
-
+		//UnusedBits3  :16
 		if (videoInfo->video_mem)
 			CONS_Printf(M_GetText(" There is %i KB of video memory\n"), videoInfo->video_mem);
 		else
 			CONS_Printf("%s", M_GetText(" There no video memory for SDL\n"));
-
+		//*vfmt
 	}
 #else
 	if (!M_CheckParm("-noblit")) videoblitok = SDL_TRUE;
@@ -689,7 +689,7 @@ static void VID_Command_Info_f (void)
 
 static void VID_Command_ModeList_f(void)
 {
-
+	// List windowed modes
 	INT32 i = 0;
 	CONS_Printf("NOTE: Under SDL2, all modes are supported on all platforms.\n");
 	CONS_Printf("Under opengl, fullscreen only supports native desktop resolution.\n");
@@ -716,7 +716,7 @@ static void VID_Command_Mode_f (void)
 	if (modenum >= VID_NumModes())
 		CONS_Printf(M_GetText("Video mode not present\n"));
 	else
-		setmodeneeded = modenum+1;  
+		setmodeneeded = modenum+1; // request vid mode change
 }
 
 static inline void SDLJoyRemap(event_t *event)
@@ -726,13 +726,13 @@ static inline void SDLJoyRemap(event_t *event)
 
 static INT32 SDLJoyAxis(const Sint16 axis, evtype_t which)
 {
-
+	// -32768 to 32767
 	INT32 raxis = axis/32;
 	if (which == ev_joystick)
 	{
 		if (Joystick.bGamepadStyle)
 		{
-
+			// gamepad control type, on or off, live or die
 			if (raxis < -(JOYAXISRANGE/2))
 				raxis = -1;
 			else if (raxis > (JOYAXISRANGE/2))
@@ -754,7 +754,7 @@ static INT32 SDLJoyAxis(const Sint16 axis, evtype_t which)
 	{
 		if (Joystick2.bGamepadStyle)
 		{
-
+			// gamepad control type, on or off, live or die
 			if (raxis < -(JOYAXISRANGE/2))
 				raxis = -1;
 			else if (raxis > (JOYAXISRANGE/2))
@@ -817,16 +817,16 @@ static void Impl_HandleWindowEvent(SDL_WindowEvent evt)
 
 	if (mousefocus && kbfocus)
 	{
-
+		// Tell game we got focus back, resume music if necessary
 		window_notinfocus = false;
 		if (!paused)
-			S_ResumeAudio();  
+			S_ResumeAudio(); //resume it
 
 		if (!firsttimeonmouse)
 		{
 			if (cv_usemouse.value) I_StartupMouse();
 		}
-
+		//else firsttimeonmouse = SDL_FALSE;
 
 		if (USE_MOUSEINPUT && ShouldGrabMouse())
 		{
@@ -838,7 +838,7 @@ static void Impl_HandleWindowEvent(SDL_WindowEvent evt)
 	}
 	else if (!mousefocus && !kbfocus)
 	{
-
+		// Tell game we lost focus, pause music
 		window_notinfocus = true;
 		if (! cv_playmusicifunfocused.value)
 			S_PauseAudio();
@@ -849,7 +849,7 @@ static void Impl_HandleWindowEvent(SDL_WindowEvent evt)
 		{
 			SDLforceUngrabMouse();
 		}
-		memset(gamekeydown, 0, NUMKEYS);  
+		memset(gamekeydown, 0, NUMKEYS); // TODO this is a scary memset
 
 		if (MOUSE_MENU)
 		{
@@ -885,7 +885,7 @@ static void Impl_HandleTextEvent(SDL_TextInputEvent evt)
 	event.type = ev_text;
 	if (evt.text[1] != '\0')
 	{
-
+		// limit ourselves to ASCII for now, we can add UTF-8 support later
 		return;
 	}
 	event.key = evt.text[0];
@@ -905,8 +905,8 @@ static void Impl_HandleMouseMotionEvent(SDL_MouseMotionEvent evt)
 			return;
 		}
 
-
-
+		// If using relative mouse mode, don't post an event_t just now,
+		// add on the offsets so we can make an overall event later.
 		if (SDL_GetRelativeMouseMode())
 		{
 			if (SDL_GetMouseFocus() == window && SDL_GetKeyboardFocus() == window)
@@ -919,18 +919,18 @@ static void Impl_HandleMouseMotionEvent(SDL_MouseMotionEvent evt)
 			return;
 		}
 
-
-
+		// If the event is from warping the pointer to middle
+		// of the screen then ignore it.
 		if ((evt.x == realwidth/2) && (evt.y == realheight/2))
 		{
 			firstmove = false;
 			return;
 		}
 
-
-
-
-
+		// Don't send an event_t if not in relative mouse mode anymore,
+		// just grab and set relative mode
+		// this fixes the stupid camera jerk on mouse entering bug
+		// -- Monster Iestyn
 		if (SDL_GetMouseFocus() == window && SDL_GetKeyboardFocus() == window)
 		{
 			SDLdoGrabMouse();
@@ -946,16 +946,16 @@ static void Impl_HandleMouseButtonEvent(SDL_MouseButtonEvent evt, Uint32 type)
 
 	SDL_memset(&event, 0, sizeof(event_t));
 
-
-
-
-
-
+	// Ignore the event if the mouse is not actually focused on the window.
+	// This can happen if you used the mouse to restore keyboard focus;
+	// this apparently makes a mouse button down event but not a mouse button up event,
+	// resulting in whatever key was pressed down getting "stuck" if we don't ignore it.
+	// -- Monster Iestyn (28/05/18)
 	if (SDL_GetMouseFocus() != window
 	 || (ShouldIgnoreMouse() && !chat_on && !con_destlines))
 		return;
 
-
+	/// \todo inputEvent.button.which
 	if (USE_MOUSEINPUT)
 	{
 		if (type == SDL_MOUSEBUTTONUP)
@@ -1016,7 +1016,7 @@ static void Impl_HandleJoystickAxisEvent(SDL_JoyAxisEvent evt)
 	event_t event;
 	SDL_JoystickID joyid[2];
 
-
+	// Determine the Joystick IDs for each current open joystick
 	joyid[0] = SDL_JoystickInstanceID(JoyInfo.dev);
 	joyid[1] = SDL_JoystickInstanceID(JoyInfo2.dev);
 
@@ -1032,10 +1032,10 @@ static void Impl_HandleJoystickAxisEvent(SDL_JoyAxisEvent evt)
 		event.type = ev_joystick2;
 	}
 	else return;
-
+	//axis
 	if (evt.axis > JOYAXISSET*2)
 		return;
-
+	//vaule
 	if (evt.axis%2)
 	{
 		event.key = evt.axis / 2;
@@ -1056,12 +1056,12 @@ static void Impl_HandleJoystickHatEvent(SDL_JoyHatEvent evt)
 	event_t event;
 	SDL_JoystickID joyid[2];
 
-
+	// Determine the Joystick IDs for each current open joystick
 	joyid[0] = SDL_JoystickInstanceID(JoyInfo.dev);
 	joyid[1] = SDL_JoystickInstanceID(JoyInfo2.dev);
 
 	if (evt.hat >= JOYHATS)
-		return;  
+		return; // ignore hats with too high an index
 
 	if (evt.which == joyid[0])
 	{
@@ -1073,7 +1073,7 @@ static void Impl_HandleJoystickHatEvent(SDL_JoyHatEvent evt)
 	}
 	else return;
 
-
+	// NOTE: UNFINISHED
 }
 #endif
 
@@ -1082,7 +1082,7 @@ static void Impl_HandleJoystickButtonEvent(SDL_JoyButtonEvent evt, Uint32 type)
 	event_t event;
 	SDL_JoystickID joyid[2];
 
-
+	// Determine the Joystick IDs for each current open joystick
 	joyid[0] = SDL_JoystickInstanceID(JoyInfo.dev);
 	joyid[1] = SDL_JoystickInstanceID(JoyInfo2.dev);
 
@@ -1119,9 +1119,9 @@ static void Impl_HandleJoystickButtonEvent(SDL_JoyButtonEvent evt, Uint32 type)
 void I_GetEvent(void)
 {
 	SDL_Event evt;
-
-
-
+	// We only want the first motion event,
+	// otherwise we'll end up catching the warp back to center.
+	//int mouseMotionOnce = 0;
 
 	if (!graphics_started)
 	{
@@ -1145,9 +1145,9 @@ void I_GetEvent(void)
 				Impl_HandleTextEvent(evt.text);
 				break;
 			case SDL_MOUSEMOTION:
-
+				//if (!mouseMotionOnce)
 				Impl_HandleMouseMotionEvent(evt.motion);
-
+				//mouseMotionOnce = 1;
 				break;
 			case SDL_MOUSEBUTTONUP:
 			case SDL_MOUSEBUTTONDOWN:
@@ -1174,14 +1174,14 @@ void I_GetEvent(void)
 
 					CONS_Debug(DBG_GAMELOGIC, "Joystick device index %d added\n", evt.jdevice.which + 1);
 
-
-
-
-
-
-
+					// Because SDL's device index is unstable, we're going to cheat here a bit:
+					// For the first joystick setting that is NOT active:
+					// 1. Set cv_usejoystickX.value to the new device index (this does not change what is written to config.cfg)
+					// 2. Set OTHERS' cv_usejoystickX.value to THEIR new device index, because it likely changed
+					//    * If device doesn't exist, switch cv_usejoystick back to default value (.string)
+					//      * BUT: If that default index is being occupied, use ANOTHER cv_usejoystick's default value!
 					if (newjoy && (!JoyInfo.dev || !SDL_JoystickGetAttached(JoyInfo.dev))
-						&& JoyInfo2.dev != newjoy)  
+						&& JoyInfo2.dev != newjoy) // don't override a currently active device
 					{
 						cv_usejoystick.value = evt.jdevice.which + 1;
 
@@ -1193,11 +1193,11 @@ void I_GetEvent(void)
 						else if (atoi(cv_usejoystick.string) != JoyInfo.oldjoy
 								&& atoi(cv_usejoystick.string) != cv_usejoystick.value)
 							cv_usejoystick2.value = atoi(cv_usejoystick.string);
-						else  
+						else // we tried...
 							cv_usejoystick2.value = 0;
 					}
 					else if (newjoy && (!JoyInfo2.dev || !SDL_JoystickGetAttached(JoyInfo2.dev))
-						&& JoyInfo.dev != newjoy)  
+						&& JoyInfo.dev != newjoy) // don't override a currently active device
 					{
 						cv_usejoystick2.value = evt.jdevice.which + 1;
 
@@ -1209,34 +1209,34 @@ void I_GetEvent(void)
 						else if (atoi(cv_usejoystick2.string) != JoyInfo2.oldjoy
 								&& atoi(cv_usejoystick2.string) != cv_usejoystick2.value)
 							cv_usejoystick.value = atoi(cv_usejoystick2.string);
-						else  
+						else // we tried...
 							cv_usejoystick.value = 0;
 					}
 
-
+					// Was cv_usejoystick disabled in settings?
 					if (!strcmp(cv_usejoystick.string, "0") || !cv_usejoystick.value)
 						cv_usejoystick.value = 0;
-					else if (atoi(cv_usejoystick.string) <= I_NumJoys()  
-						     && cv_usejoystick.value)  
+					else if (atoi(cv_usejoystick.string) <= I_NumJoys() // don't mess if we intentionally set higher than NumJoys
+						     && cv_usejoystick.value) // update the cvar ONLY if a device exists
 						CV_SetValue(&cv_usejoystick, cv_usejoystick.value);
 
 					if (!strcmp(cv_usejoystick2.string, "0") || !cv_usejoystick2.value)
 						cv_usejoystick2.value = 0;
-					else if (atoi(cv_usejoystick2.string) <= I_NumJoys()  
-					         && cv_usejoystick2.value)  
+					else if (atoi(cv_usejoystick2.string) <= I_NumJoys() // don't mess if we intentionally set higher than NumJoys
+					         && cv_usejoystick2.value) // update the cvar ONLY if a device exists
 						CV_SetValue(&cv_usejoystick2, cv_usejoystick2.value);
 
-
-
-
-
+					// Update all joysticks' init states
+					// This is a little wasteful since cv_usejoystick already calls this, but
+					// we need to do this in case CV_SetValue did nothing because the string was already same.
+					// if the device is already active, this should do nothing, effectively.
 					I_InitJoystick();
 					I_InitJoystick2();
 
 					CONS_Debug(DBG_GAMELOGIC, "Joystick1 device index: %d\n", JoyInfo.oldjoy);
 					CONS_Debug(DBG_GAMELOGIC, "Joystick2 device index: %d\n", JoyInfo2.oldjoy);
 
-
+					// update the menu
 					if (currentMenu == &OP_JoystickSetDef)
 						M_SetupJoystickMenu(0);
 
@@ -1257,16 +1257,16 @@ void I_GetEvent(void)
 					I_ShutdownJoystick2();
 				}
 
-
-
-
+				// Update the device indexes, because they likely changed
+				// * If device doesn't exist, switch cv_usejoystick back to default value (.string)
+				//   * BUT: If that default index is being occupied, use ANOTHER cv_usejoystick's default value!
 				if (JoyInfo.dev)
 					cv_usejoystick.value = JoyInfo.oldjoy = I_GetJoystickDeviceIndex(JoyInfo.dev) + 1;
 				else if (atoi(cv_usejoystick.string) != JoyInfo2.oldjoy)
 					cv_usejoystick.value = atoi(cv_usejoystick.string);
 				else if (atoi(cv_usejoystick2.string) != JoyInfo2.oldjoy)
 					cv_usejoystick.value = atoi(cv_usejoystick2.string);
-				else  
+				else // we tried...
 					cv_usejoystick.value = 0;
 
 				if (JoyInfo2.dev)
@@ -1275,26 +1275,26 @@ void I_GetEvent(void)
 					cv_usejoystick2.value = atoi(cv_usejoystick2.string);
 				else if (atoi(cv_usejoystick.string) != JoyInfo.oldjoy)
 					cv_usejoystick2.value = atoi(cv_usejoystick.string);
-				else  
+				else // we tried...
 					cv_usejoystick2.value = 0;
 
-
+				// Was cv_usejoystick disabled in settings?
 				if (!strcmp(cv_usejoystick.string, "0"))
 					cv_usejoystick.value = 0;
-				else if (atoi(cv_usejoystick.string) <= I_NumJoys()  
-						 && cv_usejoystick.value)  
+				else if (atoi(cv_usejoystick.string) <= I_NumJoys() // don't mess if we intentionally set higher than NumJoys
+						 && cv_usejoystick.value) // update the cvar ONLY if a device exists
 					CV_SetValue(&cv_usejoystick, cv_usejoystick.value);
 
 				if (!strcmp(cv_usejoystick2.string, "0"))
 					cv_usejoystick2.value = 0;
-				else if (atoi(cv_usejoystick2.string) <= I_NumJoys()  
-						 && cv_usejoystick2.value)  
+				else if (atoi(cv_usejoystick2.string) <= I_NumJoys() // don't mess if we intentionally set higher than NumJoys
+						 && cv_usejoystick2.value) // update the cvar ONLY if a device exists
 					CV_SetValue(&cv_usejoystick2, cv_usejoystick2.value);
 
 				CONS_Debug(DBG_GAMELOGIC, "Joystick1 device index: %d\n", JoyInfo.oldjoy);
 				CONS_Debug(DBG_GAMELOGIC, "Joystick2 device index: %d\n", JoyInfo2.oldjoy);
 
-
+				// update the menu
 				if (currentMenu == &OP_JoystickSetDef)
 					M_SetupJoystickMenu(0);
 				break;
@@ -1305,13 +1305,13 @@ void I_GetEvent(void)
 		}
 	}
 
-
+	// Send all relative mouse movement as one single mouse event.
 	if (mousemovex || mousemovey)
 	{
 		event_t event;
 		int wwidth, wheight;
 		SDL_GetWindowSize(window, &wwidth, &wheight);
-
+		//SDL_memset(&event, 0, sizeof(event_t));
 		event.type = ev_mouse;
 		event.key = 0;
 		event.x = (INT32)lround(mousemovex * ((float)wwidth / (float)realwidth));
@@ -1319,8 +1319,8 @@ void I_GetEvent(void)
 		D_PostEvent(&event);
 	}
 
-
-
+	// In order to make wheels act like buttons, we have to set their state to Up.
+	// This is because wheel messages don't have an up/down state.
 	gamekeydown[KEY_MOUSEWHEELDOWN] = gamekeydown[KEY_MOUSEWHEELUP] = 0;
 }
 
@@ -1333,7 +1333,7 @@ void I_StartupMouse(void)
 
 	if (!firsttimeonmouse)
 	{
-		HalfWarpMouse(realwidth, realheight);  
+		HalfWarpMouse(realwidth, realheight); // warp to center
 	}
 	else
 		firsttimeonmouse = SDL_FALSE;
@@ -1343,9 +1343,9 @@ void I_StartupMouse(void)
 		SDLdoUngrabMouse();
 }
 
-
-
-
+//
+// I_OsPolling
+//
 void I_OsPolling(void)
 {
 	SDL_Keymod mod;
@@ -1364,7 +1364,7 @@ void I_OsPolling(void)
 	I_GetEvent();
 
 	mod = SDL_GetModState();
-	 
+	/* Handle here so that our state is always synched with the system. */
 	shiftdown = ctrldown = altdown = 0;
 	capslock = false;
 	if (mod & KMOD_LSHIFT) shiftdown |= 1;
@@ -1376,9 +1376,9 @@ void I_OsPolling(void)
 	if (mod & KMOD_CAPS) capslock = true;
 }
 
-
-
-
+//
+// I_UpdateNoBlit
+//
 void I_UpdateNoBlit(void)
 {
 	if (rendermode == render_none)
@@ -1401,17 +1401,17 @@ void I_UpdateNoBlit(void)
 	exposevideo = SDL_FALSE;
 }
 
-
-
-
-
+// I_SkipFrame
+//
+// Returns true if it thinks we can afford to skip this frame
+// from PrBoom's src/SDL/i_video.c
 static inline boolean I_SkipFrame(void)
 {
 #if 1
-
-
-
-
+	// While I fixed the FPS counter bugging out with this,
+	// I actually really like being able to pause and
+	// use perfstats to measure rendering performance
+	// without game logic changes.
 	return false;
 #else
 	static boolean skip = false;
@@ -1423,25 +1423,25 @@ static inline boolean I_SkipFrame(void)
 		case GS_LEVEL:
 			if (!paused)
 				return false;
-			 
-
+			/* FALLTHRU */
+		//case GS_TIMEATTACK: -- sorry optimisation but now we have a cool level platter and that being laggardly looks terrible
 		case GS_WAITINGPLAYERS:
-			return skip;  
+			return skip; // Skip odd frames
 		default:
 			return false;
 	}
 #endif
 }
 
-
-
-
+//
+// I_FinishUpdate
+//
 static SDL_Rect src_rect = { 0, 0, 0, 0 };
 
 void I_FinishUpdate(void)
 {
 	if (rendermode == render_none)
-		return;  
+		return; //Alam: No software or OpenGl surface
 
 	SCR_CalculateFPS();
 
@@ -1451,7 +1451,7 @@ void I_FinishUpdate(void)
 	if (marathonmode)
 		SCR_DisplayMarathonInfo();
 
-
+	// draw captions if enabled
 	if (cv_closedcaptioning.value)
 		SCR_ClosedCaptions();
 
@@ -1463,7 +1463,7 @@ void I_FinishUpdate(void)
 
 	if (rendermode == render_soft && screens[0])
 	{
-		if (!bufSurface)  
+		if (!bufSurface) //Double-Check
 		{
 			Impl_VideoSetupSDLBuffer();
 		}
@@ -1482,8 +1482,8 @@ void I_FinishUpdate(void)
 #endif
 		if (renderer && texture)
 		{
-
-
+			// UpdateTexture consumes the surface pixels directly; locking this
+			// system-memory surface only adds overhead.
 			SDL_UpdateTexture(texture, &src_rect, vidSurface->pixels, vidSurface->pitch);
 			SDL_RenderClear(renderer);
 			SDL_RenderCopy(renderer, texture, &src_rect, NULL);
@@ -1493,7 +1493,7 @@ void I_FinishUpdate(void)
 #ifdef HWRENDER
 	else if (rendermode == render_opengl)
 	{
-
+		// Final postprocess step of palette rendering, after everything else has been drawn.
 		if (HWR_ShouldUsePaletteRendering())
 		{
 			HWD.pfnMakeScreenTexture(HWD_SCREENTEXTURE_GENERIC2);
@@ -1515,9 +1515,9 @@ void I_FinishUpdate(void)
 	exposevideo = SDL_FALSE;
 }
 
-
-
-
+//
+// I_UpdateNoVsync
+//
 void I_UpdateNoVsync(void)
 {
 	INT32 real_vidwait = cv_vidwait.value;
@@ -1526,9 +1526,9 @@ void I_UpdateNoVsync(void)
 	cv_vidwait.value = real_vidwait;
 }
 
-
-
-
+//
+// I_ReadScreen
+//
 void I_ReadScreen(UINT8 *scr)
 {
 	if (rendermode != render_soft)
@@ -1539,9 +1539,9 @@ void I_ReadScreen(UINT8 *scr)
 			vid.rowbytes, vid.rowbytes);
 }
 
-
-
-
+//
+// I_SetPalette
+//
 void I_SetPalette(RGBA_t *palette)
 {
 	size_t i;
@@ -1551,12 +1551,12 @@ void I_SetPalette(RGBA_t *palette)
 		localPalette[i].g = palette[i].s.green;
 		localPalette[i].b = palette[i].s.blue;
 	}
-
-
+	//if (vidSurface) SDL_SetPaletteColors(vidSurface->format->palette, localPalette, 0, 256);
+	// Fury -- SDL2 vidSurface is a 32-bit surface buffer copied to the texture. It's not palletized, like bufSurface.
 	if (bufSurface) SDL_SetPaletteColors(bufSurface->format->palette, localPalette, 0, 256);
 }
 
-
+// return number of fullscreen + X11 modes
 INT32 VID_NumModes(void)
 {
 	if (USE_FULLSCREEN && numVidModes != -1)
@@ -1568,7 +1568,7 @@ INT32 VID_NumModes(void)
 const char *VID_GetModeName(INT32 modeNum)
 {
 #if 0
-	if (USE_FULLSCREEN && numVidModes != -1)  
+	if (USE_FULLSCREEN && numVidModes != -1) // fullscreen modes
 	{
 		modeNum += firstEntry;
 		if (modeNum >= numVidModes)
@@ -1578,7 +1578,7 @@ const char *VID_GetModeName(INT32 modeNum)
 			modeList[modeNum]->w,
 			modeList[modeNum]->h);
 	}
-	else  
+	else // windowed modes
 	{
 #endif
 	if (modeNum == -1)
@@ -1591,7 +1591,7 @@ const char *VID_GetModeName(INT32 modeNum)
 		sprintf(&vidModeName[modeNum][0], "%dx%d",
 			windowedModes[modeNum][0],
 			windowedModes[modeNum][1]);
-
+	//}
 	return &vidModeName[modeNum][0];
 }
 
@@ -1610,14 +1610,14 @@ INT32 VID_GetModeForSize(INT32 w, INT32 h)
 
 void VID_PrepareModeList(void)
 {
-
+	// Under SDL2, we just use the windowed modes list, and scale in windowed fullscreen.
 	allow_fullscreen = true;
 }
 
-
-
-
-
+// SDL_Renderer owns backend state that conflicts with SRB2's OpenGL context
+// on some Windows drivers. Always discard every software object before making
+// the game context current again; stale texture pointers also caused delayed
+// crashes after the first Software -> OpenGL transition.
 static void Impl_DestroySoftwareContext(void)
 {
 #ifdef HWRENDER
@@ -1639,8 +1639,8 @@ static void Impl_DestroySoftwareContext(void)
 
 	if (renderer)
 	{
-
-
+		// Submit queued presentation work before deleting its backend context.
+		// This closes a timing-dependent race seen after several rapid switches.
 #if SDL_VERSION_ATLEAST(2, 0, 10)
 		SDL_RenderFlush(renderer);
 #endif
@@ -1663,7 +1663,7 @@ static void Impl_DestroySoftwareContext(void)
 
 static SDL_bool Impl_CreateContext(void)
 {
-
+	// Renderer-specific stuff
 #ifdef HWRENDER
 	if ((rendermode == render_opengl)
 	&& (vid.glstate != VID_GL_LIBRARY_ERROR))
@@ -1706,13 +1706,13 @@ static SDL_bool Impl_CreateContext(void)
 #endif
 	if (rendermode == render_soft)
 	{
-		int flags = 0;  
+		int flags = 0; // Use this to set SDL_RENDERER_* flags now
 #ifdef HWRENDER
-
-
-
-
-
+		// SDL renderers are not reliable on an SDL_WINDOW_OPENGL window,
+		// especially in fullscreen. Upload Software through SRB2's persistent
+		// game context. Keeping the same HWND *and* GL context lets OBS retain
+		// its Game Capture hook across OpenGL -> Software switches. SDLSetMode's
+		// OglSdlSurface call restores the complete HWR state on the way back.
 		if (sdlglcontext)
 		{
 			static SDL_bool reported_gl_software_presenter = SDL_FALSE;
@@ -1734,13 +1734,13 @@ static SDL_bool Impl_CreateContext(void)
 		else if (cv_vidwait.value)
 		{
 #if SDL_VERSION_ATLEAST(2, 0, 18)
-
+			// If SDL is new enough, we can turn off vsync later.
 			flags |= SDL_RENDERER_PRESENTVSYNC;
 #else
-
-
-
-
+			// However, if it isn't, we should just silently turn vid_wait off
+			// This is because the renderer will be created before the config
+			// is read and vid_wait is set from the user's preferences, and thus
+			// vid_wait will have no effect.
 			CV_StealthSetValue(&cv_vidwait, 0);
 #endif
 		}
@@ -1768,10 +1768,10 @@ static INT32 Impl_GetStartupMSAA(void)
 		return (samples == 2 || samples == 4 || samples == 8 || samples == 16) ? samples : 0;
 	}
 
-	                                                                       
-                                                                        
-                                                                            
-                                             
+	/* Multisampling costs bandwidth even while GL_MULTISAMPLE is disabled,
+	 * because the window still owns a multisampled color/depth backbuffer.
+	 * Keep the normal startup path single-sampled; -msaa remains available for
+	 * users who explicitly accept that cost. */
 	return 0;
 }
 
@@ -1779,11 +1779,11 @@ void VID_CheckGLLoaded(rendermode_t oldrender)
 {
 	(void)oldrender;
 #ifdef HWRENDER
-	if (vid.glstate == VID_GL_LIBRARY_ERROR)  
+	if (vid.glstate == VID_GL_LIBRARY_ERROR) // Well, it didn't work the first time anyway.
 	{
 		CONS_Alert(CONS_ERROR, "OpenGL never loaded\n");
 		rendermode = oldrender;
-		if (chosenrendermode == render_opengl)  
+		if (chosenrendermode == render_opengl) // fallback to software
 			rendermode = render_soft;
 		if (setrenderneeded)
 		{
@@ -1812,8 +1812,8 @@ boolean VID_CheckRenderer(void)
 			rendermode, setrenderneeded, vid.width, vid.height, USE_FULLSCREEN));
 #endif
 #ifdef HWRENDER
-
-
+		// Release Software's uploader texture before restoring the hardware
+		// renderer's complete state on the same persistent OpenGL context.
 		if (oldrenderer == render_soft && setrenderneeded == render_opengl)
 			Impl_DestroySoftwareContext();
 
@@ -1827,13 +1827,13 @@ boolean VID_CheckRenderer(void)
 		{
 			VID_CheckGLLoaded(oldrenderer);
 
-
-
+			// Initialise OpenGL before calling SDLSetMode!!!
+			// This is because SDLSetMode calls OglSdlSurface.
 			if (vid.glstate == VID_GL_LIBRARY_NOTLOADED)
 			{
 				VID_StartupOpenGL();
 
-
+				// Loaded successfully!
 				if (vid.glstate == VID_GL_LIBRARY_LOADED)
 				{
 					Impl_DestroySoftwareContext();
@@ -1849,7 +1849,7 @@ boolean VID_CheckRenderer(void)
 					else
 						Impl_CreateContext();
 
-
+					// The OpenGL context is active on the retained or new window.
 					contextcreated = true;
 				}
 			}
@@ -1901,13 +1901,13 @@ static UINT32 VID_GetRefreshRate(void)
 
 	if (SDL_WasInit(SDL_INIT_VIDEO) == 0)
 	{
-
+		// Video not init yet.
 		return 0;
 	}
 
 	if (SDL_GetCurrentDisplayMode(index, &m) != 0)
 	{
-
+		// Error has occurred.
 		return 0;
 	}
 
@@ -1930,7 +1930,7 @@ INT32 VID_SetMode(INT32 modeNum)
 	vid.height = windowedModes[modeNum][1];
 	vid.modenum = modeNum;
 
-
+	//Impl_SetWindowName("SRB2 "VERSIONSTRING);
 	src_rect.w = vid.width;
 	src_rect.h = vid.height;
 
@@ -1947,8 +1947,8 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 	const INT32 requested_msaa = Impl_GetStartupMSAA();
 #endif
 
-	if (rendermode == render_none)  
-		return SDL_TRUE;  
+	if (rendermode == render_none) // dedicated
+		return SDL_TRUE; // Monster Iestyn -- not sure if it really matters what we return here tbh
 
 	if (window != NULL)
 		return SDL_FALSE;
@@ -1957,15 +1957,15 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
 #ifdef HWRENDER
-	                                                                        
-                                                                           
+	/* Create the initial Software window with OpenGL capability so renderer
+	 * switches can retain the same native window handle for capture tools. */
 	flags |= SDL_WINDOW_OPENGL;
 
-	                                                                         
-                                                                             
+	/* A 24-bit depth buffer is broadly accelerated on Windows and avoids the
+	 * precision loss and GDI Generic fallback caused by unsupported formats. */
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-
-
+	// Hardware visual portals use the stencil buffer to confine the paired
+	// view to the portal opening instead of leaking it across nearby walls.
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 	if (requested_msaa > 0)
 	{
@@ -1979,13 +1979,13 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 	}
 #endif
 
-
+	// Create a window
 	window = SDL_CreateWindow("SRB2 "VERSIONSTRING, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 			realwidth, realheight, flags);
 
 #ifdef HWRENDER
-	                                                                           
-                                                                      
+	/* Unsupported sample counts must not prevent the game from starting. Retry
+	 * without MSAA and leave a clear message explaining the fallback. */
 	if (window == NULL && requested_msaa > 0)
 	{
 		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
@@ -2001,8 +2001,8 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 #endif
 
 #ifdef HWRENDER
-	                                                                          
-                                                                               
+	/* Software rendering should still start on a system where SDL cannot make
+	 * an OpenGL-capable window; that system will use the normal SDL presenter. */
 	if (window == NULL && rendermode == render_soft)
 	{
 		flags &= ~SDL_WINDOW_OPENGL;
@@ -2018,8 +2018,8 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 		return SDL_FALSE;
 	}
 
-
-
+	// Do not expose Windows' default white client area. I_FinishUpdate shows
+	// the window only after a complete Software or OpenGL frame is presented.
 	window_needs_first_present = SDL_TRUE;
 
 	Impl_SetWindowIcon();
@@ -2027,16 +2027,16 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 	return Impl_CreateContext();
 }
 
-  
-                                                 
- 
-                    
-  
-         
-  
-                                   
- 
-  
+/*
+static void Impl_SetWindowName(const char *title)
+{
+	if (window == NULL)
+	{
+		return;
+	}
+	SDL_SetWindowTitle(window, title);
+}
+*/
 
 static void Impl_SetWindowIcon(void)
 {
@@ -2051,16 +2051,16 @@ static void Impl_VideoSetupSDLBuffer(void)
 		SDL_FreeSurface(bufSurface);
 		bufSurface = NULL;
 	}
-
+	// Set up the SDL palletized buffer (copied to vidbuffer before being rendered to texture)
 	if (vid.bpp == 1)
 	{
 		bufSurface = SDL_CreateRGBSurfaceFrom(screens[0],vid.width,vid.height,8,
-			(int)vid.rowbytes,0x00000000,0x00000000,0x00000000,0x00000000);  
+			(int)vid.rowbytes,0x00000000,0x00000000,0x00000000,0x00000000); // 256 mode
 	}
-	else if (vid.bpp == 2)  
+	else if (vid.bpp == 2) // Fury -- don't think this is used at all anymore
 	{
 		bufSurface = SDL_CreateRGBSurfaceFrom(screens[0],vid.width,vid.height,15,
-			(int)vid.rowbytes,0x00007C00,0x000003E0,0x0000001F,0x00000000);  
+			(int)vid.rowbytes,0x00007C00,0x000003E0,0x0000001F,0x00000000); // 555 mode
 	}
 	if (bufSurface)
 	{
@@ -2077,14 +2077,14 @@ static void Impl_VideoSetupBuffer(void)
 	size_t required;
 	void *newbuffer;
 
-
+	// Set up game's software render buffer
 	vid.rowbytes = vid.width * vid.bpp;
 	vid.direct = NULL;
 	required = (size_t)NUMSCREENS * (size_t)vid.rowbytes * (size_t)vid.height;
 
-
-
-
+	// Resolution switches used to free and reallocate the full framebuffer even
+	// when the existing allocation was already large enough. Keep a high-water
+	// buffer so switching down from a large mode is effectively allocation-free.
 	if (!vid.buffer || required > vid_buffer_capacity)
 	{
 		newbuffer = calloc(1, required);
@@ -2127,7 +2127,7 @@ void I_StartupGraphics(void)
 	keyboard_started = true;
 
 #if !defined(HAVE_TTF)
-
+	// Previously audio was init here for questionable reasons?
 	if (SDL_InitSubSystem(SDL_INIT_VIDEO) < 0)
 	{
 		CONS_Printf(M_GetText("Couldn't initialize SDL's Video System: %s\n"), SDL_GetError());
@@ -2136,7 +2136,7 @@ void I_StartupGraphics(void)
 #endif
 	{
 		const char *vd = SDL_GetCurrentVideoDriver();
-
+		//CONS_Printf(M_GetText("Starting up with video driver: %s\n"), vd);
 		if (vd && (
 			strncasecmp(vd, "gcvideo", 8) == 0 ||
 			strncasecmp(vd, "fbcon", 6) == 0 ||
@@ -2146,8 +2146,8 @@ void I_StartupGraphics(void)
 			framebuffer = SDL_TRUE;
 	}
 
-
-
+	// Renderer choices
+	// Takes priority over the config.
 	if (M_CheckParm("-renderer"))
 	{
 		INT32 i = 0;
@@ -2164,16 +2164,16 @@ void I_StartupGraphics(void)
 		}
 	}
 
-
+	// Choose Software renderer
 	else if (M_CheckParm("-software"))
 		chosenrendermode = render_soft;
 
 #ifdef HWRENDER
-
+	// Choose OpenGL renderer
 	else if (M_CheckParm("-opengl"))
 		chosenrendermode = render_opengl;
 
-
+	// Don't startup OpenGL
 	if (M_CheckParm("-nogl"))
 	{
 		vid.glstate = VID_GL_LIBRARY_ERROR;
@@ -2187,33 +2187,33 @@ void I_StartupGraphics(void)
 
 	usesdl2soft = M_CheckParm("-softblit");
 
-
-
+	//SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY>>1,SDL_DEFAULT_REPEAT_INTERVAL<<2);
+	//VID_Command_ModeList_f();
 
 #ifdef HWRENDER
 	if (rendermode == render_opengl)
 		VID_StartupOpenGL();
 #endif
 
-
+	// Window icon
 #ifdef HAVE_IMAGE
 	icoSurface = IMG_ReadXPMFromArray(SDL_icon_xpm);
 #endif
 
+	// Fury: we do window initialization after GL setup to allow
+	// SDL_GL_LoadLibrary to work well on Windows
 
-
-
-
-
-
+	// Create window
+	//Impl_CreateWindow(USE_FULLSCREEN);
+	//Impl_SetWindowName("SRB2 "VERSIONSTRING);
 	VID_SetMode(VID_GetModeForSize(BASEVIDWIDTH, BASEVIDHEIGHT));
 
-	vid.width = BASEVIDWIDTH;  
-	vid.height = BASEVIDHEIGHT;  
-	vid.recalc = true;  
-	vid.direct = NULL;  
-	vid.bpp = 1;  
-	vid.WndParent = NULL;  
+	vid.width = BASEVIDWIDTH; // Default size for startup
+	vid.height = BASEVIDHEIGHT; // BitsPerPixel is the SDL interface's
+	vid.recalc = true; // Set up the console stufff
+	vid.direct = NULL; // Maybe direct access?
+	vid.bpp = 1; // This is the game engine's Bpp
+	vid.WndParent = NULL; //For the window?
 
 #ifdef HAVE_TTF
 	I_ShutdownTTF();
@@ -2223,20 +2223,20 @@ void I_StartupGraphics(void)
 
 	if (M_CheckParm("-nomousegrab"))
 		mousegrabok = SDL_FALSE;
-#if 0  
+#if 0 // defined (_DEBUG)
 	else
 	{
 		char videodriver[4] = {'S','D','L',0};
 		if (!M_CheckParm("-mousegrab") &&
 		    *strncpy(videodriver, SDL_GetCurrentVideoDriver(), 4) != '\0' &&
 		    strncasecmp("x11",videodriver,4) == 0)
-			mousegrabok = SDL_FALSE;  
+			mousegrabok = SDL_FALSE; //X11's XGrabPointer not good
 	}
 #endif
 	realwidth = (Uint16)vid.width;
 	realheight = (Uint16)vid.height;
 
-
+	//VID_Command_Info_f();
 	SDLdoUngrabMouse();
 
 	SDL_RaiseWindow(window);
@@ -2299,7 +2299,7 @@ void VID_StartupOpenGL(void)
 		HWD.pfnClearLightTables = hwSym("ClearLightTables",NULL);
 		HWD.pfnSetScreenPalette = hwSym("SetScreenPalette",NULL);
 
-		vid.glstate = HWD.pfnInit() ? VID_GL_LIBRARY_LOADED : VID_GL_LIBRARY_ERROR;  
+		vid.glstate = HWD.pfnInit() ? VID_GL_LIBRARY_LOADED : VID_GL_LIBRARY_ERROR; // let load the OpenGL library
 
 		if (vid.glstate == VID_GL_LIBRARY_ERROR)
 		{
@@ -2326,7 +2326,7 @@ void I_ShutdownGraphics(void)
 
 	I_OutputMsg("I_ShutdownGraphics(): ");
 
-
+	// was graphics initialized anyway?
 	if (!graphics_started)
 	{
 		I_OutputMsg("graphics never started\n");
@@ -2369,11 +2369,11 @@ void I_GetCursorPosition(INT32 *x, INT32 *y)
 
 UINT32 I_GetRefreshRate(void)
 {
-
-
-
-
-
+	// Moved to VID_GetRefreshRate.
+	// Precalculating it like that won't work as
+	// well for windowed mode since you can drag
+	// the window around, but very slow PCs might have
+	// trouble querying mode over and over again.
 	return refresh_rate;
 }
 

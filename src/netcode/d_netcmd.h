@@ -7,25 +7,25 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
-
+/// \file  d_netcmd.h
+/// \brief host/client network commands
+///        commands are executed through the command buffer
+///        like console commands
 
 #ifndef __D_NETCMD__
 #define __D_NETCMD__
 
 #include "../command.h"
 
-
+// console vars
 extern consvar_t cv_playername;
 extern consvar_t cv_playercolor;
 extern consvar_t cv_skin;
-
+// secondary splitscreen player
 extern consvar_t cv_playername2;
 extern consvar_t cv_playercolor2;
 extern consvar_t cv_skin2;
-
+// saved versions of the above six
 extern consvar_t cv_defaultplayercolor;
 extern consvar_t cv_defaultskin;
 extern consvar_t cv_defaultplayercolor2;
@@ -43,14 +43,14 @@ extern consvar_t cv_joyport2;
 extern consvar_t cv_joyscale;
 extern consvar_t cv_joyscale2;
 
-
+// splitscreen with second mouse
 extern consvar_t cv_mouse2port;
 extern consvar_t cv_usemouse2;
 #if defined (__unix__) || defined (__APPLE__) || defined (UNIXCOMMON)
 extern consvar_t cv_mouse2opt;
 #endif
 
-
+// normally in p_mobj but the .h is not read
 extern consvar_t cv_itemrespawntime;
 extern consvar_t cv_itemrespawn;
 
@@ -98,7 +98,7 @@ extern consvar_t cv_startinglives;
 extern consvar_t cv_gravity, cv_movebob;
 extern consvar_t cv_tailspickup;
 
-
+// for f_finale.c
 extern consvar_t cv_rollingdemos;
 
 extern consvar_t cv_ringslinger, cv_soundtest;
@@ -127,30 +127,30 @@ extern consvar_t cv_freedemocamera;
 typedef enum
 {
 	XD_NAMEANDCOLOR = 1,
-	XD_WEAPONPREF,   
-	XD_KICK,         
-	XD_NETVAR,       
-	XD_SAY,          
-	XD_MAP,          
-	XD_EXITLEVEL,    
-	XD_ADDFILE,      
-	XD_ADDFOLDER,    
-	XD_PAUSE,        
-	XD_ADDPLAYER,    
-	XD_TEAMCHANGE,   
-	XD_CLEARSCORES,  
-	XD_VERIFIED,     
-	XD_RANDOMSEED,   
-	XD_RUNSOC,       
-	XD_REQADDFILE,   
-	XD_REQADDFOLDER, 
-	XD_SETMOTD,      
-	XD_SUICIDE,      
-	XD_DEMOTED,      
-	XD_LUACMD,       
-	XD_LUAVAR,       
-	XD_LUAFILE,      
-	XD_MUTEPLAYER,   
+	XD_WEAPONPREF,  // 2
+	XD_KICK,        // 3
+	XD_NETVAR,      // 4
+	XD_SAY,         // 5
+	XD_MAP,         // 6
+	XD_EXITLEVEL,   // 7
+	XD_ADDFILE,     // 8
+	XD_ADDFOLDER,   // 9
+	XD_PAUSE,       // 10
+	XD_ADDPLAYER,   // 11
+	XD_TEAMCHANGE,  // 12
+	XD_CLEARSCORES, // 13
+	XD_VERIFIED,    // 14
+	XD_RANDOMSEED,  // 15
+	XD_RUNSOC,      // 16
+	XD_REQADDFILE,  // 17
+	XD_REQADDFOLDER,// 18
+	XD_SETMOTD,     // 19
+	XD_SUICIDE,     // 20
+	XD_DEMOTED,     // 21
+	XD_LUACMD,      // 22
+	XD_LUAVAR,      // 23
+	XD_LUAFILE,     // 24
+	XD_MUTEPLAYER,  // 25
 	MAXNETXCMD
 } netxcmd_t;
 
@@ -164,15 +164,15 @@ extern const char *netxcmdnames[MAXNETXCMD - 1];
 #pragma warning(disable :  4214)
 #endif
 
-
-
-
+//Packet composition for Command_TeamChange_f() ServerTeamChange, etc.
+//bitwise structs make packing bits a little easier, but byte alignment harder?
+//todo: decide whether to make the other netcommands conform, or just get rid of this experiment.
 typedef struct {
-	UINT32 playernum    : 5;   
-	UINT32 newteam      : 5;   
-	UINT32 verification : 1;   
-	UINT32 autobalance  : 1;   
-	UINT32 scrambled    : 1;   
+	UINT32 playernum    : 5;  // value 0 to 31
+	UINT32 newteam      : 5;  // value 0 to 31
+	UINT32 verification : 1;  // value 0 to 1
+	UINT32 autobalance  : 1;  // value 0 to 1
+	UINT32 scrambled    : 1;  // value 0 to 1
 } ATTRPACK changeteam_packet_t;
 
 #ifdef _MSC_VER
@@ -180,13 +180,13 @@ typedef struct {
 #endif
 
 typedef struct {
-	UINT16 l;  
-	UINT16 b;  
+	UINT16 l; // liitle endian
+	UINT16 b; // big enian
 } ATTRPACK changeteam_value_t;
 
-
-
-
+//Since we do not want other files/modules to know about this data buffer we union it here with a Short Int.
+//Other files/modules will hand the INT16 back to us and we will decode it here.
+//We don't have to use a union, but we would then send four bytes instead of two.
 typedef union {
 	changeteam_packet_t packet;
 	changeteam_value_t value;
@@ -196,7 +196,7 @@ typedef union {
 #pragma pack()
 #endif
 
-
+// add game commands, needs cleanup
 void D_RegisterServerCommands(void);
 void D_RegisterClientCommands(void);
 void CleanupPlayerName(INT32 playernum, const char *newname);
@@ -205,7 +205,7 @@ void D_SendPlayerConfig(void);
 void D_SendPlayerConfigForced(void);
 void Command_ExitGame_f(void);
 void Command_Retry_f(void);
-void D_GameTypeChanged(INT32 lastgametype);  
+void D_GameTypeChanged(INT32 lastgametype); // not a real _OnChange function anymore
 void D_MapChange(INT32 pmapnum, INT32 pgametype, boolean pultmode, boolean presetplayers, INT32 pdelay, boolean pskipprecutscene, boolean pfromlevelselect);
 boolean IsPlayerAdmin(INT32 playernum);
 void SetAdminPlayer(INT32 playernum);
@@ -216,7 +216,7 @@ void D_SetPassword(const char *pw);
 void D_ClearPassword(void);
 void D_ResetAddonAuditState(void);
 
-
+// used for the player setup menu
 UINT8 CanChangeSkin(INT32 playernum);
 
 #endif

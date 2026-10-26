@@ -1,4 +1,4 @@
-
+# configure.ac
 
 # Copyright (c) 2018 Cosmin Truta
 # Copyright (c) 2004-2016 Glenn Randers-Pehrson
@@ -28,16 +28,16 @@ dnl Version number stuff here:
 AC_INIT([libpng],[1.6.37],[png-mng-implement@lists.sourceforge.net])
 AC_CONFIG_MACRO_DIR([scripts])
 
-
-
-
-
-
-
+# libpng does not follow GNU file name conventions (hence 'foreign')
+# color-tests requires automake 1.11 or later
+# silent-rules requires automake 1.11 or later
+# dist-xz requires automake 1.11 or later
+# 1.12.2 fixes a security issue in 1.11.2 and 1.12.1
+# 1.13 is required for parallel tests
 AM_INIT_AUTOMAKE([1.13 foreign dist-xz color-tests silent-rules subdir-objects])
-
-
-
+# The following line causes --disable-maintainer-mode to be the default to
+# configure. This is necessary because libpng distributions cannot rely on the
+# time stamps of the autotools generated files being correct
 AM_MAINTAINER_MODE
 
 dnl configure.ac and Makefile.am expect automake 1.11.2 or a compatible later
@@ -56,7 +56,7 @@ dnl End of version number stuff
 AC_CONFIG_SRCDIR([pngget.c])
 AC_CONFIG_HEADERS([config.h])
 
-
+# Checks for programs.
 AC_LANG([C])
 AC_PROG_CC
 AM_PROG_AS
@@ -72,8 +72,8 @@ dnl compatible later version may be used
 LT_INIT([win32-dll])
 LT_PREREQ([2.4.2])
 
-
-
+# Some awks crash when confronted with pnglibconf.dfa, do a test run now
+# to make sure this doesn't happen
 AC_MSG_CHECKING([that AWK works])
 if ${AWK} -f ${srcdir}/scripts/options.awk out="/dev/null" version=search\
    ${srcdir}/pngconf.h ${srcdir}/scripts/pnglibconf.dfa\
@@ -84,14 +84,14 @@ else
    AC_MSG_FAILURE([failed], 1)
 fi
 
-
-
+# This is a remnant of the old cc -E validation, where it may have been
+# necessary to use a different preprocessor for .dfn files
 DFNCPP="$CPP"
 AC_SUBST(DFNCPP)
 
-
-
-
+# -Werror cannot be passed to GCC in CFLAGS because configure will fail (it
+# checks the compiler with a program that generates a warning), add the
+# following option to deal with this
 AC_ARG_VAR(PNG_COPTS,
    [additional flags for the C compiler, use this for options that would]
    [cause configure itself to fail])
@@ -114,10 +114,10 @@ AC_ARG_ENABLE(werror,
       CFLAGS="$sav_CFLAGS"
     fi],)
 
-
-
-
-
+# For GCC 5 the default mode for C is -std=gnu11 instead of -std=gnu89
+# In pngpriv.h we request just the POSIX 1003.1 and C89 APIs by defining _POSIX_SOURCE to 1
+# This is incompatible with the new default mode, so we test for that and force the 
+# "-std=c89" compiler option:
 AC_MSG_CHECKING([if we need to force back C standard to C89])
 AC_COMPILE_IFELSE(
    [AC_LANG_PROGRAM([
@@ -133,21 +133,21 @@ AC_COMPILE_IFELSE(
    CFLAGS="$CFLAGS -std=c89"
 ])
 
-
+# Checks for header files.
 AC_HEADER_STDC
 
-
+# Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
 AC_TYPE_SIZE_T
 AC_STRUCT_TM
 AC_C_RESTRICT
 
-
+# Checks for library functions.
 AC_FUNC_STRTOD
 AC_CHECK_FUNCS([pow], , AC_CHECK_LIB(m, pow, , AC_MSG_ERROR(cannot find pow)) )
 
-
-
+# Some later POSIX 1003.1 functions are required for test programs, failure here
+# is soft (the corresponding test program is not built).
 AC_CHECK_FUNC([clock_gettime],,[AC_MSG_WARN([not building timepng])])
 AM_CONDITIONAL([HAVE_CLOCK_GETTIME], [test "$ac_cv_func_clock_gettime" = "yes"])
 
@@ -159,9 +159,9 @@ AC_ARG_WITH(zlib-prefix,
 AC_CHECK_LIB(z, zlibVersion, ,
     AC_CHECK_LIB(z, ${ZPREFIX}zlibVersion, , AC_MSG_ERROR(zlib not installed)))
 
-
-
-
+# The following is for pngvalid, to ensure it catches FP errors even on
+# platforms that don't enable FP exceptions, the function appears in the math
+# library (typically), it's not an error if it is not found.
 AC_CHECK_LIB([m], [feenableexcept])
 AC_CHECK_FUNCS([feenableexcept])
 
@@ -177,9 +177,9 @@ fi
 AM_CONDITIONAL(HAVE_SOLARIS_LD, test "$have_solaris_ld" = "yes")
 
 AC_MSG_CHECKING([if libraries can be versioned])
-
-
-
+# Special case for PE/COFF platforms: ld reports
+# support for version-script, but doesn't actually
+# DO anything with it.
 case $host in
 *cygwin* | *mingw32* | *interix* )
     have_ld_version_script=no
@@ -216,14 +216,14 @@ if test "$have_ld_version_script" = "yes"; then
     AC_MSG_RESULT($SYMBOL_PREFIX)
 fi
 
-
+# Substitutions for .in files
 AC_SUBST(PNGLIB_VERSION)
 AC_SUBST(PNGLIB_MAJOR)
 AC_SUBST(PNGLIB_MINOR)
 AC_SUBST(PNGLIB_RELEASE)
 
-
-
+# Additional arguments (and substitutions)
+# Allow the pkg-config directory to be set
 AC_ARG_WITH(pkgconfigdir,
    AS_HELP_STRING([[[--with-pkgconfigdir]]],
       [Use the specified pkgconfig dir (default is libdir/pkgconfig)]),
@@ -233,7 +233,7 @@ AC_ARG_WITH(pkgconfigdir,
 AC_SUBST([pkgconfigdir])
 AC_MSG_NOTICE([[pkgconfig directory is ${pkgconfigdir}]])
 
-
+# Make the *-config binary config scripts optional
 AC_ARG_WITH(binconfigs,
    AS_HELP_STRING([[[--with-binconfigs]]],
       [Generate shell libpng-config scripts as well as pkg-config data]
@@ -247,8 +247,8 @@ AC_ARG_WITH(binconfigs,
    [binconfigs='${binconfigs}'])
 AC_SUBST([binconfigs])
 
-
-
+# Support for prefixes to the API function names; this will generate defines
+# at the start of the build to rename exported library functions
 AC_ARG_WITH(libpng-prefix,
    AS_HELP_STRING([[[--with-libpng-prefix]]],
       [prefix libpng exported function (API) names with the given value]),
@@ -257,9 +257,9 @@ AC_ARG_WITH(libpng-prefix,
     fi])
 AM_CONDITIONAL([DO_PNG_PREFIX], [test "${with_libpng_prefix:-no}" != "no"])
 
-
-
-
+# Control over what links are made for installed files.  Versioned files are
+# always installed, when the following options are turned on corresponding
+# unversioned links are also created (normally as symbolic links):
 AC_ARG_ENABLE([unversioned-links],
    AS_HELP_STRING([[[--enable-unversioned-links]]],
       [Installed libpng header files are placed in a versioned subdirectory]
@@ -267,7 +267,7 @@ AC_ARG_ENABLE([unversioned-links],
       [If this option is enabled unversioned links will be created pointing to]
       [the corresponding installed files.  If you use libpng.pc or]
       [libpng-config for all builds you do not need these links, but if you]
-      [compile programs directly they will typically  
+      [compile programs directly they will typically #include <png.h> and]
       [link with -lpng; in that case you need the links.]
       [The links can be installed manually using 'make install-header-links']
       [and 'make install-library-links' and can be removed using the]
@@ -276,8 +276,8 @@ AC_ARG_ENABLE([unversioned-links],
       [installed version of libpng.  The default is to create the links;]
       [use --disable-unversioned-links to change this]))
 
-
-
+# The AM_CONDITIONAL test is written so that the default is enabled;
+# --disable-unversioned-links must be given to turn the option off.
 AM_CONDITIONAL([DO_INSTALL_LINKS],[test "$enable_unversioned_links" != "no"])
 
 AC_ARG_ENABLE([unversioned-libpng-pc],
@@ -296,18 +296,18 @@ AC_ARG_ENABLE([unversioned-libpng-config],
 AM_CONDITIONAL([DO_INSTALL_LIBPNG_CONFIG],
    [test "$enable_unversioned_libpng_config" != "no"])
 
-
-
-
-
-
-
+# HOST SPECIFIC OPTIONS
+# =====================
+#
+# DEFAULT
+# =======
+#
 AC_ARG_ENABLE([hardware-optimizations],
    AS_HELP_STRING([[[--enable-hardware-optimizations]]],
       [Enable hardware optimizations: =no/off, yes/on:]),
    [case "$enableval" in
       no|off)
-
+         # disable hardware optimization on all systems:
          enable_arm_neon=no
          AC_DEFINE([PNG_ARM_NEON_OPT], [0],
            [Disable ARM_NEON optimizations])
@@ -322,7 +322,7 @@ AC_ARG_ENABLE([hardware-optimizations],
            [Disable INTEL_SSE optimizations])
          ;;
       *)
-
+         # allow enabling hardware optimization on any system:
          case "$host_cpu" in
             arm*|aarch64*)
               enable_arm_neon=yes
@@ -348,10 +348,10 @@ AC_ARG_ENABLE([hardware-optimizations],
          ;;
    esac])
 
-
-
-
-
+# ARM
+# ===
+#
+# ARM NEON (SIMD) support.
 
 AC_ARG_ENABLE([arm-neon],
    AS_HELP_STRING([[[--enable-arm-neon]]],
@@ -362,10 +362,10 @@ AC_ARG_ENABLE([arm-neon],
       [If not specified: determined by the compiler.]),
    [case "$enableval" in
       no|off)
-
+         # disable the default enabling on __ARM_NEON__ systems:
          AC_DEFINE([PNG_ARM_NEON_OPT], [0],
                    [Disable ARM Neon optimizations])
-
+         # Prevent inclusion of the assembler files below:
          enable_arm_neon=no;;
       check)
          AC_DEFINE([PNG_ARM_NEON_CHECK_SUPPORTED], [],
@@ -383,9 +383,9 @@ AC_ARG_ENABLE([arm-neon],
          AC_MSG_ERROR([--enable-arm-neon=${enable_arm_neon}: invalid value])
    esac])
 
-
-
-
+# Add ARM specific files to all builds where the host_cpu is arm ('arm*') or
+# where ARM optimizations were explicitly requested (this allows a fallback if a
+# future host CPU does not match 'arm*')
 
 AM_CONDITIONAL([PNG_ARM_NEON],
    [test "$enable_arm_neon" != 'no' &&
@@ -394,10 +394,10 @@ AM_CONDITIONAL([PNG_ARM_NEON],
       *)    test "$enable_arm_neon" != '';;
     esac])
 
-
-
-
-
+# MIPS
+# ===
+#
+# MIPS MSA (SIMD) support.
 
 AC_ARG_ENABLE([mips-msa],
    AS_HELP_STRING([[[--enable-mips-msa]]],
@@ -408,10 +408,10 @@ AC_ARG_ENABLE([mips-msa],
       [If not specified: determined by the compiler.]),
    [case "$enableval" in
       no|off)
-
+         # disable the default enabling on __mips_msa systems:
          AC_DEFINE([PNG_MIPS_MSA_OPT], [0],
                    [Disable MIPS MSA optimizations])
-
+         # Prevent inclusion of the assembler files below:
          enable_mips_msa=no;;
       check)
          AC_DEFINE([PNG_MIPS_MSA_CHECK_SUPPORTED], [],
@@ -429,9 +429,9 @@ AC_ARG_ENABLE([mips-msa],
          AC_MSG_ERROR([--enable-mips-msa=${enable_mips_msa}: invalid value])
    esac])
 
-
-
-
+# Add MIPS specific files to all builds where the host_cpu is mips ('mips*') or
+# where MIPS optimizations were explicitly requested (this allows a fallback if a
+# future host CPU does not match 'mips*')
 
 AM_CONDITIONAL([PNG_MIPS_MSA],
    [test "$enable_mips_msa" != 'no' &&
@@ -439,10 +439,10 @@ AM_CONDITIONAL([PNG_MIPS_MSA],
       mipsel*|mips64el*) :;;
     esac])
 
-
-
-
-
+# INTEL
+# =====
+#
+# INTEL SSE (SIMD) support.
 
 AC_ARG_ENABLE([intel-sse],
    AS_HELP_STRING([[[--enable-intel-sse]]],
@@ -452,10 +452,10 @@ AC_ARG_ENABLE([intel-sse],
       [If not specified: determined by the compiler.]),
    [case "$enableval" in
       no|off)
-
+         # disable the default enabling:
          AC_DEFINE([PNG_INTEL_SSE_OPT], [0],
                    [Disable Intel SSE optimizations])
-
+         # Prevent inclusion of the assembler files below:
          enable_intel_sse=no;;
       yes|on)
          AC_DEFINE([PNG_INTEL_SSE_OPT], [1],
@@ -464,9 +464,9 @@ AC_ARG_ENABLE([intel-sse],
          AC_MSG_ERROR([--enable-intel-sse=${enable_intel_sse}: invalid value])
    esac])
 
-
-
-
+# Add Intel specific files to all builds where the host_cpu is Intel ('x86*')
+# or where Intel optimizations were explicitly requested (this allows a
+# fallback if a future host CPU does not match 'x86*')
 AM_CONDITIONAL([PNG_INTEL_SSE],
    [test "$enable_intel_sse" != 'no' &&
     case "$host_cpu" in
@@ -474,10 +474,10 @@ AM_CONDITIONAL([PNG_INTEL_SSE],
       *)    test "$enable_intel_sse" != '';;
     esac])
 
-
-
-
-
+# PowerPC
+# ===
+#
+# PowerPC VSX (SIMD) support.
 
 AC_ARG_ENABLE([powerpc-vsx],
 AS_HELP_STRING([[[--enable-powerpc-vsx]]],
@@ -488,10 +488,10 @@ AS_HELP_STRING([[[--enable-powerpc-vsx]]],
       [If not specified: determined by the compiler.]),
    [case "$enableval" in
       no|off)
-
+         # disable the default enabling on __ppc64__ systems:
          AC_DEFINE([PNG_POWERPC_VSX_OPT], [0],
                    [Disable POWERPC VSX optimizations])
-
+         # Prevent inclusion of the platform specific files below:
          enable_powerpc_vsx=no;;
       check)
          AC_DEFINE([PNG_POWERPC_VSX_CHECK_SUPPORTED], [],
@@ -511,9 +511,9 @@ AS_HELP_STRING([[[--enable-powerpc-vsx]]],
          AC_MSG_ERROR([--enable-powerpc-vsx=${enable_powerpc_vsx}: invalid value])
    esac])
 
-
-
-
+# Add PowerPC specific files to all builds where the host_cpu is powerpc('powerpc*') or
+# where POWERPC optimizations were explicitly requested (this allows a fallback if a
+# future host CPU does not match 'powerpc*')
 
 AM_CONDITIONAL([PNG_POWERPC_VSX],
    [test "$enable_powerpc_vsx" != 'no' &&
@@ -524,7 +524,7 @@ AM_CONDITIONAL([PNG_POWERPC_VSX],
 
 AC_MSG_NOTICE([[Extra options for compiler: $PNG_COPTS]])
 
-
+# Config files, substituting as above
 AC_CONFIG_FILES([Makefile libpng.pc:libpng.pc.in])
 AC_CONFIG_FILES([libpng-config:libpng-config.in],
    [chmod +x libpng-config])

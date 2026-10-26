@@ -47,7 +47,7 @@ png_get_rows(png_const_structrp png_ptr, png_const_inforp info_ptr)
 #endif
 
 #ifdef PNG_EASY_ACCESS_SUPPORTED
- 
+/* Easy access to info, added in libpng-0.99 */
 png_uint_32 PNGAPI
 png_get_image_width(png_const_structrp png_ptr, png_const_inforp info_ptr)
 {
@@ -216,9 +216,9 @@ png_get_pixel_aspect_ratio_fixed(png_const_structrp png_ptr,
 
       png_debug1(1, "in %s retrieval function", "png_get_aspect_ratio_fixed");
 
-                                                                               
-                                                               
-         
+      /* The following casts work because a PNG 4 byte integer only has a valid
+       * range of 0..2^31-1; otherwise the cast might overflow.
+       */
       if (png_muldiv(&res, (png_int_32)info_ptr->y_pixels_per_unit, PNG_FP_1,
           (png_int_32)info_ptr->x_pixels_per_unit) != 0)
          return res;
@@ -317,30 +317,30 @@ static png_uint_32
 ppi_from_ppm(png_uint_32 ppm)
 {
 #if 0
-                                                           
-                                       
-      
+   /* The conversion is *(2.54/100), in binary (32 digits):
+    * .00000110100000001001110101001001
+    */
    png_uint_32 t1001, t1101;
-   ppm >>= 1;                   
-   t1001 = ppm + (ppm >> 3);    
-   t1101 = t1001 + (ppm >> 1);  
-   ppm >>= 20;                  
-   t1101 += t1101 >> 15;        
-   t1001 >>= 11;                
-   t1001 += t1001 >> 12;        
-   ppm += t1001;                
-   ppm += t1101;                
-   return (ppm + 16) >> 5; 
+   ppm >>= 1;                  /* .1 */
+   t1001 = ppm + (ppm >> 3);   /* .1001 */
+   t1101 = t1001 + (ppm >> 1); /* .1101 */
+   ppm >>= 20;                 /* .000000000000000000001 */
+   t1101 += t1101 >> 15;       /* .1101000000000001101 */
+   t1001 >>= 11;               /* .000000000001001 */
+   t1001 += t1001 >> 12;       /* .000000000001001000000001001 */
+   ppm += t1001;               /* .000000000001001000001001001 */
+   ppm += t1101;               /* .110100000001001110101001001 */
+   return (ppm + 16) >> 5;/* .00000110100000001001110101001001 */
 #else
-                                                                    
-                             
-      
+   /* The argument is a PNG unsigned integer, so it is not permitted
+    * to be bigger than 2^31.
+    */
    png_fixed_point result;
    if (ppm <= PNG_UINT_31_MAX && png_muldiv(&result, (png_int_32)ppm, 127,
        5000) != 0)
       return (png_uint_32)result;
 
-    
+   /* Overflow. */
    return 0;
 #endif
 }
@@ -367,11 +367,11 @@ png_get_y_pixels_per_inch(png_const_structrp png_ptr, png_const_inforp info_ptr)
 static png_fixed_point
 png_fixed_inches_from_microns(png_const_structrp png_ptr, png_int_32 microns)
 {
-                                                                    
-                                                                     
-                                                                  
-               
-      
+   /* Convert from meters * 1,000,000 to inches * 100,000, meters to
+    * inches is simply *(100/2.54), so we want *(10/2.54) == 500/127.
+    * Notice that this can overflow - a warning is output and 0 is
+    * returned.
+    */
    return png_muldiv_warn(png_ptr, microns, 500, 127);
 }
 
@@ -398,9 +398,9 @@ png_get_y_offset_inches_fixed(png_const_structrp png_ptr,
 float PNGAPI
 png_get_x_offset_inches(png_const_structrp png_ptr, png_const_inforp info_ptr)
 {
-                                                                  
-            
-      
+   /* To avoid the overflow do the conversion directly in floating
+    * point.
+    */
    return (float)(png_get_x_offset_microns(png_ptr, info_ptr) * .00003937);
 }
 #endif
@@ -409,9 +409,9 @@ png_get_x_offset_inches(png_const_structrp png_ptr, png_const_inforp info_ptr)
 float PNGAPI
 png_get_y_offset_inches(png_const_structrp png_ptr, png_const_inforp info_ptr)
 {
-                                                                  
-            
-      
+   /* To avoid the overflow do the conversion directly in floating
+    * point.
+    */
    return (float)(png_get_y_offset_microns(png_ptr, info_ptr) * .00003937);
 }
 #endif
@@ -455,12 +455,12 @@ png_get_pHYs_dpi(png_const_structrp png_ptr, png_const_inforp info_ptr,
 
    return (retval);
 }
-#endif  
-#endif  
+#endif /* pHYs */
+#endif /* INCH_CONVERSIONS */
 
- 
+/* png_get_channels really belongs in here, too, but it's been around longer */
 
-#endif  
+#endif /* EASY_ACCESS */
 
 
 png_byte PNGAPI
@@ -503,22 +503,22 @@ png_get_bKGD(png_const_structrp png_ptr, png_inforp info_ptr,
 #endif
 
 #ifdef PNG_cHRM_SUPPORTED
-                                                                              
-                                                                                
-                      
-   
+/* The XYZ APIs were added in 1.5.5 to take advantage of the code added at the
+ * same time to correct the rgb grayscale coefficient defaults obtained from the
+ * cHRM chunk in 1.5.4
+ */
 #  ifdef PNG_FLOATING_POINT_SUPPORTED
 png_uint_32 PNGAPI
 png_get_cHRM(png_const_structrp png_ptr, png_const_inforp info_ptr,
     double *white_x, double *white_y, double *red_x, double *red_y,
     double *green_x, double *green_y, double *blue_x, double *blue_y)
 {
-                                                                              
-                                                                           
-                                                                                
-                                                                     
-                 
-      
+   /* Quiet API change: this code used to only return the end points if a cHRM
+    * chunk was present, but the end points can also come from iCCP or sRGB
+    * chunks, so in 1.6.0 the png_get_ APIs return the end points regardless and
+    * the png_set_ APIs merely check that set end points are mutually
+    * consistent.
+    */
    if (png_ptr != NULL && info_ptr != NULL &&
       (info_ptr->colorspace.flags & PNG_COLORSPACE_HAVE_ENDPOINTS) != 0)
    {
@@ -746,9 +746,9 @@ png_get_iCCP(png_const_structrp png_ptr, png_inforp info_ptr,
       *name = info_ptr->iccp_name;
       *profile = info_ptr->iccp_profile;
       *proflen = png_get_uint_32(info_ptr->iccp_profile);
-                                                                        
-                                    
-         
+      /* This is somewhat irrelevant since the profile data returned has
+       * actually been uncompressed.
+       */
       if (compression_type != NULL)
          *compression_type = PNG_COMPRESSION_TYPE_BASE;
       return (PNG_INFO_iCCP);
@@ -853,11 +853,11 @@ png_get_IHDR(png_const_structrp png_ptr, png_const_inforp info_ptr,
    if (interlace_type != NULL)
       *interlace_type = info_ptr->interlace_type;
 
-                                                                           
-                                                                    
-                                                                     
-                           
-      
+   /* This is redundant if we can be sure that the info_ptr values were all
+    * assigned in png_set_IHDR().  We do the check anyhow in case an
+    * application has ignored our advice not to mess with the members
+    * of info_ptr directly.
+    */
    png_check_IHDR(png_ptr, info_ptr->width, info_ptr->height,
        info_ptr->bit_depth, info_ptr->color_type, info_ptr->interlace_type,
        info_ptr->compression_type, info_ptr->filter_type);
@@ -925,10 +925,10 @@ png_get_sCAL_fixed(png_const_structrp png_ptr, png_const_inforp info_ptr,
        (info_ptr->valid & PNG_INFO_sCAL) != 0)
    {
       *unit = info_ptr->scal_unit;
-                                                                                
-                                                                              
-                     
-         
+      /*TODO: make this work without FP support; the API is currently eliminated
+       * if neither floating point APIs nor internal floating point arithmetic
+       * are enabled.
+       */
       *width = png_fixed(png_ptr, atof(info_ptr->scal_s_width), "sCAL width");
       *height = png_fixed(png_ptr, atof(info_ptr->scal_s_height),
           "sCAL height");
@@ -937,8 +937,8 @@ png_get_sCAL_fixed(png_const_structrp png_ptr, png_const_inforp info_ptr,
 
    return(0);
 }
-#    endif  
-#  endif  
+#    endif /* FLOATING_ARITHMETIC */
+#  endif /* FIXED_POINT */
 #  ifdef PNG_FLOATING_POINT_SUPPORTED
 png_uint_32 PNGAPI
 png_get_sCAL(png_const_structrp png_ptr, png_const_inforp info_ptr,
@@ -955,7 +955,7 @@ png_get_sCAL(png_const_structrp png_ptr, png_const_inforp info_ptr,
 
    return(0);
 }
-#  endif  
+#  endif /* FLOATING POINT */
 png_uint_32 PNGAPI
 png_get_sCAL_s(png_const_structrp png_ptr, png_const_inforp info_ptr,
     int *unit, png_charpp width, png_charpp height)
@@ -971,7 +971,7 @@ png_get_sCAL_s(png_const_structrp png_ptr, png_const_inforp info_ptr,
 
    return(0);
 }
-#endif  
+#endif /* sCAL */
 
 #ifdef PNG_pHYs_SUPPORTED
 png_uint_32 PNGAPI
@@ -1006,7 +1006,7 @@ png_get_pHYs(png_const_structrp png_ptr, png_const_inforp info_ptr,
 
    return (retval);
 }
-#endif  
+#endif /* pHYs */
 
 png_uint_32 PNGAPI
 png_get_PLTE(png_const_structrp png_ptr, png_inforp info_ptr,
@@ -1111,7 +1111,7 @@ png_get_tRNS(png_const_structrp png_ptr, png_inforp info_ptr,
             *trans_color = &(info_ptr->trans_color);
       }
 
-      else  
+      else /* if (info_ptr->color_type != PNG_COLOR_TYPE_PALETTE) */
       {
          if (trans_color != NULL)
          {
@@ -1189,8 +1189,8 @@ png_get_compression_buffer_size(png_const_structrp png_ptr)
 }
 
 #ifdef PNG_SET_USER_LIMITS_SUPPORTED
-                                                              
-                                
+/* These functions were added to libpng 1.2.6 and were enabled
+ * by default in libpng-1.4.0 */
 png_uint_32 PNGAPI
 png_get_user_width_max (png_const_structrp png_ptr)
 {
@@ -1203,22 +1203,22 @@ png_get_user_height_max (png_const_structrp png_ptr)
    return (png_ptr ? png_ptr->user_height_max : 0);
 }
 
- 
+/* This function was added to libpng 1.4.0 */
 png_uint_32 PNGAPI
 png_get_chunk_cache_max (png_const_structrp png_ptr)
 {
    return (png_ptr ? png_ptr->user_chunk_cache_max : 0);
 }
 
- 
+/* This function was added to libpng 1.4.1 */
 png_alloc_size_t PNGAPI
 png_get_chunk_malloc_max (png_const_structrp png_ptr)
 {
    return (png_ptr ? png_ptr->user_chunk_malloc_max : 0);
 }
-#endif  
+#endif /* SET_USER_LIMITS */
 
- 
+/* These functions were added to libpng 1.4.0 */
 #ifdef PNG_IO_STATE_SUPPORTED
 png_uint_32 PNGAPI
 png_get_io_state (png_const_structrp png_ptr)
@@ -1231,7 +1231,7 @@ png_get_io_chunk_type (png_const_structrp png_ptr)
 {
    return png_ptr->chunk_name;
 }
-#endif  
+#endif /* IO_STATE */
 
 #ifdef PNG_CHECK_FOR_INVALID_INDEX_SUPPORTED
 #  ifdef PNG_GET_PALETTE_MAX_SUPPORTED
@@ -1407,5 +1407,5 @@ png_get_first_frame_is_hidden(png_structp png_ptr, png_infop info_ptr)
 
     return 0;
 }
-#endif  
-#endif  
+#endif /* PNG_APNG_SUPPORTED */
+#endif /* READ || WRITE */

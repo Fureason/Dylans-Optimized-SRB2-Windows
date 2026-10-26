@@ -1,7 +1,7 @@
-
+## Assets Target Configuration ##
 
 if(${CMAKE_SYSTEM} MATCHES Linux)
-
+	# Asset installation isn't part of the Linux target
 	return()
 endif()
 
@@ -21,9 +21,9 @@ set(SRB2_ASSETS_DOCS
 list(TRANSFORM SRB2_ASSETS_DOCS PREPEND "/")
 list(TRANSFORM SRB2_ASSETS_DOCS PREPEND "${SRB2_ASSET_DIRECTORY_ABSOLUTE}")
 
-
-
-
+####################
+# POST-V2.2 NOTE: Do not forget to add patch.pk3 to the end of this list!
+####################
 
 set(SRB2_ASSETS_GAME
 	"srb2.pk3"
@@ -38,7 +38,7 @@ list(TRANSFORM SRB2_ASSETS_GAME PREPEND "${SRB2_ASSET_DIRECTORY_ABSOLUTE}")
 
 set(SRB2_ASSETS ${SRB2_ASSET_DOCS} ${SRB2_ASSETS_GAME})
 
-
+# Installation
 
 if(${CMAKE_SYSTEM} MATCHES Darwin)
 	get_target_property(outname SRB2SDL2 OUTPUT_NAME)

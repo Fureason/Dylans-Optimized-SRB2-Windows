@@ -9,7 +9,7 @@
   including commercial applications, and to alter it and redistribute it
   freely.
 */
- 
+/* Simple test of filesystem functions. */
 
 #include <stdio.h>
 #include "SDL.h"
@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
     char *base_path;
     char *pref_path;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (SDL_Init(0) == -1) {

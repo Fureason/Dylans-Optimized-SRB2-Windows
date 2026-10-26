@@ -1,4 +1,4 @@
-
+# Declare SDL2 interface sources
 
 target_sources(SRB2SDL2 PRIVATE
 	ogl_sdl.c
@@ -12,8 +12,8 @@ target_sources(SRB2SDL2 PRIVATE
 	hwsym_sdl.c
 )
 
-
-
+# Compatibility flag with later versions of GCC
+# We should really fix our code to not need this
 if (NOT SRB2_CONFIG_FORCE_NO_MS_BITFIELDS)
 	if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 		check_cxx_compiler_flag("-mno-ms-bitfields" HAS_NO_MS_BITFIELDS)
@@ -23,27 +23,27 @@ if (NOT SRB2_CONFIG_FORCE_NO_MS_BITFIELDS)
 	endif()
 endif()
 
-
+# Yes we know we use insecure CRT functions...
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     target_compile_definitions(SRB2SDL2 PRIVATE -D_CRT_SECURE_NO_WARNINGS)
 endif()
 
-
+# Compiler warnings configuration
 target_compile_options(SRB2SDL2 PRIVATE
+    # Using generator expressions to handle per-language compile options
 
-
-
-
+    # C, GNU
+    # This is a direct translation from versions.mk
     $<$<AND:$<COMPILE_LANGUAGE:C>,$<C_COMPILER_ID:GNU>>:
         -Wall
         -Wno-trigraphs
-        -W  
+        -W # Was controlled by RELAXWARNINGS
         -Wfloat-equal
         -Wundef
         -Wpointer-arith
         -Wbad-function-cast
         -Wcast-qual
-        -Wcast-align  
+        -Wcast-align # Was controlled by NOCASTALIGNWARN
         -Wwrite-strings
         -Wsign-compare
         -Wmissing-prototypes
@@ -114,7 +114,7 @@ target_compile_options(SRB2SDL2 PRIVATE
         >
     >
 
-
+    # C, Clang and Apple Clang
     $<$<AND:$<COMPILE_LANGUAGE:C>,$<OR:$<C_COMPILER_ID:AppleClang>,$<C_COMPILER_ID:Clang>>>:
         -Wall
         -Wno-absolute-value
@@ -126,14 +126,14 @@ target_compile_options(SRB2SDL2 PRIVATE
         -Wno-shorten-64-to-32
     >
 
-
+    # C, MSVC
     $<$<AND:$<COMPILE_LANGUAGE:C>,$<C_COMPILER_ID:MSVC>>:
-
-
+        # All warnings at and before Visual Studio 2019 RTM
+        # https://learn.microsoft.com/en-us/cpp/error-messages/compiler-warnings/compiler-warnings-by-compiler-version?view=msvc-170
         /Wv:19.20.27004.0
     >
 
-
+    # C++, GNU, Clang and Apple Clang
     $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<OR:$<C_COMPILER_ID:GNU>,$<C_COMPILER_ID:AppleClang>,$<C_COMPILER_ID:Clang>>>:
         -Wall
         -Wno-unused-function
@@ -141,12 +141,12 @@ target_compile_options(SRB2SDL2 PRIVATE
         -Wno-unused-private-field
     >
 
-
+    # C++, MSVC
     $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<C_COMPILER_ID:MSVC>>:
         /Wv:19.20.27004.0
     >
 
-
+    # GNU
     $<$<C_COMPILER_ID:GNU>:
         -fmax-errors=5
     >
@@ -163,10 +163,10 @@ if(SRB2_CONFIG_ERRORMODE)
     )
 endif()
 
-
+# Link warnings configuration
 target_link_options(SRB2SDL2 PRIVATE
     $<$<C_COMPILER_ID:GNU>:
-
+        # -Wl,--as-needed   - Was controlled by NOLDWARNING
     >
 )
 
@@ -204,7 +204,7 @@ if("${CMAKE_SYSTEM_NAME}" MATCHES Darwin)
 
 	set_target_properties(SRB2SDL2 PROPERTIES OUTPUT_NAME "${CPACK_PACKAGE_DESCRIPTION_SUMMARY}")
 
-
+	# Configure the app bundle icon and plist properties
 	target_sources(SRB2SDL2 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/macosx/Srb2mac.icns")
 	set_target_properties(SRB2SDL2 PROPERTIES
 		MACOSX_BUNDLE_ICON_FILE "Srb2mac"
@@ -311,7 +311,7 @@ else()
 	message(STATUS "no SDL2_mixer_ext or SDL2_mixer Found")
 endif()
 
-
+#### Installation ####
 if("${CMAKE_SYSTEM_NAME}" MATCHES Darwin)
 	install(TARGETS SRB2SDL2
 		BUNDLE DESTINATION .
@@ -332,16 +332,16 @@ else()
 	endif()
 endif()
 
-
-
-
-
-
-
-
-
-
-
+# Mac bundle fixup
+# HACK: THIS IS IMPORTANT! See the escaped \${CMAKE_INSTALL_PREFIX}? This
+# makes it so that var is evaluated LATER during cpack, not right now!
+# This fixes the quirk where the bundled libraries don't land in the final package
+# https://cmake.org/pipermail/cmake/2011-March/043532.html
+#
+# HOWEVER: ${CPACK_PACKAGE_DESCRIPTION_SUMMARY} is NOT escaped, because that var
+# is only available to us at this step. Read the link: ${CMAKE_INSTALL_PREFIX} at
+# this current step points to the CMAKE build folder, NOT the folder that CPACK uses.
+# Therefore, it makes sense to escape that var, but not the other.
 if("${CMAKE_SYSTEM_NAME}" MATCHES Darwin)
 	install(CODE "
 		include(BundleUtilities)

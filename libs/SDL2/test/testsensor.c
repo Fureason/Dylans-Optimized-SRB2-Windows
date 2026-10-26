@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple test of the SDL sensor code */
 
 #include "SDL.h"
 
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     int i;
     int num_sensors, num_opened;
 
-     
+    /* Load the SDL library */
     if (SDL_Init(SDL_INIT_SENSOR) < 0) {
         SDL_Log("Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;
@@ -93,10 +93,10 @@ int main(int argc, char **argv)
 
         SDL_CreateWindow("Sensor Test", 0, 0, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
         while (!done) {
-             
+            /* Update to get the current event state */
             SDL_PumpEvents();
 
-             
+            /* Process all currently pending events */
             while (SDL_PeepEvents(&event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT) == 1) {
                 switch (event.type) {
                 case SDL_SENSORUPDATE:

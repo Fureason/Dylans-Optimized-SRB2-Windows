@@ -3,12 +3,12 @@
 
 int main() {
 
-
-
+  // Construct a stream object with this filebuffer.  Anything sent
+  // to this stream will go to standard out.
   gzofstream os( 1, ios::out );
 
-
-
+  // This text is getting compressed and sent to stdout.
+  // To prove this, run 'test | zcat'.
   os << "Hello, Mommy" << endl;
 
   os << setcompressionlevel( Z_NO_COMPRESSION );

@@ -10,7 +10,7 @@
   freely.
 */
 
- 
+/* Simple test of the SDL semaphore code */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,8 +19,8 @@
 #include "SDL.h"
 
 #define NUM_THREADS 10
- 
- 
+/* This value should be smaller than the maximum count of the */
+/* semaphore implementation: */
 #define NUM_OVERHEAD_OPS      10000
 #define NUM_OVERHEAD_OPS_MULT 10
 
@@ -55,7 +55,7 @@ ThreadFuncRealWorld(void *data)
         SDL_Log("Thread number %d has released the semaphore (value = %" SDL_PRIu32 ")!\n",
                 state->number, SDL_SemValue(sem));
         ++state->loop_count;
-        SDL_Delay(1);  
+        SDL_Delay(1); /* For the scheduler */
     }
     SDL_Log("Thread number %d exiting.\n", state->number);
     return 0;
@@ -73,7 +73,7 @@ TestRealWorld(int init_sem)
     SDL_Log("Running %d threads, semaphore value = %d\n", NUM_THREADS,
             init_sem);
     alive = 1;
-     
+    /* Create all the threads */
     for (i = 0; i < NUM_THREADS; ++i) {
         char name[64];
         (void)SDL_snprintf(name, sizeof(name), "Thread%u", (unsigned int)i);
@@ -81,10 +81,10 @@ TestRealWorld(int init_sem)
         thread_states[i].thread = SDL_CreateThread(ThreadFuncRealWorld, name, (void *)&thread_states[i]);
     }
 
-     
+    /* Wait 10 seconds */
     SDL_Delay(10 * 1000);
 
-     
+    /* Wait for all threads to finish */
     SDL_Log("Waiting for threads to finish\n");
     alive = 0;
     loop_count = 0;
@@ -114,11 +114,11 @@ TestWaitTimeout(void)
 
     duration = end_ticks - start_ticks;
 
-     
+    /* Accept a little offset in the effective wait */
     SDL_assert(duration > 1900 && duration < 2050);
     SDL_Log("Wait took %" SDL_PRIu32 " milliseconds\n\n", duration);
 
-     
+    /* Check to make sure the return value indicates timed out */
     if (retval != SDL_MUTEX_TIMEDOUT) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_SemWaitTimeout returned: %d; expected: %d\n\n", retval, SDL_MUTEX_TIMEDOUT);
     }
@@ -168,7 +168,7 @@ ThreadFuncOverheadContended(void *data)
         }
     } else {
         while (alive) {
-             
+            /* Timeout needed to allow check on alive flag */
             if (SDL_SemWaitTimeout(sem, 50) == SDL_MUTEX_TIMEDOUT) {
                 ++state->content_count;
             }
@@ -195,7 +195,7 @@ TestOverheadContended(SDL_bool try_wait)
     SDL_Log("Doing %d contended %s operations on semaphore using %d threads\n",
             NUM_OVERHEAD_OPS * NUM_OVERHEAD_OPS_MULT, try_wait ? "Post/TryWait" : "Post/WaitTimeout", NUM_THREADS);
     alive = 1;
-     
+    /* Create multiple threads to starve the semaphore and cause contention */
     for (i = 0; i < NUM_THREADS; ++i) {
         char name[64];
         (void)SDL_snprintf(name, sizeof(name), "Thread%u", (unsigned int)i);
@@ -208,9 +208,9 @@ TestOverheadContended(SDL_bool try_wait)
         for (j = 0; j < NUM_OVERHEAD_OPS; j++) {
             SDL_SemPost(sem);
         }
-         
+        /* Make sure threads consumed everything */
         while (SDL_SemValue(sem)) {
-             
+            /* Friendlier with cooperative threading models */
             SDL_Delay(1);
         }
     }
@@ -230,7 +230,7 @@ TestOverheadContended(SDL_bool try_wait)
     SDL_Log("Took %" SDL_PRIu32 " milliseconds, threads %s %d out of %d times in total (%.2f%%)\n",
             duration, try_wait ? "where contended" : "timed out", content_count,
             loop_count, ((float)content_count * 100) / loop_count);
-     
+    /* Print how many semaphores where consumed per thread */
     (void)SDL_snprintf(textBuffer, sizeof(textBuffer), "{ ");
     for (i = 0; i < NUM_THREADS; ++i) {
         if (i > 0) {
@@ -251,7 +251,7 @@ int main(int argc, char **argv)
 {
     int init_sem;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (argc < 2) {
@@ -259,7 +259,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-     
+    /* Load the SDL library */
     if (SDL_Init(0) < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s\n", SDL_GetError());
         return 1;

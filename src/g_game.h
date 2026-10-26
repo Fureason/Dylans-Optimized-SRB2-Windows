@@ -8,8 +8,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  g_game.h
+/// \brief Game loop, events handling.
 
 #ifndef __G_GAME__
 #define __G_GAME__
@@ -18,7 +18,7 @@
 #include "doomstat.h"
 #include "d_event.h"
 #include "g_demo.h"
-#include "m_cheat.h"  
+#include "m_cheat.h" // objectplacing
 #include "m_cond.h"
 
 extern char gamedatafilename[64];
@@ -33,14 +33,14 @@ extern INT32 player_name_changes[MAXPLAYERS];
 extern player_t players[MAXPLAYERS];
 extern boolean playeringame[MAXPLAYERS];
 
-
+// gametic at level start
 extern tic_t levelstarttic;
 
-
+// for modding?
 extern INT16 prevmap, nextmap;
 extern INT32 gameovertics;
 extern UINT8 ammoremovaltics;
-extern tic_t timeinmap;  
+extern tic_t timeinmap; // Ticker for time spent in level (used for levelcard display)
 extern INT16 rw_maximums[NUM_WEAPONS];
 extern INT32 pausedelay;
 extern boolean pausebreakkey;
@@ -51,7 +51,7 @@ extern consvar_t cv_pauseifunfocused;
 
 extern consvar_t cv_instantretry;
 
-
+// used in game menu
 extern consvar_t cv_tutorialprompt;
 extern consvar_t cv_chatwidth, cv_chatnotifications, cv_chatheight, cv_chattime, cv_consolechat, cv_chatbacktint, cv_chatspamprotection, cv_chatspamspeed, cv_chatspamburst, cv_compactscoreboard;
 extern consvar_t cv_crosshair, cv_crosshair2;
@@ -75,7 +75,7 @@ extern consvar_t cv_sideaxis,cv_turnaxis,cv_moveaxis,cv_lookaxis,cv_jumpaxis,cv_
 extern consvar_t cv_sideaxis2,cv_turnaxis2,cv_moveaxis2,cv_lookaxis2,cv_jumpaxis2,cv_spinaxis2,cv_fireaxis2,cv_firenaxis2,cv_deadzone2,cv_digitaldeadzone2;
 extern consvar_t cv_ghost_bestscore, cv_ghost_besttime, cv_ghost_bestrings, cv_ghost_last, cv_ghost_guest;
 
-
+// hi here's some new controls
 extern consvar_t cv_cam_shiftfacing[2], cv_cam_turnfacing[2],
 	cv_cam_turnfacingability[2], cv_cam_turnfacingspindash[2], cv_cam_turnfacinginput[2],
 	cv_cam_centertoggle[2], cv_cam_lockedinput[2], cv_cam_lockonboss[2];
@@ -96,7 +96,7 @@ typedef enum
 	JA_LOOK,
 	JA_STRAFE,
 
-	JA_DIGITAL,  
+	JA_DIGITAL, // axes henceforth use digital deadzone
 
 	JA_JUMP = JA_DIGITAL,
 	JA_SPIN,
@@ -107,34 +107,34 @@ typedef enum
 INT32 JoyAxis(joyaxis_e axissel);
 INT32 Joy2Axis(joyaxis_e axissel);
 
-
+// mouseaiming (looking up/down with the mouse or keyboard)
 #define KB_LOOKSPEED (1<<25)
 #define MAXPLMOVE (50)
 #define SLOWTURNTICS (6)
 
-
+// build an internal map name MAPxx from map number
 const char *G_BuildMapName(INT32 map);
 
 extern INT16 ticcmd_oldangleturn[2];
-extern boolean ticcmd_centerviewdown[2];  
-extern mobj_t *ticcmd_ztargetfocus[2];  
+extern boolean ticcmd_centerviewdown[2]; // For simple controls, lock the camera behind the player
+extern mobj_t *ticcmd_ztargetfocus[2]; // Locking onto an object?
 void G_BuildTiccmd(ticcmd_t *cmd, INT32 realtics, UINT8 ssplayer);
 
-
+// copy ticcmd_t to and fro the normal way
 ticcmd_t *G_CopyTiccmd(ticcmd_t* dest, const ticcmd_t* src, const size_t n);
-
+// copy ticcmd_t to and fro network packets
 ticcmd_t *G_MoveTiccmd(ticcmd_t* dest, const ticcmd_t* src, const size_t n);
 
-
+// clip the console player aiming to the view
 INT16 G_ClipAimingPitch(INT32 *aiming);
 INT16 G_SoftwareClipAimingPitch(INT32 *aiming);
 
 extern angle_t localangle, localangle2;
-extern INT32 localaiming, localaiming2;  
+extern INT32 localaiming, localaiming2; // should be an angle_t but signed
 
-
-
-
+//
+// GAME
+//
 void G_ChangePlayerReferences(mobj_t *oldmo, mobj_t *newmo);
 void G_DoReborn(INT32 playernum);
 void G_PlayerReborn(INT32 player, boolean betweenmaps);
@@ -152,10 +152,10 @@ typedef struct
 {
 	INT16  mapnum;
 	UINT8  matchc;
-	struct searchdim *matchd; 
+	struct searchdim *matchd;/* offset that a pattern was matched */
 	UINT8  keywhc;
-	struct searchdim *keywhd; 
-	UINT8  total; 
+	struct searchdim *keywhd;/* ...in KEYWORD */
+	UINT8  total;/* total hits */
 }
 mapsearchfreq_t;
 
@@ -163,10 +163,10 @@ INT32 G_FindMap(const char *query, char **foundmapnamep,
 		mapsearchfreq_t **freqp, INT32 *freqc);
 void G_FreeMapSearch(mapsearchfreq_t *freq, INT32 freqc);
 
- 
+/* Match map name by search + 2 digit map code or map number. */
 INT32 G_FindMapByNameOrCode(const char *query, char **foundmapnamep);
 
-
+// XMOD spawning
 mapthing_t *G_FindCTFStart(INT32 playernum);
 mapthing_t *G_FindMatchStart(INT32 playernum);
 mapthing_t *G_FindCoopStart(INT32 playernum);
@@ -174,15 +174,15 @@ mapthing_t *G_FindMapStart(INT32 playernum);
 void G_MovePlayerToSpawnOrStarpost(INT32 playernum);
 void G_SpawnPlayer(INT32 playernum);
 
-
-
+// Can be called by the startup code or M_Responder.
+// A normal game starts at map 1, but a warp test can start elsewhere
 void G_DeferedInitNew(boolean pultmode, const char *mapname, INT32 character, boolean SSSG, boolean FLS);
 void G_DoLoadLevel(boolean resetplayer);
 void G_StartTitleCard(void);
 void G_PreLevelTitleCard(void);
 boolean G_IsTitleCardAvailable(void);
 
-
+// Can be called by the startup code or M_Responder, calls P_SetupLevel.
 void G_LoadGame(UINT32 slot, INT16 mapoverride);
 
 void G_SaveGameData(gamedata_t *data);
@@ -222,7 +222,7 @@ void G_NextLevel(void);
 void G_Continue(void);
 void G_UseContinue(void);
 void G_AfterIntermission(void);
-void G_EndGame(void);  
+void G_EndGame(void); // moved from y_inter.c/h and renamed
 
 void G_Ticker(boolean run);
 boolean G_Responder(event_t *ev);
@@ -251,7 +251,7 @@ void G_SetUsedCheats(boolean silent);
 
 void G_SetGamestate(gamestate_t newstate);
 
-
+// Gamedata record shit
 void G_AllocMainRecordData(INT16 i, gamedata_t *data);
 void G_AllocNightsRecordData(INT16 i, gamedata_t *data);
 void G_ClearRecords(gamedata_t *data);
@@ -271,7 +271,7 @@ FUNCMATH INT32 G_TicsToSeconds(tic_t tics);
 FUNCMATH INT32 G_TicsToCentiseconds(tic_t tics);
 FUNCMATH INT32 G_TicsToMilliseconds(tic_t tics);
 
-
+// Don't split up TOL handling
 UINT32 G_TOLFlag(INT32 pgametype);
 
 #endif

@@ -12,9 +12,9 @@
 #define PNG_EXPORTA(ordinal, type, name, args, attributes)\
         PNG_DFN "@" name "@"
 
-                                                                           
-                                                 
-   
+/* The configuration information *before* the additional of symbol renames,
+ * the list is the C name list; no symbol prefix.
+ */
 #include "pnglibconf.out"
 
 PNG_DFN_START_SORT 1

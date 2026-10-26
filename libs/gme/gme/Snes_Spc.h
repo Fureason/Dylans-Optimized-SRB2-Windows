@@ -1,6 +1,6 @@
+// SNES SPC-700 APU emulator
 
-
-
+// Game_Music_Emu 0.6.0
 #ifndef SNES_SPC_H
 #define SNES_SPC_H
 
@@ -11,101 +11,101 @@ struct Snes_Spc {
 public:
 	typedef BOOST::uint8_t uint8_t;
 	
-
+	// Must be called once before using
 	blargg_err_t init();
 	
-
+	// Sample pairs generated per second
 	enum { sample_rate = 32000 };
 	
-
+// Emulator use
 	
-
-
+	// Sets IPL ROM data. Library does not include ROM data. Most SPC music files
+	// don't need ROM, but a full emulator must provide this.
 	enum { rom_size = 0x40 };
 	void init_rom( uint8_t const rom [rom_size] );
 
-
+	// Sets destination for output samples
 	typedef short sample_t;
 	void set_output( sample_t* out, int out_size );
 
-
+	// Number of samples written to output since last set
 	int sample_count() const;
 
-
-
+	// Resets SPC to power-on state. This resets your output buffer, so you must
+	// call set_output() after this.
 	void reset();
 
-
-
+	// Emulates pressing reset switch on SNES. This resets your output buffer, so
+	// you must call set_output() after this.
 	void soft_reset();
 
-
+	// 1024000 SPC clocks per second, sample pair every 32 clocks
 	typedef int time_t;
 	enum { clock_rate = 1024000 };
 	enum { clocks_per_sample = 32 };
 	
-
+	// Emulated port read/write at specified time
 	enum { port_count = 4 };
 	int  read_port ( time_t, int port );
 	void write_port( time_t, int port, int data );
 
-
+	// Runs SPC to end_time and starts a new time frame at 0
 	void end_frame( time_t end_time );
 	
-
+// Sound control
 	
-
-
+	// Mutes voices corresponding to non-zero bits in mask (issues repeated KOFF events).
+	// Reduces emulation accuracy.
 	enum { voice_count = 8 };
 	void mute_voices( int mask );
 	
-
-
+	// If true, prevents channels and global volumes from being phase-negated.
+	// Only supported by fast DSP.
 	void disable_surround( bool disable = true );
 	
-
+	// Sets tempo, where tempo_unit = normal, tempo_unit / 2 = half speed, etc.
 	enum { tempo_unit = 0x100 };
 	void set_tempo( int );
 
+// SPC music files
 
-
-
+	// Loads SPC data into emulator
 	enum { spc_min_file_size = 0x10180 };
 	enum { spc_file_size     = 0x10200 };
 	blargg_err_t load_spc( void const* in, long size );
 	
-
+	// Clears echo region. Useful after loading an SPC as many have garbage in echo.
 	void clear_echo();
 
-
-
+	// Plays for count samples and write samples to out. Discards samples if out
+	// is NULL. Count must be a multiple of 2 since output is stereo.
 	blargg_err_t play( int count, sample_t* out );
 	
-
+	// Skips count samples. Several times faster than play() when using fast DSP.
 	blargg_err_t skip( int count );
 	
-
+// State save/load (only available with accurate DSP)
 
 #if !SPC_NO_COPY_STATE_FUNCS
-
-	enum { state_size = 67 * 1024L };  
+	// Saves/loads state
+	enum { state_size = 67 * 1024L }; // maximum space needed when saving
 	typedef Spc_Dsp::copy_func_t copy_func_t;
 	void copy_state( unsigned char** io, copy_func_t );
 	
-
+	// Writes minimal header to spc_out
 	static void init_header( void* spc_out );
 
-
-
+	// Saves emulator state as SPC file data. Writes spc_file_size bytes to spc_out.
+	// Does not set up SPC header; use init_header() for that.
 	void save_spc( void* spc_out );
 
-
-
+	// Returns true if new key-on events occurred since last check. Useful for
+	// trimming silence while saving an SPC.
 	bool check_kon();
 #endif
 
 public:
-
+	// TODO: document
 	struct regs_t
 	{
 		int pc;
@@ -125,14 +125,14 @@ public:
 	
 	typedef BOOST::uint16_t uint16_t;
 	
-
-
-
+	// Time relative to m_spc_time. Speeds up code a bit by eliminating need to
+	// constantly add m_spc_time to time from CPU. CPU uses time that ends at
+	// 0 to eliminate reloading end time every instruction. It pays off.
 	typedef int rel_time_t;
 	
 	struct Timer
 	{
-		rel_time_t next_time;  
+		rel_time_t next_time; // time of next event
 		int prescaler;
 		int period;
 		int divider;
@@ -184,10 +184,10 @@ private:
 		
 		struct
 		{
-
+			// padding to neutralize address overflow
 			union {
 				uint8_t padding1 [0x100];
-				uint16_t align;  
+				uint16_t align; // makes compiler align data for 16-bit access
 			} padding1 [1];
 			uint8_t ram      [0x10000];
 			uint8_t padding2 [0x100];
@@ -199,7 +199,7 @@ private:
 	
 	enum { skipping_time = 127 };
 	
-
+	// Value that padding should be filled with
 	enum { cpu_pad_fill = 0xFF };
 	
 	enum {

@@ -9,13 +9,13 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
+/// \file  m_fixed.c
+/// \brief Fixed point implementation
 
-
-
-#if 0  
+#if 0 //#ifndef NO_M
 #include <math.h>
 #define HAVE_SQRT
- #if 0  
+ #if 0 //#ifndef _WIN32 // MSVCRT does not have *f() functions
  #define HAVE_SQRTF
  #endif
 #endif
@@ -34,22 +34,22 @@ fixed_t FixedSqrt(fixed_t x)
 #endif
 	return FLOAT_TO_FIXED(fr);
 #else
-
-
-
-
-
-
+	// The neglected art of Fixed Point arithmetic
+	// Jetro Lauha
+	// Seminar Presentation
+	// Assembly 2006, 3rd- 6th August 2006
+	// (Revised: September 13, 2006)
+	// URL: http://jet.ro/files/The_neglected_art_of_Fixed_Point_arithmetic_20060913.pdf
 	register UINT32 root, remHi, remLo, testDiv, count;
-	root = 0;          
-	remHi = 0;         
-	remLo = x;         
-	count = (15 + (FRACBITS >> 1));     
+	root = 0;         /* Clear root */
+	remHi = 0;        /* Clear high part of partial remainder */
+	remLo = x;        /* Get argument into low part of partial remainder */
+	count = (15 + (FRACBITS >> 1));    /* Load loop counter */
 	do
 	{
-		remHi = (remHi << 2) | (remLo >> 30); remLo <<= 2;   
-		root <<= 1;    
-		testDiv = (root << 1) + 1;     
+		remHi = (remHi << 2) | (remLo >> 30); remLo <<= 2;  /* get 2 bits of arg */
+		root <<= 1;   /* Get ready for the next bit in the root */
+		testDiv = (root << 1) + 1;    /* Test radical */
 		if (remHi >= testDiv)
 		{
 			remHi -= testDiv;
@@ -63,19 +63,19 @@ fixed_t FixedSqrt(fixed_t x)
 fixed_t FixedHypot(fixed_t x, fixed_t y)
 {
 	fixed_t ax, yx, yx2, yx1;
-	if (abs(y) > abs(x))  
+	if (abs(y) > abs(x)) // |y|>|x|
 	{
-		ax = abs(y);  
-		yx = FixedDiv(x, y);  
+		ax = abs(y); // |y| => ax
+		yx = FixedDiv(x, y); // (x/y)
 	}
-	else  
+	else // |x|>|y|
 	{
-		ax = abs(x);  
-		yx = FixedDiv(y, x);  
+		ax = abs(x); // |x| => ax
+		yx = FixedDiv(y, x); // (x/y)
 	}
-	yx2 = FixedMul(yx, yx);  
-	yx1 = FixedSqrt(1 * FRACUNIT + yx2);  
-	return FixedMul(ax, yx1);  
+	yx2 = FixedMul(yx, yx); // (x/y)^2
+	yx1 = FixedSqrt(1 * FRACUNIT + yx2); // (1 + (x/y)^2)^1/2
+	return FixedMul(ax, yx1); // |x|*((1 + (x/y)^2)^1/2)
 }
 
 vector2_t *FV2_Load(vector2_t *vec, fixed_t x, fixed_t y)
@@ -145,7 +145,7 @@ vector2_t *FV2_Divide(vector2_t *a_i, fixed_t a_c)
 	return FV2_DivideEx(a_i, a_c, a_i);
 }
 
-
+// Vector Complex Math
 vector2_t *FV2_Midpoint(const vector2_t *a_1, const vector2_t *a_2, vector2_t *a_o)
 {
 	a_o->x = FixedDiv(a_2->x - a_1->x, 2 * FRACUNIT);
@@ -169,7 +169,7 @@ fixed_t FV2_Magnitude(const vector2_t *a_normal)
 	return FixedSqrt(xs + ys);
 }
 
-
+// Also returns the magnitude
 fixed_t FV2_NormalizeEx(const vector2_t *a_normal, vector2_t *a_o)
 {
 	fixed_t magnitude = FV2_Magnitude(a_normal);
@@ -213,11 +213,11 @@ fixed_t FV2_Dot(const vector2_t *a_1, const vector2_t *a_2)
 	return (FixedMul(a_1->x, a_2->x) + FixedMul(a_1->y, a_2->y));
 }
 
-
-
-
-
-
+//
+// Point2Vec
+//
+// Given two points, create a vector between them.
+//
 vector2_t *FV2_Point2Vec(const vector2_t *point1, const vector2_t *point2, vector2_t *a_o)
 {
 	a_o->x = point1->x - point2->x;
@@ -377,7 +377,7 @@ vector4_t *FV4_Divide(vector4_t *a_i, fixed_t a_c)
 	return FV4_DivideEx(a_i, a_c, a_i);
 }
 
-
+// Vector Complex Math
 vector3_t *FV3_Midpoint(const vector3_t *a_1, const vector3_t *a_2, vector3_t *a_o)
 {
 	a_o->x = FixedDiv(a_2->x - a_1->x, 2 * FRACUNIT);
@@ -436,7 +436,7 @@ fixed_t FV4_Magnitude(const vector4_t *a_normal)
 	return FixedSqrt(xs + ys + zs + as);
 }
 
-
+// Also returns the magnitude
 fixed_t FV3_NormalizeEx(const vector3_t *a_normal, vector3_t *a_o)
 {
 	fixed_t magnitude = FV3_Magnitude(a_normal);
@@ -540,15 +540,15 @@ vector3_t *FV3_Cross(const vector3_t *a_1, const vector3_t *a_2, vector3_t *a_o)
 	return a_o;
 }
 
-
-
-
-
-
-
+//
+// ClosestPointOnLine
+//
+// Finds the point on a line closest
+// to the specified point.
+//
 vector3_t *FV3_ClosestPointOnLine(const vector3_t *Line, const vector3_t *p, vector3_t *out)
 {
-
+	// Determine t (the length of the vector from "Line[0]" to "p")
 	vector3_t c, V;
 	fixed_t t, d = 0;
 	FV3_SubEx(p, &Line[0], &c);
@@ -558,7 +558,7 @@ vector3_t *FV3_ClosestPointOnLine(const vector3_t *Line, const vector3_t *p, vec
 	d = FV3_Distance(&Line[0], &Line[1]);
 	t = FV3_Dot(&V, &c);
 
-
+	// Check to see if "t" is beyond the extents of the line segment
 	if (t < 0)
 	{
 		return FV3_Copy(out, &Line[0]);
@@ -568,33 +568,33 @@ vector3_t *FV3_ClosestPointOnLine(const vector3_t *Line, const vector3_t *p, vec
 		return FV3_Copy(out, &Line[1]);
 	}
 
-
+	// Return the point between "Line[0]" and "Line[1]"
 	FV3_Mul(&V, t);
 
 	return FV3_AddEx(&Line[0], &V, out);
 }
 
-
-
-
-
-
+//
+// ClosestPointOnVector
+//
+// Similar to ClosestPointOnLine, but uses a vector instead of two points.
+//
 void FV3_ClosestPointOnVector(const vector3_t *dir, const vector3_t *p, vector3_t *out)
 {
 	fixed_t t = FV3_Dot(dir, p);
 
-
+	// Return the point on the line closest
 	FV3_MulEx(dir, t, out);
 	return;
 }
 
-
-
-
-
-
-
-
+//
+// ClosestPointOnTriangle
+//
+// Given a triangle and a point,
+// the closest point on the edge of
+// the triangle is returned.
+//
 void FV3_ClosestPointOnTriangle(const vector3_t *tri, const vector3_t *point, vector3_t *result)
 {
 	UINT8 i;
@@ -614,7 +614,7 @@ void FV3_ClosestPointOnTriangle(const vector3_t *tri, const vector3_t *point, ve
 	FV3_Copy(&Line[1], &tri[0]);
 	FV3_ClosestPointOnLine(Line, point, &EdgePoints[2]);
 
-
+	// Find the closest one of the three
 	FV3_Copy(result, &EdgePoints[0]);
 	closestdist = FV3_Distance(point, &EdgePoints[0]);
 	for (i = 1; i < 3; i++)
@@ -628,14 +628,14 @@ void FV3_ClosestPointOnTriangle(const vector3_t *tri, const vector3_t *point, ve
 		}
 	}
 
-
+	// We now have the closest point! Whee!
 }
 
-
-
-
-
-
+//
+// Point2Vec
+//
+// Given two points, create a vector between them.
+//
 vector3_t *FV3_Point2Vec(const vector3_t *point1, const vector3_t *point2, vector3_t *a_o)
 {
 	a_o->x = point1->x - point2->x;
@@ -644,11 +644,11 @@ vector3_t *FV3_Point2Vec(const vector3_t *point1, const vector3_t *point2, vecto
 	return a_o;
 }
 
-
-
-
-
-
+//
+// Normal
+//
+// Calculates the normal of a polygon.
+//
 fixed_t FV3_Normal(const vector3_t *a_triangle, vector3_t *a_normal)
 {
 	vector3_t a_1;
@@ -662,11 +662,11 @@ fixed_t FV3_Normal(const vector3_t *a_triangle, vector3_t *a_normal)
 	return FV3_NormalizeEx(a_normal, a_normal);
 }
 
-
-
-
-
-
+//
+// Strength
+//
+// Measures the 'strength' of a vector in a particular direction.
+//
 fixed_t FV3_Strength(const vector3_t *a_1, const vector3_t *dir)
 {
 	vector3_t normal;
@@ -677,17 +677,17 @@ fixed_t FV3_Strength(const vector3_t *a_1, const vector3_t *dir)
 
 	dist = FV3_Magnitude(&normal);
 
-	if (dot < 0)  
+	if (dot < 0) // Not facing same direction, so negate result.
 		dist = -dist;
 
 	return dist;
 }
 
-
-
-
-
-
+//
+// PlaneDistance
+//
+// Calculates distance between a plane and the origin.
+//
 fixed_t FV3_PlaneDistance(const vector3_t *a_normal, const vector3_t *a_point)
 {
 	return -(FixedMul(a_normal->x, a_point->x) + FixedMul(a_normal->y, a_point->y) + FixedMul(a_normal->z, a_point->z));
@@ -707,22 +707,22 @@ boolean FV3_IntersectedPlane(const vector3_t *a_triangle, const vector3_t *a_lin
 	distance2 = (FixedMul(a_normal->x, a_line[1].x) + FixedMul(a_normal->y, a_line[1].y)
 		+ FixedMul(a_normal->z, a_line[1].z)) + *originDistance;
 
-
+	// Positive or zero number means no intersection
 	if (FixedMul(distance1, distance2) >= 0)
 		return false;
 
 	return true;
 }
 
-
-
-
-
-
-
-
-
-
+//
+// PlaneIntersection
+//
+// Returns the distance from
+// rOrigin to where the ray
+// intersects the plane. Assumes
+// you already know it intersects
+// the plane.
+//
 fixed_t FV3_PlaneIntersection(const vector3_t *pOrigin, const vector3_t *pNormal, const vector3_t *rOrigin, const vector3_t *rVector)
 {
 	fixed_t d = -(FV3_Dot(pNormal, pOrigin));
@@ -731,15 +731,15 @@ fixed_t FV3_PlaneIntersection(const vector3_t *pOrigin, const vector3_t *pNormal
 	return -FixedDiv(number, denom);
 }
 
-
-
-
-
-
-
-
-
-
+//
+// IntersectRaySphere
+// Input : rO - origin of ray in world space
+//         rV - vector describing direction of ray in world space
+//         sO - Origin of sphere
+//         sR - radius of sphere
+// Notes : Normalized directional vectors expected
+// Return: distance to sphere in world units, -1 if no intersection.
+//
 fixed_t FV3_IntersectRaySphere(const vector3_t *rO, const vector3_t *rV, const vector3_t *sO, fixed_t sR)
 {
 	vector3_t Q;
@@ -750,91 +750,91 @@ fixed_t FV3_IntersectRaySphere(const vector3_t *rO, const vector3_t *rV, const v
 	v = FV3_Dot(&Q, rV);
 	d = FixedMul(sR, sR) - (FixedMul(c, c) - FixedMul(v, v));
 
-
+	// If there was no intersection, return -1
 	if (d < 0 * FRACUNIT)
 		return (-1 * FRACUNIT);
 
-
+	// Return the distance to the [first] intersecting point
 	return (v - FixedSqrt(d));
 }
 
-
-
-
-
-
+//
+// IntersectionPoint
+//
+// This returns the intersection point of the line that intersects the plane
+//
 vector3_t *FV3_IntersectionPoint(const vector3_t *vNormal, const vector3_t *vLine, fixed_t distance, vector3_t *ReturnVec)
 {
-	vector3_t vLineDir;  
+	vector3_t vLineDir; // Variables to hold the point and the line's direction
 	fixed_t Numerator = 0, Denominator = 0, dist = 0;
 
+	// Here comes the confusing part.  We need to find the 3D point that is actually
+	// on the plane.  Here are some steps to do that:
+
+	// 1)  First we need to get the vector of our line, Then normalize it so it's a length of 1
+	FV3_Point2Vec(&vLine[1], &vLine[0], &vLineDir);		// Get the Vector of the line
+	FV3_NormalizeEx(&vLineDir, &vLineDir);				// Normalize the lines vector
 
 
-
-
-	FV3_Point2Vec(&vLine[1], &vLine[0], &vLineDir);		 
-	FV3_NormalizeEx(&vLineDir, &vLineDir);				 
-
-
-
-
-
-
-	Numerator = -(FixedMul(vNormal->x, vLine[0].x) +		 
+	// 2) Use the plane equation (distance = Ax + By + Cz + D) to find the distance from one of our points to the plane.
+	//    Here I just chose a arbitrary point as the point to find that distance.  You notice we negate that
+	//    distance.  We negate the distance because we want to eventually go BACKWARDS from our point to the plane.
+	//    By doing this is will basically bring us back to the plane to find our intersection point.
+	Numerator = -(FixedMul(vNormal->x, vLine[0].x) +		// Use the plane equation with the normal and the line
 		FixedMul(vNormal->y, vLine[0].y) +
 		FixedMul(vNormal->z, vLine[0].z) + distance);
 
+	// 3) If we take the dot product between our line vector and the normal of the polygon,
+	//    this will give us the cosine of the angle between the 2 (since they are both normalized - length 1).
+	//    We will then divide our Numerator by this value to find the offset towards the plane from our arbitrary point.
+	Denominator = FV3_Dot(vNormal, &vLineDir);		// Get the dot product of the line's vector and the normal of the plane
 
+	// Since we are using division, we need to make sure we don't get a divide by zero error
+	// If we do get a 0, that means that there are INFINITE points because the the line is
+	// on the plane (the normal is perpendicular to the line - (Normal.Vector = 0)).
+	// In this case, we should just return any point on the line.
 
-
-	Denominator = FV3_Dot(vNormal, &vLineDir);		 
-
-
-
-
-
-
-	if (Denominator == 0 * FRACUNIT)  
+	if (Denominator == 0 * FRACUNIT) // Check so we don't divide by zero
 	{
 		ReturnVec->x = vLine[0].x;
 		ReturnVec->y = vLine[0].y;
 		ReturnVec->z = vLine[0].z;
-		return ReturnVec;	 
+		return ReturnVec;	// Return an arbitrary point on the line
 	}
 
+	// We divide the (distance from the point to the plane) by (the dot product)
+	// to get the distance (dist) that we need to move from our arbitrary point.  We need
+	// to then times this distance (dist) by our line's vector (direction).  When you times
+	// a scalar (single number) by a vector you move along that vector.  That is what we are
+	// doing.  We are moving from our arbitrary point we chose from the line BACK to the plane
+	// along the lines vector.  It seems logical to just get the numerator, which is the distance
+	// from the point to the line, and then just move back that much along the line's vector.
+	// Well, the distance from the plane means the SHORTEST distance.  What about in the case that
+	// the line is almost parallel with the polygon, but doesn't actually intersect it until half
+	// way down the line's length.  The distance from the plane is short, but the distance from
+	// the actual intersection point is pretty long.  If we divide the distance by the dot product
+	// of our line vector and the normal of the plane, we get the correct length.  Cool huh?
 
+	dist = FixedDiv(Numerator, Denominator); // Divide to get the multiplying (percentage) factor
 
+	// Now, like we said above, we times the dist by the vector, then add our arbitrary point.
+	// This essentially moves the point along the vector to a certain distance.  This now gives
+	// us the intersection point.  Yay!
 
-
-
-
-
-
-
-
-
-
-
-	dist = FixedDiv(Numerator, Denominator);  
-
-
-
-
-
-
+	// Return the intersection point
 	ReturnVec->x = vLine[0].x + FixedMul(vLineDir.x, dist);
 	ReturnVec->y = vLine[0].y + FixedMul(vLineDir.y, dist);
 	ReturnVec->z = vLine[0].z + FixedMul(vLineDir.z, dist);
 	return ReturnVec;
 }
 
-
-
-
-
-
-
-
+//
+// PointOnLineSide
+//
+// If on the front side of the line, returns 1.
+// If on the back side of the line, returns 0.
+// 2D only.
+//
 UINT8 FV3_PointOnLineSide(const vector3_t *point, const vector3_t *line)
 {
 	fixed_t s1 = FixedMul((point->y - line[0].y), (line[1].x - line[0].x));
@@ -842,13 +842,13 @@ UINT8 FV3_PointOnLineSide(const vector3_t *point, const vector3_t *line)
 	return (UINT8)(s1 - s2 < 0);
 }
 
-
-
-
-
-
-
-
+//
+// PointInsideBox
+//
+// Given four points of a box,
+// determines if the supplied point is
+// inside the box or not.
+//
 boolean FV3_PointInsideBox(const vector3_t *point, const vector3_t *box)
 {
 	vector3_t lastLine[2];
@@ -864,11 +864,11 @@ boolean FV3_PointInsideBox(const vector3_t *point, const vector3_t *box)
 
 	return true;
 }
-
-
-
-
-
+//
+// LoadIdentity
+//
+// Loads the identity matrix into a matrix
+//
 void FM_LoadIdentity(matrix_t* matrix)
 {
 #define M(row,col)  matrix->m[col * 4 + row]
@@ -881,12 +881,12 @@ void FM_LoadIdentity(matrix_t* matrix)
 #undef M
 }
 
-
-
-
-
-
-
+//
+// CreateObjectMatrix
+//
+// Creates a matrix that can be used for
+// adjusting the position of an object
+//
 void FM_CreateObjectMatrix(matrix_t *matrix, fixed_t x, fixed_t y, fixed_t z, fixed_t anglex, fixed_t angley, fixed_t anglez, fixed_t upx, fixed_t upy, fixed_t upz, fixed_t radius)
 {
 	vector3_t upcross;
@@ -921,11 +921,11 @@ void FM_CreateObjectMatrix(matrix_t *matrix, fixed_t x, fixed_t y, fixed_t z, fi
 	matrix->m[15] = FRACUNIT;
 }
 
-
-
-
-
-
+//
+// MultMatrixVec
+//
+// Multiplies a vector by the specified matrix
+//
 const vector3_t *FM_MultMatrixVec3(const matrix_t *matrix, const vector3_t *vec, vector3_t *out)
 {
 #define M(row,col)  matrix->m[col * 4 + row]
@@ -974,11 +974,11 @@ const vector4_t *FM_MultMatrixVec4(const matrix_t *matrix, const vector4_t *vec,
 	return out;
 }
 
-
-
-
-
-
+//
+// MultMatrix
+//
+// Multiples one matrix into another
+//
 void FM_MultMatrix(matrix_t *dest, const matrix_t *multme)
 {
 	matrix_t result;
@@ -1000,11 +1000,11 @@ void FM_MultMatrix(matrix_t *dest, const matrix_t *multme)
 #undef M
 }
 
-
-
-
-
-
+//
+// Translate
+//
+// Translates a matrix
+//
 void FM_Translate(matrix_t *dest, fixed_t x, fixed_t y, fixed_t z)
 {
 	matrix_t trans;
@@ -1021,11 +1021,11 @@ void FM_Translate(matrix_t *dest, fixed_t x, fixed_t y, fixed_t z)
 #undef M
 }
 
-
-
-
-
-
+//
+// Scale
+//
+// Scales a matrix
+//
 void FM_Scale(matrix_t *dest, fixed_t x, fixed_t y, fixed_t z)
 {
 	matrix_t scale;
@@ -1043,7 +1043,7 @@ void FM_Scale(matrix_t *dest, fixed_t x, fixed_t y, fixed_t z)
 }
 
 #ifdef M_TESTCASE
-
+//#define MULDIV_TEST
 #define SQRT_TEST
 
 static inline void M_print(INT64 a)
@@ -1171,7 +1171,7 @@ int main(int argc, char** argv)
 			printf(") != (");
 			M_print(d);
 			printf(")} \n");
-
+			//n--;
 			printf("%d != %d {", c, d);
 			M_print(b);
 			printf("}\n");

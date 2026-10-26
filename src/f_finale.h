@@ -8,9 +8,9 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
+/// \file  f_finale.h
+/// \brief Title screen, intro, game evaluation, and credits.
+///        Also includes protos for screen wipe functions.
 
 #ifndef __F_FINALE__
 #define __F_FINALE__
@@ -19,16 +19,16 @@
 #include "d_event.h"
 #include "p_mobj.h"
 
+//
+// FINALE
+//
 
-
-
-
-
+// Called by main loop.
 boolean F_IntroResponder(event_t *ev);
 boolean F_CutsceneResponder(event_t *ev);
 boolean F_CreditResponder(event_t *ev);
 
-
+// Called by main loop.
 void F_GameEndTicker(void);
 void F_IntroTicker(void);
 void F_TitleScreenTicker(boolean run);
@@ -36,7 +36,7 @@ void F_CutsceneTicker(void);
 void F_TitleDemoTicker(void);
 void F_TextPromptTicker(void);
 
-
+// Called by main loop.
 void F_GameEndDrawer(void);
 void F_IntroDrawer(void);
 void F_TitleScreenDrawer(void);
@@ -90,12 +90,12 @@ typedef enum
 	TTMODE_USER
 } ttmode_enum;
 
-#define TTMAX_ALACROIX 30  
+#define TTMAX_ALACROIX 30 // max frames for SONIC typeface, plus one for NULL terminating entry
 #define TTMAX_USER 100
 
 extern ttmode_enum ttmode;
 extern UINT8 ttscale;
-
+// ttmode user vars
 extern char ttname[8+1];
 extern INT16 ttx;
 extern INT16 tty;
@@ -111,7 +111,7 @@ typedef enum
 	TITLEMAP_RUNNING
 } titlemap_enum;
 
-
+// Current menu parameters
 
 extern mobj_t *titlemapcameraref;
 extern char curbgname[9];
@@ -125,7 +125,7 @@ extern boolean hidetitlemap;
 extern boolean curhidepics;
 extern ttmode_enum curttmode;
 extern UINT8 curttscale;
-
+// ttmode user vars
 extern char curttname[9];
 extern INT16 curttx;
 extern INT16 curtty;
@@ -137,10 +137,10 @@ extern UINT16 curtttics;
 void F_InitMenuPresValues(void);
 void F_MenuPresTicker(void);
 
-
-
-
-
+//
+// WIPE
+//
+// HACK for menu fading while titlemapinaction; skips the level check
 #define FORCEWIPE -3
 #define FORCEWIPEOFF -2
 
@@ -163,7 +163,7 @@ typedef enum
 } wipestyleflags_t;
 extern wipestyleflags_t wipestyleflags;
 
-
+// Even my function names are borderline
 boolean F_ShouldColormapFade(void);
 boolean F_TryColormapFade(UINT8 wipecolor);
 #ifndef NOWIPE
@@ -179,9 +179,9 @@ void F_DecideWipeStyle(void);
 
 extern INT32 lastwipetic;
 
-
-
-#define PRELEVELTIME 24  
+// Don't know where else to place this constant
+// But this file seems appropriate
+#define PRELEVELTIME 24 // frames in tics
 
 void F_WipeStartScreen(void);
 void F_WipeEndScreen(void);
@@ -193,7 +193,7 @@ boolean F_WipeExists(UINT8 wipetype);
 
 enum
 {
-	wipe_credits_intermediate,  
+	wipe_credits_intermediate, // makes a good 0 I guess.
 
 	wipe_level_toblack,
 	wipe_intermission_toblack,
@@ -207,7 +207,7 @@ enum
 	wipe_ending_toblack,
 	wipe_cutscene_toblack,
 
-
+	// custom intermissions
 	wipe_specinter_toblack,
 	wipe_multinter_toblack,
 	wipe_speclevel_towhite,
@@ -224,7 +224,7 @@ enum
 	wipe_ending_final,
 	wipe_cutscene_final,
 
-
+	// custom intermissions
 	wipe_specinter_final,
 	wipe_multinter_final,
 

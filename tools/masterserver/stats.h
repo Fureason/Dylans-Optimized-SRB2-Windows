@@ -13,7 +13,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
-
+//-----------------------------------------------------------------------------
 
 #ifndef _STATS_H_
 #define _STATS_H_
@@ -26,15 +26,15 @@
 #define SERVERMOTDTEXT "No Clans, advertising websites, Chat, Hangout, Hacked, or Role Playing Servers Allowed"
 
 
-
+// ================================ DEFINITIONS ===============================
 
 class CServerStats
 {
-	time_t uptime;  
-	char motd[2048];  
-	msg_server_t last_server[NUMLASTSERVERS];  
-	time_t last_time[NUMLASTSERVERS];  
-	char version[32];  
+	time_t uptime; // master server uptime
+	char motd[2048]; // increase that if not enough
+	msg_server_t last_server[NUMLASTSERVERS]; // keep last 6 named registered servers
+	time_t last_time[NUMLASTSERVERS]; // keep date/time of registration of those servers
+	char version[32]; // master server version
 
 public:
 	int num_connections;
@@ -61,8 +61,8 @@ public:
 	void putLastServer(msg_server_t *);
 };
 
+// ================================== PROTOS ==================================
 
-
-
+// ================================== EXTERNS =================================
 
 #endif

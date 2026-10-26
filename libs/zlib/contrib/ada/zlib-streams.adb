@@ -6,22 +6,22 @@
 --  Open source license information is in the zlib.ads file.  --
 ----------------------------------------------------------------
 
-
+--  $Id: zlib-streams.adb,v 1.10 2004/05/31 10:53:40 vagul Exp $
 
 with Ada.Unchecked_Deallocation;
 
 package body ZLib.Streams is
 
-
-
-
+   -----------
+   -- Close --
+   -----------
 
    procedure Close (Stream : in out Stream_Type) is
       procedure Free is new Ada.Unchecked_Deallocation
          (Stream_Element_Array, Buffer_Access);
    begin
       if Stream.Mode = Out_Stream or Stream.Mode = Duplex then
-
+         --  We should flush the data written by the writer.
 
          Flush (Stream, Finish);
 
@@ -34,9 +34,9 @@ package body ZLib.Streams is
       end if;
    end Close;
 
-
-
-
+   ------------
+   -- Create --
+   ------------
 
    procedure Create
      (Stream            :    out Stream_Type;
@@ -58,9 +58,9 @@ package body ZLib.Streams is
          (Filter   : in out Filter_Type;
           Compress : in     Boolean);
 
-
-
-
+      -----------------
+      -- Init_Filter --
+      -----------------
 
       procedure Init_Filter
          (Filter   : in out Filter_Type;
@@ -94,9 +94,9 @@ package body ZLib.Streams is
       end if;
    end Create;
 
-
-
-
+   -----------
+   -- Flush --
+   -----------
 
    procedure Flush
      (Stream : in out Stream_Type;

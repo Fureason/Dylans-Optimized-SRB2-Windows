@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  r_patch.h
+/// \brief Patch generation.
 
 #ifndef __R_PATCH__
 #define __R_PATCH__
@@ -17,7 +17,7 @@
 #include "r_picformats.h"
 #include "r_fps.h"
 
-
+// Patch functions
 patch_t *Patch_Create(INT16 width, INT16 height);
 patch_t *Patch_CreateFromDoomPatch(softwarepatch_t *source, size_t insize);
 void Patch_CalcDataSizes(softwarepatch_t *source, size_t *total_pixels, size_t *total_posts);
@@ -47,4 +47,4 @@ angle_t R_SpriteRotationAngle(interpmobjstate_t *interp);
 INT32 R_GetRollAngle(angle_t rollangle);
 #endif
 
-#endif  
+#endif // __R_PATCH__

@@ -54,29 +54,29 @@ unsigned short colordiff   = (   BLACK<<4) +  LIGHTRED;
 unsigned short colorkeys   = (   BLACK<<4) + LIGHTCYAN;
 
 
-
+// compare directorys
 void CompareDir(char *dir1,char *dir2);
 
-
+// compare directorys this one check only for missing file
 void CompareDir2(char *dir1,char *dir2);
 
-
+// compare files
 void CompareFile(char *filename1,char *filename2);
 
-
+// copy a file
 void fcopy(char *filename1,char *filename2);
 
-
+// recursive delete a dir
 void dirunlink(char *dirname);
 
-
+// recursive copy a dir
 void copydir(char *dirname1,char *dirname2);
 
 void Quit(char *f,...)
 {
     va_list     argptr;
 
-
+    // put message to stderr
     va_start (argptr,f);
     fprintf  (stderr, "Error: ");
     vfprintf (stderr,f,argptr);
@@ -142,8 +142,8 @@ int main(int argc,char *argv[])
 
     _set_screen_lines(50);
     screenline=50;
-
-
+    // desable blink color so we can use darkcolor for background
+    //outportb(0x3b8,5);
     intensevideo();
 
     tmp=getenv("temp");
@@ -166,7 +166,7 @@ int main(int argc,char *argv[])
     CompareDir(argv[1],argv[2]);
 
     if(!nonewfile)
-
+        // just for file in the directory 2 and not in the 1
         CompareDir2(argv[1],argv[2]);
 
     return 0;
@@ -180,7 +180,7 @@ char *fileextension(char *filename)
     while(i>0 && filename[i]!='.') i--;
     if( filename[i]=='.' )
         return filename+i+1;
-
+    // else
     return &nullextension;
 }
 
@@ -196,7 +196,7 @@ void CompareDir(char *dirname1,char *dirname2)
 
     printf("Comparing %s and %s\n",dirname2,dirname1);
 
-
+    // enter in directorys first
     finish=findfirst(tempstr,&dir,FA_DIREC);
     while(!finish)
     {
@@ -273,7 +273,7 @@ void CompareDir(char *dirname1,char *dirname2)
 
                 if(check)
                 {
-
+                    // seconde file not found
                     int choice;
                     if(!nonewfile)
                     {
@@ -304,7 +304,7 @@ void CompareDir(char *dirname1,char *dirname2)
     }
 }
 
-
+// find file in dir2 but not in dir1
 void CompareDir2(char *dirname1,char *dirname2)
 {
     struct ffblk dir;
@@ -384,7 +384,7 @@ void CompareDir2(char *dirname1,char *dirname2)
                   stricmp(ext,"o"  )==0 ||
                   stricmp(ext,"bat")==0 ||
                   stricmp(ext,"obj")==0    ) &&
-
+            // check if file exist in dir1
                   access(tempstr2,F_OK))
             {
                 int choice;
@@ -407,7 +407,7 @@ void CompareDir2(char *dirname1,char *dirname2)
     }
 }
 
-
+// convert tab to space
 char *tabconv(char *c,int tabsize)
 {
     static char buf[MAXLENLINE];
@@ -426,13 +426,13 @@ char *tabconv(char *c,int tabsize)
         i++;
     }
 
-  
-                 
-     
-                                      
-                  
-     
-  
+/*
+    if(j>maxline)
+    {
+        buf[maxline-1]='\n';  // trunc
+        j=maxline;
+    }
+*/
     buf[j]=0;
 
     return buf;
@@ -475,7 +475,7 @@ void initmyfgets( FILE *stream )
     c = fgetc(stream);    
 }
   
-
+// convert any f*** format to the good one
 char *myfgets( char *string, int n, FILE *stream )
 {
     int i=0;
@@ -495,7 +495,7 @@ char *myfgets( char *string, int n, FILE *stream )
             c = fgetc(stream);
             if( c==13 )
                 c = fgetc(stream);
-            *s++='\n';  
+            *s++='\n'; // hope no overflow
             *s++='\0';                            
             break;    
         }
@@ -505,7 +505,7 @@ char *myfgets( char *string, int n, FILE *stream )
             c = fgetc(stream);
             if( c==10 )
                 c = fgetc(stream);
-            *s++='\n';  
+            *s++='\n'; // hope no overflow
             *s++='\0';
             break;    
         }       
@@ -565,9 +565,9 @@ void FreeTextFile(textfile_t *file)
     file->lines = 0;   
 }
 
-
-
-
+// afficher une partie de fichier en partant de startline jusqu'a stop line
+// affiche les ligne redbeg   jusqua redstop en rouge
+// decale le text vers la droite de offset caractere
 void PrintfBlock(textfile_t *f,int start,int redbeg,int redstop,int stop, int offset)
 {
     int i,l;
@@ -609,7 +609,7 @@ void PrintfBlock(textfile_t *f,int start,int redbeg,int redstop,int stop, int of
     }
 }
 
-
+// copy only the syntax, compress all spacing in 1 space
 char *delspace(char *s)
 {
 static char buf[MAXLENLINE];
@@ -617,7 +617,7 @@ static char buf[MAXLENLINE];
 
     if( !compspace )
     {
-
+        // remove just trailing space
         strcpy(buf, s);
         for(i = strlen(buf)-1;(buf[i]==' ' || buf[i]=='\n' || buf[i]=='\r') && i>=0;i--)
             buf[i]='\0';
@@ -665,11 +665,11 @@ void Resynchronize(textfile_t *f1,int line1,
 {
     int  i,j,animcount=0;
     char anim[]="-\\|/";
-
-
-
-
-
+    // must compare line1+i and line2+j with all i and j
+    // insteed do a double for do fist the most probable
+    // therefore try first :
+    //  i = 0 1 0 2 1 0 3 2 1 0 4 ...
+    //  j = 0 0 1 0 1 2 0 1 2 3 0 ...
     cprintf("Resynchronising %c",anim[animcount]);
     for(i=1;i<maxlines;i++)
     {
@@ -684,7 +684,7 @@ void Resynchronize(textfile_t *f1,int line1,
             }
         animcount++;
         animcount&=0xF;
-
+        // not to mush printf this slowdown a lot
         if( (animcount&3)==0 )
             cprintf("\b%c",anim[animcount>>2]);
     }
@@ -734,7 +734,7 @@ void PrintVDiff(char *filename1,textfile_t *f1,int line1,
      textattr(colornormal);
 }
 
-
+// copy file date of source to dest
 void CopyFileDate(char *dest,char *source)
 {
     struct stat    fs1;
@@ -765,25 +765,25 @@ void CompareFile(char *filename1,char *filename2)
     always=0;
     maxlines=f1.lines+f2.lines+1;
 
-
-
+//    if(maxlines<f2.lines+1)
+//        maxlines=f2.lines;
 
     while(line1<maxlines && line2<maxlines)
     {
         if(!LineCmp(&f1.line[line1],&f2.line[line2],1))
-        {    
-
+        {   // different
+            // resynchronisation
             int oldcompspace = compspace;
             l=0;column=0;
             Resynchronize(&f1,line1,&f2,line2,&i,&j,maxlines,sameline);
 
             if( strncmp(f1.line[line1],"// $",4)==0 &&
                 strncmp(f2.line[line2],"// $",4)==0)
-                choice = '9';  
+                choice = '9'; // skip stupid cvs changes
             else
             {
                 choice = 0;
-
+              // ask the possibility and write it to the file
                 do {
                    PrintVDiff(filename1,&f1,line1,
                               filename2,&f2,line2,i,j,l,column);
@@ -820,12 +820,12 @@ void CompareFile(char *filename1,char *filename2)
                           compspace = !compspace;
                           Resynchronize(&f1,line1,&f2,line2,&i,&j,maxlines,sameline);
                           break;
-  
-                                
-                                                        
-                                                                                     
-                                
-  
+/*
+                      case 't' :
+                          tabconv2(&f1,line1,line1+i-1);
+                          Resynchronize(&f1,line1,&f2,line2,&i,&j,maxlines,sameline);
+                          break;
+*/
                       case 'p' : always=1;break;
                       case 'd' : always=2;break;
                       case 'u' :
@@ -833,7 +833,7 @@ void CompareFile(char *filename1,char *filename2)
                           FreeTextFile(&f1);
                           FreeTextFile(&f2);
 
-
+                          // remove the temp file
                           unlink(tempfilename);
 
                           CompareFile(filename1,filename2);
@@ -846,7 +846,7 @@ void CompareFile(char *filename1,char *filename2)
                           FreeTextFile(&f1);
                           FreeTextFile(&f2);
 
-
+                          // remove the temp file
                           unlink(tempfilename);
 
                           sprintf(params,"\"%s/%d\" \"%s/%d\"",filename1,line1,filename2,line2);
@@ -889,13 +889,13 @@ void CompareFile(char *filename1,char *filename2)
 
                 twoselected=true;
             }
-
+          // resynchronize
             line1+=i;
             line2+=j;
             compspace = oldcompspace;
         }
-
-
+        // skip "\n" line at the end of the file
+        // it is added for more easy compare at load time
         if(strcmp(f1.line[line1],"\n")==0)
             enterline++;
         else
@@ -913,18 +913,18 @@ void CompareFile(char *filename1,char *filename2)
     FreeTextFile(&f1);
     FreeTextFile(&f2);
 
-
+    // now overwrite the source file
     if( !twoselected )
-
+        // this is not necessarie but in futur version we can use trie directory
         fcopy(filename1,filename1);
     else
     if( !oneselected )
         fcopy(filename1,filename2);
     else
-
+        // twoselected==true && oneselected==true
         fcopy(filename1,tempfilename);
 
-
+    // remove the temp file
     unlink(tempfilename);
 }
 
@@ -950,11 +950,11 @@ void fcopy(char *dest,char *source)
     fclose(f1);
     fclose(f2);
 
-
+    // copy too the file date
     CopyFileDate(dest,source);
 }
 
-
+// recurisve remove dir
 void dirunlink(char *dirname)
 {
     struct ffblk dir;
@@ -964,7 +964,7 @@ void dirunlink(char *dirname)
     strcpy(tempstr,dirname);
     strcat(tempstr,"\\*.*");
 
-
+    // remove all dirs and file inside
     finish=findfirst(tempstr,&dir,0);
     while(!finish)
     {
@@ -985,7 +985,7 @@ void dirunlink(char *dirname)
         finish=findnext(&dir);
     }
 
-
+    // remove dir (it is now empty)
     unlink( dirname );
 }
 
@@ -1000,7 +1000,7 @@ void copydir(char *destdirname,char *srcdirname)
     strcpy(tempstr,srcdirname);
     strcat(tempstr,"\\*.*");
 
-
+    // remove all dirs and file inside
     finish=findfirst(tempstr,&dir,0);
     while(!finish)
     {

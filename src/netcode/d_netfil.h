@@ -7,8 +7,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file  d_netfil.h
+/// \brief File transferring related structs and functions.
 
 #ifndef __D_NETFIL__
 #define __D_NETFIL__
@@ -49,7 +49,7 @@ typedef enum
 	FS_FOUND,
 	FS_REQUESTED,
 	FS_DOWNLOADING,
-	FS_OPEN,  
+	FS_OPEN, // Is opened and used in w_wad
 	FS_MD5SUMBAD,
 	FS_FALLBACK
 } filestatus_t;
@@ -65,14 +65,14 @@ typedef struct
 {
 	char filename[MAX_WADPATH];
 	UINT8 md5sum[16];
-	filestatus_t status;  
-	UINT8 willsend;  
-	UINT8 folder;  
+	filestatus_t status; // The value returned by recsearch
+	UINT8 willsend; // Is the server willing to send it?
+	UINT8 folder; // File is a folder
 	fileneededtype_t type;
 	filedownloadfail_t failed;
-	boolean justdownloaded;  
+	boolean justdownloaded; // To prevent late fragments from causing an I_Error
 
-
+	// Used only for download
 	FILE *file;
 	boolean *receivedfragments;
 	UINT32 fragmentsize;
@@ -80,7 +80,7 @@ typedef struct
 	fileack_pak *ackpacket;
 	UINT32 currentsize;
 	UINT32 totalsize;
-	UINT32 ackresendposition;  
+	UINT32 ackresendposition; // Used when resuming downloads
 } fileneeded_t;
 
 #define FILENEEDEDSIZE 23
@@ -116,17 +116,17 @@ extern struct HTTP_login
 
 extern consvar_t cv_maxsend, cv_autosendaddons, cv_noticedownload, cv_downloadspeed, cv_autodownloadspeed, cv_persistentmd5;
 
-                                                                            
-                                                                                   
-                                                                         
-                         
+/** Return the approximate direct file-transfer payload limit represented by
+ *  downloadspeed, in decimal megabytes per second.  Actual throughput can be lower
+ *  because of acknowledgements, congestion control, or the listen-server
+ *  frame-time budget. */
 double D_FileTransferMBPerSecond(INT32 packetspertic);
- 
+/** Convert a user-facing decimal MB/s limit back to downloadspeed packets/tic. */
 INT32 D_FileTransferPacketsForMBPerSecond(double megabytespersecond);
 
 void D_MD5CacheStats_f(void);
 void D_ClearMD5Cache_f(void);
- 
+/** Persist checksum results once after a group of add-ons has finished. */
 void D_FlushPersistentMD5Cache(void);
 
 void AllocFileNeeded(INT32 size);
@@ -159,19 +159,19 @@ HTTP_login * CURLGetLogin (const char *url, HTTP_login ***return_prev_next);
 
 typedef enum
 {
-	LFTNS_NONE,     
-	LFTNS_WAITING,  
-	LFTNS_ASKED,    
-	LFTNS_SENDING,  
-	LFTNS_SENT      
+	LFTNS_NONE,    // This node is not connected
+	LFTNS_WAITING, // This node is waiting for the server to send the file
+	LFTNS_ASKED,   // The server has told the node they're ready to send the file
+	LFTNS_SENDING, // The server is sending the file to this node
+	LFTNS_SENT     // The node already has the file
 } luafiletransfernodestatus_t;
 
 typedef struct luafiletransfer_s
 {
 	char *filename;
 	char *realfilename;
-	char mode[4];  
-	INT32 id;  
+	char mode[4]; // rb+/wb+/ab+ + null character
+	INT32 id; // Callback ID
 	boolean ongoing;
 	luafiletransfernodestatus_t nodestatus[MAXNETNODES];
 	tic_t nodetimeouts[MAXNETNODES];
@@ -204,18 +204,18 @@ void Command_Downloads_f(void);
 
 boolean fileexist(char *filename, time_t ptime);
 
-
+// Search a file in the wadpath, return FS_FOUND when found
 filestatus_t findfile(char *filename, const UINT8 *wantedmd5sum,
 	boolean completepath);
 filestatus_t checkfilemd5(char *filename, const UINT8 *wantedmd5sum);
-                                                                           
-                                                         
+/* Return a stable MD5 for an add-on, reusing the persistent checksum cache
+ * when its metadata and sampled contents still match. */
 boolean D_GetCachedFileMD5(const char *filename, UINT8 md5sum[16]);
 
-
+// Searches for a folder
 filestatus_t findfolder(const char *path);
 
 void nameonly(char *s);
 size_t nameonlylength(const char *s);
 
-#endif  
+#endif // __D_NETFIL__

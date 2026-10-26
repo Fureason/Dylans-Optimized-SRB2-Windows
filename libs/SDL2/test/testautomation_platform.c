@@ -1,34 +1,34 @@
-   
-                                                                             
-                                                         
-   
+/**
+ * Original code: automated SDL platform test written by Edgar Simo "bobbens"
+ * Extended and updated by aschiffler at ferzkopp dot net
+ */
 
 #include <stdio.h>
 
 #include "SDL.h"
 #include "SDL_test.h"
 
- 
+/* ================= Test Case Implementation ================== */
 
- 
+/* Helper functions */
 
-   
-                                 
-  
-                                                                            
-                                                                       
-                            
-   
+/**
+ * @brief Compare sizes of types.
+ *
+ * @note Watcom C flags these as Warning 201: "Unreachable code" if you just
+ *  compare them directly, so we push it through a function to keep the
+ *  compiler quiet.  --ryan.
+ */
 static int _compareSizeOfType(size_t sizeoftype, size_t hardcodetype)
 {
     return sizeoftype != hardcodetype;
 }
 
- 
+/* Test case functions */
 
-   
-                           
-   
+/**
+ * @brief Tests type sizes.
+ */
 int platform_testTypes(void *arg)
 {
     int ret;
@@ -48,9 +48,9 @@ int platform_testTypes(void *arg)
     return TEST_COMPLETED;
 }
 
-   
-                                                             
-   
+/**
+ * @brief Tests platform endianness and SDL_SwapXY functions.
+ */
 int platform_testEndianessAndSwap(void *arg)
 {
     int real_byteorder;
@@ -82,7 +82,7 @@ int platform_testEndianessAndSwap(void *arg)
         real_byteorder = SDL_LIL_ENDIAN;
     }
 
-     
+    /* Test endianness. */
     SDLTest_AssertCheck(real_byteorder == SDL_BYTEORDER,
                         "Machine detected as %s endian, appears to be %s endian.",
                         (SDL_BYTEORDER == SDL_LIL_ENDIAN) ? "little" : "big",
@@ -94,24 +94,24 @@ int platform_testEndianessAndSwap(void *arg)
         real_floatwordorder = SDL_BIG_ENDIAN;
     }
 
-     
+    /* Test endianness. */
     SDLTest_AssertCheck(real_floatwordorder == SDL_FLOATWORDORDER,
                         "Machine detected as having %s endian float word order, appears to be %s endian.",
                         (SDL_FLOATWORDORDER == SDL_LIL_ENDIAN) ? "little" : "big",
                         (real_floatwordorder == SDL_LIL_ENDIAN) ? "little" : (real_floatwordorder == SDL_BIG_ENDIAN) ? "big"
                                                                                                                      : "unknown");
 
-     
+    /* Test 16 swap. */
     SDLTest_AssertCheck(SDL_Swap16(value16) == swapped16,
                         "SDL_Swap16(): 16 bit swapped: 0x%X => 0x%X",
                         value16, SDL_Swap16(value16));
 
-     
+    /* Test 32 swap. */
     SDLTest_AssertCheck(SDL_Swap32(value32) == swapped32,
                         "SDL_Swap32(): 32 bit swapped: 0x%" SDL_PRIX32 " => 0x%" SDL_PRIX32,
                         value32, SDL_Swap32(value32));
 
-     
+    /* Test 64 swap. */
     SDLTest_AssertCheck(SDL_Swap64(value64) == swapped64,
                         "SDL_Swap64(): 64 bit swapped: 0x%" SDL_PRIX64 " => 0x%" SDL_PRIX64,
                         value64, SDL_Swap64(value64));
@@ -119,15 +119,15 @@ int platform_testEndianessAndSwap(void *arg)
     return TEST_COMPLETED;
 }
 
-    
-                                      
-      
-                                         
-                                         
-                                                 
-                                         
-                                               
-   
+/* !
+ * \brief Tests SDL_GetXYZ() functions
+ * \sa
+ * http://wiki.libsdl.org/SDL_GetPlatform
+ * http://wiki.libsdl.org/SDL_GetCPUCount
+ * http://wiki.libsdl.org/SDL_GetCPUCacheLineSize
+ * http://wiki.libsdl.org/SDL_GetRevision
+ * http://wiki.libsdl.org/SDL_GetRevisionNumber
+ */
 int platform_testGetFunctions(void *arg)
 {
     char *platform;
@@ -165,23 +165,23 @@ int platform_testGetFunctions(void *arg)
     return TEST_COMPLETED;
 }
 
-    
-                                      
-      
-                                      
-                                        
-                                    
-                                      
-                                    
-                                     
-                                     
-                                      
-                                      
-                                    
-   
+/* !
+ * \brief Tests SDL_HasXYZ() functions
+ * \sa
+ * http://wiki.libsdl.org/SDL_Has3DNow
+ * http://wiki.libsdl.org/SDL_HasAltiVec
+ * http://wiki.libsdl.org/SDL_HasMMX
+ * http://wiki.libsdl.org/SDL_HasRDTSC
+ * http://wiki.libsdl.org/SDL_HasSSE
+ * http://wiki.libsdl.org/SDL_HasSSE2
+ * http://wiki.libsdl.org/SDL_HasSSE3
+ * http://wiki.libsdl.org/SDL_HasSSE41
+ * http://wiki.libsdl.org/SDL_HasSSE42
+ * http://wiki.libsdl.org/SDL_HasAVX
+ */
 int platform_testHasFunctions(void *arg)
 {
-     
+    /* TODO: independently determine and compare values as well */
 
     SDL_HasRDTSC();
     SDLTest_AssertPass("SDL_HasRDTSC()");
@@ -216,11 +216,11 @@ int platform_testHasFunctions(void *arg)
     return TEST_COMPLETED;
 }
 
-    
-                              
-      
-                                        
-   
+/* !
+ * \brief Tests SDL_GetVersion
+ * \sa
+ * http://wiki.libsdl.org/SDL_GetVersion
+ */
 int platform_testGetVersion(void *arg)
 {
     SDL_version linked;
@@ -240,9 +240,9 @@ int platform_testGetVersion(void *arg)
     return TEST_COMPLETED;
 }
 
-    
-                                 
-   
+/* !
+ * \brief Tests SDL_VERSION macro
+ */
 int platform_testSDLVersion(void *arg)
 {
     SDL_version compiled;
@@ -262,9 +262,9 @@ int platform_testSDLVersion(void *arg)
     return TEST_COMPLETED;
 }
 
-    
-                                
-   
+/* !
+ * \brief Tests default SDL_Init
+ */
 int platform_testDefaultInit(void *arg)
 {
     int ret;
@@ -284,13 +284,13 @@ int platform_testDefaultInit(void *arg)
     return TEST_COMPLETED;
 }
 
-    
-                                      
-      
-                                      
-                                      
-                                        
-   
+/* !
+ * \brief Tests SDL_Get/Set/ClearError
+ * \sa
+ * http://wiki.libsdl.org/SDL_GetError
+ * http://wiki.libsdl.org/SDL_SetError
+ * http://wiki.libsdl.org/SDL_ClearError
+ */
 int platform_testGetSetClearError(void *arg)
 {
     int result;
@@ -329,18 +329,18 @@ int platform_testGetSetClearError(void *arg)
                             lastError);
     }
 
-     
+    /* Clean up */
     SDL_ClearError();
     SDLTest_AssertPass("SDL_ClearError()");
 
     return TEST_COMPLETED;
 }
 
-    
-                                             
-      
-                                      
-   
+/* !
+ * \brief Tests SDL_SetError with empty input
+ * \sa
+ * http://wiki.libsdl.org/SDL_SetError
+ */
 int platform_testSetErrorEmptyInput(void *arg)
 {
     int result;
@@ -366,7 +366,7 @@ int platform_testSetErrorEmptyInput(void *arg)
                             lastError);
     }
 
-     
+    /* Clean up */
     SDL_ClearError();
     SDLTest_AssertPass("SDL_ClearError()");
 
@@ -378,11 +378,11 @@ int platform_testSetErrorEmptyInput(void *arg)
 #pragma GCC diagnostic ignored "-Wformat-overflow"
 #endif
 
-    
-                                               
-      
-                                      
-   
+/* !
+ * \brief Tests SDL_SetError with invalid input
+ * \sa
+ * http://wiki.libsdl.org/SDL_SetError
+ */
 int platform_testSetErrorInvalidInput(void *arg)
 {
     int result;
@@ -391,11 +391,11 @@ int platform_testSetErrorInvalidInput(void *arg)
     char *lastError;
     size_t len;
 
-     
+    /* Reset */
     SDL_ClearError();
     SDLTest_AssertPass("SDL_ClearError()");
 
-     
+    /* Check for no-op */
     result = SDL_SetError("%s", invalidError);
     SDLTest_AssertPass("SDL_SetError()");
     SDLTest_AssertCheck(result == -1, "SDL_SetError: expected -1, got: %i", result);
@@ -409,12 +409,12 @@ int platform_testSetErrorInvalidInput(void *arg)
                             (int)len);
     }
 
-     
+    /* Set */
     result = SDL_SetError("%s", probeError);
     SDLTest_AssertPass("SDL_SetError('%s')", probeError);
     SDLTest_AssertCheck(result == -1, "SDL_SetError: expected -1, got: %i", result);
 
-     
+    /* Check for no-op */
     result = SDL_SetError("%s", invalidError);
     SDLTest_AssertPass("SDL_SetError(NULL)");
     SDLTest_AssertCheck(result == -1, "SDL_SetError: expected -1, got: %i", result);
@@ -428,11 +428,11 @@ int platform_testSetErrorInvalidInput(void *arg)
                             (int)len);
     }
 
-     
+    /* Reset */
     SDL_ClearError();
     SDLTest_AssertPass("SDL_ClearError()");
 
-     
+    /* Set and check */
     result = SDL_SetError("%s", probeError);
     SDLTest_AssertPass("SDL_SetError()");
     SDLTest_AssertCheck(result == -1, "SDL_SetError: expected -1, got: %i", result);
@@ -451,7 +451,7 @@ int platform_testSetErrorInvalidInput(void *arg)
                             lastError);
     }
 
-     
+    /* Clean up */
     SDL_ClearError();
     SDLTest_AssertPass("SDL_ClearError()");
 
@@ -462,11 +462,11 @@ int platform_testSetErrorInvalidInput(void *arg)
 #pragma GCC diagnostic pop
 #endif
 
-    
-                                
-      
-                                          
-   
+/* !
+ * \brief Tests SDL_GetPowerInfo
+ * \sa
+ * http://wiki.libsdl.org/SDL_GetPowerInfo
+ */
 int platform_testGetPowerInfo(void *arg)
 {
     SDL_PowerState state;
@@ -510,7 +510,7 @@ int platform_testGetPowerInfo(void *arg)
             pct);
     }
 
-     
+    /* Partial return value variations */
     stateAgain = SDL_GetPowerInfo(&secsAgain, NULL);
     SDLTest_AssertCheck(
         state == stateAgain,
@@ -538,9 +538,9 @@ int platform_testGetPowerInfo(void *arg)
     return TEST_COMPLETED;
 }
 
- 
+/* ================= Test References ================== */
 
- 
+/* Platform test cases */
 static const SDLTest_TestCaseReference platformTest1 = {
     (SDLTest_TestCaseFp)platform_testTypes, "platform_testTypes", "Tests predefined types", TEST_ENABLED
 };
@@ -585,7 +585,7 @@ static const SDLTest_TestCaseReference platformTest11 = {
     (SDLTest_TestCaseFp)platform_testGetPowerInfo, "platform_testGetPowerInfo", "Tests SDL_GetPowerInfo function", TEST_ENABLED
 };
 
- 
+/* Sequence of Platform test cases */
 static const SDLTest_TestCaseReference *platformTests[] = {
     &platformTest1,
     &platformTest2,
@@ -601,7 +601,7 @@ static const SDLTest_TestCaseReference *platformTests[] = {
     NULL
 };
 
- 
+/* Platform test suite (global) */
 SDLTest_TestSuiteReference platformTestSuite = {
     "Platform",
     NULL,

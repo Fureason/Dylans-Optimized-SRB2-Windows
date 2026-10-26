@@ -12,9 +12,9 @@ using System.Runtime.InteropServices;
 namespace DotZLib
 {
 
-
-
-
+    /// <summary>
+    /// Implements a data compressor, using the deflate algorithm in the ZLib dll
+    /// </summary>
 	public sealed class Deflater : CodecBase
 	{
         #region Dll imports
@@ -31,10 +31,10 @@ namespace DotZLib
         private static extern int deflateEnd(ref ZStream sz);
         #endregion
 
-
-
-
-
+        /// <summary>
+        /// Constructs an new instance of the <c>Deflater</c>
+        /// </summary>
+        /// <param name="level">The compression level to use for this <c>Deflater</c></param>
 		public Deflater(CompressLevel level) : base()
 		{
             int retval = deflateInit_(ref _ztream, (int)level, Info.Version, Marshal.SizeOf(_ztream));
@@ -44,13 +44,13 @@ namespace DotZLib
             resetOutput();
 		}
 
-
-
-
-
-
-
-
+        /// <summary>
+        /// Adds more data to the codec to be processed.
+        /// </summary>
+        /// <param name="data">Byte array containing the data to be added to the codec</param>
+        /// <param name="offset">The index of the first byte to add from <c>data</c></param>
+        /// <param name="count">The number of bytes to add</param>
+        /// <remarks>Adding data may, or may not, raise the <c>DataAvailable</c> event</remarks>
         public override void Add(byte[] data, int offset, int count)
         {
             if (data == null) throw new ArgumentNullException();
@@ -80,9 +80,9 @@ namespace DotZLib
         }
 
 
-
-
-
+        /// <summary>
+        /// Finishes up any pending data that needs to be processed and handled.
+        /// </summary>
         public override void Finish()
         {
             int err;
@@ -97,9 +97,9 @@ namespace DotZLib
             resetOutput();
         }
 
-
-
-
+        /// <summary>
+        /// Closes the internal zlib deflate stream
+        /// </summary>
         protected override void CleanUp() { deflateEnd(ref _ztream); }
 
     }

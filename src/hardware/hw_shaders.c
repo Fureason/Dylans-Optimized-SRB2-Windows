@@ -6,8 +6,8 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
+/// \file hw_shaders.c
+/// \brief Handles the shaders used by the game.
 
 #ifdef HWRENDER
 
@@ -16,42 +16,42 @@
 #include "hw_shaders.h"
 #include "../z_zone.h"
 
-
-
-
+// ================
+//  Shader sources
+// ================
 
 static struct {
 	const char *vertex;
 	const char *fragment;
 } const gl_shadersources[] = {
-
+	// Floor shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_FLOOR_FRAGMENT_SHADER},
 
-
+	// Wall shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_WALL_FRAGMENT_SHADER},
 
-
+	// Sprite shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_WALL_FRAGMENT_SHADER},
 
-
+	// Model shader
 	{GLSL_MODEL_VERTEX_SHADER, GLSL_MODEL_FRAGMENT_SHADER},
 
-
+	// Water shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_WATER_FRAGMENT_SHADER},
 
-
+	// Fog shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_FOG_FRAGMENT_SHADER},
 
-
+	// Sky shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_SKY_FRAGMENT_SHADER},
 
-
+	// Palette postprocess shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_PALETTE_POSTPROCESS_FRAGMENT_SHADER},
 
-
+	// UI colormap fade shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_UI_COLORMAP_FADE_FRAGMENT_SHADER},
 
-
+	// UI tinted wipe shader
 	{GLSL_DEFAULT_VERTEX_SHADER, GLSL_UI_TINTED_WIPE_FRAGMENT_SHADER},
 
 	{NULL, NULL},
@@ -59,8 +59,8 @@ static struct {
 
 typedef struct
 {
-	int base_shader;  
-	int custom_shader;  
+	int base_shader; // index of base shader_t
+	int custom_shader; // index of custom shader_t
 } shadertarget_t;
 
 typedef struct
@@ -68,11 +68,11 @@ typedef struct
 	char *vertex;
 	char *fragment;
 	boolean compiled;
-} shader_t;  
+} shader_t; // these are in an array and accessed by indices
 
-
-
-
+// the array has NUMSHADERTARGETS entries for base shaders and for custom shaders
+// the array could be expanded in the future to fit "dynamic" custom shaders that
+// aren't fixed to shader targets
 static shader_t gl_shaders[NUMSHADERTARGETS*2];
 
 static shadertarget_t gl_shadertargets[NUMSHADERTARGETS];
@@ -82,8 +82,8 @@ static shadertarget_t gl_shadertargets[NUMSHADERTARGETS];
 #define MODEL_LIGHTING_DEFINE "#define SRB2_MODEL_LIGHTING"
 #define PALETTE_RENDERING_DEFINE "#define SRB2_PALETTE_RENDERING"
 
-
-
+// Initialize shader variables and the backend's shader system. Load the base shaders.
+// Returns false if shaders cannot be used.
 boolean HWR_InitShaders(void)
 {
 	int i;
@@ -93,10 +93,10 @@ boolean HWR_InitShaders(void)
 
 	for (i = 0; i < NUMSHADERTARGETS; i++)
 	{
-
+		// set up string pointers for base shaders
 		gl_shaders[i].vertex = Z_StrDup(gl_shadersources[i].vertex);
 		gl_shaders[i].fragment = Z_StrDup(gl_shadersources[i].fragment);
-
+		// set shader target indices to correct values
 		gl_shadertargets[i].base_shader = i;
 		gl_shadertargets[i].custom_shader = -1;
 	}
@@ -106,8 +106,8 @@ boolean HWR_InitShaders(void)
 	return true;
 }
 
-
-
+// helper function: strstr but returns an int with the substring position
+// returns INT32_MAX if not found
 static INT32 strstr_int(const char *str1, const char *str2)
 {
 	char *location = strstr(str1, str2);
@@ -117,9 +117,9 @@ static INT32 strstr_int(const char *str1, const char *str2)
 		return INT32_MAX;
 }
 
-
-
-
+// Creates a preprocessed copy of the shader according to the current graphics settings
+// Returns a pointer to the results on success and NULL on failure.
+// Remember memory management of the returned string.
 static char *HWR_PreprocessShader(char *original)
 {
 	const char *line_ending = "\n";
@@ -137,16 +137,16 @@ static char *HWR_PreprocessShader(char *original)
 	if (strstr(original, "\r\n"))
 	{
 		line_ending = "\r\n";
-
+		// check if all line endings are same
 		while ((read_pos = strchr(read_pos, '\n')))
 		{
 			read_pos--;
 			if (*read_pos != '\r')
 			{
-
-
-
-
+				// this file contains mixed CRLF and LF line endings.
+				// treating it as a LF file during parsing should keep
+				// the results sane enough as long as the gpu driver is fine
+				// with these kinds of weirdly formatted shader sources.
 				line_ending = "\n";
 				break;
 			}
@@ -157,25 +157,25 @@ static char *HWR_PreprocessShader(char *original)
 
 	line_ending_len = strlen(line_ending);
 
-
-
-
+	// Find the #version directive, if it exists. Also don't get fooled if it's
+	// inside a comment. Copy the version digits so they can be used in the preamble.
+	// Time for some string parsing :D
 
 #define STARTSWITH(str, with_what) !strncmp(str, with_what, sizeof(with_what)-1)
 #define ADVANCE(amount) read_pos += (amount); distance_to_end -= (amount);
 	while (true)
 	{
-
-
+		// we're at the start of a line or at the end of a block comment.
+		// first get any possible whitespace out of the way
 		int whitespace_len = strspn(read_pos, WHITESPACE_CHARS);
 		if (whitespace_len == distance_to_end)
-			break;  
+			break; // we got to the end
 		ADVANCE(whitespace_len)
 
 		if (STARTSWITH(read_pos, "#version"))
 		{
-
-
+			// found a version directive (and it's not inside a comment)
+			// now locate, verify and read the version number
 			int version_number_len;
 			version_pos = read_pos - original;
 			ADVANCE(sizeof("#version") - 1)
@@ -216,43 +216,43 @@ static char *HWR_PreprocessShader(char *original)
 		}
 		else
 		{
-
-
+			// go to next newline or end of next block comment if it starts before the newline
+			// and is not inside a line comment
 			INT32 newline_pos = strstr_int(read_pos, line_ending);
 			INT32 line_comment_pos;
 			INT32 block_comment_pos;
-
-
+			// optimization: temporarily put a null at the line ending, so strstr does not needlessly
+			// look past it since we're only interested in the current line
 			if (newline_pos != INT32_MAX)
 				read_pos[newline_pos] = '\0';
 			line_comment_pos = strstr_int(read_pos, "//");
 			block_comment_pos = strstr_int(read_pos, "/*");
-
+			// restore the line ending, remove the null we just put there
 			if (newline_pos != INT32_MAX)
 				read_pos[newline_pos] = line_ending[0];
 			if (line_comment_pos < block_comment_pos)
 			{
-
+				// line comment found, skip rest of the line
 				if (newline_pos != INT32_MAX)
 				{
 					ADVANCE(newline_pos + line_ending_len)
 				}
 				else
 				{
-
+					// we got to the end
 					break;
 				}
 			}
 			else if (block_comment_pos < line_comment_pos)
 			{
-
+				// block comment found, skip past it
 				INT32 block_comment_end;
 				ADVANCE(block_comment_pos + 2)
 				block_comment_end = strstr_int(read_pos, "*/");
 				if (block_comment_end == INT32_MAX)
 				{
-
-
+					// could also leave insertion_pos at 0 and let the GLSL compiler
+					// output an error message for this broken comment
 					CONS_Alert(CONS_ERROR, "HWR_PreprocessShader: Encountered unclosed block comment in shader.\n");
 					return NULL;
 				}
@@ -260,12 +260,12 @@ static char *HWR_PreprocessShader(char *original)
 			}
 			else if (newline_pos == INT32_MAX)
 			{
-
+				// we got to the end
 				break;
 			}
 			else
 			{
-
+				// nothing special on this line, move to the next one
 				ADVANCE(newline_pos + line_ending_len)
 			}
 		}
@@ -275,7 +275,7 @@ static char *HWR_PreprocessShader(char *original)
 
 #define ADD_TO_LEN(def) new_len += sizeof(def) - 1 + line_ending_len;
 
-
+	// Calculate length of modified shader.
 	new_len = original_len;
 	if (cv_glmodellighting.value)
 		ADD_TO_LEN(MODEL_LIGHTING_DEFINE)
@@ -293,7 +293,7 @@ static char *HWR_PreprocessShader(char *original)
 		new_len += sizeof("#line 0") - 1 + line_ending_len;
 	}
 
-
+	// Allocate memory for modified shader.
 	new_shader = Z_Malloc(new_len + 1, PU_STATIC, NULL);
 
 	read_pos = original;
@@ -319,7 +319,7 @@ static char *HWR_PreprocessShader(char *original)
 		write_pos += line_ending_len; \
 	}
 
-
+	// Write the defines.
 	if (cv_glmodellighting.value)
 		WRITE_DEFINE(MODEL_LIGHTING_DEFINE)
 	if (cv_glpaletterendering.value)
@@ -327,11 +327,11 @@ static char *HWR_PreprocessShader(char *original)
 
 #undef WRITE_DEFINE
 
-
-
+	// Write a #line directive, so compiler errors will report line numbers from the
+	// original shader without our preamble lines.
 	if (new_len != original_len)
 	{
-
+		// line numbering in the #line directive is different for versions 110-150
 		if (version_pos == -1 || shader_glsl_version[0] == '1')
 			strcpy(write_pos, "#line 0");
 		else
@@ -341,20 +341,20 @@ static char *HWR_PreprocessShader(char *original)
 		write_pos += line_ending_len;
 	}
 
-
+	// Copy the original shader.
 	M_Memcpy(write_pos, read_pos, original_len);
 
-
+	// Erase the original #version directive, if it exists and was copied.
 	if (new_len != original_len && version_pos != -1)
 		memset(write_pos + version_pos, ' ', version_len);
 
-
+	// Terminate the new string.
 	new_shader[new_len] = '\0';
 
 	return new_shader;
 }
 
-
+// preprocess and compile shader at gl_shaders[index]
 static void HWR_CompileShader(int index)
 {
 	char *vertex_source = gl_shaders[index].vertex;
@@ -376,7 +376,7 @@ static void HWR_CompileShader(int index)
 	gl_shaders[index].compiled = HWD.pfnCompileShader(index);
 }
 
-
+// compile or recompile shaders
 void HWR_CompileShaders(void)
 {
 	int i;
@@ -399,11 +399,11 @@ void HWR_CompileShaders(void)
 int HWR_GetShaderFromTarget(int shader_target)
 {
 	int custom_shader = gl_shadertargets[shader_target].custom_shader;
-
-
-
-
-
+	// use custom shader if following are true
+	// - custom shader exists
+	// - custom shader has been compiled successfully
+	// - custom shaders are enabled
+	// - custom shaders are allowed by the server
 	if (custom_shader != -1 && gl_shaders[custom_shader].compiled &&
 		cv_glshaders.value == 1 && cv_glallowshaders.value)
 		return custom_shader;
@@ -443,7 +443,7 @@ void HWR_LoadAllCustomShaders(void)
 {
 	INT32 i;
 
-
+	// read every custom shader
 	for (i = 0; i < numwadfiles; i++)
 		HWR_LoadCustomShadersFromFile(i, W_FileHasFolders(wadfiles[i]));
 }
@@ -502,17 +502,17 @@ static void HWR_TryToCompileShaderWithImplicitVersion(INT32 shader_index, INT32 
 		CONS_Alert(CONS_WARNING, "HWR_LoadCustomShadersFromFile: fragment shader '%s' is missing a #version directive\n", HWR_GetShaderName(shaderxlat_id));
 	}
 
-
+	// try to compile as is
 	HWR_CompileShader(shader_index);
 	if (gl_shaders[shader_index].compiled)
 		return;
 
-
+	// try each version directive
 	for(UINT32 i = 0; i < sizeof(version_directives) / sizeof(version_directives[0]); ++i) {
 		CONS_Alert(CONS_NOTICE, "HWR_TryToCompileShaderWithImplicitVersion: Trying %s\n", version_directives[i]);
 
 		if(!vert_shader_version_exists) {
-
+			// first time reallocation would have to be made
 
 			if(i == 0) {
 				void* old = (void*)gl_shaders[shader_index].vertex;
@@ -573,7 +573,7 @@ void HWR_LoadCustomShadersFromFile(UINT16 wadnum, boolean PK3)
 	while (stoken)
 	{
 		if ((stoken[0] == '/' && stoken[1] == '/')
-			|| (stoken[0] == '#')) 
+			|| (stoken[0] == '#'))// skip comments
 		{
 			stoken = strtok(NULL, "\r\n");
 			goto skip_field;
@@ -585,7 +585,7 @@ void HWR_LoadCustomShadersFromFile(UINT16 wadnum, boolean PK3)
 			if (!value)
 			{
 				CONS_Alert(CONS_WARNING, "HWR_LoadCustomShadersFromFile: Missing shader type (file %s, line %d)\n", wadfiles[wadnum]->filename, linenum);
-				stoken = strtok(NULL, "\r\n");  
+				stoken = strtok(NULL, "\r\n"); // skip end of line
 				goto skip_lump;
 			}
 
@@ -604,7 +604,7 @@ skip_lump:
 			if (!value)
 			{
 				CONS_Alert(CONS_WARNING, "HWR_LoadCustomShadersFromFile: Missing shader target (file %s, line %d)\n", wadfiles[wadnum]->filename, linenum);
-				stoken = strtok(NULL, "\r\n");  
+				stoken = strtok(NULL, "\r\n"); // skip end of line
 				goto skip_field;
 			}
 
@@ -623,7 +623,7 @@ skip_lump:
 					char *shader_source;
 					char *shader_lumpname;
 					UINT16 shader_lumpnum;
-					int shader_index;  
+					int shader_index; // index in gl_shaders
 
 					if (PK3)
 					{
@@ -655,8 +655,8 @@ skip_lump:
 					shader_index = shaderxlat[i].id + NUMSHADERTARGETS;
 					if (!modified_shaders[shaderxlat[i].id])
 					{
-
-
+						// this will clear any old custom shaders from previously loaded files
+						// Z_Free checks if the pointer is NULL!
 						Z_Free(gl_shaders[shader_index].vertex);
 						gl_shaders[shader_index].vertex = NULL;
 						Z_Free(gl_shaders[shader_index].fragment);
@@ -697,10 +697,10 @@ skip_field:
 	{
 		if (modified_shaders[i])
 		{
-			int shader_index = i + NUMSHADERTARGETS;  
+			int shader_index = i + NUMSHADERTARGETS; // index to gl_shaders
 			gl_shadertargets[i].custom_shader = shader_index;
-
-
+			// if only one stage (vertex/fragment) is defined, the other one
+			// is copied from the base shaders.
 			if (!gl_shaders[shader_index].fragment)
 				gl_shaders[shader_index].fragment = Z_StrDup(gl_shadersources[i].fragment);
 			if (!gl_shaders[shader_index].vertex)
@@ -734,4 +734,4 @@ const char *HWR_GetShaderName(INT32 shader)
 	return "Unknown";
 }
 
-#endif  
+#endif // HWRENDER

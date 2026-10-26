@@ -17,61 +17,61 @@
 
 typedef struct
 {
-	int ident;			 
-	int version;		 
+	int ident;			// A "magic number" that's used to identify the .md3 file
+	int version;		// The version of the file, always 15
 	char name[64];
 	int flags;
-	int numFrames;		 
+	int numFrames;		// Number of frames
 	int numTags;
 	int numSurfaces;
-	int numSkins;		 
+	int numSkins;		// Number of skins with the model
 	int offsetFrames;
 	int offsetTags;
 	int offsetSurfaces;
-	int offsetEnd;		 
+	int offsetEnd;		// Offset, in bytes from the start of the file, to the end of the file (filesize)
 } md3modelHeader;
 
 typedef struct
 {
-	float minBounds[3];		 
-	float maxBounds[3];		 
-	float localOrigin[3];	 
-	float radius;			 
-	char name[16];			 
+	float minBounds[3];		// First corner of the bounding box
+	float maxBounds[3];		// Second corner of the bounding box
+	float localOrigin[3];	// Local origin, usually (0, 0, 0)
+	float radius;			// Radius of bounding sphere
+	char name[16];			// Name of frame
 } md3Frame;
 
 typedef struct
 {
-	char name[64];		 
-	float origin[3];	 
-	float axis[9];		 
+	char name[64];		// Name of tag
+	float origin[3];	// Coordinates of tag
+	float axis[9];		// Orientation of tag object
 } md3Tag;
 
 typedef struct
 {
 	int ident;
-	char name[64];			 
+	char name[64];			// Name of this surface
 	int flags;
-	int numFrames;			 
-	int numShaders;			 
-	int numVerts;			 
-	int numTriangles;		 
-	int offsetTriangles;	 
-	int offsetShaders;		 
-	int offsetST;			 
-	int offsetXYZNormal;	 
-	int offsetEnd;			 
+	int numFrames;			// # of keyframes
+	int numShaders;			// # of shaders
+	int numVerts;			// # of vertices
+	int numTriangles;		// # of triangles
+	int offsetTriangles;	// Relative offset from start of this struct to where the list of Triangles start
+	int offsetShaders;		// Relative offset from start of this struct to where the list of Shaders start
+	int offsetST;			// Relative offset from start of this struct to where the list of tex coords start
+	int offsetXYZNormal;	// Relative offset from start of this struct to where the list of vertices start
+	int offsetEnd;			// Relative offset from start of this struct to where this surface ends
 } md3Surface;
 
 typedef struct
 {
-	char name[64];  
-	int shaderIndex;  
+	char name[64]; // Name of this shader
+	int shaderIndex; // Shader index number
 } md3Shader;
 
 typedef struct
 {
-	int index[3];  
+	int index[3]; // List of offset values into the list of Vertex objects that constitute the corners of the Triangle object.
 } md3Triangle;
 
 typedef struct
@@ -98,7 +98,7 @@ static void GetNormalFromLatLong(short latlng, float *out)
 #if 0
 static void NormalToLatLng(float *n, short *out)
 {
-
+	// Special cases
 	if (0.0f == n[0] && 0.0f == n[1])
 	{
 		if (n[2] > 0.0f)
@@ -172,19 +172,19 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 
 	retModel = (model_t*)Z_Calloc(sizeof(model_t), ztag, 0);
 
-
+	// find length of file
 	fseek(f, 0, SEEK_END);
 	fileLen = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
-
+	// read in file
 	buffer = malloc(fileLen);
 	fileReadLen = fread(buffer, fileLen, 1, f);
 	fclose(f);
 
-	(void)fileReadLen;  
+	(void)fileReadLen; // intentionally ignore return value, per buildbot
 
-
+	// get pointer to file header
 	mdh = (md3modelHeader*)buffer;
 
 	retModel->numMeshes = mdh->numSurfaces;
@@ -199,8 +199,8 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 		retModel->numMaterials += mdS->numShaders;
 	}
 
-
-	if (retModel->numMaterials <= 0)  
+	// Initialize materials
+	if (retModel->numMaterials <= 0) // Always at least one skin, duh
 		retModel->numMaterials = 1;
 
 	retModel->materials = (material_t*)Z_Calloc(sizeof(material_t)*retModel->numMaterials, ztag, 0);
@@ -256,53 +256,53 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 			mdShader[j].name[len-2] = 'u';
 			mdShader[j].name[len-3] = 'b';
 
+			// Load material
+/*			retModel->materials[matCount].texture = Texture::ReadTexture(mdShader[j].name, ZT_TEXTURE);
 
-                                                                                                
+			if (!systemSucks)
+			{
+				// Check for a normal map...??
+				char openfilename[1024];
+				char normalMapName[1024];
+				strcpy(normalMapName, mdShader[j].name);
+				len = strlen(normalMapName);
+				char *ptr = &normalMapName[len];
+				ptr--; // z
+				ptr--; // u
+				ptr--; // b
+				ptr--; // .
+				*ptr++ = '_';
+				*ptr++ = 'n';
+				*ptr++ = '.';
+				*ptr++ = 'b';
+				*ptr++ = 'u';
+				*ptr++ = 'z';
+				*ptr++ = '\0';
 
-                    
-    
-                                  
-                            
-                             
-                                            
-                                
-                                    
-               
-               
-               
-               
-                 
-                 
-                 
-                 
-                 
-                 
-                  
+				sprintf(openfilename, "%s/%s", "textures", normalMapName);
+				// Convert backslashes to forward slashes
+				for (int k = 0; k < 1024; k++)
+				{
+					if (openfilename[k] == '\0')
+						break;
 
-                                                              
-                                             
-                                  
-     
-                                 
-            
+					if (openfilename[k] == '\\')
+						openfilename[k] = '/';
+				}
 
-                                 
-                            
-     
-
-                                                             
-            
-     
-                          
-                                                                                              
-     
-      
+				Resource::resource_t *res = Resource::Open(openfilename);
+				if (res)
+				{
+					Resource::Close(res);
+					retModel->materials[matCount].lightmap = Texture::ReadTexture(normalMapName, ZT_TEXTURE);
+				}
+			}*/
 		}
 
 		retModel->meshes[i].numFrames = mdS->numFrames;
 		retModel->meshes[i].numTriangles = mdS->numTriangles;
 
-		if (!useFloat)  
+		if (!useFloat) // 'tinyframe' mode with indices
 		{
 			float tempNormal[3];
 			float *uvptr;
@@ -317,24 +317,24 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 			{
 				short *vertptr;
 				char *normptr;
-
+				// char *tanptr;
 				int k;
 				md3Vertex *mdV = (md3Vertex*)((char*)mdS + mdS->offsetXYZNormal + (mdS->numVerts*j*sizeof(md3Vertex)));
 				retModel->meshes[i].tinyframes[j].vertices = (short*)Z_Malloc(sizeof(short)*3*mdS->numVerts, ztag, 0);
 				retModel->meshes[i].tinyframes[j].normals = (char*)Z_Malloc(sizeof(char)*3*mdS->numVerts, ztag, 0);
 
-
-
+//				if (retModel->materials[0].lightmap)
+//					retModel->meshes[i].tinyframes[j].tangents = (char*)malloc(sizeof(char));//(char*)Z_Malloc(sizeof(char)*3*mdS->numVerts, ztag);
 				retModel->meshes[i].indices = (unsigned short*)Z_Malloc(sizeof(unsigned short) * 3 * mdS->numTriangles, ztag, 0);
 				vertptr = retModel->meshes[i].tinyframes[j].vertices;
 				normptr = retModel->meshes[i].tinyframes[j].normals;
 
-
+//				tanptr = retModel->meshes[i].tinyframes[j].tangents;
 				retModel->meshes[i].tinyframes[j].material = &retModel->materials[i];
 
 				for (k = 0; k < mdS->numVerts; k++)
 				{
-
+					// Vertex
 					*vertptr = mdV[k].x;
 					vertptr++;
 					*vertptr = mdV[k].z;
@@ -342,7 +342,7 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 					*vertptr = 1.0f - mdV[k].y;
 					vertptr++;
 
-
+					// Normal
 					GetNormalFromLatLong(mdV[k].n, tempNormal);
 					*normptr = (char)(tempNormal[0] * 127);
 					normptr++;
@@ -367,7 +367,7 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 			mdT = (md3Triangle*)((char*)mdS + mdS->offsetTriangles);
 			for (j = 0; j < mdS->numTriangles; j++, mdT++)
 			{
-
+				// Indices
 				*indexptr = (unsigned short)mdT->index[0];
 				indexptr++;
 				*indexptr = (unsigned short)mdT->index[1];
@@ -376,7 +376,7 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 				indexptr++;
 			}
 		}
-		else  
+		else // Traditional full-float loading method
 		{
 			float dataScale = 0.015624f * WUNITS;
 			float tempNormal[3];
@@ -385,7 +385,7 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 			float *uvptr;
 			int k;
 
-			retModel->meshes[i].numVertices = mdS->numTriangles * 3; 
+			retModel->meshes[i].numVertices = mdS->numTriangles * 3;//mdS->numVerts;
 			retModel->meshes[i].frames = (mdlframe_t*)Z_Calloc(sizeof(mdlframe_t)*mdS->numFrames, ztag, 0);
 			retModel->meshes[i].uvs = (float*)Z_Malloc(sizeof(float)*2*mdS->numTriangles*3, ztag, 0);
 
@@ -396,8 +396,8 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 				md3Vertex *mdV = (md3Vertex*)((char*)mdS + mdS->offsetXYZNormal + (mdS->numVerts*j*sizeof(md3Vertex)));
 				retModel->meshes[i].frames[j].vertices = (float*)Z_Malloc(sizeof(float)*3*mdS->numTriangles*3, ztag, 0);
 				retModel->meshes[i].frames[j].normals = (float*)Z_Malloc(sizeof(float)*3*mdS->numTriangles*3, ztag, 0);
-
-
+//				if (retModel->materials[i].lightmap)
+//					retModel->meshes[i].frames[j].tangents = (float*)malloc(sizeof(float));//(float*)Z_Malloc(sizeof(float)*3*mdS->numTriangles*3, ztag);
 				vertptr = retModel->meshes[i].frames[j].vertices;
 				normptr = retModel->meshes[i].frames[j].normals;
 				retModel->meshes[i].frames[j].material = &retModel->materials[i];
@@ -406,7 +406,7 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 
 				for (k = 0; k < mdS->numTriangles; k++)
 				{
-
+					// Vertex 1
 					*vertptr = mdV[mdT->index[0]].x * dataScale;
 					vertptr++;
 					*vertptr = mdV[mdT->index[0]].z * dataScale;
@@ -422,7 +422,7 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 					*normptr = tempNormal[1];
 					normptr++;
 
-
+					// Vertex 2
 					*vertptr = mdV[mdT->index[1]].x * dataScale;
 					vertptr++;
 					*vertptr = mdV[mdT->index[1]].z * dataScale;
@@ -438,7 +438,7 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 					*normptr = tempNormal[1];
 					normptr++;
 
-
+					// Vertex 3
 					*vertptr = mdV[mdT->index[2]].x * dataScale;
 					vertptr++;
 					*vertptr = mdV[mdT->index[2]].z * dataScale;
@@ -454,7 +454,7 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 					*normptr = tempNormal[1];
 					normptr++;
 
-					mdT++;  
+					mdT++; // Advance to next triangle
 				}
 			}
 
@@ -479,41 +479,41 @@ model_t *MD3_LoadModel(const char *fileName, int ztag, boolean useFloat)
 				*uvptr = mdST[mdT->index[2]].st[1];
 				uvptr++;
 
-				mdT++;  
+				mdT++; // Advance to next triangle
 			}
 		}
 	}
-	  
-         
-                                  
-                                         
-                                                                                             
-                                                   
-                                
-                                     
-  
-        
-                                                  
-   
-                                                                           
-                                              
-                                              
-                                              
-                                              
-                                              
-                                              
-                                              
-                                              
-                                              
-                                                         
-                                                         
-                                                         
-                                    
+	/*
+	// Tags?
+	retModel->numTags = mdh->numTags;
+	retModel->maxNumFrames = mdh->numFrames;
+	retModel->tags = (tag_t*)Z_Calloc(sizeof(tag_t) * retModel->numTags * mdh->numFrames, ztag);
+	md3Tag *mdTag = (md3Tag*)&buffer[mdh->offsetTags];
+	tag_t *curTag = retModel->tags;
+	for (i = 0; i < mdh->numFrames; i++)
+	{
+		int j;
+		for (j = 0; j < retModel->numTags; j++, mdTag++)
+		{
+			strcpys(curTag->name, mdTag->name, sizeof(curTag->name) / sizeof(char));
+			curTag->transform.m[0][0] = mdTag->axis[0];
+			curTag->transform.m[0][1] = mdTag->axis[1];
+			curTag->transform.m[0][2] = mdTag->axis[2];
+			curTag->transform.m[1][0] = mdTag->axis[3];
+			curTag->transform.m[1][1] = mdTag->axis[4];
+			curTag->transform.m[1][2] = mdTag->axis[5];
+			curTag->transform.m[2][0] = mdTag->axis[6];
+			curTag->transform.m[2][1] = mdTag->axis[7];
+			curTag->transform.m[2][2] = mdTag->axis[8];
+			curTag->transform.m[3][0] = mdTag->origin[0] * WUNITS;
+			curTag->transform.m[3][1] = mdTag->origin[1] * WUNITS;
+			curTag->transform.m[3][2] = mdTag->origin[2] * WUNITS;
+			curTag->transform.m[3][3] = 1.0f;
 
-                                                             
-            
-   
-    
+			Matrix::Rotate(&curTag->transform, 90.0f, &Vector::Xaxis);
+			curTag++;
+		}
+	}*/
 
 
 	free(buffer);

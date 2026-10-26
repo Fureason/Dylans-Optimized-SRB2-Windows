@@ -13,19 +13,19 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //-----------------------------------------------------------------------------
-
-
-
-
+/// \file
+/// \brief Sources from GameDeveloper magazine article, January 1998, by Bruce Dawson.
+///	this source file contains the exception handler for recording error
+///	information after crashes.
 
 
 #include <tchar.h>
 #ifndef HAVE_SDL
 #include "win_main.h"
 #endif
-#include "../doomdef.h"  
+#include "../doomdef.h" //just for VERSION
 #include "win_dbg.h"
-#include "../m_argv.h"  
+#include "../m_argv.h" //print the parameter in the log
 
 LPTOP_LEVEL_EXCEPTION_FILTER prevExceptionFilter = NULL;
 
@@ -38,7 +38,7 @@ typedef void (APIENTRY *BT_SETAPPNAME)(LPCTSTR pszAppName);
 typedef void (APIENTRY *BT_SETAPPVERSION)(LPCTSTR pszAppVersion);
 typedef void (APIENTRY *BT_SETSUPPORTSERVER)(LPCTSTR pszSupportHost, SHORT nSupportPort);
 
-
+// BT constant definitions that we use, as given in the docs.
 #define BTF_DETAILEDMODE 0x01
 #define BTF_ATTACHREPORT 0x04
 
@@ -46,10 +46,10 @@ typedef void (APIENTRY *BT_SETSUPPORTSERVER)(LPCTSTR pszSupportHost, SHORT nSupp
 static HMODULE g_hmodBugTrap;
 
 
-
-
-
-
+// --------------------------------------------------------------------------
+// Initialises the Bug Trap exception-handling library. Returns true iff
+// successful.
+// --------------------------------------------------------------------------
 BOOL InitBugTrap(void)
 {
 	BT_SETFLAGS lpfnBT_SetFlags;
@@ -58,14 +58,14 @@ BOOL InitBugTrap(void)
 	BT_SETAPPVERSION lpfnBT_SetAppVersion;
 	BT_SETSUPPORTSERVER lpfnBT_SetSupportServer;
 
-
+	// Loading the library installs the exception handler.
 #ifdef UNICODE
 	g_hmodBugTrap = LoadLibrary(L"BugTrapU.dll");
 #else
 	g_hmodBugTrap = LoadLibrary("BugTrap.dll");
 #endif
 
-
+	// Get the functions.
 	lpfnBT_SetFlags = (BT_SETFLAGS)GetProcAddress(g_hmodBugTrap, "BT_SetFlags");
 	lpfnBT_SetSupportURL = (BT_SETSUPPORTURL)GetProcAddress(g_hmodBugTrap, "BT_SetSupportURL");
 	lpfnBT_SetAppName = (BT_SETAPPNAME)GetProcAddress(g_hmodBugTrap, "BT_SetAppName");
@@ -87,30 +87,30 @@ BOOL InitBugTrap(void)
 }
 
 
-
-
-
-
+// --------------------------------------------------------------------------
+//   Removes the BugTrap exception handler. Safe to call even if BT was never
+//   initialized.
+// --------------------------------------------------------------------------
 void ShutdownBugTrap(void)
 {
 	if (g_hmodBugTrap) FreeLibrary(g_hmodBugTrap);
 }
 
-
-
-
-
+// --------------------------------------------------------------------------
+//   Simple test to check whether BugTrap is loaded without exposing its
+//   handle.
+// --------------------------------------------------------------------------
 BOOL IsBugTrapLoaded(void)
 {
 	return !!g_hmodBugTrap;
 }
 
-#endif		 
+#endif		// (defined BUGTRAP)
 
 
-#define NumCodeBytes    16           
-#define MaxStackDump    2048     
-#define StackColumns    8                
+#define NumCodeBytes    16          // Number of code bytes to record.
+#define MaxStackDump    2048    // Maximum number of DWORDS in stack dumps.
+#define StackColumns    8               // Number of columns in stack dump.
 
 #define ONEK                    1024
 #define SIXTYFOURK              (64*ONEK)
@@ -118,9 +118,9 @@ BOOL IsBugTrapLoaded(void)
 #define ONEG                    (ONEK*ONEK*ONEK)
 
 
-
-
-
+// --------------------------------------------------------------------------
+// return a description for an ExceptionCode
+// --------------------------------------------------------------------------
 static inline LPCSTR GetExceptionDescription(DWORD ExceptionCode)
 {
 	size_t i;
@@ -171,9 +171,9 @@ static inline LPCSTR GetExceptionDescription(DWORD ExceptionCode)
 }
 
 
-
-
-
+// --------------------------------------------------------------------------
+// Directly output a formatted string to the errorlog file, using win32 funcs
+// --------------------------------------------------------------------------
 static VOID FPrintf(HANDLE fileHandle, LPCSTR lpFmt, ...)
 {
 	CHAR    str[1999];
@@ -187,17 +187,17 @@ static VOID FPrintf(HANDLE fileHandle, LPCSTR lpFmt, ...)
 	WriteFile(fileHandle, str, (DWORD)strlen(str), &bytesWritten, NULL);
 }
 
-
-
-
-
+// --------------------------------------------------------------------------
+// Print the specified FILETIME to output in a human readable format,
+// without using the C run time.
+// --------------------------------------------------------------------------
 static VOID PrintTime(LPSTR output, FILETIME TimeToPrint)
 {
 	WORD Date, Time;
 	if (FileTimeToLocalFileTime(&TimeToPrint, &TimeToPrint) &&
 		FileTimeToDosDateTime(&TimeToPrint, &Date, &Time))
 	{
-
+		// What a silly way to print out the file date/time.
 		wsprintfA(output, "%d/%d/%d %02d:%02d:%02d",
 		          (Date / 32) & 15, Date & 31, (Date / 512) + 1980,
 		          (Time / 2048), (Time / 32) & 63, (Time & 31) * 2);
@@ -217,10 +217,10 @@ static LPTSTR GetFilePart(LPTSTR source)
 	return result;
 }
 
-
-
-
-
+// --------------------------------------------------------------------------
+// Print information about a code module (DLL or EXE) such as its size,
+// location, time stamp, etc.
+// --------------------------------------------------------------------------
 static VOID ShowModuleInfo(HANDLE LogFile, HMODULE ModuleHandle)
 {
 	CHAR ModName[MAX_PATH];
@@ -237,9 +237,9 @@ static VOID ShowModuleInfo(HANDLE LogFile, HMODULE ModuleHandle)
 	{
 		if (GetModuleFileNameA(ModuleHandle, ModName, sizeof(ModName)) > 0)
 		{
-
-
-
+			// If GetModuleFileName returns greater than zero then this must
+			// be a valid code module address. Therefore we can try to walk
+			// our way through its structures to find the link time stamp.
 			DosHeader = (IMAGE_DOS_HEADER*)ModuleHandle;
 			if (IMAGE_DOS_SIGNATURE != DosHeader->e_magic)
 				return;
@@ -247,8 +247,8 @@ static VOID ShowModuleInfo(HANDLE LogFile, HMODULE ModuleHandle)
 				+ DosHeader->e_lfanew);
 			if (IMAGE_NT_SIGNATURE != NTHeader->Signature)
 				return;
-
-
+			// Open the code module file so that we can get its file date
+			// and size.
 			ModuleFile = CreateFileA(ModName, GENERIC_READ,
 				FILE_SHARE_READ, 0, OPEN_EXISTING,
 				FILE_ATTRIBUTE_NORMAL, 0);
@@ -268,7 +268,7 @@ static VOID ShowModuleInfo(HANDLE LogFile, HMODULE ModuleHandle)
 				NTHeader->FileHeader.TimeDateStamp, TimeBuffer);
 		}
 	}
-
+	// Handle any exceptions by continuing from this point.
 #ifdef NO_SEH_MINGW
 	__except1
 #else
@@ -277,12 +277,12 @@ static VOID ShowModuleInfo(HANDLE LogFile, HMODULE ModuleHandle)
 	{}
 }
 
-
-
-
-
-
-
+// --------------------------------------------------------------------------
+// Scan memory looking for code modules (DLLs or EXEs). VirtualQuery is used
+// to find all the blocks of address space that were reserved or committed,
+// and ShowModuleInfo will display module information if they are code
+// modules.
+// --------------------------------------------------------------------------
 static VOID RecordModuleList(HANDLE LogFile)
 {
 	SYSTEM_INFO SystemInfo;
@@ -296,8 +296,8 @@ static VOID RecordModuleList(HANDLE LogFile)
 		"\tModule list: names, addresses, sizes, time stamps "
 		"and file times:\r\n");
 
-
-
+	// Set NumPages to the number of pages in the 4GByte address space,
+	// while being careful to avoid overflowing ints.
 	GetSystemInfo(&SystemInfo);
 	PageSize = SystemInfo.dwPageSize;
 	NumPages = 4 * (size_t)(ONEG / PageSize);
@@ -308,14 +308,14 @@ static VOID RecordModuleList(HANDLE LogFile)
 		{
 			if (MemInfo.RegionSize > 0)
 			{
-
+				// Adjust the page number to skip over this block of memory.
 				pageNum += MemInfo.RegionSize / PageSize;
 				if (MemInfo.State == MEM_COMMIT && MemInfo.AllocationBase >
 					LastAllocationBase)
 				{
-
-
-
+					// Look for new blocks of committed memory, and try
+					// recording their module names - this will fail
+					// gracefully if they aren't code modules.
 					LastAllocationBase = MemInfo.AllocationBase;
 					ShowModuleInfo(LogFile, (HMODULE)LastAllocationBase);
 				}
@@ -325,16 +325,16 @@ static VOID RecordModuleList(HANDLE LogFile)
 		}
 		else
 			pageNum += SIXTYFOURK / PageSize;
-
-
+		// If VirtualQuery fails we advance by 64K because that is the
+		// granularity of address space doled out by VirtualAlloc().
 	}
 }
 
 
-
-
-
-
+// --------------------------------------------------------------------------
+// Record information about the user's system, such as processor type, amount
+// of memory, etc.
+// --------------------------------------------------------------------------
 static VOID RecordSystemInformation(HANDLE fileHandle)
 {
 	FILETIME     CurrentTime;
@@ -368,20 +368,20 @@ static VOID RecordSystemInformation(HANDLE fileHandle)
 
 	MemInfo.dwLength = sizeof(MemInfo);
 	GlobalMemoryStatus(&MemInfo);
-
+	// Print out the amount of physical memory, rounded up.
 	FPrintf(fileHandle, "%d MBytes physical memory.\r\n", (MemInfo.dwTotalPhys +
 	        ONEM - 1) / ONEM);
 }
 
-
-
-
-
-
-
-
-
-LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
+// --------------------------------------------------------------------------
+// What we do here is trivial : open a file, write out the register information
+// from the PEXCEPTION_POINTERS structure, then return EXCEPTION_CONTINUE_SEARCH
+// whose magic value tells Win32 to proceed with its normal error handling
+// mechanism. This is important : an error dialog will popup if possible and
+// the debugger will hopefully coexist peacefully with the structured exception
+// handler.
+// --------------------------------------------------------------------------
+LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data/*, LPCSTR Message, LPSTR lpCmdLine*/)
 {
 	PEXCEPTION_RECORD   Exception = NULL;
 	PCONTEXT            Context = NULL;
@@ -406,7 +406,7 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 	else
 		return EXCEPTION_CONTINUE_SEARCH;
 
-	if (BeenHere)        
+	if (BeenHere)       // Going recursive! That must mean this routine crashed!
 	{
 		if (prevExceptionFilter)
 			return prevExceptionFilter(data);
@@ -420,17 +420,17 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 		code = (LPBYTE)(size_t)Context->Eip;
 #elif defined (_AMD64_)
 		code = (LPBYTE)(size_t)Context->Rip;
-#endif  
+#endif // || defined (_IA64_)
 	}
 
-
-
+	// Create a filename to record the error information to.
+	// Keep legacy exception logs beside the newer RPT and minidump files.
 	if (GetModuleFileName(NULL, ModuleName, sizeof(ModuleName)) <= 0)
 		ModuleName[0] = 0;
 	FilePart = GetFilePart(ModuleName);
 
-
-
+	// Extract the file name portion and remove it's file extension. We'll
+	// use that name shortly.
 	lstrcpy(FileName, FilePart);
 	lastperiod = _tcsrchr(FileName, '.');
 	if (lastperiod)
@@ -448,26 +448,26 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 		return EXCEPTION_CONTINUE_SEARCH;
 	}
 
-
+	// Append to the error log.
 	SetFilePointer(fileHandle, 0, 0, FILE_END);
 
-
-	FPrintf(fileHandle, "Email Sonic Team Junior so we can fix the bugs\r\n");  
-	FPrintf(fileHandle, "Make sure you tell us what you were doing to cause the crash, and if possible, record a demo!\r\n");  
+	// Print out some blank lines to separate this error log from any previous ones.
+	FPrintf(fileHandle, "Email Sonic Team Junior so we can fix the bugs\r\n"); // Tails
+	FPrintf(fileHandle, "Make sure you tell us what you were doing to cause the crash, and if possible, record a demo!\r\n"); // Tails
 	FPrintf(fileHandle, "\r\n\r\n\r\n\r\n");
 	FPrintf(fileHandle, "SRB2 %s -ERROR LOG-\r\n\r\n", VERSIONSTRING);
 	FPrintf(fileHandle, "\r\n");
-
-
-
+	// VirtualQuery can be used to get the allocation base associated with a
+	// code address, which is the same as the ModuleHandle. This can be used
+	// to get the filename of the module that the crash happened in.
 	if (code && VirtualQuery(code, &MemInfo, sizeof(MemInfo)) &&
 		GetModuleFileName((HMODULE)MemInfo.AllocationBase,
 		                   CrashModulePathName,
 		                   sizeof(CrashModulePathName)) > 0)
 		CrashModuleFileName = GetFilePart(CrashModulePathName);
 
-
-
+	// Print out the beginning of the error log in a Win95 error window
+	// compatible format.
 #ifdef _X86_
 	FPrintf(fileHandle, "%s caused %s in module %s at %04x:%08x.\r\n",
 		FileName, GetExceptionDescription(Exception->ExceptionCode),
@@ -476,20 +476,20 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 	FPrintf(fileHandle, "%s caused %s in module %s at %08x:%016x.\r\n",
 		FileName, GetExceptionDescription(Exception->ExceptionCode),
 		CrashModuleFileName, Context->SegCs, Context->Rip);
-#else  
+#else //defined (_IA64_)
 	FPrintf(fileHandle, "%s caused %s in module %s at ????.\r\n",
 		FileName, GetExceptionDescription(Exception->ExceptionCode),
 		CrashModuleFileName);
 #endif
-
+	//if (&Message = Null)
 		FPrintf(fileHandle, "Exception handler called in %s.\r\n", "main thread");
-
-
+	//else
+		//FPrintf(fileHandle, "Exception handler called in %s.\r\n", Message);
 
 	RecordSystemInformation(fileHandle);
 
-
-
+	// If the exception was an access violation, print out some additional
+	// information, to the error log and the debugger.
 	if (Exception->ExceptionCode == STATUS_ACCESS_VIOLATION &&
 		Exception->NumberParameters >= 2)
 	{
@@ -499,9 +499,9 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 			readwrite = TEXT("Write to");
 		wsprintf(DebugMessage, TEXT("%s location %08x caused an access violation.\r\n"),
 			readwrite, Exception->ExceptionInformation[1]);
-
-
-
+		// The VisualC++ debugger doesn't actually tell you whether a read
+		// or a write caused the access violation, nor does it tell what
+		// address was being read or written. So I fixed that.
 		OutputDebugString(TEXT("Exception handler: "));
 		OutputDebugString(DebugMessage);
 		FPrintf(fileHandle, "%s", DebugMessage);
@@ -509,7 +509,7 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 
 	FPrintf(fileHandle, "\r\n");
 
-
+	// Print out the register values in a Win95 error window compatible format.
 	if ((Context->ContextFlags & CONTEXT_FULL) == CONTEXT_FULL)
 	{
 		FPrintf(fileHandle, "Registers:\r\n");
@@ -531,23 +531,23 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 			Context->Rcx,Context->SegDs,Context->Rsi,Context->SegFs);
 		FPrintf(fileHandle, "RDX=%.16lx ES=%.8x RDI=%.16lx GS=%.8x\r\n",
 			Context->Rdx,Context->SegEs,Context->Rdi,Context->SegGs);
-#else  
+#else //defined (_IA64_)
 		FPrintf(fileHandle, "Unknown CPU type\r\n");
 #endif
 	}
 
-
+	// moved down because it was causing the printout to stop
 	FPrintf(fileHandle, "Command Line parameters: ");
 	for(i = 1;i < myargc;i++)
 		FPrintf(fileHandle, "%s ", myargv[i]);
 
 	FPrintf(fileHandle, "Bytes at CS : EIP:\r\n");
 
-
-
-
-
-
+	// Print out the bytes of code at the instruction pointer. Since the
+	// crash may have been caused by an instruction pointer that was bad,
+	// this code needs to be wrapped in an exception handler, in case there
+	// is no memory to read. If the dereferencing of code[] fails, the
+	// exception handler will print '??'.
 	if (code)
 	for(codebyte = 0; codebyte < NumCodeBytes; codebyte++)
 	{
@@ -569,8 +569,8 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 		}
 	}
 
-
-
+	// Time to print part or all of the stack to the error log. This allows
+	// us to figure out the call stack, parameters, local variables, etc.
 	FPrintf(fileHandle, "\r\n"
 		"Stack dump:\r\n");
 #ifdef NO_SEH_MINGW
@@ -579,8 +579,8 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 	__try
 #endif
 	{
-
-
+		// Esp contains the bottom of the stack, or at least the bottom of
+		// the currently used area.
 		LPDWORD   pStack = NULL;
 		LPDWORD   pStackTop = NULL;
 		size_t    Count = 0;
@@ -594,12 +594,12 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 		pStack = (LPDWORD)(size_t)Context->Esp;
 #elif defined (_AMD64_)
 		pStack = (LPDWORD)(size_t)Context->Rsp;
-#endif  
+#endif // defined (_IA64_)
 
 
-
-
-
+		// Load the top (highest address) of the stack from the
+		// thread information block. It will be found there in
+		// Win9x and Windows NT.
 #ifdef _X86_
 #ifdef __GNUC__
 		__asm__("movl %%fs : 4, %%eax": "=a"(pStackTop));
@@ -614,23 +614,23 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 #ifdef __GNUC__
 		__asm__("mov %%gs : 4, %%rax": "=a"(pStackTop));
 #elif defined (_MSC_VER)
-  
-       
-   
-                  
-                     
-   
-  
+/*
+		__asm
+		{
+			mov rax, fs:[4]
+			mov pStackTop, rax
+		}
+*/
 #endif
 #endif
 		if (pStackTop == NULL)
 			goto StackSkip;
 		else if (pStackTop > pStack + MaxStackDump)
 			pStackTop = pStack + MaxStackDump;
-
-
-
-
+		// Too many calls to WriteFile can take a long time, causing
+		// confusing delays when programs crash. Therefore I implemented
+		// simple buffering for the stack dumping code instead of calling
+		// FPrintf directly.
 		while(pStack + 1 <= pStackTop)
 		{
 			if ((Count % StackColumns) == 0)
@@ -641,7 +641,7 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 				Suffix = TEXT(" ");
 			output += wsprintf(output, TEXT("%p%s"), *pStack, Suffix);
 			pStack++;
-
+			// Check for when the buffer is almost full, and flush it to disk.
 			if ( output > nearend)
 			{
 				FPrintf(fileHandle, "%s", buffer);
@@ -649,7 +649,7 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 				output = buffer;
 			}
 		}
-
+		// Print out any final characters from the cache.
 		StackSkip:
 		FPrintf(fileHandle, "%s", buffer);
 	}
@@ -666,10 +666,10 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data )
 
 	CloseHandle(fileHandle);
 
-
-
-
-
+	// Return the magic value which tells Win32 that this handler didn't
+	// actually handle the exception - so that things will proceed as per
+	// normal.
+	//BP: should put message for end user to send this file to fix any bug
 	if (prevExceptionFilter)
 		return prevExceptionFilter(data);
 	return EXCEPTION_CONTINUE_SEARCH;

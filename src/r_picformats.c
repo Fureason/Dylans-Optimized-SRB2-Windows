@@ -9,12 +9,12 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
+/// \file  r_picformats.c
+/// \brief Picture generation.
 
-
-
-                                                                              
-                                                                             
-                                                                    
+/* r_defs.h makes the optional rotated-sprite fields part of patch_t only when
+ * ROTSPRITE is already defined.  Load the build feature definitions first so
+ * this translation unit sees the same patch layout as r_patch.c. */
 #include "doomdef.h"
 
 #include "byteptr.h"
@@ -60,22 +60,22 @@
 static colorlookup_t png_colorlookup;
 #endif
 
-                                           
-   
-                                         
-                                      
-                                           
-                                     
-                                                     
-                                       
-                                         
-                                                               
-                                                             
-                                     
-                                               
-                            
-                           
-    
+/** Converts a picture between two formats.
+  *
+  * \param informat Input picture format.
+  * \param picture Input picture data.
+  * \param outformat Output picture format.
+  * \param insize Input picture size.
+  * \param outsize Output picture size, as a pointer.
+  * \param inwidth Input picture width.
+  * \param inheight Input picture height.
+  * \param inleftoffset Input picture left offset, for patches.
+  * \param intopoffset Input picture top offset, for patches.
+  * \param flags Input picture flags.
+  * \return A pointer to the converted picture.
+  * \sa Picture_PatchConvert
+  * \sa Picture_FlatConvert
+  */
 void *Picture_Convert(
 	pictureformat_t informat, void *picture, pictureformat_t outformat,
 	size_t insize, size_t *outsize,
@@ -158,7 +158,7 @@ static UINT8 GetAlphaFunc_8bpp(void *input, pictureflags_t flags)
 		return 255;
 }
 
-
+// input 32bpp output 32bpp
 static void *WritePatchPixel_i32o32(void *ptr, void *input)
 {
 	RGBA_t px = *(RGBA_t *)input;
@@ -166,7 +166,7 @@ static void *WritePatchPixel_i32o32(void *ptr, void *input)
 	return ptr;
 }
 
-
+// input 16bpp output 32bpp
 static void *WritePatchPixel_i16o32(void *ptr, void *input)
 {
 	RGBA_t px = pMasterPalette[*((UINT16 *)input) & 0xFF];
@@ -174,7 +174,7 @@ static void *WritePatchPixel_i16o32(void *ptr, void *input)
 	return ptr;
 }
 
-
+// input 8bpp output 32bpp
 static void *WritePatchPixel_i8o32(void *ptr, void *input)
 {
 	RGBA_t px = pMasterPalette[*((UINT8 *)input) & 0xFF];
@@ -182,7 +182,7 @@ static void *WritePatchPixel_i8o32(void *ptr, void *input)
 	return ptr;
 }
 
-
+// input 32bpp output 16bpp
 static void *WritePatchPixel_i32o16(void *ptr, void *input)
 {
 	RGBA_t in = *(RGBA_t *)input;
@@ -191,21 +191,21 @@ static void *WritePatchPixel_i32o16(void *ptr, void *input)
 	return ptr;
 }
 
-
+// input 16bpp output 16bpp
 static void *WritePatchPixel_i16o16(void *ptr, void *input)
 {
 	WRITEUINT16(ptr, *(UINT16 *)input);
 	return ptr;
 }
 
-
+// input 8bpp output 16bpp
 static void *WritePatchPixel_i8o16(void *ptr, void *input)
 {
 	WRITEUINT16(ptr, (0xFF00 | (*(UINT8 *)input)));
 	return ptr;
 }
 
-
+// input 32bpp output 8bpp
 static void *WritePatchPixel_i32o8(void *ptr, void *input)
 {
 	RGBA_t in = *(RGBA_t *)input;
@@ -214,7 +214,7 @@ static void *WritePatchPixel_i32o8(void *ptr, void *input)
 	return ptr;
 }
 
-
+// input 16bpp output 8bpp
 static void *WritePatchPixel_i16o8(void *ptr, void *input)
 {
 	UINT16 px = *(UINT16 *)input;
@@ -222,33 +222,33 @@ static void *WritePatchPixel_i16o8(void *ptr, void *input)
 	return ptr;
 }
 
-
+// input 8bpp output 8bpp
 static void *WritePatchPixel_i8o8(void *ptr, void *input)
 {
 	WRITEUINT8(ptr, *(UINT8 *)input);
 	return ptr;
 }
 
-                                  
-   
-                                         
-                                      
-                                           
-                                                     
-                                       
-                                         
-                                                               
-                                                             
-                                     
-                                               
-    
+/** Converts a picture to a patch.
+  *
+  * \param informat Input picture format.
+  * \param picture Input picture data.
+  * \param outformat Output picture format.
+  * \param outsize Output picture size, as a pointer.
+  * \param inwidth Input picture width.
+  * \param inheight Input picture height.
+  * \param inleftoffset Input picture left offset, for patches.
+  * \param intopoffset Input picture top offset, for patches.
+  * \param flags Input picture flags.
+  * \return A pointer to the converted picture.
+  */
 void *Picture_PatchConvert(
 	pictureformat_t informat, size_t insize, void *picture,
 	pictureformat_t outformat, size_t *outsize,
 	INT32 inwidth, INT32 inheight, INT32 inleftoffset, INT32 intopoffset,
 	pictureflags_t flags)
 {
-
+	// Shortcut: If converting a Doom patch into a regular patch, use Patch_Create
 	if (informat == PICFMT_DOOMPATCH && outformat == PICFMT_PATCH && flags == 0)
 	{
 		if (outsize != NULL)
@@ -274,7 +274,7 @@ void *Picture_PatchConvert(
 	if (outbpp == PICDEPTH_NONE)
 		I_Error("Picture_PatchConvert: unknown output bits per pixel!");
 
-
+	// If it's a patch, we can just figure out the dimensions from the header.
 	if (Picture_IsPatchFormat(informat))
 	{
 		inpatch = (patch_t *)picture;
@@ -338,7 +338,7 @@ void *Picture_PatchConvert(
 				writePatchPixel = WritePatchPixel_i32o32;
 			else if (inbpp == PICDEPTH_16BPP)
 				writePatchPixel = WritePatchPixel_i16o32;
-			else  
+			else // PICFMT_PATCH
 				writePatchPixel = WritePatchPixel_i8o32;
 			break;
 		}
@@ -348,25 +348,25 @@ void *Picture_PatchConvert(
 				writePatchPixel = WritePatchPixel_i32o16;
 			else if (inbpp == PICDEPTH_16BPP)
 				writePatchPixel = WritePatchPixel_i16o16;
-			else  
+			else // PICFMT_PATCH
 				writePatchPixel = WritePatchPixel_i8o16;
 			break;
-		default:  
+		default: // PICFMT_PATCH
 		{
 			if (inbpp == PICDEPTH_32BPP)
 				writePatchPixel = WritePatchPixel_i32o8;
 			else if (inbpp == PICDEPTH_16BPP)
 				writePatchPixel = WritePatchPixel_i16o8;
-			else  
+			else // PICFMT_PATCH
 				writePatchPixel = WritePatchPixel_i8o8;
 			break;
 		}
 	}
 
-	                                                                            
-                                                                             
-                                                                               
-                                                            
+	/* Keep construction and destruction in agreement even if patch_t gains more
+	 * optional trailing fields later.  The old local allocation was compiled as
+	 * 0x58 bytes while Patch_Free expected 0x68, so texture data beyond the short
+	 * allocation was mistaken for a rotated-sprite pointer. */
 	patch_t *out = Patch_Create((INT16)inwidth, (INT16)inheight);
 
 	out->width = inwidth;
@@ -385,7 +385,7 @@ void *Picture_PatchConvert(
 
 	unsigned *column_posts = Z_Calloc(sizeof(unsigned) * inwidth, PU_STATIC, NULL);
 
-
+	// Write columns
 	for (INT32 x = 0; x < inwidth; x++)
 	{
 		post_t *post = NULL;
@@ -399,19 +399,19 @@ void *Picture_PatchConvert(
 
 		column_posts[x] = (unsigned)-1;
 
-
+		// Write pixels
 		for (INT32 y = 0; y < inheight; y++)
 		{
 			boolean opaque = false;
 
-
+			// Read pixel
 			void *input = readPixelFunc(picture, informat, x, y, inwidth, inheight, flags);
 
-
+			// Determine opacity
 			if (input != NULL)
 				opaque = getAlphaFunc(input, flags) > 0;
 
-
+			// End span if we have a transparent pixel
 			if (!opaque)
 			{
 				was_opaque = false;
@@ -434,7 +434,7 @@ void *Picture_PatchConvert(
 
 			was_opaque = true;
 
-
+			// Write the pixel
 			UINT8 *last_ptr = imgptr;
 			imgptr = writePatchPixel(last_ptr, input);
 
@@ -465,17 +465,17 @@ void *Picture_PatchConvert(
 	return (void *)out;
 }
 
-                                 
-   
-                                         
-                                      
-                                           
-                                                     
-                                       
-                                         
-                                     
-                                               
-    
+/** Converts a picture to a flat.
+  *
+  * \param informat Input picture format.
+  * \param picture Input picture data.
+  * \param outformat Output picture format.
+  * \param outsize Output picture size, as a pointer.
+  * \param inwidth Input picture width.
+  * \param inheight Input picture height.
+  * \param flags Input picture flags.
+  * \return A pointer to the converted picture.
+  */
 void *Picture_FlatConvert(
 	pictureformat_t informat, void *picture, pictureformat_t outformat,
 	size_t *outsize,
@@ -501,8 +501,8 @@ void *Picture_FlatConvert(
 	if (outbpp == PICDEPTH_NONE)
 		I_Error("Picture_FlatConvert: unknown output bits per pixel?!");
 
-
-
+	// If it's a patch, you can just figure out
+	// the dimensions from the header.
 	if (Picture_IsPatchFormat(informat))
 	{
 		inpatch = (patch_t *)picture;
@@ -524,7 +524,7 @@ void *Picture_FlatConvert(
 	if (outsize)
 		*outsize = size;
 
-
+	// Set transparency
 	if (outbpp == PICDEPTH_8BPP)
 		memset(outflat, TRANSPARENTPIXEL, size);
 
@@ -543,7 +543,7 @@ void *Picture_FlatConvert(
 			size_t in_offs = ((sy * inwidth) + sx);
 			size_t out_offs = ((y * inwidth) + x);
 
-
+			// Read pixel
 			if (Picture_IsPatchFormat(informat))
 				input = Picture_GetPatchPixel(inpatch, informat, sx, sy, 0);
 			else if (Picture_IsFlatFormat(informat))
@@ -569,7 +569,7 @@ void *Picture_FlatConvert(
 						RGBA_t out = pMasterPalette[*((UINT16 *)input) & 0xFF];
 						f32[out_offs] = out.rgba;
 					}
-					else  
+					else // PICFMT_PATCH
 					{
 						RGBA_t out = pMasterPalette[*((UINT8 *)input) & 0xFF];
 						f32[out_offs] = out.rgba;
@@ -587,7 +587,7 @@ void *Picture_FlatConvert(
 					}
 					else if (inbpp == PICDEPTH_16BPP)
 						f16[out_offs] = *(UINT16 *)input;
-					else  
+					else // PICFMT_PATCH
 						f16[out_offs] = (0xFF00 | *((UINT8 *)input));
 					break;
 				}
@@ -605,7 +605,7 @@ void *Picture_FlatConvert(
 						UINT16 out = *(UINT16 *)input;
 						f8[out_offs] = (out & 0xFF);
 					}
-					else  
+					else // PICFMT_PATCH
 						f8[out_offs] = *(UINT8 *)input;
 					break;
 				}
@@ -617,15 +617,15 @@ void *Picture_FlatConvert(
 	return outflat;
 }
 
-                                 
-   
-                             
-                                         
-                              
-                              
-                                     
-                                                                          
-    
+/** Returns a pixel from a patch.
+  *
+  * \param patch Input patch.
+  * \param informat Input picture format.
+  * \param x Pixel X position.
+  * \param y Pixel Y position.
+  * \param flags Input picture flags.
+  * \return A pointer to a pixel in the patch. Returns NULL if not opaque.
+  */
 void *Picture_GetPatchPixel(
 	patch_t *patch, pictureformat_t informat,
 	INT32 x, INT32 y,
@@ -655,7 +655,7 @@ void *Picture_GetPatchPixel(
 		INT32 prevdelta = -1;
 		INT32 colofs = LONG(doompatch->columnofs[sx]);
 
-
+		// Column offsets are pointers, so no casting is required.
 		doompost_t *column = (doompost_t *)((UINT8 *)doompatch + colofs);
 
 		while (column->topdelta != 0xff)
@@ -678,7 +678,7 @@ void *Picture_GetPatchPixel(
 					case PICDEPTH_16BPP:
 						s16 = (UINT16 *)s8;
 						return &s16[ofs];
-					default:  
+					default: // PICDEPTH_8BPP
 						return &s8[ofs];
 				}
 			}
@@ -712,7 +712,7 @@ void *Picture_GetPatchPixel(
 					case PICDEPTH_16BPP:
 						s16 = (UINT16 *)s8;
 						return &s16[ofs];
-					default:  
+					default: // PICDEPTH_8BPP
 						return &s8[ofs];
 				}
 			}
@@ -722,11 +722,11 @@ void *Picture_GetPatchPixel(
 	return NULL;
 }
 
-                                                                         
-   
-                                       
-                                                            
-    
+/** Returns the amount of bits per pixel in the specified picture format.
+  *
+  * \param format Input picture format.
+  * \return The bits per pixel amount of the picture format.
+  */
 INT32 Picture_FormatBPP(pictureformat_t format)
 {
 	INT32 bpp = PICDEPTH_NONE;
@@ -754,21 +754,21 @@ INT32 Picture_FormatBPP(pictureformat_t format)
 	return bpp;
 }
 
-                                                      
-   
-                                       
-                                                                
-    
+/** Checks if the specified picture format is a patch.
+  *
+  * \param format Input picture format.
+  * \return True if the picture format is a patch, false if not.
+  */
 boolean Picture_IsPatchFormat(pictureformat_t format)
 {
 	return (Picture_IsInternalPatchFormat(format) || Picture_IsDoomPatchFormat(format));
 }
 
-                                                                
-   
-                                       
-                                                                          
-    
+/** Checks if the specified picture format is an internal patch.
+  *
+  * \param format Input picture format.
+  * \return True if the picture format is an internal patch, false if not.
+  */
 boolean Picture_IsInternalPatchFormat(pictureformat_t format)
 {
 	switch (format)
@@ -782,11 +782,11 @@ boolean Picture_IsInternalPatchFormat(pictureformat_t format)
 	}
 }
 
-                                                           
-   
-                                       
-                                                                     
-    
+/** Checks if the specified picture format is a Doom patch.
+  *
+  * \param format Input picture format.
+  * \return True if the picture format is a Doom patch, false if not.
+  */
 boolean Picture_IsDoomPatchFormat(pictureformat_t format)
 {
 	switch (format)
@@ -800,22 +800,22 @@ boolean Picture_IsDoomPatchFormat(pictureformat_t format)
 	}
 }
 
-                                                     
-   
-                                       
-                                                               
-    
+/** Checks if the specified picture format is a flat.
+  *
+  * \param format Input picture format.
+  * \return True if the picture format is a flat, false if not.
+  */
 boolean Picture_IsFlatFormat(pictureformat_t format)
 {
 	return (format == PICFMT_FLAT || format == PICFMT_FLAT16 || format == PICFMT_FLAT32);
 }
 
-                                                   
-   
-                             
-                                    
-                                             
-    
+/** Returns true if the lump is a valid Doom patch.
+  *
+  * \param patch Input patch.
+  * \param picture Input patch size.
+  * \return True if the input patch is valid.
+  */
 boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size)
 {
 	const UINT8 *data;
@@ -837,7 +837,7 @@ boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size)
 	if (!VALID_PATCH_LUMP_SIZE(size, width))
 		return false;
 
-
+	// All columns must begin after the column directory and remain in the lump.
 	for (INT16 x = 0; x < width; x++)
 	{
 		UINT32 ofs = LONG(patch->columnofs[x]);
@@ -846,10 +846,10 @@ boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size)
 		if (ofs < FIRST_PATCH_LUMP_COLUMN(width) || (size_t)ofs >= size)
 			return false;
 
-		                                                                   
-                                                                         
-                                                                         
-                                                    
+		/* A column is a sequence of four-byte-overhead posts followed by a
+		 * 0xff terminator. Validate the complete sequence here, not merely its
+		 * first offset, so malformed add-on graphics never reach the unchecked
+		 * post walkers used by the hot renderer paths. */
 		post = data + ofs;
 		for (;;)
 		{
@@ -876,11 +876,11 @@ boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size)
 	return true;
 }
 
-                                 
-   
-                                     
-                               
-    
+/** Converts a texture to a flat.
+  *
+  * \param texnum The texture number.
+  * \return The converted flat.
+  */
 void *Picture_TextureToFlat(size_t texnum)
 {
 	texture_t *texture;
@@ -893,17 +893,17 @@ void *Picture_TextureToFlat(size_t texnum)
 	if (texnum >= (unsigned)numtextures)
 		I_Error("Picture_TextureToFlat: invalid texture number!");
 
-
-
+	// Check the texture cache
+	// If the texture's not there, it'll be generated right now
 	texture = textures[texnum];
 	R_CheckTextureCache(texnum);
 
-
+	// Allocate the flat
 	flatsize = texture->width * texture->height;
 	converted = Z_Malloc(flatsize, PU_STATIC, NULL);
 	memset(converted, TRANSPARENTPIXEL, flatsize);
 
-
+	// Now we're gonna write to it
 	desttop = converted;
 	deststop = desttop + flatsize;
 
@@ -927,19 +927,19 @@ void *Picture_TextureToFlat(size_t texnum)
 	return converted;
 }
 
-                                            
-   
-                                    
-                           
-                                            
-    
+/** Returns true if the lump is a valid PNG.
+  *
+  * \param d The lump to be checked.
+  * \param s The lump size.
+  * \return True if the lump is a PNG image.
+  */
 boolean Picture_IsLumpPNG(const UINT8 *d, size_t s)
 {
-	if (s < PNG_MIN_SIZE)  
+	if (s < PNG_MIN_SIZE) // https://web.archive.org/web/20230524232139/http://garethrees.org/2007/11/14/pngcrush/
 		return false;
-
-
-
+	// Check for PNG file signature using memcmp
+	// As it may be faster on CPUs with slow unaligned memory access
+	// Ref: http://www.libpng.org/pub/png/spec/1.2/PNG-Rationale.html#R.PNG-file-signature
 	return (memcmp(&d[0], "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a", PNG_HEADER_SIZE) == 0);
 }
 
@@ -951,10 +951,10 @@ static boolean Picture_PNGDimensionsAreSafe(UINT32 width, UINT32 height)
 		&& (UINT64)width * (UINT64)height <= (UINT64)MAX_PNG_PIXELS;
 }
 
-                                                             
-                                                                            
-                                                                          
-    
+/** Reads PNG dimensions directly from its fixed IHDR header.
+  * This avoids initializing libpng and inflating the entire image when only
+  * its width and height are needed while building startup texture tables.
+  */
 boolean Picture_PNGDimensionsFromHeader(const UINT8 *png, size_t size, INT32 *width, INT32 *height)
 {
 	UINT32 w, h;
@@ -981,9 +981,9 @@ boolean Picture_PNGDimensionsFromHeader(const UINT8 *png, size_t size, INT32 *wi
 #ifndef NO_PNG_LUMPS
 #ifdef HAVE_PNG
 
-                                
-                                            
-        
+/*#if PNG_LIBPNG_VER_DLLNUM < 14
+typedef PNG_CONST png_byte *png_const_bytep;
+#endif*/
 typedef struct
 {
 	const UINT8 *buffer;
@@ -1016,8 +1016,8 @@ static int PNG_ChunkReader(png_structp png_ptr, png_unknown_chunkp chonk)
 	(void)png_ptr;
 	if (!memcmp(chonk->name, chunkname, 4))
 	{
-		                                                                   
-                                                                          
+		/* The SRB2 grAb offset chunk is exactly two big-endian INT32s.  Do
+		 * not allocate an attacker-controlled unknown chunk just to read it. */
 		if (chonk->size != 8)
 			return 1;
 		memcpy(chunk.name, chonk->name, 4);
@@ -1169,8 +1169,8 @@ static png_bytep *PNG_Read(
 	{
 		boolean usepal = false;
 
-
-
+		// Lactozilla: Check if the PNG has a palette, and if its color count
+		// matches the color count of SRB2's palette: 256 colors.
 		if (png_get_PLTE(png_ptr, png_info_ptr, &palette, &palette_size))
 		{
 			if (palette_size == 256 && pMasterPalette)
@@ -1193,12 +1193,12 @@ static png_bytep *PNG_Read(
 			}
 		}
 
-		                                                                 
-                                                                       
-                                                                      
-                                                                       
-                                                                     
-                                             
+		/* An exact SRB2 palette can stay indexed even when it has a tRNS
+		 * table. Older code expanded those images to RGBA and then performed
+		 * an expensive nearest-colour lookup for every pixel to recover the
+		 * indices it already had. Keep the alpha table beside the indices so
+		 * both the software patch and hardware RGBA copy preserve the same
+		 * transparency without that round trip. */
 		if (usepal)
 		{
 			png_uint_32 result = png_get_tRNS(png_ptr, png_info_ptr, &trans, &num_trans, NULL);
@@ -1227,7 +1227,7 @@ static png_bytep *PNG_Read(
 
 	png_read_update_info(png_ptr, png_info_ptr);
 
-
+	// Read the image
 	allocated->rows = (png_bytep*)malloc(sizeof(png_bytep) * height);
 	if (!allocated->rows)
 		png_error(png_ptr, "couldn't allocate PNG row table");
@@ -1241,15 +1241,15 @@ static png_bytep *PNG_Read(
 	row_pointers = allocated->rows;
 	png_read_image(png_ptr, row_pointers);
 
-
+	// Read grAB chunk
 	if ((topoffset || leftoffset) && (chunk.data != NULL))
 	{
 		INT32 *offsets = (INT32 *)chunk.data;
-
+		// read left offset
 		if (leftoffset != NULL)
 			*leftoffset = (INT16)BIGENDIAN_LONG(*offsets);
 		offsets++;
-
+		// read top offset
 		if (topoffset != NULL)
 			*topoffset = (INT16)BIGENDIAN_LONG(*offsets);
 	}
@@ -1270,19 +1270,19 @@ static png_bytep *PNG_Read(
 	return row_pointers;
 }
 
-                                
-   
-                             
-                                                 
-                                                      
-                                                       
-                                                                                
-                                                                                  
-                                           
-                                                          
-                                     
-                                               
-    
+/** Converts a PNG to a picture.
+  *
+  * \param png The PNG image.
+  * \param outformat The output picture's format.
+  * \param w The output picture's width, as a pointer.
+  * \param h The output picture's height, as a pointer.
+  * \param topoffset The output picture's top offset, for sprites, as a pointer.
+  * \param leftoffset The output picture's left offset, for sprites, as a pointer.
+  * \param insize The input picture's size.
+  * \param outsize A pointer to the output picture's size.
+  * \param flags Input picture flags.
+  * \return A pointer to the converted picture.
+  */
 static void *Picture_PNGConvertInternal(
 	const UINT8 *png, pictureformat_t outformat,
 	INT32 *w, INT32 *h,
@@ -1326,10 +1326,10 @@ static void *Picture_PNGConvertInternal(
 	if (row_pointers == NULL)
 		return NULL;
 
-	                                                                   
-                                                                          
-                                                                            
-                               
+	/* A hardware patch needs the original RGBA image as well as SRB2's
+	 * paletted software columns.  Produce both from this one libpng inflate;
+	 * decoding the same multi-megapixel image again was the largest first-view
+	 * hitch in PNG-heavy maps. */
 	if (rgbaout)
 	{
 		RGBA_t *rgba = Z_Calloc((size_t)width * (size_t)height
@@ -1367,30 +1367,30 @@ static void *Picture_PNGConvertInternal(
 		*rgbaout = rgba;
 	}
 
-
+	// Find the output format's bits per pixel amount
 	outbpp = Picture_FormatBPP(outformat);
 
-
+	// Hack for patches because you'll want to preserve transparency.
 	if (Picture_IsPatchFormat(outformat))
 	{
-
+		// Force a higher bit depth
 		if (outbpp == PICDEPTH_8BPP)
 			outbpp = PICDEPTH_16BPP;
 	}
 
-
+	// Shouldn't happen.
 	if (outbpp == PICDEPTH_NONE)
 		I_Error("Picture_PNGConvert: unknown output bits per pixel?!");
 
-
+	// Figure out the size
 	flatsize = (size_t)width * (size_t)height * (size_t)(outbpp / 8);
 	if (outsize)
 		*outsize = flatsize;
 
-
+	// Convert the image
 	flat = Z_Calloc(flatsize, PU_STATIC, NULL);
 
-
+	// Set transparency
 	if (outbpp == PICDEPTH_8BPP)
 		memset(flat, TRANSPARENTPIXEL, (width * height));
 
@@ -1485,7 +1485,7 @@ static void *Picture_PNGConvertInternal(
 			}
 		}
 	}
-	else  
+	else // 8bpp
 	{
 		UINT8 *outflat = (UINT8 *)flat;
 
@@ -1529,18 +1529,18 @@ static void *Picture_PNGConvertInternal(
 		}
 	}
 
-
+	// Free the row pointers that we allocated for libpng.
 	for (y = 0; y < height; y++)
 		free(row_pointers[y]);
 	free(row_pointers);
 
-
+	// But wait, there's more!
 	if (Picture_IsPatchFormat(outformat))
 	{
 		void *converted;
 		pictureformat_t informat = PICFMT_NONE;
 
-
+		// Figure out the format of the flat, from the bit depth of the output format
 		switch (outbpp)
 		{
 			case 32:
@@ -1554,7 +1554,7 @@ static void *Picture_PNGConvertInternal(
 				break;
 		}
 
-
+		// Now, convert it!
 		converted = Picture_PatchConvert(informat, flatsize, flat, outformat, outsize, (INT32)width, (INT32)height, *leftoffset, *topoffset, flags);
 		if (converted == NULL)
 		{
@@ -1571,7 +1571,7 @@ static void *Picture_PNGConvertInternal(
 		return converted;
 	}
 
-
+	// Return the converted flat!
 	return flat;
 }
 
@@ -1600,16 +1600,16 @@ void *Picture_PNGConvertWithRGBA(
 		topoffset, leftoffset, insize, outsize, flags, rgbaout);
 }
 
-                                                                               
-   
-                             
-                                                        
-                                                          
-                                                                      
-                                                                         
-                                         
-                                                                   
-    
+/** Returns the dimensions of a PNG image, but doesn't perform any conversions.
+  *
+  * \param png The PNG image.
+  * \param width A pointer to the input picture's width.
+  * \param height A pointer to the input picture's height.
+  * \param topoffset A pointer to the input picture's vertical offset.
+  * \param leftoffset A pointer to the input picture's horizontal offset.
+  * \param size The input picture's size.
+  * \return True if reading the file succeeded, false if it failed.
+  */
 boolean Picture_PNGDimensions(UINT8 *png, INT32 *width, INT32 *height, INT16 *topoffset, INT16 *leftoffset, size_t size)
 {
 	png_structp png_ptr;
@@ -1683,15 +1683,15 @@ boolean Picture_PNGDimensions(UINT8 *png, INT32 *width, INT32 *height, INT16 *to
 	if (!Picture_PNGDimensionsAreSafe((UINT32)w, (UINT32)h))
 		png_error(png_ptr, "image dimensions exceed SRB2's safe PNG limits");
 
-
+	// Read grAB chunk
 	if ((topoffset || leftoffset) && (chunk.data != NULL))
 	{
 		INT32 *offsets = (INT32 *)chunk.data;
-
+		// read left offset
 		if (leftoffset != NULL)
 			*leftoffset = (INT16)BIGENDIAN_LONG(*offsets);
 		offsets++;
-
+		// read top offset
 		if (topoffset != NULL)
 			*topoffset = (INT16)BIGENDIAN_LONG(*offsets);
 	}
@@ -1710,11 +1710,11 @@ boolean Picture_PNGDimensions(UINT8 *png, INT32 *width, INT32 *height, INT16 *to
 #endif
 #endif
 
-
-
-
-
-
+//
+// R_ParseSpriteInfoFrame
+//
+// Parse a SPRTINFO frame.
+//
 static void R_ParseSpriteInfoFrame(spriteinfo_t *info)
 {
 	char *sprinfoToken;
@@ -1724,7 +1724,7 @@ static void R_ParseSpriteInfoFrame(spriteinfo_t *info)
 	INT16 frameXPivot = 0;
 	INT16 frameYPivot = 0;
 
-
+	// Sprite identifier
 	sprinfoToken = M_GetToken(NULL);
 	if (sprinfoToken == NULL)
 	{
@@ -1741,7 +1741,7 @@ static void R_ParseSpriteInfoFrame(spriteinfo_t *info)
 	frameFrame = R_Char2Frame(frameChar[0]);
 	Z_Free(sprinfoToken);
 
-
+	// Left Curly Brace
 	sprinfoToken = M_GetToken(NULL);
 	if (sprinfoToken == NULL)
 		I_Error("Error parsing SPRTINFO lump: Missing sprite info");
@@ -1786,29 +1786,29 @@ static void R_ParseSpriteInfoFrame(spriteinfo_t *info)
 		Z_Free(sprinfoToken);
 	}
 
-
+	// set fields
 	info->pivot[frameFrame].x = frameXPivot;
 	info->pivot[frameFrame].y = frameYPivot;
 }
 
-
-
-
-
-
+//
+// R_ParseSpriteInfo
+//
+// Parse a SPRTINFO lump.
+//
 static void R_ParseSpriteInfo(boolean spr2)
 {
 	spriteinfo_t *info;
 	char *sprinfoToken;
 	size_t sprinfoTokenLength;
-	char newSpriteName[MAXSPRITENAME + 1];  
+	char newSpriteName[MAXSPRITENAME + 1]; // no longer dynamically allocated
 	spritenum_t sprnum = NUMSPRITES;
 	playersprite_t spr2num = NUMPLAYERSPRITES;
 	INT32 i;
 	UINT8 *skinnumbers = NULL;
 	INT32 foundskins = 0;
 
-
+	// Sprite name
 	sprinfoToken = M_GetToken(NULL);
 	if (sprinfoToken == NULL)
 	{
@@ -1818,7 +1818,7 @@ static void R_ParseSpriteInfo(boolean spr2)
 	if (sprinfoTokenLength > MAXSPRITENAME)
 		I_Error("Error parsing SPRTINFO lump: Sprite name \"%s\" is longer than %d characters", sprinfoToken, MAXSPRITENAME);
 	strcpy(newSpriteName, sprinfoToken);
-	strupr(newSpriteName);  
+	strupr(newSpriteName); // Just do this now so we don't have to worry about it
 	Z_Free(sprinfoToken);
 
 	if (!spr2)
@@ -1841,11 +1841,11 @@ static void R_ParseSpriteInfo(boolean spr2)
 		}
 	}
 
-
+	// allocate a spriteinfo
 	info = Z_Calloc(sizeof(spriteinfo_t), PU_STATIC, NULL);
 	info->available = true;
 
-
+	// Left Curly Brace
 	sprinfoToken = M_GetToken(NULL);
 	if (sprinfoToken == NULL)
 	{
@@ -1870,14 +1870,14 @@ static void R_ParseSpriteInfo(boolean spr2)
 
 				Z_Free(sprinfoToken);
 
-
+				// Skin name
 				sprinfoToken = M_GetToken(NULL);
 				if (sprinfoToken == NULL)
 				{
 					I_Error("Error parsing SPRTINFO lump: Unexpected end of file where skin frame should be");
 				}
 
-
+				// copy skin name yada yada
 				sprinfoTokenLength = strlen(sprinfoToken);
 				skinName = (char *)Z_Malloc((sprinfoTokenLength+1)*sizeof(char),PU_STATIC,NULL);
 				M_Memcpy(skinName,sprinfoToken,sprinfoTokenLength*sizeof(char));
@@ -1935,11 +1935,11 @@ static void R_ParseSpriteInfo(boolean spr2)
 		Z_Free(skinnumbers);
 }
 
-
-
-
-
-
+//
+// R_ParseSPRTINFOLump
+//
+// Read a SPRTINFO lump.
+//
 void R_ParseSPRTINFOLump(UINT16 wadNum, UINT16 lumpNum)
 {
 	char *sprinfoLump;
@@ -1947,21 +1947,21 @@ void R_ParseSPRTINFOLump(UINT16 wadNum, UINT16 lumpNum)
 	char *sprinfoText;
 	char *sprinfoToken;
 
-
-
-
+	// Since lumps AREN'T \0-terminated like I'd assumed they should be, I'll
+	// need to make a space of memory where I can ensure that it will terminate
+	// correctly. Start by loading the relevant data from the WAD.
 	sprinfoLump = (char *)W_CacheLumpNumPwad(wadNum, lumpNum, PU_STATIC);
-
+	// If that didn't exist, we have nothing to do here.
 	if (sprinfoLump == NULL) return;
-
+	// If we're still here, then it DOES exist; figure out how long it is, and allot memory accordingly.
 	sprinfoLumpLength = W_LumpLengthPwad(wadNum, lumpNum);
 	sprinfoText = (char *)Z_Malloc((sprinfoLumpLength+1)*sizeof(char),PU_STATIC,NULL);
-
+	// Now move the contents of the lump into this new location.
 	memmove(sprinfoText,sprinfoLump,sprinfoLumpLength);
-
+	// Make damn well sure the last character in our new memory location is \0.
 	sprinfoText[sprinfoLumpLength] = '\0';
-
-
+	// Finally, free up the memory from the first data load, because we really
+	// don't need it.
 	Z_Free(sprinfoLump);
 
 	sprinfoToken = M_GetToken(sprinfoText);
@@ -1979,11 +1979,11 @@ void R_ParseSPRTINFOLump(UINT16 wadNum, UINT16 lumpNum)
 	Z_Free((void *)sprinfoText);
 }
 
-
-
-
-
-
+//
+// R_LoadSpriteInfoLumps
+//
+// Load and read every SPRTINFO lump from the specified file.
+//
 void R_LoadSpriteInfoLumps(UINT16 wadnum, UINT16 numlumps)
 {
 	lumpinfo_t *lumpinfo = wadfiles[wadnum]->lumpinfo;
@@ -1993,7 +1993,7 @@ void R_LoadSpriteInfoLumps(UINT16 wadnum, UINT16 numlumps)
 	for (i = 0; i < numlumps; i++, lumpinfo++)
 	{
 		name = lumpinfo->name;
-
+		// Load SPRTINFO and SPR_ lumps as SpriteInfo
 		if (!memcmp(name, "SPRTINFO", 8) || !memcmp(name, "SPR_", 4))
 			R_ParseSPRTINFOLump(wadnum, i);
 	}

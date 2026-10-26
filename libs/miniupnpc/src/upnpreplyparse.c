@@ -1,10 +1,10 @@
- 
-                                          
-                   
-                                                             
-                               
-                                                      
-                                                          
+/* $Id: upnpreplyparse.c,v 1.21 2019/04/08 13:30:51 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * MiniUPnP project
+ * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
+ * (c) 2006-2019 Thomas Bernard
+ * This software is subject to the conditions detailed
+ * in the LICENCE file provided within the distribution */
 
 #include <stdlib.h>
 #include <string.h>
@@ -38,16 +38,16 @@ NameValueParserEndElt(void * d, const char * name, int namelen)
 	if(strcmp(data->curelt, "NewPortListing") != 0)
 	{
 		int l;
-		 
+		/* standard case. Limited to n chars strings */
 		l = data->cdatalen;
 	    nv = malloc(sizeof(struct NameValue));
 		if(nv == NULL)
 		{
-			 
+			/* malloc error */
 #ifdef DEBUG
 			fprintf(stderr, "%s: error allocating memory",
 			        "NameValueParserEndElt");
-#endif  
+#endif /* DEBUG */
 			return;
 		}
 	    if(l>=(int)sizeof(nv->value))
@@ -63,7 +63,7 @@ NameValueParserEndElt(void * d, const char * name, int namelen)
 		{
 			nv->value[0] = '\0';
 		}
-		nv->l_next = data->l_head;	 
+		nv->l_next = data->l_head;	/* insert in list */
 		data->l_head = nv;
 	}
 	data->cdata = NULL;
@@ -77,16 +77,16 @@ NameValueParserGetData(void * d, const char * datas, int l)
     struct NameValueParserData * data = (struct NameValueParserData *)d;
 	if(strcmp(data->curelt, "NewPortListing") == 0)
 	{
-		 
+		/* specific case for NewPortListing which is a XML Document */
 		free(data->portListing);
 		data->portListing = malloc(l + 1);
 		if(!data->portListing)
 		{
-			 
+			/* malloc error */
 #ifdef DEBUG
 			fprintf(stderr, "%s: error allocating memory",
 			        "NameValueParserGetData");
-#endif  
+#endif /* DEBUG */
 			return;
 		}
 		memcpy(data->portListing, datas, l);
@@ -95,7 +95,7 @@ NameValueParserGetData(void * d, const char * datas, int l)
 	}
 	else
 	{
-		 
+		/* standard case. */
 		data->cdata = datas;
 		data->cdatalen = l;
 	}
@@ -107,7 +107,7 @@ ParseNameValue(const char * buffer, int bufsize,
 {
 	struct xmlparser parser;
 	memset(data, 0, sizeof(struct NameValueParserData));
-	 
+	/* init xmlparser object */
 	parser.xmlstart = buffer;
 	parser.xmlsize = bufsize;
 	parser.data = data;
@@ -152,7 +152,7 @@ GetValueFromNameValueList(struct NameValueParserData * pdata,
 }
 
 #if 0
- 
+/* useless now that minixml ignores namespaces by itself */
 char *
 GetValueFromNameValueListIgnoreNS(struct NameValueParserData * pdata,
                                   const char * Name)
@@ -176,8 +176,8 @@ GetValueFromNameValueListIgnoreNS(struct NameValueParserData * pdata,
 }
 #endif
 
-                            
-                                       
+/* debug all-in-one function
+ * do parsing then display to stdout */
 #ifdef DEBUG
 void
 DisplayNameValueList(char * buffer, int bufsize)
@@ -193,5 +193,5 @@ DisplayNameValueList(char * buffer, int bufsize)
     }
     ClearNameValueList(&pdata);
 }
-#endif  
+#endif /* DEBUG */
 

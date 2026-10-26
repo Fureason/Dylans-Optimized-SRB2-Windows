@@ -24,7 +24,7 @@
  */
 include_once('./SmartIRC.php');
 define('MAGPIE_DIR', './magpierss/');
-
+// define('MAGPIE_CACHE_AGE', 30); // half-min
 require_once(MAGPIE_DIR.'rss_fetch.inc');
 require_once(MAGPIE_DIR.'rss_utils.inc');
 $today = getdate();
@@ -109,28 +109,28 @@ class SRB2MS_BOT
 		$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, "$data->nick is already on the list");
 		}
 	}
-  
-                                       
-  
-                              
-                                           
-                   
-   
-                                                                              
-                                          
-    
-                                              
-                            
-                                                                                  
-    
-   
-      
-   
-                                                                       
-                                                                                                
-   
-  
-  
+/*
+	function RSSListGamesPM(&$irc, &$data)
+	{
+		$content = $this->GenFeed();
+		$SRB2MSRSS10 = new MagpieRSS( $content );
+		if ($SRB2MSRSS10)
+		{
+			$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, 'Running SRB2 netgames ');
+			foreach ($SRB2MSRSS10->items as $item) 
+			{
+				$description = $item['dc']['description'];
+				$title = $item['title'];
+				$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, "Name: $title $description");
+			}
+		}
+		else
+		{
+			$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, '.magpie_error()');
+			$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, 'The SRB2 MasterServer RSS feed is not up');
+		}
+	}
+*/
 	function RSSListUpdate(&$irc)
 	{
 		global $lastupdatetime;
@@ -143,16 +143,16 @@ class SRB2MS_BOT
 		$SRB2MSRSS10 = new MagpieRSS( $RSS10content );
 		if ($SRB2MSRSS10)
 		{
-
+			//$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2fun', 'Running SRB2 netgames ');
 			foreach ($SRB2MSRSS10->items as $item) 
 			{
 				if ( $item['title'] == "No servers" ) 
 				{
-
+					// NOP
 				}
 				elseif ( $item['title'] == "No master server" ) 
 				{
-
+					// NOP
 				}
 				else
 				{
@@ -163,25 +163,25 @@ class SRB2MS_BOT
 						$serveraddress = $item['srb2ms']['address'];
 						$serverport = $item['srb2ms']['port'];
 						$serverversion = $item['srb2ms']['version'];
-
-
-
-
-
+						//if ( $serverversion == "1.09.3" )
+						//{
+						//	$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2fun'    , "New Server, $serveraddress:$serverport Name: $title");
+						//}
+						//else
 						{
 							$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2fun'    , "New Server, $serveraddress:$serverport Name: $title Version: $serverversion");
 						}
-
+						//$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2general', "New Server, Name: $title $description");
 					}
 					else
 					{
-
+						// NOP
 					}
 				}
 				
 			}
 			$today = getdate();
-
+			// update time
 			$lastupdatetime = mktime($today['hours'],$today['minutes'],0,$today['mon'], $today['mday'], $today['year']);
 		}
 		else
@@ -199,7 +199,7 @@ class SRB2MS_BOT
 			{
 				global $lastupdatetime;
 				$today = getdate();
-
+				// update time
 				$lastupdatetime = mktime($today['hours'],$today['minutes'],0,$today['mon'], $today['mday'], $today['year']);
 				$GLOBALS['SRB2MS_mute'] = TRUE;
 				return;
@@ -226,7 +226,7 @@ class SRB2MS_BOT
 		{
 			global $lastupdatetime;
 			$today = getdate();
-
+			// update time
 			$lastupdatetime = mktime($today['hours'],$today['minutes'],0,$today['mon'], $today['mday'], $today['year']);
 			$GLOBALS['SRB2MS_mute'] = TRUE;
 		}
@@ -245,21 +245,21 @@ class SRB2MS_BOT
 		global $lastlisttime;
 		$content = $this->GenFeed();
 		$today = getdate();
-
-
-
-
+		//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, 'testing feed');
+		//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "$content");
+		//$content1 = $this->Gettextfromserver();
+		//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "$content1");
 		$SRB2MSRSS10 = new MagpieRSS( $content );
 		if ($SRB2MSRSS10)
 		{
 			if ((mktime($today['hours'],$today['minutes']-2,0,$today['mon'], $today['mday'], $today['year'])) >= $lastlisttime)
 			{
-
+					//$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2fun', 'Running SRB2 netgames ');
 					foreach ($SRB2MSRSS10->items as $item) 
 					{
 						if ( $item['title'] == "No servers" ) 
 						{
-
+							//0$description = $item['dc']['description'];
 							$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "No SRB2 Games are running, so why don't you start one?");
 						}
 						elseif ( $item['title'] == "No master server" )
@@ -273,15 +273,15 @@ class SRB2MS_BOT
 							$serveraddress = $item['srb2ms']['address'];
 							$serverport = $item['srb2ms']['port'];
 							$serverversion = $item['srb2ms']['version'];
-
-
-
-
-
-
-
-
-
+							//if ( $serverport == " 5029" )
+							//{
+							//	$serverport = "5029";
+							//}
+							//if ( $serverversion == "1.09.3" )
+							//{
+							//	$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2fun'    , "$serveraddress:$serverport Name: $title");
+							//}
+							//else
 							{
 								$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2fun'    , "$serveraddress:$serverport Name: $title  Version: $serverversion");
 							}
@@ -306,28 +306,28 @@ class SRB2MS_BOT
 		global $lastlisttime;
 		$content = $this->GenFeed();
 		$today = getdate();
-
-
-
-
+		//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, 'testing feed');
+		//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "$content");
+		//$content1 = $this->Gettextfromserver();
+		//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "$content1");
 		$SRB2MSRSS10 = new MagpieRSS( $content );
 		if ($SRB2MSRSS10)
 		{
-
+			//if ((mktime($today['hours'],$today['minutes']-2,0,$today['mon'], $today['mday'], $today['year'])) >= $lastlisttime)
 			{
-
+					//$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2fun', 'Running SRB2 netgames ');
 					$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, "Running SRB2 netgames from http://srb2.servegame.org/");
 					foreach ($SRB2MSRSS10->items as $item) 
 					{
 						if ( $item['title'] == "No servers" ) 
 						{
-
-
+							//0$description = $item['dc']['description'];
+							//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "No SRB2 Games are running, so why don't you start one?");
 						}
 						elseif ( $item['title'] == "No master server" )
 						{
 							$description = $item['dc']['description'];
-
+							//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "$description");
 						}
 						else
 						{
@@ -335,15 +335,15 @@ class SRB2MS_BOT
 							$serveraddress = $item['srb2ms']['address'];
 							$serverport = $item['srb2ms']['port'];
 							$serverversion = $item['srb2ms']['version'];
-
-
-
-
-
-
-
-
-
+							//if ( $serverport == " 5029" )
+							//{
+							//	$serverport = "5029";
+							//}
+							//if ( $serverversion == "1.09.3" )
+							//{
+							//	$irc->message(SMARTIRC_TYPE_CHANNEL, '#srb2fun'    , "$serveraddress:$serverport Name: $title");
+							//}
+							//else
 							{
 								$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, "$serveraddress:$serverport Name: $title  Version: $serverversion");
 							}
@@ -358,8 +358,8 @@ class SRB2MS_BOT
 		}
 		else
 		{
-
-
+			//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, ".magpie_error()");
+			//$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, 'The SRB2 MasterServer RSS feed is not up');
 		}
 	}
 
@@ -373,10 +373,10 @@ class SRB2MS_BOT
 			$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, 'Running SRB2 netgames ');
 			while (1)
 			{
-				$content=fgets($fd, 13);  
+				$content=fgets($fd, 13); // skip 13 first bytes
 				$content=fgets($fd, 1024);
 				$irc->message(SMARTIRC_TYPE_NOTICE, $data->nick, "$content");
-
+				//echo "$content";
 				if (feof($fd)) break;
 			}
 		}
@@ -401,7 +401,7 @@ class SRB2MS_BOT
 				$content = "";
 				while (1)
 				{	
-					fgets($fd, 13);  
+					fgets($fd, 13); // skip 13 first bytes
 					$content = fgets($fd, 1024);
 					$irc->message(SMARTIRC_TYPE_CHANNEL, $data->channel, "$content");
 					$today = getdate();
@@ -451,7 +451,7 @@ class SRB2MS_BOT
 				return;
 			}
 		}
-
+		//$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "Sorry, but I don't like you, or your channel, $data->message");
 	}
 
 	function Talk(&$irc, &$data)
@@ -519,22 +519,22 @@ class SRB2MS_BOT
 
 	function DebugPM(&$irc, &$data)
 	{
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "from:");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "$data->from");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "nick:");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "$data->nick");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "ident:");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "$data->ident");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "host:");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "$data->host");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "channel:");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "$data->channel");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "message:");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "$data->message");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "type:");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "$data->type");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "rawmessage:");
+//		$irc->message(SMARTIRC_TYPE_QUERY, $data->nick, "$data->rawmessage");
 		
 		$irc->message(SMARTIRC_TYPE_QUERY, "Alam_GBC", "from: $data->from");
 		$irc->message(SMARTIRC_TYPE_QUERY, "Alam_GBC", "nick: $data->nick");
@@ -556,7 +556,7 @@ class SRB2MS_BOT
 			fwrite($fd, $buff);
 			while (1)
 			{
-				fgets($fd, 13);  
+				fgets($fd, 13); // skip 13 first bytes
 				$content .= fgets($fd, 1024);
 				if (feof($fd)) break;
 			}
@@ -675,65 +675,65 @@ class RSSDataBase_Class
 		return $userbeenfound;
 	}
 }
-
+// gobal var for muting the Bot
 $SRB2MS_mute = FALSE;
-
-
+//$SRB2MSRSS10 = fetch_rss( 'http://srb2.servegame.org/RSS1.0.php' );
+// thing to hold RSS stuff
 $rssdatabase = &new RSSDataBase_Class();
-
-
-
+// PHP error reporting
+//error_reporting(E_ERROR);
+// the Bot is the Class SRB2MS_BOT
 $bot = &new SRB2MS_BOT();
-
+// Create SmartIRC, and name it as <network>irc for use to, well, do irc stuff ^_^
 $esperirc = &new Net_SmartIRC();
-
-
-
+// To Debug or Not
+//$esperirc->setDebug(SMARTIRC_DEBUG_ALL);
+// Do connect to the Internet
 $esperirc->setUseSockets(TRUE);
-
+// kep a list of all the users in the channel
 $esperirc->setChannelSyncing(TRUE);
-
-
-
-
-
+// Register the triggers with the class of SRB2MS_BOT
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!gamelist$', $bot, 'ListGamesChan');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!gamelist$', $bot, 'ListGamesPM');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!RSSgamelist$', $bot, 'RSSListGamesPM');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!gamelist0$', $bot, 'RSSListGames');
 $esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!gamelist$', $bot, 'RSSListGamesPM');
-
-
-
-
-
-
-
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!gamelist$', $bot, 'RSSListGamesPM');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!addme$', $bot, 'RSSadduser');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!removeme$', $bot, 'RSSremoveuser');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!listusers$', $bot, 'ListUsersPM');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_NICKCHANGE, '', $bot, 'RSSupdateuser');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!checkme$', $bot, 'RSScheckuser');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!shutdown$', $bot, 'byebye');
 $esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!mute$', $bot, 'Mute');
 $esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!unmute$', $bot, 'Unmute');
 $esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!shutup$', $bot, 'Mute2');
 $esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!talktome$', $bot, 'Unmute2');
 $esperirc->registerTimehandler(120000, $bot, 'RSSListUpdate');
-
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_CHANNEL, '^!gamelist$', $bot, 'ListGamesChan');
 $esperirc->registerActionhandler(SMARTIRC_TYPE_INVITE, '', $bot, 'BeenInvited');
-
-
-
-
-
-
-
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!talk', $bot, 'Talk');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!action', $bot, 'Action');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!kick', $bot, 'Kick');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_QUERY, '^!ban', $bot, 'Ban');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_ALL, '', $bot, 'DebugPM');
+//$esperirc->registerActionhandler(SMARTIRC_TYPE_KICK | SMARTIRC_TYPE_QUIT | SMARTIRC_TYPE_PART, '', $bot, 'DebugPM');
+// If you fail once, try agian
 $esperirc->setAutoRetry(TRUE);
-
-
+// Connect to EsperNet
+//$esperirc->connect('irc.esper.net', 6667);
 $esperirc->connect('excalibur.esper.net', 6667);
-
+// Reconnect as needed
 $esperirc->setAutoReconnect(TRUE);
-
+// Use the name SRB2MS, and set other stuff
 $esperirc->login('SRB2MS', 'Net_SmartIRC Client '.SMARTIRC_VERSION.' (SRB2MS_Bot.php)', 0, 'Net_SmartIRC');
-
+// Join #srb2fun
 $esperirc->join(array('#srb2fun'));
-
+// SRB2MS_Pass.php have "$esperirc->message(SMARTIRC_TYPE_QUERY, 'nickserv', 'identify <password>');"
 include('./SRB2MS_Pass.php');
-
+// Idle
 $esperirc->listen();
-
+// Rejoin?
 $esperirc->reconnect();
 
 ?>

@@ -1,4 +1,4 @@
- 
+/* $Id: miniupnpc_socketdef.h,v 1.4 2021/03/02 23:35:29 nanard Exp $ */
 /* Miniupnp project : http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
  * Author : Thomas Bernard
  * Copyright (c) 2018 Thomas Bernard
@@ -34,11 +34,11 @@
 #define MSC_CAST_INT
 #endif
 
- 
+/* definition of PRINT_SOCKET_ERROR */
 #ifdef _WIN32
 #define PRINT_SOCKET_ERROR(x)    fprintf(stderr, "Socket error: %s, %d\n", x, WSAGetLastError());
 #else
 #define PRINT_SOCKET_ERROR(x) perror(x)
 #endif
 
-#endif  
+#endif /* MINIUPNPC_SOCKETDEF_H_INCLUDED */

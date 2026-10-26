@@ -1,4 +1,4 @@
- 
+/* $Id: miniwget.h,v 1.13 2018/04/06 10:53:15 nanard Exp $ */
 /* Project : miniupnp
  * Author : Thomas Bernard
  * Copyright (c) 2005-2016 Thomas Bernard

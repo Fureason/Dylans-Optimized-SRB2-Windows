@@ -8,17 +8,17 @@
 # For conditions of distribution and use, see the disclaimer
 # and license in png.h
 
-
+# Library name:
 LIBNAME = libpng16
 PNGMAJ = 16
 
-
+# Shared library names:
 LIBSO=$(LIBNAME).so
 LIBSOMAJ=$(LIBNAME).so.$(PNGMAJ)
 LIBSOREL=$(LIBSOMAJ).$(RELEASE)
 OLDSO=libpng.so
 
-
+# Utilities:
 AR_RC=ar rc
 CC=gcc
 MKDIR_P=mkdir -p
@@ -27,24 +27,24 @@ RANLIB=echo
 CP=cp
 RM_F=/bin/rm -f
 
-
+# Where make install puts libpng.a, libpng16.so*, and png.h
 prefix=/usr/local
 exec_prefix=$(prefix)
 
-
-
-
-
-
+# Where the zlib library and include files are located
+# Changing these to ../zlib poses a security risk.  If you want
+# to have zlib in an adjacent directory, specify the full path instead of "..".
+#ZLIBLIB=../zlib
+#ZLIBINC=../zlib
 
 ZLIBLIB=/usr/local/lib
 ZLIBINC=/usr/local/include
 
 WARNMORE=-Wwrite-strings -Wpointer-arith -Wshadow \
 	-Wmissing-declarations -Wtraditional -Wcast-align \
-	-Wstrict-prototypes -Wmissing-prototypes  
-CPPFLAGS=-I$(ZLIBINC)  
-CFLAGS=-W -Wall -O  
+	-Wstrict-prototypes -Wmissing-prototypes #-Wconversion
+CPPFLAGS=-I$(ZLIBINC) # -DPNG_DEBUG=5
+CFLAGS=-W -Wall -O # $(WARNMORE) -g
 LDFLAGS=-L. -R. -L$(ZLIBLIB) -R$(ZLIBLIB) -lpng16 -lz -lm
 
 INCPATH=$(prefix)/include
@@ -52,14 +52,14 @@ LIBPATH=$(exec_prefix)/lib
 MANPATH=$(prefix)/man
 BINPATH=$(exec_prefix)/bin
 
-
-
-
-
-
-
-
-
+# override DESTDIR= on the make install command line to easily support
+# installing into a temporary location.  Example:
+#
+#    make install DESTDIR=/tmp/build/libpng
+#
+# If you're going to install into a temporary location
+# via DESTDIR, $(DESTDIR)$(prefix) must already exist before
+# you execute make install.
 DESTDIR=
 
 DB=$(DESTDIR)$(BINPATH)
@@ -67,8 +67,8 @@ DI=$(DESTDIR)$(INCPATH)
 DL=$(DESTDIR)$(LIBPATH)
 DM=$(DESTDIR)$(MANPATH)
 
-
-
+# Pre-built configuration
+# See scripts/pnglibconf.mak for more options
 PNGLIBCONF_H_PREBUILT = scripts/pnglibconf.h.prebuilt
 
 OBJS = png.o pngset.o pngget.o pngrutil.o pngtrans.o pngwutil.o \

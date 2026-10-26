@@ -25,7 +25,7 @@ int main(int argc, char **argv)
     int avgbytes = 0;
     SDL_RWops *io = NULL;
 
-     
+    /* Enable standard application logging */
     SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
     if (argc != 5) {
@@ -73,7 +73,7 @@ int main(int argc, char **argv)
         return 6;
     }
 
-     
+    /* write out a WAV header... */
     io = SDL_RWFromFile(argv[2], "wb");
     if (io == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "fopen('%s') failed: %s\n", argv[2], SDL_GetError());
@@ -87,19 +87,19 @@ int main(int argc, char **argv)
     blockalign = (bitsize / 8) * cvtchans;
     avgbytes = cvtfreq * blockalign;
 
-    SDL_WriteLE32(io, 0x46464952);  
+    SDL_WriteLE32(io, 0x46464952); /* RIFF */
     SDL_WriteLE32(io, cvt.len_cvt + 36);
-    SDL_WriteLE32(io, 0x45564157);                              
-    SDL_WriteLE32(io, 0x20746D66);                              
-    SDL_WriteLE32(io, 16);                                      
-    SDL_WriteLE16(io, SDL_AUDIO_ISFLOAT(spec.format) ? 3 : 1);  
-    SDL_WriteLE16(io, cvtchans);                                
-    SDL_WriteLE32(io, cvtfreq);                                 
-    SDL_WriteLE32(io, avgbytes);                                
-    SDL_WriteLE16(io, blockalign);                              
-    SDL_WriteLE16(io, bitsize);                                 
-    SDL_WriteLE32(io, 0x61746164);                              
-    SDL_WriteLE32(io, cvt.len_cvt);                             
+    SDL_WriteLE32(io, 0x45564157);                             /* WAVE */
+    SDL_WriteLE32(io, 0x20746D66);                             /* fmt */
+    SDL_WriteLE32(io, 16);                                     /* chunk size */
+    SDL_WriteLE16(io, SDL_AUDIO_ISFLOAT(spec.format) ? 3 : 1); /* uncompressed */
+    SDL_WriteLE16(io, cvtchans);                               /* channels */
+    SDL_WriteLE32(io, cvtfreq);                                /* sample rate */
+    SDL_WriteLE32(io, avgbytes);                               /* average bytes per second */
+    SDL_WriteLE16(io, blockalign);                             /* block align */
+    SDL_WriteLE16(io, bitsize);                                /* significant bits per sample */
+    SDL_WriteLE32(io, 0x61746164);                             /* data */
+    SDL_WriteLE32(io, cvt.len_cvt);                            /* size */
     SDL_RWwrite(io, cvt.buf, cvt.len_cvt, 1);
 
     if (SDL_RWclose(io) == -1) {
@@ -108,12 +108,12 @@ int main(int argc, char **argv)
         SDL_FreeWAV(data);
         SDL_Quit();
         return 8;
-    }  
+    } /* if */
 
     SDL_free(cvt.buf);
     SDL_FreeWAV(data);
     SDL_Quit();
     return 0;
-}  
+} /* main */
 
- 
+/* end of testresample.c ... */

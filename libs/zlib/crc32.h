@@ -1,6 +1,6 @@
-                                              
-                                     
-   
+/* crc32.h -- tables for rapid CRC calculation
+ * Generated automatically by crc32.c
+ */
 
 local const z_crc_t FAR crc_table[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419,
@@ -148,7 +148,7 @@ local const z_word_t FAR crc_big_table[] = {
     0x37be0bb400000000, 0xa18e0cc300000000, 0x1bdf055a00000000,
     0x8def022d00000000};
 
-#else  
+#else /* W == 4 */
 
 local const z_word_t FAR crc_big_table[] = {
     0x00000000, 0x96300777, 0x2c610eee, 0xba510999, 0x19c46d07,
@@ -1318,7 +1318,7 @@ local const z_word_t FAR crc_braid_big_table[][256] = {
     0x0501c4a800000000, 0x9b016e6400000000, 0x7806e1ea00000000,
     0xe6064b2600000000}};
 
-#else  
+#else /* W == 4 */
 
 local const z_crc_t FAR crc_braid_table[][256] = {
    {0x00000000, 0xb8bc6765, 0xaa09c88b, 0x12b5afee, 0x8f629757,
@@ -2856,7 +2856,7 @@ local const z_word_t FAR crc_braid_big_table[][256] = {
     0x258db92400000000, 0xb41cd18a00000000, 0x46a819a300000000,
     0xd739710d00000000}};
 
-#else  
+#else /* W == 4 */
 
 local const z_crc_t FAR crc_braid_table[][256] = {
    {0x00000000, 0xccaa009e, 0x4225077d, 0x8e8f07e3, 0x844a0efa,
@@ -4394,7 +4394,7 @@ local const z_word_t FAR crc_braid_big_table[][256] = {
     0x792cd35100000000, 0x5e49f6d000000000, 0x76e0e88800000000,
     0x5185cd0900000000}};
 
-#else  
+#else /* W == 4 */
 
 local const z_crc_t FAR crc_braid_table[][256] = {
    {0x00000000, 0x9ba54c6f, 0xec3b9e9f, 0x779ed2f0, 0x03063b7f,
@@ -5932,7 +5932,7 @@ local const z_word_t FAR crc_braid_big_table[][256] = {
     0xa951db2a00000000, 0x035401db00000000, 0xbc5c1e1200000000,
     0x1659c4e300000000}};
 
-#else  
+#else /* W == 4 */
 
 local const z_crc_t FAR crc_braid_table[][256] = {
    {0x00000000, 0xae689191, 0x87a02563, 0x29c8b4f2, 0xd4314c87,
@@ -7470,7 +7470,7 @@ local const z_word_t FAR crc_braid_big_table[][256] = {
     0xedc528c300000000, 0xaa576c6c00000000, 0x22e7d04600000000,
     0x657594e900000000}};
 
-#else  
+#else /* W == 4 */
 
 local const z_crc_t FAR crc_braid_table[][256] = {
    {0x00000000, 0x65673b46, 0xcace768c, 0xafa94dca, 0x4eedeb59,
@@ -9008,7 +9008,7 @@ local const z_word_t FAR crc_braid_big_table[][256] = {
     0xcc95bac300000000, 0x10790bfe00000000, 0x744cd9b800000000,
     0xa8a0688500000000}};
 
-#else  
+#else /* W == 4 */
 
 local const z_crc_t FAR crc_braid_table[][256] = {
    {0x00000000, 0x81256527, 0xd93bcc0f, 0x581ea928, 0x69069e5f,

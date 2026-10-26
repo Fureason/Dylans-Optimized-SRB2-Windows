@@ -81,14 +81,14 @@ static int LoadContext(GLES2_Context *data)
             return SDL_SetError("Couldn't load GLES2 function %s: %s", #func, SDL_GetError()); \
         }                                                                                      \
     } while (0);
-#endif  
+#endif /* __SDL_NOGETPROCADDR__ */
 
 #include "../src/render/opengles2/SDL_gles2funcs.h"
 #undef SDL_PROC
     return 0;
 }
 
- 
+/* Call this instead of exit(), so we can clean up SDL: atexit() is evil. */
 static void
 quit(int rc)
 {
@@ -118,13 +118,13 @@ quit(int rc)
         }                                                                                   \
     }
 
-  
-                                                                   
-  
-                                               
-                                        
-                                                    
-   
+/*
+ * Create shader, load in source, compile, dump debug as necessary.
+ *
+ * shader: Pointer to return created shader ID.
+ * source: Passed-in shader source code.
+ * shader_type: Passed to GL, e.g. GL_VERTEX_SHADER.
+ */
 void
 process_shader(GLenum *shader, const char *source, GLenum shader_type)
 {
@@ -133,21 +133,21 @@ process_shader(GLenum *shader, const char *source, GLenum shader_type)
     char buffer[1024];
     GLsizei length;
 
-     
+    /* Create shader and load into GL. */
     *shader = GL_CHECK(ctx.glCreateShader(shader_type));
 
     shaders[0] = source;
 
     GL_CHECK(ctx.glShaderSource(*shader, 1, shaders, NULL));
 
-     
+    /* Clean up shader source. */
     shaders[0] = NULL;
 
-     
+    /* Try compiling the shader. */
     GL_CHECK(ctx.glCompileShader(*shader));
     GL_CHECK(ctx.glGetShaderiv(*shader, GL_COMPILE_STATUS, &status));
 
-     
+    /* Dump debug info (source and log) if compilation failed. */
     if (status != GL_TRUE) {
         ctx.glGetShaderInfoLog(*shader, sizeof(buffer), &length, &buffer[0]);
         buffer[length] = '\0';
@@ -156,11 +156,11 @@ process_shader(GLenum *shader, const char *source, GLenum shader_type)
     }
 }
 
-                    
-                                                                
-                                                                         
-                                                                                   
-   
+/* Notes on a_angle:
+ * It is a vector containing sine and cosine for rotation matrix
+ * To get correct rotation for most cases when a_angle is disabled cosine
+ * value is decremented by 1.0 to get proper output with 0.0 which is default value
+ */
 static const char GLES2_VertexSrc_Default_[] = " \
     uniform mat4 u_projection; \
     attribute vec2 a_position; \
@@ -194,7 +194,7 @@ static const char GLES2_FragmentSrc_TextureABGRSrc_[] = " \
     } \
 ";
 
- 
+/* RGB to ABGR conversion */
 static const char GLES2_FragmentSrc_TextureABGRSrc_SDF[] = " \
     #extension GL_OES_standard_derivatives : enable\n\
     \
@@ -218,7 +218,7 @@ static const char GLES2_FragmentSrc_TextureABGRSrc_SDF[] = " \
     } \
 ";
 
- 
+/* RGB to ABGR conversion DEBUG */
 static const char *GLES2_FragmentSrc_TextureABGRSrc_SDF_dbg = " \
     #extension GL_OES_standard_derivatives : enable\n\
     \
@@ -331,7 +331,7 @@ void loop()
     int i;
     int status;
 
-     
+    /* Check for events */
     ++frames;
     while (SDL_PollEvent(&event) && !done) {
         switch (event.type) {
@@ -370,12 +370,12 @@ void loop()
                             SDL_Log("SDL_GL_MakeCurrent(): %s\n", SDL_GetError());
                             break;
                         }
-                         
+                        /* Change view port to the new window dimensions */
                         SDL_GL_GetDrawableSize(state->windows[i], &w, &h);
                         ctx.glViewport(0, 0, w, h);
                         state->window_w = event.window.data1;
                         state->window_h = event.window.data2;
-                         
+                        /* Update window content */
                         Render(event.window.data1, event.window.data2, &datas[i]);
                         SDL_GL_SwapWindow(state->windows[i]);
                         break;
@@ -414,7 +414,7 @@ void loop()
             if (status) {
                 SDL_Log("SDL_GL_MakeCurrent(): %s\n", SDL_GetError());
 
-                 
+                /* Continue for next window */
                 continue;
             }
             Render(state->window_w, state->window_h, &datas[i]);
@@ -439,11 +439,11 @@ int main(int argc, char *argv[])
     shader_data *data;
     char *path = NULL;
 
-     
+    /* Initialize parameters */
     fsaa = 0;
     accel = 0;
 
-     
+    /* Initialize test framework */
     state = SDLTest_CommonCreateState(argv, SDL_INIT_VIDEO);
     if (state == NULL) {
         return 1;
@@ -479,7 +479,7 @@ int main(int argc, char *argv[])
         i += consumed;
     }
 
-     
+    /* Set OpenGL parameters */
     state->window_flags |= SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
     state->gl_red_size = 5;
     state->gl_green_size = 5;
@@ -507,7 +507,7 @@ int main(int argc, char *argv[])
         quit(2);
     }
 
-     
+    /* Create OpenGL ES contexts */
     for (i = 0; i < state->num_windows; i++) {
         context[i] = SDL_GL_CreateContext(state->windows[i]);
         if (!context[i]) {
@@ -516,7 +516,7 @@ int main(int argc, char *argv[])
         }
     }
 
-     
+    /* Important: call this *after* creating the context */
     if (LoadContext(&ctx) < 0) {
         SDL_Log("Could not load GLES2 functions\n");
         quit(2);
@@ -539,7 +539,7 @@ int main(int argc, char *argv[])
 
         SDL_Log("SDF is %s", g_use_SDF ? "enabled" : "disabled");
 
-         
+        /* Load SDF BMP image */
 #if 1
         path = GetNearbyFilename(f);
 
@@ -562,7 +562,7 @@ int main(int argc, char *argv[])
 
         SDL_free(path);
 #else
-         
+        /* Generate SDF image using SDL_ttf */
 
 #include "SDL_ttf.h"
         char *font_file = "./font/DroidSansFallback.ttf";
@@ -667,7 +667,7 @@ int main(int argc, char *argv[])
 
     datas = (shader_data *)SDL_calloc(state->num_windows, sizeof(shader_data));
 
-     
+    /* Set rendering settings for each context */
     for (i = 0; i < state->num_windows; ++i) {
 
         int w, h;
@@ -675,7 +675,7 @@ int main(int argc, char *argv[])
         if (status) {
             SDL_Log("SDL_GL_MakeCurrent(): %s\n", SDL_GetError());
 
-             
+            /* Continue for next window */
             continue;
         }
 
@@ -696,7 +696,7 @@ int main(int argc, char *argv[])
             ctx.glTexParameteri(g_texture_type, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             ctx.glTexParameteri(g_texture_type, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             GL_CHECK(ctx.glTexImage2D(g_texture_type, 0, format, g_surf_sdf->w, g_surf_sdf->h, 0, format, type, NULL));
-            GL_CHECK(ctx.glTexSubImage2D(g_texture_type, 0, 0  , 0  , g_surf_sdf->w, g_surf_sdf->h, format, type, g_surf_sdf->pixels));
+            GL_CHECK(ctx.glTexSubImage2D(g_texture_type, 0, 0 /* xoffset */, 0 /* yoffset */, g_surf_sdf->w, g_surf_sdf->h, format, type, g_surf_sdf->pixels));
         }
 
         SDL_GL_GetDrawableSize(state->windows[i], &w, &h);
@@ -704,7 +704,7 @@ int main(int argc, char *argv[])
 
         data = &datas[i];
 
-         
+        /* Shader Initialization */
         process_shader(&data->shader_vert, GLES2_VertexSrc_Default_, GL_VERTEX_SHADER);
 
         if (g_use_SDF) {
@@ -717,10 +717,10 @@ int main(int argc, char *argv[])
             process_shader(&data->shader_frag, GLES2_FragmentSrc_TextureABGRSrc_, GL_FRAGMENT_SHADER);
         }
 
-         
+        /* Create shader_program (ready to attach shaders) */
         data->shader_program = GL_CHECK(ctx.glCreateProgram());
 
-         
+        /* Attach shaders and link shader_program */
         GL_CHECK(ctx.glAttachShader(data->shader_program, data->shader_vert));
         GL_CHECK(ctx.glAttachShader(data->shader_program, data->shader_frag));
         GL_CHECK(ctx.glLinkProgram(data->shader_program));
@@ -730,7 +730,7 @@ int main(int argc, char *argv[])
         ctx.glBindAttribLocation(data->shader_program, GLES2_ATTRIBUTE_ANGLE, "a_angle");
         ctx.glBindAttribLocation(data->shader_program, GLES2_ATTRIBUTE_CENTER, "a_center");
 
-         
+        /* Predetermine locations of uniform variables */
         g_uniform_locations[GLES2_UNIFORM_PROJECTION] = ctx.glGetUniformLocation(data->shader_program, "u_projection");
         g_uniform_locations[GLES2_UNIFORM_TEXTURE] = ctx.glGetUniformLocation(data->shader_program, "u_texture");
         g_uniform_locations[GLES2_UNIFORM_COLOR] = ctx.glGetUniformLocation(data->shader_program, "u_color");
@@ -742,18 +742,18 @@ int main(int argc, char *argv[])
         ctx.glEnableVertexAttribArray(GLES2_ATTRIBUTE_POSITION);
         ctx.glEnableVertexAttribArray((GLenum)GLES2_ATTRIBUTE_TEXCOORD);
 
-        ctx.glUniform1i(g_uniform_locations[GLES2_UNIFORM_TEXTURE], 0);  
+        ctx.glUniform1i(g_uniform_locations[GLES2_UNIFORM_TEXTURE], 0); /* always texture unit 0. */
         ctx.glActiveTexture(GL_TEXTURE0);
         ctx.glBindTexture(g_texture_type, g_texture);
         GL_CHECK(ctx.glClearColor(1, 1, 1, 1));
 
-
+        // SDL_BLENDMODE_BLEND
         GL_CHECK(ctx.glEnable(GL_BLEND));
         ctx.glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         ctx.glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
     }
 
-     
+    /* Main render loop */
     frames = 0;
     then = SDL_GetTicks();
     done = 0;
@@ -766,7 +766,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-     
+    /* Print out some timing information */
     now = SDL_GetTicks();
     if (now > then) {
         SDL_Log("%2.2f frames per second\n",
@@ -778,7 +778,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-#else  
+#else /* HAVE_OPENGLES2 */
 
 int main(int argc, char *argv[])
 {
@@ -786,6 +786,6 @@ int main(int argc, char *argv[])
     return 1;
 }
 
-#endif  
+#endif /* HAVE_OPENGLES2 */
 
- 
+/* vi: set ts=4 sw=4 expandtab: */

@@ -1,5 +1,5 @@
-
-
+# SDL2 CMake configuration file:
+# This file is meant to be placed in a cmake subfolder of SDL2-devel-2.x.y-VC
 
 cmake_minimum_required(VERSION 3.0...3.5)
 
@@ -9,7 +9,7 @@ set_package_properties(SDL2 PROPERTIES
     DESCRIPTION "low level access to audio, keyboard, mouse, joystick, and graphics hardware"
 )
 
-
+# Copied from `configure_package_config_file`
 macro(set_and_check _var _file)
     set(${_var} "${_file}")
     if(NOT EXISTS "${_file}")
@@ -17,7 +17,7 @@ macro(set_and_check _var _file)
     endif()
 endmacro()
 
-
+# Copied from `configure_package_config_file`
 macro(check_required_components _NAME)
     foreach(comp ${${_NAME}_FIND_COMPONENTS})
         if(NOT ${_NAME}_${comp}_FOUND)
@@ -39,7 +39,7 @@ else()
     return()
 endif()
 
-
+# For compatibility with autotools sdl2-config.cmake, provide SDL2_* variables.
 
 set_and_check(SDL2_PREFIX       "${CMAKE_CURRENT_LIST_DIR}/..")
 set_and_check(SDL2_EXEC_PREFIX  "${CMAKE_CURRENT_LIST_DIR}/..")
@@ -53,8 +53,8 @@ set(SDL2MAIN_LIBRARY    SDL2::SDL2main)
 set(SDL2TEST_LIBRARY    SDL2::SDL2test)
 
 
-
-
+# All targets are created, even when some might not be requested though COMPONENTS.
+# This is done for compatibility with CMake generated SDL2-target.cmake files.
 
 set(_sdl2_library     "${SDL2_LIBDIR}/SDL2.lib")
 set(_sdl2_dll_library "${SDL2_BINDIR}/SDL2.dll")

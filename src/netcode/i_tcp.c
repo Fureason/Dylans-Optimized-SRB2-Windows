@@ -7,10 +7,10 @@
 // terms of the GNU General Public License, version 2.
 // See the 'LICENSE' file for more details.
 //-----------------------------------------------------------------------------
-
-
-
-
+/// \file  i_tcp.c
+/// \brief TCP driver, socket code.
+///        This is not really OS-dependent because all OSes have the same socket API.
+///        Just use ifdef for OS-dependent parts.
 
 #include <stdlib.h>
 #include <string.h>
@@ -27,10 +27,10 @@
 	#define USE_WINSOCK
 	#if defined (_WIN64) || defined (HAVE_IPV6)
 		#define USE_WINSOCK2
-	#else  
+	#else //_WIN64/HAVE_IPV6
 		#define USE_WINSOCK1
 	#endif
-#endif  
+#endif //WIN32 OS
 
 #ifdef USE_WINSOCK2
 	#include <ws2tcpip.h>
@@ -52,27 +52,27 @@
 		#ifdef __APPLE_CC__
 			#ifndef _BSD_SOCKLEN_T_
 				#define _BSD_SOCKLEN_T_
-			#endif  
-		#endif  
+			#endif //_BSD_SOCKLEN_T_
+		#endif //__APPLE_CC__
 		#include <sys/socket.h>
 		#include <netinet/in.h>
 		#include <netdb.h>
 		#include <sys/ioctl.h>
-	#endif  
+	#endif //normal BSD API
 
 	#include <errno.h>
 	#include <time.h>
 
 	#if defined (__unix__) || defined (__APPLE__) || defined (UNIXCOMMON)
 		#include <sys/time.h>
-	#endif  
+	#endif // UNIXCOMMON
 #endif
 
 #ifdef USE_WINSOCK
-
+	// some undefined under win32
 	#undef errno
-
-	#define errno h_errno  
+	//#define errno WSAGetLastError() //Alam_GBC: this is the correct way, right?
+	#define errno h_errno // some very strange things happen when not using h_error?!?
 	#ifdef EWOULDBLOCK
 	#undef EWOULDBLOCK
 	#endif
@@ -112,7 +112,7 @@
 	#ifndef STATUS_INVALID_PARAMETER
 	#define STATUS_INVALID_PARAMETER 0xC000000D
 	#endif
-#endif  
+#endif // USE_WINSOCK
 
 typedef union
 {
@@ -128,7 +128,7 @@ typedef union
 	#include "miniupnpc/upnpcommands.h"
 	#include "miniupnpc/upnperrors.h"
 	static boolean UPNP_support;
-	#endif  
+	#endif // HAVE_MINIUPNC
 
 #include "../i_system.h"
 #include "../i_time.h"
@@ -142,9 +142,9 @@ typedef union
 
 #include "../doomstat.h"
 
-
+// win32
 #ifdef USE_WINSOCK
-
+	// winsock stuff (in winsock a socket is not a file)
 	#define ioctl ioctlsocket
 	#define close closesocket
 #endif
@@ -166,7 +166,7 @@ typedef union
 
 #define IPV6_MULTICAST_ADDRESS "ff15::57e1:1a12"
 
-
+// define socklen_t in DOS/Windows if it is not already defined
 #ifdef USE_WINSOCK1
 	typedef int socklen_t;
 #endif
@@ -182,23 +182,23 @@ static mysockaddr_t *banned;
 static UINT8 *bannedmask;
 
 static size_t numbans = 0;
-static boolean SOCK_bannednode[MAXNETNODES+1];  
+static boolean SOCK_bannednode[MAXNETNODES+1]; /// \note do we really need the +1?
 static boolean init_tcp_driver = false;
 
-
-
+// A failed UDP send must not take down the whole game. Keep enough state to
+// report persistent failures without flooding the console every tic.
 static boolean badaddresswarned[MAXNETNODES+1];
 static int lastsenderror[MAXNETNODES+1];
 static tic_t lastsenderrorreport[MAXNETNODES+1];
 
 static const char *serverport_name = DEFAULTPORT;
-static const char *clientport_name; 
+static const char *clientport_name;/* any port */
 
 #ifdef USE_WINSOCK
-
+// stupid microsoft makes things complicated
 static char *get_WSAErrorStr(int e)
 {
-	static char buf[256];  
+	static char buf[256]; // allow up to 255 bytes
 
 	buf[0] = '\0';
 
@@ -212,7 +212,7 @@ static char *get_WSAErrorStr(int e)
 		sizeof (buf),
 		NULL);
 
-	if (!buf[0])  
+	if (!buf[0]) // provide a fallback error message if no message is available for some reason
 		sprintf(buf, "Unknown error");
 
 	return buf;
@@ -280,7 +280,7 @@ static const char* inet_ntopA(short af, const void *cp, char *buf, socklen_t len
 #define HAVE_NTOP
 #endif
 
-#ifdef HAVE_MINIUPNPC  
+#ifdef HAVE_MINIUPNPC // based on old XChat patch
 static void I_ShutdownUPnP(void);
 static void I_InitUPnP(void);
 static void I_RequestUPnPMapping(const char *port);
@@ -295,9 +295,9 @@ static boolean upnp_ready;
 static boolean upnp_mapping_requested;
 static boolean upnp_mapping_succeeded;
 static boolean upnp_mapping_failed;
-                                                                             
-                                                                              
-                                                                              
+/* Only delete a UPnP entry that this process actually created.  Another SRB2
+ * instance can use the same default port; deleting by port alone used to tear
+ * down the first host's still-live mapping when the second process exited. */
 static boolean upnp_mapping_owned;
 static boolean upnp_discovery_failed;
 static boolean upnp_exit_registered;
@@ -342,10 +342,10 @@ typedef enum
 	UPNP_ENTRY_CONFLICT
 } upnp_entry_state_t;
 
-                                                                           
-                                                                             
-                                                                              
-                                                          
+/* The router indexes a mapping by external port/protocol.  Query it before
+ * changing or deleting anything so one SRB2 process cannot steal or remove a
+ * mapping owned by another live server.  This also detects a stale hoststatus
+ * result after a router reboot or an outside deletion. */
 static upnp_entry_state_t I_UPnP_entry(const char *addr, const char *port,
 	char *mappedaddr, size_t mappedaddrsize, char *mappedport,
 	size_t mappedportsize)
@@ -370,8 +370,8 @@ static upnp_entry_state_t I_UPnP_entry(const char *addr, const char *port,
 	if (mappedport && mappedportsize)
 		strlcpy(mappedport, intport, mappedportsize);
 
-	                                                                         
-                                                                       
+	/* A disabled entry looks present but cannot pass traffic. Let the normal
+	 * add path replace/enable it instead of reporting a false success. */
 	if (enabled[0] && !atoi(enabled))
 		return UPNP_ENTRY_MISSING;
 	if (!strcmp(intclient, addr) && atoi(intport) == atoi(port))
@@ -421,9 +421,9 @@ static boolean I_PortMapGateway(struct sockaddr_in *gateway)
 	return true;
 }
 
-                                                                         
-                                                                           
-                                                                          
+/* PCP is the standards-track successor to NAT-PMP.  It uses the same UDP
+ * gateway port, but includes the local address and an unguessable nonce so
+ * responses and later deletion requests cannot affect another mapping. */
 static boolean I_PCPMap(const char *port, UINT32 lifetime,
 	UINT32 *granted_lifetime)
 {
@@ -464,19 +464,19 @@ static boolean I_PCPMap(const char *port, UINT32 lifetime,
 		return false;
 	}
 
-	request[0] = 2;  
-	request[1] = 1;  
+	request[0] = 2; /* PCP version 2. */
+	request[1] = 1; /* MAP opcode, request bit clear. */
 	I_PortMapWrite32(&request[4], lifetime);
-	 
+	/* PCP carries IPv4 addresses as IPv4-mapped IPv6 addresses. */
 	request[18] = request[19] = 0xff;
 	memcpy(&request[20], &local.sin_addr.s_addr, sizeof local.sin_addr.s_addr);
 	memcpy(&request[24], pcp_nonce, sizeof pcp_nonce);
 	request[36] = IPPROTO_UDP;
 	I_PortMapWrite16(&request[40], internalport);
 	I_PortMapWrite16(&request[42], internalport);
-	request[54] = request[55] = 0xff;  
+	request[54] = request[55] = 0xff; /* Any external IPv4 address. */
 	if (lifetime)
-		request[60] = 2;  
+		request[60] = 2; /* PREFER_FAILURE: SRB2 advertises this exact port. */
 
 	for (attempt = 0; attempt < 3; attempt++)
 	{
@@ -535,7 +535,7 @@ static boolean I_NATPMPMap(const char *port, UINT32 lifetime,
 		return false;
 	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof timeout);
 
-	request[1] = 1;  
+	request[1] = 1; /* Map UDP. */
 	I_PortMapWrite16(&request[4], internalport);
 	I_PortMapWrite16(&request[6], internalport);
 	I_PortMapWrite32(&request[8], lifetime);
@@ -707,9 +707,9 @@ static boolean I_UPnPDiscoverWorker(void)
 	memset(lanaddr, 0, sizeof lanaddr);
 
 	I_OutputMsg(M_GetText("Looking for UPnP Internet Gateway Device\n"));
-	                                                                         
-                                                                            
-                                                                        
+	/* SSDP replies are commonly delayed immediately after a Windows firewall
+	 * reset, Wi-Fi reconnect, or network-profile change.  This entire sequence
+	 * runs on the port-mapping worker and can never stall a game frame. */
 	for (discovery_attempt = 0; discovery_attempt < 3 && !devlist;
 		discovery_attempt++)
 	{
@@ -884,7 +884,7 @@ static void I_UPnPMapWorker(const char *port)
 	if (!active)
 		return;
 
-	 
+	/* Renew an existing finite lease through the same protocol first. */
 	if (previously_mapped && previous_method == UPNP_METHOD_PCP)
 	{
 		pcp_tried = true;
@@ -1087,8 +1087,8 @@ static void I_ShutdownUPnP(void)
 	if (spawn_worker)
 		I_spawn_thread("easyhost-shutdown", (I_thread_fn)I_UPnPWorker, NULL);
 
-	                                                                          
-                                                                           
+	/* Exit is allowed to wait; gameplay is not.  This prevents WSACleanup and
+	 * FreeUPNPUrls from racing a still-active discovery or router request. */
 	I_lock_mutex(&upnp_mutex);
 	while (upnp_worker_running)
 		I_hold_cond(&upnp_worker_cond, upnp_mutex);
@@ -1129,8 +1129,8 @@ void I_ConfigureUPnP(boolean enable)
 	}
 	I_unlock_mutex(upnp_mutex);
 
-	                                                                          
-                                                                        
+	/* Register on the main thread after the TCP shutdown hook. Exit functions
+	 * run in reverse order, so mapping work finishes before WSACleanup. */
 	if (register_exit)
 		I_AddExitFunc(I_ShutdownUPnP);
 	if (enable)
@@ -1304,10 +1304,10 @@ static boolean I_EnsureWindowsFirewallRule(const char *port)
 		return false;
 	if (!GetModuleFileNameA(NULL, executable, sizeof executable))
 		return false;
-	                                                                         
-                                                                       
-                                                                         
-                                                                   
+	/* A port-only rule name can find a stale rule after the client is moved,
+	 * even though that rule still points at the old executable. Include a
+	 * case-insensitive path fingerprint so each installed location gets one
+	 * accurate, reusable rule and does not prompt on every launch. */
 	for (cursor = (const unsigned char *)executable; *cursor; cursor++)
 	{
 		unsigned char value = *cursor;
@@ -1321,8 +1321,8 @@ static boolean I_EnsureWindowsFirewallRule(const char *port)
 		(unsigned)pathhash);
 	rulename[sizeof rulename - 1] = '\0';
 
-	                                                                        
-                                                                               
+	/* netsh creates another rule when "add rule" is repeated. Check for our
+	 * executable-specific named rule first so repeated hosting stays harmless. */
 	memset(&check, 0, sizeof check);
 	check.cbSize = sizeof check;
 	check.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
@@ -1342,9 +1342,9 @@ static boolean I_EnsureWindowsFirewallRule(const char *port)
 			return true;
 	}
 
-	                                                                          
-                                                                         
-                                                                        
+	/* Network Discovery/file sharing is unrelated to SRB2's UDP socket. Add a
+	 * narrowly scoped application+port rule instead. ShellExecute's "runas"
+	 * verb leaves the authorization decision with Windows and the user. */
 	snprintf(parameters, sizeof parameters,
 		"advfirewall firewall add rule name=\"%s\" "
 		"dir=in action=allow protocol=UDP localport=%lu profile=any "
@@ -1360,8 +1360,8 @@ static boolean I_EnsureWindowsFirewallRule(const char *port)
 	check.nShow = SW_HIDE;
 	if (!ShellExecuteExA(&check))
 		return false;
-	                                                                         
-                                                                                
+	/* ShellExecuteEx returns after elevation succeeds and netsh starts. Wait
+	 * briefly for the rule itself so the server cannot race its firewall setup. */
 	if (WaitForSingleObject(check.hProcess, 15000) != WAIT_OBJECT_0)
 	{
 		CloseHandle(check.hProcess);
@@ -1426,8 +1426,8 @@ boolean I_RequestWindowsFirewallRule(const char *port)
 
 static const char *SOCK_AddrToStr(mysockaddr_t *sk)
 {
-	static char s[64];  
-
+	static char s[64]; // 255.255.255.255:65535 or
+	// [ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff]:65535
 #ifdef HAVE_NTOP
 #ifdef HAVE_IPV6
 	int v6 = (sk->any.sa_family == AF_INET6);
@@ -1494,7 +1494,7 @@ static const char *SOCK_GetBanAddress(size_t ban)
 
 static const char *SOCK_GetBanMask(size_t ban)
 {
-	static char s[16];  
+	static char s[16]; //255.255.255.255 netmask? no, just CDIR for only
 	if (ban >= numbans)
 		return NULL;
 	if (sprintf(s,"%d",bannedmask[ban]) > 0)
@@ -1538,18 +1538,18 @@ static boolean SOCK_cmpaddr(mysockaddr_t *a, mysockaddr_t *b, UINT8 mask)
 		return false;
 }
 
-
-
-                                                                                
-                                                                              
-                                                                  
-    
+// This is a hack. For some reason, nodes aren't being freed properly.
+// This goes through and cleans up what nodes were supposed to be freed.
+/** \warning This function causes the file downloading to stop if someone joins.
+  *          How? Because it removes nodes that are connected but not in game,
+  *          which is exactly what clients downloading a file are.
+  */
 static void cleanupnodes(void)
 {
 	if (!Playing())
 		return;
 
-
+	// Why can't I start at zero?
 	for (SINT8 j = 1; j < MAXNETNODES; j++)
 		if (!(netnodes[j].ingame || SendingFile(j)))
 			nodeconnected[j] = false;
@@ -1569,15 +1569,15 @@ static SINT8 getfreenode(void)
 			return j;
 		}
 
-	                                                                                  
-                                                                                     
-                                                                          
-                                                                                       
-     
-	                                                 
-                                        
-                          
-              
+	/** \warning No free node? Just in case a node might not have been freed properly,
+	  *          look if there are connected nodes that aren't in game, and forget them.
+	  *          It's dirty, and might result in a poor guy having to restart
+	  *          downloading a needed wad, but it's better than not letting anyone join...
+	  */
+	/*I_Error("No more free nodes!!1!11!11!!1111\n");
+	for (SINT8 j = 1; j < MAXNETNODES; j++)
+		if (!netnodes[j].ingame)
+			return j;*/
 
 	return -1;
 }
@@ -1621,7 +1621,7 @@ void Command_Numnodes(void)
 }
 #endif
 
-
+// Returns true if a packet was received from a new node, false in all other cases
 static boolean SOCK_Get(void)
 {
 	size_t i;
@@ -1639,20 +1639,20 @@ static boolean SOCK_Get(void)
 			(void *)&fromaddress, &fromlen);
 		if (c != ERRSOCKET)
 		{
-
-			for (j = 1; j <= MAXNETNODES; j++)  
+			// find remote node number
+			for (j = 1; j <= MAXNETNODES; j++) //include LAN
 			{
 				if (SOCK_cmpaddr(&fromaddress, &clientaddress[j], 0))
 				{
-					doomcom->remotenode = (INT16)j;  
+					doomcom->remotenode = (INT16)j; // good packet from a game player
 					doomcom->datalength = (INT16)c;
 					nodesocket[j] = mysockets[n];
 					return false;
 				}
 			}
+			// not found
 
-
-
+			// find a free slot
 			j = getfreenode();
 			if (j > 0)
 			{
@@ -1660,10 +1660,10 @@ static boolean SOCK_Get(void)
 				nodesocket[j] = mysockets[n];
 				DEBFILE(va("New node detected: node:%d address:%s\n", j,
 						SOCK_GetNodeAddress(j)));
-				doomcom->remotenode = (INT16)j;  
+				doomcom->remotenode = (INT16)j; // good packet from a game player
 				doomcom->datalength = (INT16)c;
 
-
+				// check if it's a banned dude so we can send a refusal later
 				for (i = 0; i < numbans; i++)
 				{
 					if (SOCK_cmpaddr(&fromaddress, &banned[i], bannedmask[i]))
@@ -1682,7 +1682,7 @@ static boolean SOCK_Get(void)
 		}
 	}
 
-	doomcom->remotenode = -1;  
+	doomcom->remotenode = -1; // no packet
 	return false;
 }
 
@@ -1770,7 +1770,7 @@ static void SOCK_Send(void)
 
 	if (c == ERRSOCKET)
 	{
-		int e = SOCK_GetLastErrorCode();  
+		int e = SOCK_GetLastErrorCode(); // save error code so it can't be modified later
 		if (!ALLOWEDERROR(e))
 		{
 			tic_t now = I_GetTime();
@@ -1792,7 +1792,7 @@ static void SOCK_Send(void)
 
 static void SOCK_FreeNodenum(INT32 numnode)
 {
-
+	// can't disconnect from self :)
 	if (!numnode || numnode > MAXNETNODES)
 		return;
 
@@ -1804,20 +1804,20 @@ static void SOCK_FreeNodenum(INT32 numnode)
 	lastsenderror[numnode] = 0;
 	lastsenderrorreport[numnode] = 0;
 
-
+	// put invalid address
 	memset(&clientaddress[numnode], 0, sizeof (clientaddress[numnode]));
 }
 
+//
+// UDPsocket
+//
 
-
-
-
-
+// allocate a socket
 static SOCKET_TYPE UDP_Bind(int family, struct sockaddr *addr, socklen_t addrlen)
 {
-	                                                                           
-                                                                           
-                                                                            
+	/* Joins, resync savegames and add-on transfers arrive in short UDP bursts.
+	 * The historical 64 KiB floor can overflow before a busy 5-10 player host
+	 * gets back to recvfrom(), even though its average bandwidth is modest. */
 	const int targetbuffersize = 1024 << 10;
 	SOCKET_TYPE s = socket(family, SOCK_DGRAM, IPPROTO_UDP);
 	int opt;
@@ -1831,7 +1831,7 @@ static SOCKET_TYPE UDP_Bind(int family, struct sockaddr *addr, socklen_t addrlen
 	if (s == (SOCKET_TYPE)ERRSOCKET)
 		return (SOCKET_TYPE)ERRSOCKET;
 #ifdef USE_WINSOCK
-	{  
+	{ // Alam_GBC: disable the new UDP connection reset behavior for Win2k and up
 #ifdef USE_WINSOCK2
 		DWORD dwBytesReturned = 0;
 		BOOL bfalse = FALSE;
@@ -1853,10 +1853,10 @@ static SOCKET_TYPE UDP_Bind(int family, struct sockaddr *addr, socklen_t addrlen
 		{
 			opt = true;
 			opts = (socklen_t)sizeof(opt);
-			                                                            
-                                                               
-                                                                    
-                        
+			/* A public host must own its UDP endpoint.  SO_REUSEADDR on
+			 * Windows let a second SRB2 instance bind 5029, replace the
+			 * router mapping, then delete it on exit while the original host
+			 * remained alive. */
 #ifdef USE_WINSOCK2
 			if (serverrunning)
 			{
@@ -1870,18 +1870,18 @@ static SOCKET_TYPE UDP_Bind(int family, struct sockaddr *addr, socklen_t addrlen
 			if (!serverrunning)
 				setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, opts);
 		}
-
+		// make it broadcastable
 		opt = true;
 		opts = (socklen_t)sizeof(opt);
 		if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, (char *)&opt, opts))
 		{
-			CONS_Alert(CONS_WARNING, M_GetText("Could not get broadcast rights\n"));  
+			CONS_Alert(CONS_WARNING, M_GetText("Could not get broadcast rights\n")); // I do not care anymore
 		}
 	}
 #ifdef HAVE_IPV6
 	else if (family == AF_INET6)
 	{
-		if (memcmp(&straddr.ip6.sin6_addr, &in6addr_any, sizeof(in6addr_any)) == 0)  
+		if (memcmp(&straddr.ip6.sin6_addr, &in6addr_any, sizeof(in6addr_any)) == 0) //IN6_ARE_ADDR_EQUAL
 		{
 			opt = true;
 			opts = (socklen_t)sizeof(opt);
@@ -1899,12 +1899,12 @@ static SOCKET_TYPE UDP_Bind(int family, struct sockaddr *addr, socklen_t addrlen
 				setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, opts);
 		}
 #ifdef IPV6_V6ONLY
-
+		// make it IPv6 ony
 		opt = true;
 		opts = (socklen_t)sizeof(opt);
 		if (setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&opt, opts))
 		{
-			CONS_Alert(CONS_WARNING, M_GetText("Could not limit IPv6 bind\n"));  
+			CONS_Alert(CONS_WARNING, M_GetText("Could not limit IPv6 bind\n")); // I do not care anymore
 		}
 #endif
 	}
@@ -1920,8 +1920,8 @@ static SOCKET_TYPE UDP_Bind(int family, struct sockaddr *addr, socklen_t addrlen
 #ifdef HAVE_IPV6
 	if (family == AF_INET6)
 	{
-
-		if (memcmp(&straddr.ip6.sin6_addr, &in6addr_any, sizeof(in6addr_any)) == 0)  
+		// we need to set all of this *after* binding to an address!
+		if (memcmp(&straddr.ip6.sin6_addr, &in6addr_any, sizeof(in6addr_any)) == 0) //IN6_ARE_ADDR_EQUAL
 		{
 			struct ipv6_mreq maddr;
 
@@ -1936,7 +1936,7 @@ static SOCKET_TYPE UDP_Bind(int family, struct sockaddr *addr, socklen_t addrlen
 #endif
 
 #ifdef FIONBIO
-
+	// make it non blocking
 	opt = true;
 	if (ioctl(s, FIONBIO, &trueval) != 0)
 	{
@@ -1962,8 +1962,8 @@ static SOCKET_TYPE UDP_Bind(int family, struct sockaddr *addr, socklen_t addrlen
 			CONS_Printf(M_GetText("Network system buffer set to: %dKb\n"), opt>>10);
 	}
 
-	                                                                          
-                                                                              
+	/* A separate send buffer keeps one slow/retransmitting client from making
+	 * bursts to the other clients block or fail at the operating-system edge. */
 	opts = (socklen_t)sizeof(opt);
 	if (getsockopt(s, SOL_SOCKET, SO_SNDBUF, (char *)&opt, &opts) == 0
 	&& opt < targetbuffersize)
@@ -2106,29 +2106,29 @@ static boolean UDP_Socket(void)
 #endif
 
 	mysocketses = s;
-	if (s == 0)  
+	if (s == 0) // no sockets?
 		return false;
 
 #ifdef HAVE_MINIUPNPC
-	                                                                           
-                                                                           
+	/* Binding succeeded; router discovery and mapping now continue entirely on
+	 * the Easy Host worker so opening a server cannot pause the game loop. */
 	if (serverrunning)
 		I_RequestUPnPMapping(serverport_name);
 #endif
 
 	s = 0;
 
-
-	packetheaderlength = 20 + 8;  
+	// ip + udp
+	packetheaderlength = 20 + 8; // for stats
 
 	clientaddress[s].any.sa_family = AF_INET;
 	clientaddress[s].ip4.sin_port = htons(0);
-	clientaddress[s].ip4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);  
+	clientaddress[s].ip4.sin_addr.s_addr = htonl(INADDR_LOOPBACK); //GetLocalAddress(); // my own ip
 	s++;
 
 	s = 0;
 
-
+	// setup broadcast adress to BROADCASTADDR entry
 	broadcastaddress[s].any.sa_family = AF_INET;
 	broadcastaddress[s].ip4.sin_port = htons(atoi(DEFAULTPORT));
 	broadcastaddress[s].ip4.sin_addr.s_addr = htonl(INADDR_BROADCAST);
@@ -2148,7 +2148,7 @@ static boolean UDP_Socket(void)
 
 	broadcastaddresses = s;
 
-	doomcom->extratics = 1;  
+	doomcom->extratics = 1; // internet is very high ping
 
 	return true;
 }
@@ -2238,8 +2238,8 @@ static void SOCK_CloseSocketOnly(void)
 static void SOCK_CloseSocket(void)
 {
 #ifdef HAVE_MINIUPNPC
-	                                                                          
-                                          
+	/* Normal disconnects should relinquish mappings too, but never wait for a
+	 * router response on the game thread. */
 	I_ReleaseUPnPMapping();
 #endif
 	SOCK_CloseSocketOnly();
@@ -2247,7 +2247,7 @@ static void SOCK_CloseSocket(void)
 
 void I_ShutdownTcpDriver(void)
 {
-	 
+	/* I_ShutdownUPnP runs first and waits for its worker before Winsock ends. */
 	SOCK_CloseSocketOnly();
 
 	CONS_Printf("I_ShutdownTcpDriver: ");
@@ -2293,7 +2293,7 @@ static SINT8 SOCK_NetMakeNodewPort(const char *address, const char *port)
 
 	while (runp != NULL)
 	{
-
+		// test ip address of server
 		for (i = 0; i < mysocketses; ++i)
 		{
 			if (runp->ai_addr != NULL
@@ -2332,7 +2332,7 @@ static boolean SOCK_OpenSocket(void)
 	memset(lastsenderror, 0, sizeof (lastsenderror));
 	memset(lastsenderrorreport, 0, sizeof (lastsenderrorreport));
 
-	nodeconnected[0] = true;  
+	nodeconnected[0] = true; // always connected to self
 	for (size_t i = 1; i < MAXNETNODES; i++)
 		nodeconnected[i] = false;
 	nodeconnected[BROADCASTADDR] = true;
@@ -2342,7 +2342,7 @@ static boolean SOCK_OpenSocket(void)
 	I_NetFreeNodenum = SOCK_FreeNodenum;
 	I_NetMakeNodewPort = SOCK_NetMakeNodewPort;
 
-
+	// build the socket but close it first
 	SOCK_CloseSocketOnly();
 	return UDP_Socket();
 }
@@ -2435,40 +2435,40 @@ boolean I_InitTcpNetwork(void)
 	char serverhostname[255];
 	const char *urlparam = NULL;
 	boolean ret = false;
-
+	// initilize the OS's TCP/IP stack
 	if (!I_InitTcpDriver())
 		return false;
 
 	if (M_CheckParm("-port") || M_CheckParm("-serverport"))
-
-
-	 
+	// Combined -udpport and -clientport into -port
+	// As it was really redundant having two seperate parms that does the same thing
+	/* Sorry Steel, I'm adding these back. But -udpport is a stupid name. */
 	{
-		  
-                                         
-                                           
-    
+		/*
+		If it's NULL, that's okay! Because then
+		we'll get a random port from getaddrinfo.
+		*/
 		serverport_name = M_GetNextParm();
 	}
 	if (M_CheckParm("-clientport"))
 		clientport_name = M_GetNextParm();
 
-
+	// parse network game options,
 	if (M_CheckParm("-server") || dedicated)
 	{
 		server = true;
 
-
-
-
-
-
-
-
+		// If a number of clients (i.e. nodes) is specified, the server will wait for the clients
+		// to connect before starting.
+		// If no number is specified here, the server starts with 1 client, and others can join
+		// in-game.
+		// Since Boris has implemented join in-game, there is no actual need for specifying a
+		// particular number here.
+		// FIXME: for dedicated server, numnodes needs to be set to 0 upon start
 		if (dedicated)
 			doomcom->numnodes = 0;
-                            
-                                                      
+/*		else if (M_IsNextParm())
+			doomcom->numnodes = (INT16)atoi(M_GetNextParm());*/
 		else
 			doomcom->numnodes = 1;
 
@@ -2477,11 +2477,11 @@ boolean I_InitTcpNetwork(void)
 		if (doomcom->numnodes > MAXNETNODES)
 			doomcom->numnodes = MAXNETNODES;
 
-
+		// server
 		servernode = 0;
-
-
-
+		// FIXME:
+		// ??? and now ?
+		// server on a big modem ??? 4*isdn
 		hardware_MAXPACKETLENGTH = INETPACKETLENGTH;
 
 		ret = true;
@@ -2493,21 +2493,21 @@ boolean I_InitTcpNetwork(void)
 		else if (M_IsNextParm())
 			strlcpy(serverhostname, M_GetNextParm(), sizeof(serverhostname));
 		else
-			serverhostname[0] = 0;  
+			serverhostname[0] = 0; // assuming server in the LAN, use broadcast to detect it
 
-
+		// server address only in ip
 		if (serverhostname[0])
 		{
 			COM_BufAddText("connect \"");
 			COM_BufAddText(serverhostname);
 			COM_BufAddText("\"\n");
 
-
+			// probably modem
 			hardware_MAXPACKETLENGTH = INETPACKETLENGTH;
 		}
 		else
 		{
-
+			// so we're on a LAN
 			COM_BufAddText("connect any\n");
 
 			hardware_MAXPACKETLENGTH = MAXPACKETLENGTH;
