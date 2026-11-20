@@ -188,18 +188,27 @@ static char movie_video_output[MAX_WADPATH];
 static char movie_video_frames[MAX_WADPATH];
 static char movie_video_audio[MAX_WADPATH];
 #ifdef _WIN32
+#include "win32/movie_mf.inc"
+static boolean movie_native_recording = false;
+static boolean movie_native_audio = false;
+static boolean movie_native_pending = false;
+static HANDLE movie_native_ready = NULL;
+static volatile LONG movie_native_result = E_PENDING;
 static char movie_ffmpeg_path[MAX_PATH];
 static HANDLE movie_ffmpeg_process = NULL;
 static HANDLE movie_ffmpeg_input = NULL;
-static boolean movie_ffmpeg_recording = false;
-static boolean movie_ffmpeg_gif = false;
-static boolean movie_ffmpeg_failed = false;
+static boolean movie_async_recording = false;
+static boolean movie_capture_gif = false;
+static boolean movie_capture_failed = false;
 #define MOVIE_FRAME_QUEUE_SIZE 6
 typedef struct
 {
 	UINT8 *pixels;
 	UINT32 repeats;
+	boolean indexed;
+	UINT8 palette[768];
 } movie_frame_slot_t;
+static const UINT8 *M_PrepareMovieFrame(const movie_frame_slot_t *slot);
 static movie_frame_slot_t movie_frame_queue[MOVIE_FRAME_QUEUE_SIZE];
 static CRITICAL_SECTION movie_frame_queue_lock;
 static HANDLE movie_frame_queue_event = NULL;
@@ -215,9 +224,15 @@ static UINT32 movie_source_frames = 0;
 static UINT64 movie_repeated_frames = 0;
 static precise_t movie_recording_start = 0;
 static UINT8 *movie_rgb_frame = NULL;
+static UINT8 *movie_capture_source = NULL;
+static INT32 *movie_capture_xmap = NULL;
+static INT32 *movie_capture_ymap = NULL;
 static size_t movie_rgb_frame_size = 0;
+static size_t movie_source_frame_size = 0;
 static INT32 movie_capture_width = 0;
 static INT32 movie_capture_height = 0;
+static INT32 movie_capture_source_width = 0;
+static INT32 movie_capture_source_height = 0;
 static INT32 movie_capture_fps = 30;
 #endif
 
@@ -1274,6 +1289,9 @@ static inline moviemode_t M_StartMovieGIF(const char *pathname)
 typedef struct
 {
 	HANDLE process;
+	boolean native;
+	HRESULT native_result;
+	UINT32 fps;
 	char frames[MAX_WADPATH];
 	char audio[MAX_WADPATH];
 	char output[MAX_WADPATH];
@@ -1311,9 +1329,22 @@ static void M_WaitForMovieEncode(void *userdata)
 	char commandline[6*MAX_WADPATH];
 	if (!job)
 		return;
-	WaitForSingleObject(job->process, INFINITE);
-	GetExitCodeProcess(job->process, &capture_exit);
-	CloseHandle(job->process);
+	if (job->native)
+	{
+		HRESULT result = job->native_result;
+		if (SUCCEEDED(result))
+			result = M_MFMovieMux(job->frames, job->audio_enabled ? job->audio : NULL,
+				job->output, job->timeline_frames, job->fps);
+		finalized = SUCCEEDED(result);
+		if (!finalized)
+			I_OutputMsg("Windows recording finalization error: 0x%08lx\n", (unsigned long)result);
+	}
+	else
+	{
+		WaitForSingleObject(job->process, INFINITE);
+		GetExitCodeProcess(job->process, &capture_exit);
+		CloseHandle(job->process);
+	}
 
 	if (capture_exit == 0 && job->gif)
 	{
@@ -1323,16 +1354,6 @@ static void M_WaitForMovieEncode(void *userdata)
 			"[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle\" "
 			"-loop 0 \"%s\"",
 			movie_ffmpeg_path, job->frames, job->output);
-		finalized = M_StartHiddenProcessAndWait(commandline);
-	}
-	else if (capture_exit == 0 && job->audio_enabled)
-	{
-		snprintf(commandline, sizeof commandline,
-			"\"%s\" -y -hide_banner -loglevel error -i \"%s\" -i \"%s\" "
-			"-filter_complex \"[1:a]aresample=async=1000:first_pts=0[a]\" "
-			"-map 0:v:0 -map \"[a]\" -c:v copy -c:a aac -b:a 192k "
-			"-shortest -movflags +faststart \"%s\"",
-			movie_ffmpeg_path, job->frames, job->audio, job->output);
 		finalized = M_StartHiddenProcessAndWait(commandline);
 	}
 
@@ -1377,96 +1398,109 @@ static boolean M_WriteMoviePipe(const UINT8 *data, size_t bytes)
 
 static DWORD WINAPI M_MovieFrameWriter(LPVOID userdata)
 {
+	movie_mf_writer_t native_writer;
+	const boolean native = movie_native_recording;
 	(void)userdata;
+	if (native)
+	{
+		HRESULT result = M_MFMovieOpen(&native_writer, movie_video_frames,
+			movie_capture_width, movie_capture_height, movie_capture_fps);
+		InterlockedExchange(&movie_native_result, result);
+		if (FAILED(result)) movie_frame_writer_failed = true;
+		SetEvent(movie_native_ready);
+	}
 	for (;;)
 	{
 		movie_frame_slot_t slot;
-		UINT32 repeat;
 		boolean have_frame = false;
-
 		EnterCriticalSection(&movie_frame_queue_lock);
-		if (movie_frame_queue_count)
-		{
-			slot = movie_frame_queue[movie_frame_queue_head];
-			have_frame = true;
-		}
-		else if (movie_frame_writer_stop)
-		{
-			LeaveCriticalSection(&movie_frame_queue_lock);
-			break;
-		}
+		if (movie_frame_queue_count) { slot = movie_frame_queue[movie_frame_queue_head]; have_frame = true; }
+		else if (movie_frame_writer_stop) { LeaveCriticalSection(&movie_frame_queue_lock); break; }
 		LeaveCriticalSection(&movie_frame_queue_lock);
-
-		if (!have_frame)
-		{
-			WaitForSingleObject(movie_frame_queue_event, INFINITE);
-			continue;
-		}
-
+		if (!have_frame) { WaitForSingleObject(movie_frame_queue_event, INFINITE); continue; }
 		if (!movie_frame_writer_failed)
 		{
-			for (repeat = 0; repeat < slot.repeats; repeat++)
+			const UINT8 *pixels = M_PrepareMovieFrame(&slot);
+			if (native)
 			{
-				if (!M_WriteMoviePipe(slot.pixels, movie_rgb_frame_size))
-				{
-					movie_frame_writer_failed = true;
-					break;
-				}
+				HRESULT result = M_MFMovieFrame(&native_writer, pixels, slot.repeats);
+				if (FAILED(result)) { InterlockedExchange(&movie_native_result, result); movie_frame_writer_failed = true; }
 			}
+			else for (UINT32 repeat = 0; repeat < slot.repeats; repeat++)
+				if (!M_WriteMoviePipe(pixels, movie_rgb_frame_size)) { movie_frame_writer_failed = true; break; }
 		}
-
 		EnterCriticalSection(&movie_frame_queue_lock);
 		movie_frame_queue_head = (movie_frame_queue_head + 1) % MOVIE_FRAME_QUEUE_SIZE;
 		movie_frame_queue_count--;
 		LeaveCriticalSection(&movie_frame_queue_lock);
 	}
+	if (native && native_writer.writer)
+	{
+		HRESULT result = M_MFMovieClose(&native_writer);
+		if (FAILED(result)) { InterlockedExchange(&movie_native_result, result); movie_frame_writer_failed = true; }
+	}
 	return 0;
 }
 
-static boolean M_CaptureMovieFrame(UINT8 *frame)
+static void M_FreeMovieCaptureBuffers(void)
 {
-	UINT8 *source = NULL;
-	INT32 x, y;
+	free(movie_rgb_frame);
+	free(movie_capture_source);
+	free(movie_capture_xmap);
+	free(movie_capture_ymap);
+	movie_rgb_frame = NULL;
+	movie_capture_source = NULL;
+	movie_capture_xmap = NULL;
+	movie_capture_ymap = NULL;
+}
+
+// The producer only snapshots pixels/palette. Resampling and palette expansion
+// belong to the writer, whose queue slot stays occupied until conversion ends.
+static boolean M_CaptureMovieFrame(movie_frame_slot_t *slot)
+{
+	if (vid.width != movie_capture_source_width || vid.height != movie_capture_source_height)
+		return false;
 #ifdef HWRENDER
 	if (rendermode == render_opengl)
-		source = HWR_GetScreenshot();
-	else
-#endif
 	{
-		source = screens[2];
-		I_ReadScreen(source);
-		M_CreateScreenShotPalette();
+		slot->indexed = false;
+		return HWR_ReadScreenshot(slot->pixels);
 	}
-	if (!source)
-		return false;
-	for (y = 0; y < movie_capture_height; ++y)
+#endif
+	I_ReadScreen(screens[2]);
+	memcpy(slot->pixels, screens[2], (size_t)vid.width * vid.height);
+	M_CreateScreenShotPalette();
+	memcpy(slot->palette, screenshot_palette, sizeof slot->palette);
+	slot->indexed = true;
+	return true;
+}
+
+static const UINT8 *M_PrepareMovieFrame(const movie_frame_slot_t *slot)
+{
+	if (!slot->indexed && movie_capture_width == movie_capture_source_width
+	&& movie_capture_height == movie_capture_source_height) return slot->pixels;
+	for (INT32 y = 0; y < movie_capture_height; ++y)
 	{
-		const INT32 sy = (INT32)((INT64)y * vid.height / movie_capture_height);
-		UINT8 *dest = frame + (size_t)y * movie_capture_width * 3;
-		for (x = 0; x < movie_capture_width; ++x)
+		const INT32 sy = movie_capture_ymap ? movie_capture_ymap[y] : y;
+		UINT8 *dest = movie_capture_source + (size_t)y * movie_capture_width * 3;
+		for (INT32 x = 0; x < movie_capture_width; ++x)
 		{
-			const INT32 sx = (INT32)((INT64)x * vid.width / movie_capture_width);
-#ifdef HWRENDER
-			if (rendermode == render_opengl)
+			const INT32 sx = movie_capture_xmap ? movie_capture_xmap[x] : x;
+			if (!slot->indexed)
 			{
-				const UINT8 *pixel = source + ((size_t)sy * vid.width + sx) * 3;
+				const UINT8 *pixel = slot->pixels + ((size_t)sy * movie_capture_source_width + sx) * 3;
 				*dest++ = pixel[0]; *dest++ = pixel[1]; *dest++ = pixel[2];
 			}
 			else
-#endif
 			{
-				const UINT8 index = source[(size_t)sy * vid.width + sx];
-				*dest++ = screenshot_palette[index*3];
-				*dest++ = screenshot_palette[index*3+1];
-				*dest++ = screenshot_palette[index*3+2];
+				const UINT8 index = slot->pixels[(size_t)sy * movie_capture_source_width + sx];
+				*dest++ = slot->palette[index*3];
+				*dest++ = slot->palette[index*3+1];
+				*dest++ = slot->palette[index*3+2];
 			}
 		}
 	}
-#ifdef HWRENDER
-	if (rendermode == render_opengl)
-		free(source);
-#endif
-	return true;
+	return movie_capture_source;
 }
 
 static boolean M_QueueMovieFrame(UINT32 repeats)
@@ -1482,7 +1516,7 @@ static boolean M_QueueMovieFrame(UINT32 repeats)
 	slot = &movie_frame_queue[movie_frame_queue_tail];
 	LeaveCriticalSection(&movie_frame_queue_lock);
 
-	if (!M_CaptureMovieFrame(slot->pixels))
+	if (!M_CaptureMovieFrame(slot))
 		return false;
 	slot->repeats = max(repeats, 1);
 	EnterCriticalSection(&movie_frame_queue_lock);
@@ -1496,52 +1530,80 @@ static boolean M_QueueMovieFrame(UINT32 repeats)
 	return true;
 }
 
-static moviemode_t M_StartMovieFFmpeg(const char *pathname, boolean gif)
+static moviemode_t M_StartMovieCapture(const char *pathname, boolean gif)
 {
 	SECURITY_ATTRIBUTES security;
 	STARTUPINFOA startup;
 	PROCESS_INFORMATION process;
-	HANDLE pipe_read = NULL, null_output = INVALID_HANDLE_VALUE;
+	HANDLE pipe_read = NULL, null_output = INVALID_HANDLE_VALUE, reservation = INVALID_HANDLE_VALUE;
 	char commandline[4*MAX_WADPATH];
 	const char *freename;
 	char basename[13];
-
-	if (!SearchPathA(NULL, "ffmpeg.exe", NULL, sizeof movie_ffmpeg_path,
-		movie_ffmpeg_path, NULL))
-	{
-		if (!gif)
-			CONS_Alert(CONS_ERROR, "Video + Sound needs ffmpeg.exe in PATH. GIF and aPNG recording still work.\n");
-		return MM_OFF;
-	}
+	boolean queue_initialized = false, reserved = false;
+	if (gif && !SearchPathA(NULL, "ffmpeg.exe", NULL, sizeof movie_ffmpeg_path, movie_ffmpeg_path, NULL))
+		return MM_OFF; // GIF has its own in-process fallback.
 	if (!(freename = Newsnapshotfile(pathname, gif ? "gif" : "mp4")))
-	{
-		CONS_Alert(CONS_ERROR, "Couldn't reserve a recording filename in %s\n", pathname);
-		return MM_OFF;
-	}
-	strlcpy(basename, freename, sizeof basename);
-	basename[8] = '\0';
+	{ CONS_Alert(CONS_ERROR, "Couldn't reserve a recording filename in %s\n", pathname); return MM_OFF; }
+	strlcpy(basename, freename, sizeof basename); basename[8] = '\0';
 	snprintf(movie_video_output, sizeof movie_video_output, pandf, pathname, freename);
-	snprintf(movie_video_frames, sizeof movie_video_frames, "%s" PATHSEP "%s-capture.mkv", pathname, basename);
+	snprintf(movie_video_frames, sizeof movie_video_frames, "%s" PATHSEP "%s-capture.%s", pathname, basename, gif ? "mkv" : "mp4");
 	snprintf(movie_video_audio, sizeof movie_video_audio, "%s" PATHSEP "%s-capture.wav", pathname, basename);
+	if (GetFileAttributesA(movie_video_frames) != INVALID_FILE_ATTRIBUTES
+		|| GetFileAttributesA(movie_video_audio) != INVALID_FILE_ATTRIBUTES)
+	{ CONS_Alert(CONS_ERROR, "An unfinished recording already uses %s. Keep or rename it before recording again.\n", basename); return MM_OFF; }
+	// Reserve the final name while asynchronous capture/finalization is active.
+	reservation = CreateFileA(movie_video_output, GENERIC_WRITE, FILE_SHARE_READ, NULL,
+		CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (reservation == INVALID_HANDLE_VALUE)
+	{ CONS_Alert(CONS_ERROR, "Couldn't create recording in %s\n", pathname); return MM_OFF; }
+	CloseHandle(reservation); reserved = true;
+	movie_native_recording = !gif;
+	movie_native_audio = false;
+	movie_native_pending = !gif;
+	movie_native_ready = NULL;
+	InterlockedExchange(&movie_native_result, E_PENDING);
 	M_GetMovieCaptureSize(&movie_capture_width, &movie_capture_height);
 	movie_capture_fps = max(cv_gif_maxfps.value, 1);
+	movie_capture_source_width = vid.width;
+	movie_capture_source_height = vid.height;
+	M_FreeMovieCaptureBuffers();
 	movie_rgb_frame_size = (size_t)movie_capture_width * movie_capture_height * 3;
-	movie_rgb_frame = malloc(movie_rgb_frame_size * MOVIE_FRAME_QUEUE_SIZE);
-	if (!movie_rgb_frame)
-		return MM_OFF;
+	movie_source_frame_size = (size_t)movie_capture_source_width * movie_capture_source_height * 3;
+	movie_rgb_frame = malloc(movie_source_frame_size * MOVIE_FRAME_QUEUE_SIZE);
+	movie_capture_source = malloc(movie_rgb_frame_size);
+	if (!movie_rgb_frame || !movie_capture_source)
+	{
+		goto fail;
+	}
+	if (movie_capture_width != movie_capture_source_width
+	|| movie_capture_height != movie_capture_source_height)
+	{
+		movie_capture_xmap = malloc((size_t)movie_capture_width * sizeof (*movie_capture_xmap));
+		movie_capture_ymap = malloc((size_t)movie_capture_height * sizeof (*movie_capture_ymap));
+		if (!movie_capture_xmap || !movie_capture_ymap
+		)
+		{
+			goto fail;
+		}
+		for (INT32 x = 0; x < movie_capture_width; x++)
+			movie_capture_xmap[x] = (INT32)((INT64)x
+				* movie_capture_source_width / movie_capture_width);
+		for (INT32 y = 0; y < movie_capture_height; y++)
+			movie_capture_ymap[y] = (INT32)((INT64)y
+				* movie_capture_source_height / movie_capture_height);
+	}
 	for (INT32 slot = 0; slot < MOVIE_FRAME_QUEUE_SIZE; slot++)
-		movie_frame_queue[slot].pixels = movie_rgb_frame + movie_rgb_frame_size * slot;
+		movie_frame_queue[slot].pixels = movie_rgb_frame + movie_source_frame_size * slot;
+
+	if (gif)
+	{
 	memset(&security, 0, sizeof security);
 	security.nLength = sizeof security;
 	security.bInheritHandle = TRUE;
 	if (!CreatePipe(&pipe_read, &movie_ffmpeg_input, &security, 1024*1024)
 	 || !SetHandleInformation(movie_ffmpeg_input, HANDLE_FLAG_INHERIT, 0))
 	{
-		if (pipe_read) CloseHandle(pipe_read);
-		if (movie_ffmpeg_input) CloseHandle(movie_ffmpeg_input);
-		movie_ffmpeg_input = NULL;
-		free(movie_rgb_frame); movie_rgb_frame = NULL;
-		return MM_OFF;
+		goto fail;
 	}
 	null_output = CreateFileA("NUL", GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE,
 		&security, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -1565,71 +1627,63 @@ static moviemode_t M_StartMovieFFmpeg(const char *pathname, boolean gif)
 	if (!CreateProcessA(movie_ffmpeg_path, commandline, NULL, NULL, TRUE,
 		CREATE_NO_WINDOW|BELOW_NORMAL_PRIORITY_CLASS, NULL, NULL, &startup, &process))
 	{
-		CloseHandle(pipe_read);
-		if (null_output != INVALID_HANDLE_VALUE) CloseHandle(null_output);
-		CloseHandle(movie_ffmpeg_input); movie_ffmpeg_input = NULL;
-		free(movie_rgb_frame); movie_rgb_frame = NULL;
-		return MM_OFF;
+		goto fail;
 	}
 	CloseHandle(process.hThread);
-	CloseHandle(pipe_read);
+	CloseHandle(pipe_read); pipe_read = NULL;
 	if (null_output != INVALID_HANDLE_VALUE) CloseHandle(null_output);
+	null_output = INVALID_HANDLE_VALUE;
 	movie_ffmpeg_process = process.hProcess;
-	InitializeCriticalSection(&movie_frame_queue_lock);
+	}
+
+	InitializeCriticalSection(&movie_frame_queue_lock); queue_initialized = true;
 	movie_frame_queue_event = CreateEventA(NULL, FALSE, FALSE, NULL);
+	if (!gif) movie_native_ready = CreateEventA(NULL, TRUE, FALSE, NULL);
 	movie_frame_writer_stop = movie_frame_writer_failed = false;
 	movie_frame_queue_head = movie_frame_queue_tail = movie_frame_queue_count = 0;
-	movie_frames_scheduled = 0;
-	movie_capture_skips = 0;
-	movie_source_frames = 0;
-	movie_repeated_frames = 0;
-	movie_frame_writer_thread = movie_frame_queue_event
+	movie_frames_scheduled = 0; movie_capture_skips = 0;
+	movie_source_frames = 0; movie_repeated_frames = 0;
+	movie_frame_writer_thread = movie_frame_queue_event && (gif || movie_native_ready)
 		? CreateThread(NULL, 0, M_MovieFrameWriter, NULL, 0, NULL) : NULL;
-	if (!movie_frame_writer_thread)
-	{
-		if (movie_frame_queue_event) CloseHandle(movie_frame_queue_event);
-		movie_frame_queue_event = NULL;
-		DeleteCriticalSection(&movie_frame_queue_lock);
-		CloseHandle(movie_ffmpeg_input); movie_ffmpeg_input = NULL;
-		WaitForSingleObject(movie_ffmpeg_process, INFINITE);
-		CloseHandle(movie_ffmpeg_process); movie_ffmpeg_process = NULL;
-		free(movie_rgb_frame); movie_rgb_frame = NULL;
-		remove(movie_video_frames);
-		return MM_OFF;
-	}
+	if (!movie_frame_writer_thread) goto fail;
 	SetThreadPriority(movie_frame_writer_thread, THREAD_PRIORITY_BELOW_NORMAL);
-	movie_ffmpeg_recording = true;
-	movie_ffmpeg_gif = gif;
-	movie_ffmpeg_failed = false;
+	movie_async_recording = true; movie_capture_gif = gif; movie_capture_failed = false;
 	movie_video_recording = !gif;
-	if (!gif && !I_StartMovieAudioCapture(movie_video_audio))
+	movie_recording_start = I_GetPreciseTime();
+	if (gif)
+		CONS_Printf("Recording %dx%d at %d FPS.\n", movie_capture_width, movie_capture_height, movie_capture_fps);
+	else
+		CONS_Printf("Starting the built-in Windows video recorder...\n");
+	return gif ? MM_GIF : MM_VIDEO;
+fail:
+	if (movie_frame_writer_thread)
 	{
-		movie_frame_writer_stop = true;
-		SetEvent(movie_frame_queue_event);
+		movie_frame_writer_stop = true; SetEvent(movie_frame_queue_event);
 		WaitForSingleObject(movie_frame_writer_thread, INFINITE);
 		CloseHandle(movie_frame_writer_thread); movie_frame_writer_thread = NULL;
-		CloseHandle(movie_frame_queue_event); movie_frame_queue_event = NULL;
-		DeleteCriticalSection(&movie_frame_queue_lock);
-		CloseHandle(movie_ffmpeg_input); movie_ffmpeg_input = NULL;
+	}
+	if (movie_frame_queue_event) { CloseHandle(movie_frame_queue_event); movie_frame_queue_event = NULL; }
+	if (movie_native_ready) { CloseHandle(movie_native_ready); movie_native_ready = NULL; }
+	if (queue_initialized) DeleteCriticalSection(&movie_frame_queue_lock);
+	if (pipe_read) CloseHandle(pipe_read);
+	if (null_output != INVALID_HANDLE_VALUE) CloseHandle(null_output);
+	if (movie_ffmpeg_input) { CloseHandle(movie_ffmpeg_input); movie_ffmpeg_input = NULL; }
+	if (movie_ffmpeg_process)
+	{
 		WaitForSingleObject(movie_ffmpeg_process, INFINITE);
 		CloseHandle(movie_ffmpeg_process); movie_ffmpeg_process = NULL;
-		movie_ffmpeg_recording = movie_video_recording = false;
-		free(movie_rgb_frame); movie_rgb_frame = NULL;
-		remove(movie_video_frames);
-		CONS_Alert(CONS_ERROR, "Couldn't capture mixed game audio.\n");
-		return MM_OFF;
 	}
-	movie_recording_start = I_GetPreciseTime();
-	CONS_Printf("Recording %dx%d at %d FPS. Final conversion runs after you stop.\n",
-		movie_capture_width, movie_capture_height, movie_capture_fps);
-	return gif ? MM_GIF : MM_VIDEO;
+	movie_native_recording = movie_native_pending = false;
+	M_FreeMovieCaptureBuffers();
+	if (reserved) { remove(movie_video_output); remove(movie_video_frames); }
+	return MM_OFF;
 }
 #endif
 
 static inline moviemode_t M_StartMovieVideo(const char *pathname)
 {
 #ifdef _WIN32
-	return M_StartMovieFFmpeg(pathname, false);
+	return M_StartMovieCapture(pathname, false);
 #else
 	(void)pathname;
 	CONS_Alert(CONS_ERROR, "Video + Sound is not available in this build.\n");
@@ -1643,21 +1697,21 @@ void M_GetMovieDiagnostics(char *buffer, size_t buffer_size)
 	if (!buffer || !buffer_size)
 		return;
 #ifdef _WIN32
-	if (movie_ffmpeg_recording)
+	if (movie_async_recording)
 	{
 		UINT8 queued;
 		EnterCriticalSection(&movie_frame_queue_lock);
 		queued = movie_frame_queue_count;
 		LeaveCriticalSection(&movie_frame_queue_lock);
 		snprintf(buffer, buffer_size,
-			"recording=%s capture=%dx%d@%d queue=%u/%u captures=%u "
+			"recording=%s encoder=%s encoder_pending=%d capture=%dx%d@%d queue=%u/%u captures=%u "
 			"timeline_frames=%llu repeated_frames=%llu queue_skips=%u encoder_failed=%d",
-			movie_ffmpeg_gif ? "gif" : "mp4", movie_capture_width,
+			movie_capture_gif ? "gif" : "mp4", movie_native_recording ? "windows" : "ffmpeg", movie_native_pending, movie_capture_width,
 			movie_capture_height, movie_capture_fps, queued,
 			(unsigned)MOVIE_FRAME_QUEUE_SIZE, movie_source_frames,
 			(unsigned long long)movie_frames_scheduled,
 			(unsigned long long)movie_repeated_frames, movie_capture_skips,
-			movie_frame_writer_failed || movie_ffmpeg_failed);
+			movie_frame_writer_failed || movie_capture_failed);
 		return;
 	}
 #endif
@@ -1699,7 +1753,7 @@ void M_StartMovie(void)
 			break;
 		case MM_GIF:
 #ifdef _WIN32
-			moviemode = M_StartMovieFFmpeg(pathname, true);
+			moviemode = M_StartMovieCapture(pathname, true);
 			if (moviemode != MM_OFF)
 				break;
 #endif
@@ -1718,7 +1772,7 @@ void M_StartMovie(void)
 	if (movie_video_recording)
 		CONS_Printf(M_GetText("Movie mode enabled (%s).\n"), "MP4 video + sound");
 #ifdef _WIN32
-	else if (movie_ffmpeg_recording && movie_ffmpeg_gif)
+	else if (movie_async_recording && movie_capture_gif)
 		CONS_Printf(M_GetText("Movie mode enabled (%s).\n"), "GIF (fast capture)");
 #endif
 	else if (moviemode == MM_APNG)
@@ -1740,8 +1794,51 @@ void M_SaveFrame(void)
 	const precise_t precision = I_GetPrecisePrecision();
 	const precise_t interval = precision / (UINT32)max(cv_gif_maxfps.value, 1);
 
+#ifdef _WIN32
+	if (movie_async_recording && movie_native_pending)
+	{
+		HRESULT result;
+		// Initialize on the writer and start the media timeline only when ready.
+		if (WaitForSingleObject(movie_native_ready, 0) != WAIT_OBJECT_0)
+			return;
+		movie_native_pending = false;
+		result = (HRESULT)InterlockedCompareExchange(&movie_native_result, 0, 0);
+		if (FAILED(result))
+		{
+			CONS_Alert(CONS_ERROR, "Windows video encoder could not start (0x%08lx). Try a lower recording resolution or check Windows media components.\n", (unsigned long)result);
+			M_StopMovie();
+			return;
+		}
+		movie_native_audio = I_StartMovieAudioCapture(movie_video_audio);
+		if (!movie_native_audio)
+			CONS_Alert(CONS_WARNING, "Game audio could not be captured; recording a silent video.\n");
+		movie_recording_start = now;
+		CONS_Printf("Recording %dx%d at %d FPS using the built-in Windows encoder.\n",
+			movie_capture_width, movie_capture_height, movie_capture_fps);
+	}
+#endif
 	if (movie_video_recording)
 		I_UpdateMovieAudioCapture();
+
+#ifdef _WIN32
+	if (movie_async_recording)
+	{
+		UINT64 desired_frames = 1;
+		if (precision && movie_recording_start && now > movie_recording_start)
+			desired_frames += ((UINT64)(now - movie_recording_start)
+				* (UINT64)movie_capture_fps) / precision;
+		if (desired_frames <= movie_frames_scheduled)
+			return;
+		if (movie_frame_writer_failed)
+			movie_capture_failed = true;
+		if (!movie_capture_failed && !M_QueueMovieFrame((UINT32)min(desired_frames - movie_frames_scheduled, (UINT64)UINT32_MAX)))
+		{
+			movie_capture_failed = true;
+			CONS_Alert(CONS_ERROR, "Recording stopped accepting frames; stop recording to keep the recoverable capture.\n");
+		}
+		return;
+	}
+#endif
 
 	/* Capture follows rendered frames rather than the 35 Hz game clock. This is
 	 * what makes 60 FPS recording possible with uncapped rendering. */
@@ -1761,27 +1858,6 @@ void M_SaveFrame(void)
 	else
 		movie_video_framedelay = 1;
 	movie_prevcapturetime = now;
-
-#ifdef _WIN32
-	if (movie_ffmpeg_recording)
-	{
-		UINT64 desired_frames = 1;
-		UINT64 pending_frames;
-		if (precision && movie_recording_start && now > movie_recording_start)
-			desired_frames += ((UINT64)(now - movie_recording_start)
-				* (UINT64)movie_capture_fps) / precision;
-		pending_frames = desired_frames > movie_frames_scheduled
-			? desired_frames - movie_frames_scheduled : 1;
-		if (movie_frame_writer_failed)
-			movie_ffmpeg_failed = true;
-		if (!movie_ffmpeg_failed && !M_QueueMovieFrame((UINT32)min(pending_frames, (UINT64)UINT32_MAX)))
-		{
-			movie_ffmpeg_failed = true;
-			CONS_Alert(CONS_ERROR, "Recording stopped accepting frames; stop recording to keep the recoverable capture.\n");
-		}
-		return;
-	}
-#endif
 
 	switch (moviemode)
 	{
@@ -1837,7 +1913,7 @@ void M_StopMovie(void)
 {
 #if NUMSCREENS > 2
 #ifdef _WIN32
-	if (movie_ffmpeg_recording)
+	if (movie_async_recording)
 	{
 		movie_encode_job_t *job;
 		if (movie_video_recording)
@@ -1849,25 +1925,43 @@ void M_StopMovie(void)
 		CloseHandle(movie_frame_writer_thread); movie_frame_writer_thread = NULL;
 		CloseHandle(movie_frame_queue_event); movie_frame_queue_event = NULL;
 		DeleteCriticalSection(&movie_frame_queue_lock);
-		CloseHandle(movie_ffmpeg_input);
+		if (movie_ffmpeg_input) CloseHandle(movie_ffmpeg_input);
 		movie_ffmpeg_input = NULL;
-		free(movie_rgb_frame);
-		movie_rgb_frame = NULL;
+		if (movie_native_ready) { CloseHandle(movie_native_ready); movie_native_ready = NULL; }
+		M_FreeMovieCaptureBuffers();
+		if (movie_native_recording && !movie_frames_scheduled)
+		{
+			// Cancelling before encoder startup must not leave an empty MP4.
+			remove(movie_video_frames);
+			remove(movie_video_audio);
+			remove(movie_video_output);
+			movie_native_recording = movie_native_audio = movie_native_pending = false;
+			movie_async_recording = false;
+			moviemode = MM_OFF;
+			CONS_Printf("Recording cancelled before the first frame.\n");
+			return;
+		}
 		job = malloc(sizeof *job);
 		if (job)
 		{
 			job->process = movie_ffmpeg_process;
+			job->native = movie_native_recording;
+			job->native_result = (HRESULT)InterlockedCompareExchange(&movie_native_result, 0, 0);
+			job->fps = movie_capture_fps;
 			strlcpy(job->frames, movie_video_frames, sizeof job->frames);
 			strlcpy(job->audio, movie_video_audio, sizeof job->audio);
 			strlcpy(job->output, movie_video_output, sizeof job->output);
-			job->gif = movie_ffmpeg_gif;
-			job->audio_enabled = !movie_ffmpeg_gif;
+			job->gif = movie_capture_gif;
+			job->audio_enabled = movie_native_recording && movie_native_audio;
 			job->timeline_frames = movie_frames_scheduled;
 			job->source_frames = movie_source_frames;
 			job->repeated_frames = movie_repeated_frames;
 			job->capture_skips = movie_capture_skips;
 #ifdef HAVE_THREADS
-			I_spawn_thread("movie finalizer", M_WaitForMovieEncode, job);
+			if (I_thread_is_stopped())
+				M_WaitForMovieEncode(job);
+			else
+				I_spawn_thread("movie finalizer", M_WaitForMovieEncode, job);
 #else
 			M_WaitForMovieEncode(job);
 #endif
@@ -1875,11 +1969,12 @@ void M_StopMovie(void)
 		}
 		else
 		{
-			CloseHandle(movie_ffmpeg_process);
+			if (movie_ffmpeg_process) CloseHandle(movie_ffmpeg_process);
 			CONS_Alert(CONS_ERROR, "Could not start the recording finalizer; kept %s\n", movie_video_frames);
 		}
 		movie_ffmpeg_process = NULL;
-		movie_ffmpeg_recording = movie_ffmpeg_gif = false;
+		movie_native_recording = movie_native_audio = movie_native_pending = false;
+		movie_async_recording = movie_capture_gif = false;
 		moviemode = MM_OFF;
 		CONS_Printf(M_GetText("Movie mode disabled.\n"));
 		return;
@@ -2060,7 +2155,8 @@ typedef struct
 } asyncscreenshot_t;
 
 static I_mutex asyncscreenshot_mutex;
-static asyncscreenshot_t *asyncscreenshot;
+static asyncscreenshot_t *asyncscreenshot_active;
+static asyncscreenshot_t *asyncscreenshot_pending;
 
 static void M_AsyncScreenshotWorker(void *userdata)
 {
@@ -2079,7 +2175,12 @@ static boolean M_AsyncScreenshotBusy(void)
 {
 	boolean busy;
 	I_lock_mutex(&asyncscreenshot_mutex);
-	busy = (asyncscreenshot != NULL);
+	/* Keep one maximum-compression job on the low-priority worker and allow one
+	 * already-captured image to wait behind it. This avoids rejecting a quick
+	 * second F8 press without making two zlib level-9 workers compete with the
+	 * game at once. */
+	busy = (asyncscreenshot_active != NULL
+		&& asyncscreenshot_pending != NULL);
 	I_unlock_mutex(asyncscreenshot_mutex);
 	return busy;
 }
@@ -2088,6 +2189,7 @@ static boolean M_StartAsyncScreenshot(const char *filename, const char *pathname
 	const char *freename, UINT8 *pixels, boolean paletted)
 {
 	asyncscreenshot_t *job = calloc(1, sizeof *job);
+	boolean startnow = false;
 	if (!job)
 		return false;
 
@@ -2107,34 +2209,44 @@ static boolean M_StartAsyncScreenshot(const char *filename, const char *pathname
 	M_CapturePNGText(&job->metadata, false);
 
 	I_lock_mutex(&asyncscreenshot_mutex);
-	if (asyncscreenshot)
+	if (asyncscreenshot_active && asyncscreenshot_pending)
 	{
 		I_unlock_mutex(asyncscreenshot_mutex);
 		free(job);
 		return false;
 	}
-	asyncscreenshot = job;
+	if (asyncscreenshot_active)
+		asyncscreenshot_pending = job;
+	else
+	{
+		asyncscreenshot_active = job;
+		startnow = true;
+	}
 	I_unlock_mutex(asyncscreenshot_mutex);
-	I_spawn_thread("png-screenshot", M_AsyncScreenshotWorker, job);
+	if (startnow)
+		I_spawn_thread("png-screenshot", M_AsyncScreenshotWorker, job);
 	return true;
 }
 
 void M_PollAsyncScreenshots(void)
 {
 	asyncscreenshot_t *finished = NULL;
+	asyncscreenshot_t *next = NULL;
 
-	if (!asyncscreenshot)
-		return;
 	I_lock_mutex(&asyncscreenshot_mutex);
-	if (asyncscreenshot && asyncscreenshot->done)
+	if (asyncscreenshot_active && asyncscreenshot_active->done)
 	{
-		finished = asyncscreenshot;
-		asyncscreenshot = NULL;
+		finished = asyncscreenshot_active;
+		asyncscreenshot_active = asyncscreenshot_pending;
+		asyncscreenshot_pending = NULL;
+		next = asyncscreenshot_active;
 	}
 	I_unlock_mutex(asyncscreenshot_mutex);
 
 	if (!finished)
 		return;
+	if (next)
+		I_spawn_thread("png-screenshot", M_AsyncScreenshotWorker, next);
 	if (finished->result)
 		CONS_Printf(M_GetText("Screen shot %s saved in %s\n"), finished->freename, finished->pathname);
 	else
@@ -2274,7 +2386,7 @@ void M_DoScreenShot(void)
 #if defined(USE_PNG) && defined(HAVE_THREADS)
 	if (moviemode != MM_SCREENSHOT && M_AsyncScreenshotBusy())
 	{
-		CONS_Alert(CONS_NOTICE, M_GetText("A screen shot is still being saved; try again in a moment.\n"));
+		CONS_Alert(CONS_NOTICE, M_GetText("Two screen shots are still being saved; try again in a moment.\n"));
 		return;
 	}
 #endif

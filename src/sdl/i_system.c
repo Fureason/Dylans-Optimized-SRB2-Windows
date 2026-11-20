@@ -219,12 +219,15 @@ static char returnWadPath[256];
 #include "../r_main.h" // Frame interpolation/uncapped
 #include "../r_fps.h"
 #include "../m_perfstats.h"
+#include "../m_custombuild.h"
 
 #ifdef MAC_ALERT
 #include "macosx/mac_alert.h"
 #endif
 
 #include "../d_main.h"
+
+#include "sdl_restart.inc"
 
 #ifdef _WIN32
 #define COMPANION_CONTROL_MAGIC 0x32425253UL
@@ -593,7 +596,7 @@ static void I_WriteCrashContext(INT32 signalnum)
 	length = snprintf(text, sizeof text,
 		"SRB2 V5.52 crash context\r\n"
 		"timestamp=%04u-%02u-%02u %02u:%02u:%02u.%03u\r\n"
-		"build=%s branch=%s revision=%s compiled=%s %s\r\n"
+		"build=%s custom_build=%s branch=%s revision=%s compiled=%s %s\r\n"
 		"signal=%d\r\nsigsegv_confirmed=%s\r\nlast_operation=%s\r\nlast_addon=%s\r\n"
 		"map=%d\r\ngametic=%u\r\nleveltime=%u\r\ngamestate=%d\r\n"
 		"renderer=%d\r\nresolution=%dx%d\r\n"
@@ -603,7 +606,7 @@ static void I_WriteCrashContext(INT32 signalnum)
 		"\r\nKeep this file together with the matching .RPT, .dmp, and executable.\r\n"
 		"A SIGSEGV/access violation cannot safely be ignored; prevention requires the failing stack and state.\r\n",
 		now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
-		VERSIONSTRING, compbranch, comprevision, compdate, comptime,
+		VERSIONSTRING, CUSTOM_BUILD_ID, compbranch, comprevision, compdate, comptime,
 		signalnum, signalnum == SIGSEGV ? "yes" : "no", crash_context, crash_last_addon,
 		gamemap, (unsigned)gametic,
 		(unsigned)leveltime, gamestate, rendermode, vid.width, vid.height,
@@ -830,7 +833,7 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 	length = snprintf(report, sizeof report,
 		"SRB2 V5.52 native x64 crash report\r\n"
 		"timestamp=%04u-%02u-%02u %02u:%02u:%02u.%03u\r\n"
-		"build=%s branch=%s revision=%s compiled=%s %s\r\n"
+		"build=%s custom_build=%s branch=%s revision=%s compiled=%s %s\r\n"
 		"process_id=%lu\r\nthread_id=%lu\r\nmode=%s\r\n"
 		"exception=0x%08lX\r\nreason=%s\r\n"
 		"likely_cause=%s\r\n"
@@ -851,7 +854,7 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 		"\r\nAll native crash files are kept together in the crashes folder.\r\n"
 		"Keep this .RPT, its .dmp, and crash-context.txt together. Build symbols are retained separately.\r\n",
 		now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
-		VERSIONSTRING, compbranch, comprevision, compdate, comptime,
+		VERSIONSTRING, CUSTOM_BUILD_ID, compbranch, comprevision, compdate, comptime,
 		(unsigned long)GetCurrentProcessId(), (unsigned long)GetCurrentThreadId(),
 		I_CrashProcessMode(),
 		(unsigned long)record->ExceptionCode, I_Win32ExceptionName(record->ExceptionCode),
@@ -887,10 +890,10 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 	 * report. Repeated exception/module/offset triples are the same crash family,
 	 * so this makes recurrence visible without accumulating large dump files. */
 	length = snprintf(history, sizeof history,
-		"%04u-%02u-%02u %02u:%02u:%02u exception=0x%08lX module=%s "
+		"%04u-%02u-%02u %02u:%02u:%02u build=%s exception=0x%08lX module=%s "
 		"offset=0x%llX map=%d gametic=%u operation=%s\r\n",
 		now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond,
-		(unsigned long)record->ExceptionCode, modulepath,
+		CUSTOM_BUILD_ID, (unsigned long)record->ExceptionCode, modulepath,
 		(unsigned long long)(modulebase ? (ULONG_PTR)record->ExceptionAddress - modulebase : 0),
 		gamemap, (unsigned)gametic, crash_context);
 	if (length > 0)
@@ -962,9 +965,10 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 	boolean expected_transition;
 	boolean window_manager_blocked;
 	SYSTEMTIME now;
-	char text[2048];
+	char text[2560];
 	char profile[768];
 	char movie[256];
+	char net_tics[256] = "";
 	int length;
 	size_t total = 0;
 	size_t freebytes;
@@ -1053,12 +1057,14 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 	PS_ArmHitchProfile();
 	PS_FormatHitchContext(profile, sizeof profile);
 	M_GetMovieDiagnostics(movie, sizeof movie);
+	if (operation && !strcmp(operation, "active frame (ticks/render/input/audio)"))
+		D_FormatNetTicHitch(net_tics, sizeof net_tics, started);
 
 	GetLocalTime(&now);
 	freebytes = I_GetFreeMem(&total);
 	length = snprintf(text, sizeof text,
 		"[%04u-%02u-%02u %02u:%02u:%02u.%03u] operation=%s elapsed_ms=%llu "
-		"map=%d gametic=%u leveltime=%u renderer=%d resolution=%dx%d "
+		"build=%s context=\"%.200s\" map=%d gametic=%u leveltime=%u renderer=%d resolution=%dx%d "
 		"fullscreen=%d vsync=%d fpscap=%d effective_cap=%u refresh_hz=%u "
 		"focused=%d netgame=%d server=%d players=%d nodes=%d "
 		"network_get_bps=%d network_send_bps=%d packet_loss=%.2f game_loss=%.2f "
@@ -1066,10 +1072,11 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 		"logic_ms=%.3f playerthink_ms=%.3f thinkers_ms=%.3f other_logic_ms=%.3f "
 		"lua_pre_ms=%.3f lua_think_ms=%.3f lua_post_ms=%.3f "
 		"process_bits=%u free_mib=%llu total_mib=%llu classification=%s "
-		"%s %s\r\n",
+		"%s %s%s\r\n",
 		now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
 		operation ? operation : "unknown", (unsigned long long)(elapsed_us / 1000ULL),
-		gamemap, (unsigned)gametic, (unsigned)leveltime, rendermode, vid.width, vid.height,
+		CUSTOM_BUILD_ID, crash_context, gamemap, (unsigned)gametic, (unsigned)leveltime,
+		rendermode, vid.width, vid.height,
 		cv_fullscreen.value, cv_vidwait.value, cv_fpscap.value, R_GetFramerateCap(),
 		I_GetRefreshRate(), !window_notinfocus, netgame, server,
 		D_NumPlayers(), D_NumNodes(false), getbps, sendbps, lostpercent, gamelostpercent,
@@ -1085,7 +1092,7 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 		(unsigned long long)(total >> 20),
 		expected_transition ? "expected-transition"
 			: (window_manager_blocked ? "windows-move-resize" : "live-hitch"),
-		profile, movie);
+		profile, movie, net_tics);
 	if (length > 0)
 	{
 		DWORD bytes = (DWORD)min((size_t)length, sizeof text - 1);
@@ -1150,7 +1157,7 @@ void I_ReportRemoteExit(const char *playername, INT32 node, boolean timedout,
 
 	length = snprintf(text, sizeof text,
 		"[%04u-%02u-%02u %02u:%02u:%02u.%03u]\r\n"
-		"player=%s\r\nnode=%d\r\nevent=%s\r\nremote_sigsegv=%s\r\n"
+		"build=%s\r\nplayer=%s\r\nnode=%d\r\nevent=%s\r\nremote_sigsegv=%s\r\n"
 		"map=%d\r\ngametic=%u\r\nleveltime=%u\r\nserver=%d\r\nrenderer=%d\r\n"
 		"ping_tics=%u\r\nping_ms_approx=%u\r\nnetwork_get_bps=%d\r\nnetwork_send_bps=%d\r\n"
 		"system_packet_loss_percent=%.3f\r\ngame_tic_loss_percent=%.3f\r\n"
@@ -1158,7 +1165,8 @@ void I_ReportRemoteExit(const char *playername, INT32 node, boolean timedout,
 		"node_tics_behind=%d\r\nlikely_reason=%s\r\n"
 		"explanation=SRB2 2.2.15 does not transmit a remote crash code, so the host can identify a timeout but cannot prove whether the remote process crashed.\r\n\r\n",
 		now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
-		playername ? playername : "unknown", node, timedout ? "connection-timeout" : "graceful-quit",
+		CUSTOM_BUILD_ID, playername ? playername : "unknown", node,
+		timedout ? "connection-timeout" : "graceful-quit",
 		timedout ? "unknown" : "not-indicated", gamemap, (unsigned)gametic,
 		(unsigned)leveltime, server, rendermode, (unsigned)ping_tics,
 		(unsigned)((ping_tics * 1000U) / TICRATE), getbps, sendbps,
@@ -3500,7 +3508,10 @@ void I_Quit(void)
 	/* prevent recursive I_Quit() */
 	if (quiting) goto death;
 	SDLforceUngrabMouse();
-	quiting = SDL_FALSE;
+	quiting = SDL_TRUE;
+	// Finish frames/audio before closing the mixer, renderer and workers.
+	if (moviemode != MM_OFF)
+		M_StopMovie();
 	M_SaveConfig(NULL); //save game config, cvars..
 	D_SaveBan(); // save the ban list
 	G_SaveGameData(clientGamedata); // Tails 12-08-2002
@@ -3534,6 +3545,9 @@ void I_Quit(void)
 		free(myargv); // Deallocate allocated memory
 death:
 	W_Shutdown();
+#ifdef HAVE_THREADS
+	I_release_thread_sync();
+#endif
 	exit(0);
 }
 
@@ -3653,6 +3667,9 @@ void I_Error(const char *error, ...)
 	// in case the fullscreen window blocks it for some absurd reason.
 
 	W_Shutdown();
+#ifdef HAVE_THREADS
+	I_release_thread_sync();
+#endif
 
 #if defined (PARANOIA) && defined (__CYGWIN__)
 	*(INT32 *)2 = 4; //Alam: Debug!

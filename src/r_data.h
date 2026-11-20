@@ -41,7 +41,8 @@ extern CV_PossibleValue_t Color_cons_t[];
 // I/O, setting up the stuff.
 void R_InitData(void);
 void R_PrecacheLevel(void);
-void R_ContinueLevelSpritePrecache(void);
+void R_ContinueLevelSpritePrecache(boolean blocking_warmup);
+void R_ContinueLevelWipePrecache(void);
 
 extern size_t flatmemory, spritememory, texturememory;
 

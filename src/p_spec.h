@@ -502,6 +502,7 @@ typedef enum
 // at game start
 void P_InitPicAnims(void);
 void P_ExpandTextureAnimationPresence(UINT8 *present, size_t count);
+void P_ExpandTextureAnimationUsage(UINT32 *usage, size_t count);
 
 // at map load
 void P_InitSpecials(void);

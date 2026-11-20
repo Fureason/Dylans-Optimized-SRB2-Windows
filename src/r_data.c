@@ -12,6 +12,10 @@
 /// \brief Preparation of data for rendering, generation of lookups, caching, retrieval by name
 
 #include "doomdef.h"
+
+#if defined(__SSE2__) || defined(_M_X64)
+#include <emmintrin.h>
+#endif
 #include "g_game.h"
 #include "i_system.h"
 #include "i_video.h"
@@ -27,6 +31,7 @@
 #include "w_wad.h"
 #include "z_zone.h"
 #include "p_setup.h" // levelflats
+#include "p_spec.h" // sector portal destinations
 #include "v_video.h" // pMasterPalette
 #include "f_finale.h" // wipes
 #include "byteptr.h"
@@ -1141,6 +1146,54 @@ extracolormap_t *R_AddColormaps(extracolormap_t *exc_augend, extracolormap_t *ex
 // utils3/qdata/images.c
 UINT8 NearestPaletteColor(UINT8 r, UINT8 g, UINT8 b, RGBA_t *palette)
 {
+#if defined(__SSE2__) || defined(_M_X64)
+	const __m128i zero = _mm_setzero_si128();
+	const __m128i rgbmask = _mm_set_epi16(0, -1, -1, -1, 0, -1, -1, -1);
+	const __m128i target = _mm_set_epi16(0, b, g, r, 0, b, g, r);
+	__m128i best = _mm_set1_epi32(256 * 256 * 4);
+	__m128i indices = zero;
+	INT32 distances[4], colors[4];
+	INT32 i, bestcolor = 0, bestdistortion = 256 * 256 * 4;
+
+	if (palette == NULL)
+		palette = pMasterPalette;
+	/* Four exact squared RGB distances at a time. Alpha never participates;
+	 * signed 16-bit differences and their 32-bit sums cannot overflow here. */
+	for (i = 0; i < 256; i += 4)
+	{
+		const __m128i packed = _mm_loadu_si128((const __m128i *)&palette[i]);
+		const __m128i lo = _mm_and_si128(rgbmask,
+			_mm_sub_epi16(_mm_unpacklo_epi8(packed, zero), target));
+		const __m128i hi = _mm_and_si128(rgbmask,
+			_mm_sub_epi16(_mm_unpackhi_epi8(packed, zero), target));
+		const __m128i losq = _mm_madd_epi16(lo, lo);
+		const __m128i hisq = _mm_madd_epi16(hi, hi);
+		const __m128i losum = _mm_add_epi32(losq,
+			_mm_shuffle_epi32(losq, _MM_SHUFFLE(2, 3, 0, 1)));
+		const __m128i hisum = _mm_add_epi32(hisq,
+			_mm_shuffle_epi32(hisq, _MM_SHUFFLE(2, 3, 0, 1)));
+		const __m128i distance = _mm_unpacklo_epi64(
+			_mm_shuffle_epi32(losum, _MM_SHUFFLE(2, 0, 2, 0)),
+			_mm_shuffle_epi32(hisum, _MM_SHUFFLE(2, 0, 2, 0)));
+		const __m128i better = _mm_cmpgt_epi32(best, distance);
+		const __m128i current = _mm_set_epi32(i+3, i+2, i+1, i);
+		best = _mm_or_si128(_mm_and_si128(better, distance),
+			_mm_andnot_si128(better, best));
+		indices = _mm_or_si128(_mm_and_si128(better, current),
+			_mm_andnot_si128(better, indices));
+	}
+	_mm_storeu_si128((__m128i *)distances, best);
+	_mm_storeu_si128((__m128i *)colors, indices);
+	for (i = 0; i < 4; i++)
+		/* Preserve the original first-palette-entry result for every tie. */
+		if (distances[i] < bestdistortion
+		|| (distances[i] == bestdistortion && colors[i] < bestcolor))
+		{
+			bestdistortion = distances[i];
+			bestcolor = colors[i];
+		}
+	return (UINT8)bestcolor;
+#else
 	int dr, dg, db;
 	int distortion, bestdistortion = 256 * 256 * 4, bestcolor = 0, i;
 
@@ -1165,6 +1218,7 @@ UINT8 NearestPaletteColor(UINT8 r, UINT8 g, UINT8 b, RGBA_t *palette)
 	}
 
 	return (UINT8)bestcolor;
+#endif
 }
 
 #ifdef EXTRACOLORMAPLUMPS
@@ -1264,11 +1318,29 @@ static size_t levelflatprecache_flat;
 static INT32 *levelflatpriority;
 static size_t levelflatpriority_count;
 static size_t levelflatpriority_index;
+static size_t leveltexturewipe_index;
+static size_t levelflatwipe_index;
+static boolean levelwipeprefertexture;
 static UINT8 levelprecachecooldown;
+static boolean levelprecacheprefertexture;
 
 #define LEVELTEXTURE_OPAQUE 1
 #define LEVELTEXTURE_MASKED 2
-#define LEVELGRAPHICS_LOCAL_PRIORITY_MAX 48
+#define LEVELGRAPHICS_LOCAL_PRIORITY_MAX 16
+#define LEVELGRAPHICS_FREQUENT_PRIORITY_MAX 12
+#define LEVELGRAPHICS_FREQUENT_SEARCH_START 64
+#define LEVELGRAPHICS_FREQUENT_INSERT_AFTER 54
+#define LEVELGRAPHICS_FREQUENT_MAX_PIXELS (512u * 1024u)
+/* Give assets that are individually expensive to decode/upload a small lane
+ * immediately after the spawn neighborhood. Five directly-used materials go
+ * first, followed by costly continuation frames, so a large animated backdrop
+ * is resident before it advances while ordinary huge room art still wins the
+ * front of the queue. */
+#define LEVELGRAPHICS_COSTLY_MIN_PIXELS (256u * 1024u)
+#define LEVELGRAPHICS_COSTLY_DIRECT_MAX 16
+#define LEVELGRAPHICS_COSTLY_DIRECT_FIRST 5
+#define LEVELGRAPHICS_COSTLY_ANIMATION_MAX 8
+#define LEVELGRAPHICS_COSTLY_FLAT_MAX 12
 /* Upload time is driven much more by decoded area than compressed file size.
  * Keep large custom artwork out of the live background warmer: a 9 KiB PNG can
  * still expand to a 1200x1000 texture and block the OpenGL driver for 40+ ms. */
@@ -1278,13 +1350,58 @@ static UINT8 levelprecachecooldown;
  * photographs must not turn a doorway hitch into a minute-long level load. */
 #define LEVELGRAPHICS_INITIAL_MAX_PIXELS (64u * 1024u * 1024u)
 #define LEVELGRAPHICS_INITIAL_MAX_SINGLE_PIXELS (8u * 1024u * 1024u)
-#define LEVELGRAPHICS_INITIAL_MAX_MILLISECONDS 900u
+#define LEVELGRAPHICS_INITIAL_MAX_MILLISECONDS 90u
+#define LEVELGRAPHICS_NETGAME_INITIAL_MAX_MILLISECONDS 220u
+/* Software can build composites lazily, just like OpenGL uploads textures
+ * lazily. Prepare only the spawn neighborhood during the blocking map load;
+ * the fixed title-card interval consumes the ranked remainder before play. */
+#define LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_PIXELS (16u * 1024u * 1024u)
+#define LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_SINGLE_PIXELS (8u * 1024u * 1024u)
+#define LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_MILLISECONDS 120u
 
 typedef struct
 {
 	INT32 graphic;
 	UINT32 references;
 } levelgraphicpriority_t;
+
+static UINT32 R_LevelGraphicPriorityScore(INT32 texture, UINT32 references,
+	boolean animationframe)
+{
+	UINT32 score = references;
+	if (texture >= 0 && texture < numtextures && textures[texture]
+	&& textures[texture]->width > 0 && textures[texture]->height > 0)
+	{
+		const size_t pixels = (size_t)textures[texture]->width
+			* (size_t)textures[texture]->height;
+		/* Decoded area predicts driver cost far better than compressed PNG size.
+		 * Composite 512x512 walls can cost more than ten milliseconds even when
+		 * referenced only once, so place them ahead of heavily repeated cheap
+		 * tiles while the title card can still hide their preparation. */
+		UINT32 sizebonus = (UINT32)(pixels / 1024u);
+		if (sizebonus > 4096u)
+			sizebonus = 4096u;
+		score += sizebonus;
+		/* Rebuilding a wall made from many patches repeats the full compositor
+		 * pass for every layer.  Give those walls an explicit rank boost so a
+		 * one-off composite (for example a detailed basement backdrop) is built
+		 * under the title card instead of on the first frame it enters view. */
+		if (textures[texture]->patchcount > 1)
+		{
+			UINT32 compositebonus = (UINT32)(textures[texture]->patchcount - 1)
+				* 256u;
+			if (compositebonus > 8192u)
+				compositebonus = 8192u;
+			score += compositebonus;
+		}
+	}
+	/* A continuation frame can be selected within a few tics despite having no
+	 * direct sidedef reference. A moderate bonus lifts costly frames like FIREC
+	 * without putting hundreds of tiny add-on animations ahead of IRLWALL. */
+	if (animationframe)
+		score += 48u;
+	return score;
+}
 
 static int R_CompareLevelGraphicPriority(const void *left, const void *right)
 {
@@ -1298,14 +1415,66 @@ static int R_CompareLevelGraphicPriority(const void *left, const void *right)
 	return a->graphic - b->graphic;
 }
 
-static void R_BuildLevelGraphicPriorities(void)
+static void R_QueueLocalPrecacheTexture(INT32 texture, UINT8 *seen)
+{
+	if (leveltexturepresent && texture >= 0 && texture < numtextures
+	&& leveltexturepresent[texture] && !seen[texture]
+	&& leveltexturepriority_count < LEVELGRAPHICS_LOCAL_PRIORITY_MAX)
+	{
+		seen[texture] = 1;
+		leveltexturepriority[leveltexturepriority_count++] = texture;
+	}
+}
+
+static void R_QueueLocalPrecacheFlat(INT32 flat, UINT8 *seen)
+{
+	if (levelflatprecachepresent && flat >= 0 && (size_t)flat < numlevelflats
+	&& levelflatprecachepresent[flat] && !seen[flat]
+	&& levelflatpriority_count < LEVELGRAPHICS_LOCAL_PRIORITY_MAX)
+	{
+		seen[flat] = 1;
+		levelflatpriority[levelflatpriority_count++] = flat;
+	}
+}
+
+static sector_t *R_PrecachePortalDestination(sectorportal_t *portal)
+{
+	if (!P_IsSectorPortalValid(portal))
+		return NULL;
+	switch (portal->type)
+	{
+	case SECPORTAL_LINE:
+		if (!portal->line.dest)
+			return NULL;
+		return portal->line.dest->frontsector
+			? portal->line.dest->frontsector : portal->line.dest->backsector;
+	case SECPORTAL_OBJECT:
+		return portal->mobj->subsector ? portal->mobj->subsector->sector : NULL;
+	case SECPORTAL_SKYBOX:
+		return skyboxmo[0]->subsector ? skyboxmo[0]->subsector->sector : NULL;
+	case SECPORTAL_FLOOR:
+	case SECPORTAL_CEILING:
+		return portal->sector;
+	default:
+		return NULL;
+	}
+}
+
+static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 {
 	sector_t **queue = NULL;
 	UINT8 *sectorseen = NULL, *textureseen = NULL, *flatseen = NULL, *depth = NULL;
 	UINT32 *textureusage = NULL, *flatusage = NULL;
 	levelgraphicpriority_t *texturecandidates = NULL, *flatcandidates = NULL;
+	INT32 frequenttextures[LEVELGRAPHICS_FREQUENT_PRIORITY_MAX];
+	INT32 costlydirect[LEVELGRAPHICS_COSTLY_DIRECT_MAX];
+	INT32 costlyanimation[LEVELGRAPHICS_COSTLY_ANIMATION_MAX];
+	INT32 costlyflats[LEVELGRAPHICS_COSTLY_FLAT_MAX];
 	sector_t *start;
-	size_t head = 0, tail = 0, i, candidatecount;
+	size_t head = 0, tail = 0, i, candidatecount, frequentcount = 0;
+	size_t costlydirectcount = 0, costlyanimationcount = 0;
+	size_t costlyflatcount = 0;
+	boolean frequentinserted = false;
 
 	free(leveltexturepriority);
 	leveltexturepriority = NULL;
@@ -1360,6 +1529,20 @@ static void R_BuildLevelGraphicPriorities(void)
 	sectorseen[start - sectors] = 1;
 	queue[tail] = start;
 	depth[tail++] = 0;
+	/* A skybox is rendered as another view every frame, but its sector is not
+	 * connected to the player's sector graph. Treat the active viewpoint as a
+	 * second spawn so its walls and animation frames are ready immediately. */
+	if (skyboxmo[0] && skyboxmo[0]->subsector
+	&& skyboxmo[0]->subsector->sector >= sectors
+	&& skyboxmo[0]->subsector->sector < sectors + numsectors
+	&& !sectorseen[skyboxmo[0]->subsector->sector - sectors]
+	&& tail < (size_t)numsectors)
+	{
+		sector_t *skyboxsector = skyboxmo[0]->subsector->sector;
+		sectorseen[skyboxsector - sectors] = 1;
+		queue[tail] = skyboxsector;
+		depth[tail++] = 0;
+	}
 	while (head < tail
 	&& (leveltexturepriority_count < LEVELGRAPHICS_LOCAL_PRIORITY_MAX
 		|| levelflatpriority_count < LEVELGRAPHICS_LOCAL_PRIORITY_MAX))
@@ -1367,20 +1550,48 @@ static void R_BuildLevelGraphicPriorities(void)
 		sector_t *sector = queue[head];
 		const UINT8 sectordepth = depth[head++];
 		INT32 localflats[2];
+		ffloor_t *rover;
+		UINT8 plane;
+
+		/* Portal views can expose a room with no ordinary shared boundary. Keep
+		 * the same bounded walk and visited set, including nested portal loops. */
+		if (sectordepth < 2)
+			for (plane = 0; plane < 2; plane++)
+			{
+				sector_t *next = R_PrecachePortalDestination(plane
+					? P_SectorGetCeilingPortal(sector) : P_SectorGetFloorPortal(sector));
+				if (next && next >= sectors && next < sectors + numsectors
+				&& !sectorseen[next - sectors] && tail < (size_t)numsectors)
+				{
+					sectorseen[next - sectors] = 1;
+					queue[tail] = next;
+					depth[tail++] = sectordepth + 1;
+				}
+			}
 
 		localflats[0] = sector->floorpic;
 		localflats[1] = sector->ceilingpic;
 		for (i = 0; i < 2; i++)
+			R_QueueLocalPrecacheFlat(localflats[i], flatseen);
+
+		/* FOF artwork belongs to its control sector, often far outside this
+		 * neighborhood. Rank the materials actually projected into this room. */
+		for (rover = sector->ffloors; rover; rover = rover->next)
 		{
-			const INT32 flat = localflats[i];
-			if (levelflatprecachepresent && flat >= 0
-			&& (size_t)flat < numlevelflats && levelflatprecachepresent[flat]
-			&& !flatseen[flat]
-			&& levelflatpriority_count < LEVELGRAPHICS_LOCAL_PRIORITY_MAX)
+			if (!(rover->fofflags & FOF_EXISTS))
+				continue;
+			if (rover->fofflags & FOF_RENDERPLANES)
 			{
-				flatseen[flat] = 1;
-				levelflatpriority[levelflatpriority_count++] = flat;
+				if (rover->toppic)
+					R_QueueLocalPrecacheFlat(*rover->toppic, flatseen);
+				if (rover->bottompic)
+					R_QueueLocalPrecacheFlat(*rover->bottompic, flatseen);
 			}
+			if ((rover->fofflags & FOF_RENDERSIDES) && rover->master
+			&& rover->master->sidenum[0] != NO_SIDEDEF
+			&& rover->master->sidenum[0] < numsides)
+				R_QueueLocalPrecacheTexture(
+					sides[rover->master->sidenum[0]].midtexture, textureseen);
 		}
 
 		for (i = 0; i < sector->linecount; i++)
@@ -1403,13 +1614,7 @@ static void R_BuildLevelGraphicPriorities(void)
 				for (candidate = 0; candidate < 3; candidate++)
 				{
 					const INT32 texture = candidates[candidate];
-					if (leveltexturepresent && texture >= 0 && texture < numtextures
-					&& leveltexturepresent[texture] && !textureseen[texture]
-					&& leveltexturepriority_count < LEVELGRAPHICS_LOCAL_PRIORITY_MAX)
-					{
-						textureseen[texture] = 1;
-						leveltexturepriority[leveltexturepriority_count++] = texture;
-					}
+					R_QueueLocalPrecacheTexture(texture, textureseen);
 				}
 			}
 
@@ -1427,10 +1632,12 @@ static void R_BuildLevelGraphicPriorities(void)
 			}
 		}
 	}
-
 	/* Rank the rest by actual map usage. This brings shared room materials and
 	 * large, repeated walls (such as TDF's basement IRLWALL) ahead of one-off
-	 * photographs without hard-coding any add-on names. */
+	 * photographs without hard-coding any add-on names. Animation frames inherit
+	 * direct wall usage and also receive a decoded-area bonus below, which keeps
+	 * costly frames such as FIREC early without letting a large animation range
+	 * bypass the usage ranking entirely. */
 	for (i = 0; i < numsides; i++)
 	{
 		const INT32 candidates[3] = {sides[i].toptexture,
@@ -1444,33 +1651,10 @@ static void R_BuildLevelGraphicPriorities(void)
 				textureusage[texture]++;
 		}
 	}
-	candidatecount = 0;
-	for (i = 0; leveltexturepresent && i < (size_t)numtextures; i++)
-		if (leveltexturepresent[i] && textureusage[i])
-		{
-			texturecandidates[candidatecount].graphic = (INT32)i;
-			texturecandidates[candidatecount++].references = textureusage[i];
-		}
-	qsort(texturecandidates, candidatecount, sizeof (*texturecandidates),
-		R_CompareLevelGraphicPriority);
-	for (i = 0; i < candidatecount; i++)
-	{
-		const INT32 texture = texturecandidates[i].graphic;
-		if (!textureseen[texture])
-		{
-			textureseen[texture] = 1;
-			leveltexturepriority[leveltexturepriority_count++] = texture;
-		}
-	}
-	/* Animation frames can be marked present without appearing directly on a
-	 * sidedef. Keep them queued after directly referenced materials. */
-	for (i = 0; leveltexturepresent && i < (size_t)numtextures; i++)
-		if (leveltexturepresent[i] && !textureseen[i])
-			leveltexturepriority[leveltexturepriority_count++] = (INT32)i;
-
 	for (i = 0; i < (size_t)numsectors; i++)
 	{
 		const INT32 candidates[2] = {sectors[i].floorpic, sectors[i].ceilingpic};
+		ffloor_t *rover;
 		UINT8 candidate;
 		for (candidate = 0; candidate < 2; candidate++)
 		{
@@ -1479,16 +1663,203 @@ static void R_BuildLevelGraphicPriorities(void)
 			&& (size_t)flat < numlevelflats && levelflatprecachepresent[flat])
 				flatusage[flat]++;
 		}
+		/* FOF planes are not sector floor/ceiling fields, but they can dominate a
+		 * room and use the same art as their translucent sides. Include them in
+		 * both flat and matching-wall priority calculations. */
+		for (rover = sectors[i].ffloors; rover; rover = rover->next)
+		{
+			INT32 roverflats[2];
+			if (!(rover->fofflags & FOF_EXISTS)
+			|| !(rover->fofflags & FOF_RENDERPLANES))
+				continue;
+			roverflats[0] = rover->toppic ? *rover->toppic : -1;
+			roverflats[1] = rover->bottompic ? *rover->bottompic : -1;
+			for (candidate = 0; candidate < 2; candidate++)
+				if (levelflatprecachepresent && roverflats[candidate] >= 0
+				&& (size_t)roverflats[candidate] < numlevelflats
+				&& levelflatprecachepresent[roverflats[candidate]])
+					/* Transparent planes are drawn in a second ordered pass and often
+					 * reuse their art on the sides. Weight them like several ordinary
+					 * sector references so first-room/basement FOFs warm early. */
+					flatusage[roverflats[candidate]] += 8;
+		}
 	}
+	/* Copy direct wall frequency across each animation before adding flat/FOF
+	 * boosts. Otherwise one dual-use texture can accidentally give every frame
+	 * in a large custom animation the same huge priority as itself. */
+	P_ExpandTextureAnimationUsage(textureusage, (size_t)numtextures);
+	/* A graphic can serve as both a level flat and a wall/FOF-side texture.
+	 * Carry its flat frequency into the wall queue so both GPU variants are
+	 * prepared together; TDF's IRLWALL corridor uses exactly this layout. */
+	for (i = 0; leveltexturepresent && i < numlevelflats; i++)
+		if (flatusage[i])
+		{
+			const INT32 flattexture = levelflats[i].texture_id;
+			const INT32 walltexture =
+				R_CheckTextureNumForName(levelflats[i].name);
+			if (flattexture >= 0 && flattexture < numtextures
+			&& leveltexturepresent[flattexture])
+				textureusage[flattexture] += flatusage[i] * 32u;
+			/* Flats and wall textures with the same resource name can have distinct
+			 * IDs. Boost the actual wall ID as well as the flat's backing texture. */
+			if (walltexture >= 0 && walltexture < numtextures
+			&& walltexture != flattexture && leveltexturepresent[walltexture])
+				textureusage[walltexture] += flatusage[i] * 32u;
+		}
+	candidatecount = 0;
+	for (i = 0; leveltexturepresent && i < (size_t)numtextures; i++)
+		if (leveltexturepresent[i] && textureusage[i])
+		{
+			texturecandidates[candidatecount].graphic = (INT32)i;
+			texturecandidates[candidatecount++].references =
+				R_LevelGraphicPriorityScore((INT32)i, textureusage[i],
+					animationframes && animationframes[i]);
+		}
+	qsort(texturecandidates, candidatecount, sizeof (*texturecandidates),
+		R_CompareLevelGraphicPriority);
+	/* The general score intentionally favors repeated cheap walls, but a single
+	 * 1000x1000+ upload can still freeze a live frame for 40-70 ms. Pull a tightly
+	 * bounded set of costly map textures forward without naming add-on assets. */
+	for (i = 0; i < candidatecount; i++)
+	{
+		const INT32 texture = texturecandidates[i].graphic;
+		size_t pixels;
+		if (textureseen[texture] || !textures[texture]
+		|| textures[texture]->width <= 0 || textures[texture]->height <= 0)
+			continue;
+		pixels = (size_t)textures[texture]->width
+			* (size_t)textures[texture]->height;
+		if (pixels < LEVELGRAPHICS_COSTLY_MIN_PIXELS)
+			continue;
+		if (animationframes && animationframes[texture])
+		{
+			if (costlyanimationcount < LEVELGRAPHICS_COSTLY_ANIMATION_MAX)
+				costlyanimation[costlyanimationcount++] = texture;
+		}
+		else if (costlydirectcount < LEVELGRAPHICS_COSTLY_DIRECT_MAX)
+			costlydirect[costlydirectcount++] = texture;
+	}
+	for (i = 0; i < costlydirectcount
+	&& i < LEVELGRAPHICS_COSTLY_DIRECT_FIRST; i++)
+	{
+		textureseen[costlydirect[i]] = 1;
+		leveltexturepriority[leveltexturepriority_count++] = costlydirect[i];
+	}
+	for (i = 0; i < costlyanimationcount; i++)
+	{
+		textureseen[costlyanimation[i]] = 1;
+		leveltexturepriority[leveltexturepriority_count++] = costlyanimation[i];
+	}
+	for (i = LEVELGRAPHICS_COSTLY_DIRECT_FIRST; i < costlydirectcount; i++)
+	{
+		textureseen[costlydirect[i]] = 1;
+		leveltexturepriority[leveltexturepriority_count++] = costlydirect[i];
+	}
+	/* Reserve a narrow lane for cheap, frequently referenced materials that the
+	 * decoded-area score placed deep in the list. Selecting from the tail avoids
+	 * duplicating work already due early, and inserting the lane after the first
+	 * room-sized batch preserves priority for spawn and other expensive nearby
+	 * artwork. The lane is capped tightly, so an animated set cannot dominate it. */
+	while (frequentcount < LEVELGRAPHICS_FREQUENT_PRIORITY_MAX)
+	{
+		INT32 besttexture = -1;
+		UINT32 bestreferences = 0;
+		size_t candidate, selected;
+		for (candidate = LEVELGRAPHICS_FREQUENT_SEARCH_START;
+		candidate < candidatecount; candidate++)
+		{
+			const INT32 texture = texturecandidates[candidate].graphic;
+			boolean alreadyselected = false;
+			for (selected = 0; selected < frequentcount; selected++)
+				if (frequenttextures[selected] == texture)
+				{
+					alreadyselected = true;
+					break;
+				}
+			if (alreadyselected || textureseen[texture] || !textures[texture]
+			|| textures[texture]->width <= 0 || textures[texture]->height <= 0
+			|| (size_t)textures[texture]->width
+				* (size_t)textures[texture]->height
+					> LEVELGRAPHICS_FREQUENT_MAX_PIXELS)
+				continue;
+			if (besttexture < 0 || textureusage[texture] > bestreferences)
+			{
+				besttexture = texture;
+				bestreferences = textureusage[texture];
+			}
+		}
+		if (besttexture < 0)
+			break;
+		frequenttextures[frequentcount++] = besttexture;
+	}
+	for (i = 0; i < candidatecount; i++)
+	{
+		const INT32 texture = texturecandidates[i].graphic;
+		if (!frequentinserted
+		&& leveltexturepriority_count >= LEVELGRAPHICS_FREQUENT_INSERT_AFTER)
+		{
+			size_t selected;
+			for (selected = 0; selected < frequentcount; selected++)
+			{
+				const INT32 frequenttexture = frequenttextures[selected];
+				if (!textureseen[frequenttexture])
+				{
+					textureseen[frequenttexture] = 1;
+					leveltexturepriority[leveltexturepriority_count++]
+						= frequenttexture;
+				}
+			}
+			frequentinserted = true;
+		}
+		if (!textureseen[texture])
+		{
+			textureseen[texture] = 1;
+			leveltexturepriority[leveltexturepriority_count++] = texture;
+		}
+	}
+	if (!frequentinserted)
+		for (i = 0; i < frequentcount; i++)
+			if (!textureseen[frequenttextures[i]])
+			{
+				textureseen[frequenttextures[i]] = 1;
+				leveltexturepriority[leveltexturepriority_count++]
+					= frequenttextures[i];
+			}
+	/* Keep a fallback for runtime-added or unusual indirect map graphics not
+	 * covered by the local, animation, sidedef, or flat-derived rankings. */
+	for (i = 0; leveltexturepresent && i < (size_t)numtextures; i++)
+		if (leveltexturepresent[i] && !textureseen[i])
+			leveltexturepriority[leveltexturepriority_count++] = (INT32)i;
 	candidatecount = 0;
 	for (i = 0; levelflatprecachepresent && i < numlevelflats; i++)
 		if (levelflatprecachepresent[i] && flatusage[i])
 		{
 			flatcandidates[candidatecount].graphic = (INT32)i;
-			flatcandidates[candidatecount++].references = flatusage[i];
+			flatcandidates[candidatecount++].references =
+				R_LevelGraphicPriorityScore(levelflats[i].texture_id,
+					flatusage[i], false);
 		}
 	qsort(flatcandidates, candidatecount, sizeof (*flatcandidates),
 		R_CompareLevelGraphicPriority);
+	for (i = 0; i < candidatecount
+	&& costlyflatcount < LEVELGRAPHICS_COSTLY_FLAT_MAX; i++)
+	{
+		const INT32 flat = flatcandidates[i].graphic;
+		const INT32 texture = levelflats[flat].texture_id;
+		if (flatseen[flat] || texture < 0 || texture >= numtextures
+		|| !textures[texture] || textures[texture]->width <= 0
+		|| textures[texture]->height <= 0
+		|| (size_t)textures[texture]->width
+			* (size_t)textures[texture]->height
+				< LEVELGRAPHICS_COSTLY_MIN_PIXELS)
+			continue;
+		costlyflats[costlyflatcount++] = flat;
+	}
+	for (i = 0; i < costlyflatcount; i++)
+	{
+		flatseen[costlyflats[i]] = 1;
+		levelflatpriority[levelflatpriority_count++] = costlyflats[i];
+	}
 	for (i = 0; i < candidatecount; i++)
 	{
 		const INT32 flat = flatcandidates[i].graphic;
@@ -1501,7 +1872,6 @@ static void R_BuildLevelGraphicPriorities(void)
 	for (i = 0; levelflatprecachepresent && i < numlevelflats; i++)
 		if (levelflatprecachepresent[i] && !flatseen[i])
 			levelflatpriority[levelflatpriority_count++] = (INT32)i;
-
 done:
 	free(queue);
 	free(depth);
@@ -1524,6 +1894,200 @@ done:
 	}
 }
 
+static boolean R_PrewarmSoftwareLevelTextureBounded(INT32 texture,
+	size_t maxpixels, size_t *remaining, boolean retire_oversize)
+{
+	texture_t *definition;
+	size_t pixels;
+
+	if (!leveltexturepresent || texture < 0 || texture >= numtextures
+	|| !leveltexturepresent[texture])
+		return false;
+	if (!(definition = textures[texture])
+	|| definition->width <= 0 || definition->height <= 0)
+	{
+		leveltexturepresent[texture] = 0;
+		return false;
+	}
+
+	pixels = (size_t)definition->width * (size_t)definition->height;
+	if (pixels > maxpixels || (remaining && pixels > *remaining))
+	{
+		if (retire_oversize)
+			leveltexturepresent[texture] = 0;
+		return false;
+	}
+
+	if (!texturecache[texture])
+		R_GenerateTexture((size_t)texture);
+	leveltexturepresent[texture] = 0;
+	if (remaining)
+		*remaining -= pixels;
+	return true;
+}
+
+static boolean R_PrewarmSoftwareLevelFlatBounded(size_t flat,
+	size_t maxpixels, size_t *remaining, boolean retire_oversize)
+{
+	levelflat_t *levelflat;
+	texture_t *definition;
+	INT32 translated;
+	size_t pixels;
+
+	if (!levelflatprecachepresent || flat >= numlevelflats
+	|| !levelflatprecachepresent[flat])
+		return false;
+
+	levelflat = &levelflats[flat];
+	if (levelflat->type == LEVELFLAT_NONE || levelflat->texture_id < 0
+	|| levelflat->texture_id >= numtextures)
+	{
+		levelflatprecachepresent[flat] = 0;
+		return false;
+	}
+	translated = texturetranslation[levelflat->texture_id];
+	if (translated < 0 || translated >= numtextures
+	|| !(definition = textures[translated])
+	|| definition->width <= 0 || definition->height <= 0)
+	{
+		levelflatprecachepresent[flat] = 0;
+		return false;
+	}
+
+	pixels = (size_t)definition->width * (size_t)definition->height;
+	if (pixels > maxpixels || (remaining && pixels > *remaining))
+	{
+		if (retire_oversize)
+			levelflatprecachepresent[flat] = 0;
+		return false;
+	}
+
+	if (!definition->flat)
+		R_GetFlat(levelflat);
+	levelflatprecachepresent[flat] = 0;
+	if (remaining)
+		*remaining -= pixels;
+	return true;
+}
+
+static boolean R_PrewarmNextSoftwareLevelTexture(size_t maxpixels)
+{
+	while (leveltexturepriority
+	&& leveltexturepriority_index < leveltexturepriority_count)
+	{
+		const INT32 texture = leveltexturepriority[leveltexturepriority_index];
+		if (R_PrewarmSoftwareLevelTextureBounded(texture, maxpixels, NULL, true))
+			return true;
+		if (!leveltexturepresent || !leveltexturepresent[texture])
+			leveltexturepriority_index++;
+	}
+	if (leveltexturepriority
+	&& leveltexturepriority_index >= leveltexturepriority_count)
+	{
+		free(leveltexturepriority);
+		leveltexturepriority = NULL;
+		leveltexturepriority_count = leveltexturepriority_index = 0;
+	}
+
+	while (leveltexturepresent
+	&& leveltextureprecache_texture < (size_t)numtextures)
+	{
+		if (!leveltexturepresent[leveltextureprecache_texture])
+		{
+			leveltextureprecache_texture++;
+			continue;
+		}
+		if (R_PrewarmSoftwareLevelTextureBounded(
+			(INT32)leveltextureprecache_texture, maxpixels, NULL, true))
+			return true;
+		if (!leveltexturepresent[leveltextureprecache_texture])
+			leveltextureprecache_texture++;
+	}
+	if (leveltexturepresent
+	&& leveltextureprecache_texture >= (size_t)numtextures)
+	{
+		free(leveltexturepresent);
+		leveltexturepresent = NULL;
+	}
+	return false;
+}
+
+static boolean R_PrewarmNextSoftwareLevelFlat(size_t maxpixels)
+{
+	while (levelflatpriority
+	&& levelflatpriority_index < levelflatpriority_count)
+	{
+		const INT32 flat = levelflatpriority[levelflatpriority_index];
+		if (R_PrewarmSoftwareLevelFlatBounded((size_t)flat,
+			maxpixels, NULL, true))
+			return true;
+		if (!levelflatprecachepresent || !levelflatprecachepresent[flat])
+			levelflatpriority_index++;
+	}
+	if (levelflatpriority
+	&& levelflatpriority_index >= levelflatpriority_count)
+	{
+		free(levelflatpriority);
+		levelflatpriority = NULL;
+		levelflatpriority_count = levelflatpriority_index = 0;
+	}
+
+	while (levelflatprecachepresent
+	&& levelflatprecache_flat < numlevelflats)
+	{
+		if (!levelflatprecachepresent[levelflatprecache_flat])
+		{
+			levelflatprecache_flat++;
+			continue;
+		}
+		if (R_PrewarmSoftwareLevelFlatBounded(levelflatprecache_flat,
+			maxpixels, NULL, true))
+			return true;
+		if (!levelflatprecachepresent[levelflatprecache_flat])
+			levelflatprecache_flat++;
+	}
+	if (levelflatprecachepresent && levelflatprecache_flat >= numlevelflats)
+	{
+		free(levelflatprecachepresent);
+		levelflatprecachepresent = NULL;
+	}
+	return false;
+}
+
+static void R_PrewarmInitialSoftwareLevelGraphics(void)
+{
+	size_t remaining = LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_PIXELS;
+	size_t texturepriority = 0, flatpriority = 0;
+	const size_t texturelimit = leveltexturepriority_count;
+	const size_t flatlimit = levelflatpriority_count;
+	const precise_t started = I_GetPreciseTime();
+	const precise_t deadline = started + (I_GetPrecisePrecision()
+		* LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_MILLISECONDS) / 1000u;
+
+	/* Start with the spawn/skybox neighborhood, then use any time left on the
+	 * globally ranked list. This catches a heavily reused nearby-room material
+	 * such as TDF's basement wall without returning to the old all-map pause. */
+	while ((texturepriority < texturelimit || flatpriority < flatlimit)
+	&& remaining && I_GetPreciseTime() < deadline)
+	{
+		if (leveltexturepriority && texturepriority < texturelimit)
+		{
+			const INT32 texture = leveltexturepriority[texturepriority++];
+			R_PrewarmSoftwareLevelTextureBounded(texture,
+				LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_SINGLE_PIXELS,
+				&remaining, false);
+		}
+		if (levelflatpriority && flatpriority < flatlimit
+		&& remaining && I_GetPreciseTime() < deadline)
+		{
+			const INT32 flat = levelflatpriority[flatpriority++];
+			R_PrewarmSoftwareLevelFlatBounded((size_t)flat,
+				LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_SINGLE_PIXELS,
+				&remaining, false);
+		}
+	}
+}
+
 #ifdef HWRENDER
 static boolean R_PrewarmLevelTextureBounded(INT32 texture, size_t maxpixels,
 	size_t *remaining, boolean retire_oversize)
@@ -1539,7 +2103,9 @@ static boolean R_PrewarmLevelTextureBounded(INT32 texture, size_t maxpixels,
 	if (!variants)
 		return false;
 
-	translated = texturetranslation[texture];
+	/* Queue entries already include every used animation frame. Warm that exact
+	 * frame instead of translating all of them back to the one active at tic 0. */
+	translated = texture;
 	if (translated < 0 || translated >= numtextures
 	|| !(definition = textures[translated])
 	|| definition->width <= 0 || definition->height <= 0)
@@ -1574,12 +2140,6 @@ static boolean R_PrewarmLevelTextureBounded(INT32 texture, size_t maxpixels,
 	return true;
 }
 
-static boolean R_PrewarmLevelTexture(INT32 texture)
-{
-	return R_PrewarmLevelTextureBounded(texture,
-		LEVELTEXTURE_BACKGROUND_MAX_PIXELS, NULL, true);
-}
-
 static boolean R_PrewarmLevelFlatBounded(size_t flat, size_t maxpixels,
 	size_t *remaining, boolean retire_oversize)
 {
@@ -1603,7 +2163,7 @@ static boolean R_PrewarmLevelFlatBounded(size_t flat, size_t maxpixels,
 		return false;
 	}
 
-	translated = texturetranslation[levelflat->texture_id];
+	translated = levelflat->texture_id;
 	if (translated < 0 || translated >= numtextures
 	|| !(definition = textures[translated])
 	|| definition->width <= 0 || definition->height <= 0)
@@ -1635,10 +2195,115 @@ static boolean R_PrewarmLevelFlatBounded(size_t flat, size_t maxpixels,
 	return true;
 }
 
-static boolean R_PrewarmLevelFlat(size_t flat)
+static boolean R_PrewarmNextLevelFlat(size_t maxpixels)
 {
-	return R_PrewarmLevelFlatBounded(flat,
-		LEVELTEXTURE_BACKGROUND_MAX_PIXELS, NULL, true);
+	while (levelflatpriority
+	&& levelflatpriority_index < levelflatpriority_count)
+	{
+		const INT32 flat = levelflatpriority[levelflatpriority_index];
+		if (R_PrewarmLevelFlatBounded((size_t)flat, maxpixels, NULL, true))
+			return true;
+		if (!levelflatprecachepresent || !levelflatprecachepresent[flat])
+			levelflatpriority_index++;
+	}
+	if (levelflatpriority
+	&& levelflatpriority_index >= levelflatpriority_count)
+	{
+		free(levelflatpriority);
+		levelflatpriority = NULL;
+		levelflatpriority_count = levelflatpriority_index = 0;
+	}
+
+	while (levelflatprecachepresent
+	&& levelflatprecache_flat < numlevelflats)
+	{
+		if (!levelflatprecachepresent[levelflatprecache_flat])
+		{
+			levelflatprecache_flat++;
+			continue;
+		}
+		if (R_PrewarmLevelFlatBounded(levelflatprecache_flat,
+			maxpixels, NULL, true))
+			return true;
+		if (!levelflatprecachepresent[levelflatprecache_flat])
+			levelflatprecache_flat++;
+	}
+	if (levelflatprecachepresent && levelflatprecache_flat >= numlevelflats)
+	{
+		free(levelflatprecachepresent);
+		levelflatprecachepresent = NULL;
+	}
+	return false;
+}
+
+static boolean R_PrewarmNextLevelTexture(size_t maxpixels)
+{
+	while (leveltexturepriority
+	&& leveltexturepriority_index < leveltexturepriority_count)
+	{
+		const INT32 texture = leveltexturepriority[leveltexturepriority_index];
+		if (R_PrewarmLevelTextureBounded(texture, maxpixels, NULL, true))
+			return true;
+		if (!leveltexturepresent || !leveltexturepresent[texture])
+			leveltexturepriority_index++;
+	}
+	if (leveltexturepriority
+	&& leveltexturepriority_index >= leveltexturepriority_count)
+	{
+		free(leveltexturepriority);
+		leveltexturepriority = NULL;
+		leveltexturepriority_count = leveltexturepriority_index = 0;
+	}
+
+	while (leveltexturepresent
+	&& leveltextureprecache_texture < (size_t)numtextures)
+	{
+		if (!leveltexturepresent[leveltextureprecache_texture])
+		{
+			leveltextureprecache_texture++;
+			continue;
+		}
+		if (R_PrewarmLevelTextureBounded((INT32)leveltextureprecache_texture,
+			maxpixels, NULL, true))
+			return true;
+		if (!leveltexturepresent[leveltextureprecache_texture])
+			leveltextureprecache_texture++;
+	}
+	if (leveltexturepresent
+	&& leveltextureprecache_texture >= (size_t)numtextures)
+	{
+		free(leveltexturepresent);
+		leveltexturepresent = NULL;
+	}
+	return false;
+}
+
+static boolean R_PrewarmNextWipeTexture(void)
+{
+	while (leveltexturepriority && leveltexturepresent
+	&& leveltexturewipe_index < leveltexturepriority_count)
+	{
+		const INT32 texture = leveltexturepriority[leveltexturewipe_index];
+		if (R_PrewarmLevelTextureBounded(texture, 512u * 1024u, NULL, false))
+			return true;
+		/* Leave oversized assets in the ordinary queues. A later blocking
+		 * title card can still prepare them; the wipe only visits this index. */
+		leveltexturewipe_index++;
+	}
+	return false;
+}
+
+static boolean R_PrewarmNextWipeFlat(void)
+{
+	while (levelflatpriority && levelflatprecachepresent
+	&& levelflatwipe_index < levelflatpriority_count)
+	{
+		const INT32 flat = levelflatpriority[levelflatwipe_index];
+		if (R_PrewarmLevelFlatBounded((size_t)flat, 512u * 1024u, NULL, false))
+			return true;
+		levelflatwipe_index++;
+	}
+	return false;
 }
 
 static void R_PrewarmInitialLevelGraphics(void)
@@ -1646,9 +2311,16 @@ static void R_PrewarmInitialLevelGraphics(void)
 	size_t remaining = LEVELGRAPHICS_INITIAL_MAX_PIXELS;
 	size_t texturepriority = 0, flatpriority = 0;
 	size_t texture = 0, flat = 0;
+	/* A listen server cannot use the fixed pre-level title-card loop, because
+	 * simulation and network traffic are already live. Give its bounded map-load
+	 * pass a little more room so important current-map art is resident before
+	 * simulation starts, without returning to an unbounded all-asset pause. */
+	const UINT32 maxmilliseconds = netgame
+		? LEVELGRAPHICS_NETGAME_INITIAL_MAX_MILLISECONDS
+		: LEVELGRAPHICS_INITIAL_MAX_MILLISECONDS;
 	const precise_t started = I_GetPreciseTime();
 	const precise_t deadline = started
-		+ (I_GetPrecisePrecision() * LEVELGRAPHICS_INITIAL_MAX_MILLISECONDS) / 1000u;
+		+ (I_GetPrecisePrecision() * maxmilliseconds) / 1000u;
 
 #define INITIAL_PREWARM_TIME_LEFT() (I_GetPreciseTime() < deadline)
 
@@ -1679,7 +2351,6 @@ static void R_PrewarmInitialLevelGraphics(void)
 					break;
 		}
 	}
-
 	/* The ranked lists contain every known map graphic, but keep a linear fallback
 	 * for assets added at runtime while setup is in progress. */
 	while ((leveltexturepresent && texture < (size_t)numtextures)
@@ -1712,11 +2383,51 @@ static void R_PrewarmInitialLevelGraphics(void)
 }
 #endif
 
+void R_ContinueLevelWipePrecache(void)
+{
+#ifdef HWRENDER
+	const precise_t started = I_GetPreciseTime();
+	const precise_t budget = I_GetPrecisePrecision() / 250; /* 4 ms */
+	UINT8 warmed;
 
-void R_ContinueLevelSpritePrecache(void)
+	if (!netgame || rendermode != render_opengl
+	|| vid.glstate != VID_GL_LIBRARY_LOADED)
+		return;
+	/* Called only in spare time inside the fixed post-load wipe, never from
+	 * live gameplay. Limit individual images and the number started; do not
+	 * consume or retire the ordinary pre-level/background queue cursors. */
+	for (warmed = 0; warmed < 8 && I_GetPreciseTime() - started < budget; warmed++)
+	{
+		boolean prepared;
+		if (levelwipeprefertexture)
+		{
+			prepared = R_PrewarmNextWipeTexture();
+			if (!prepared)
+				prepared = R_PrewarmNextWipeFlat();
+		}
+		else
+		{
+			prepared = R_PrewarmNextWipeFlat();
+			if (!prepared)
+				prepared = R_PrewarmNextWipeTexture();
+		}
+		levelwipeprefertexture = !levelwipeprefertexture;
+		if (!prepared)
+			break;
+	}
+#endif
+}
+
+
+void R_ContinueLevelSpritePrecache(boolean blocking_warmup)
 {
 	const precise_t started = I_GetPreciseTime();
 	const precise_t budget = (precise_t)(I_GetPrecisePrecision() / 1000);
+	/* Never decode or upload large artwork from the live frame loop. A listen
+	 * server has no fixed pre-level loop, and the title card does not make a
+	 * 20--60 ms driver stall any less visible. Larger assets are either handled
+	 * by the bounded blocking preload or loaded when actually requested. */
+	const size_t backgroundmaxpixels = LEVELTEXTURE_BACKGROUND_MAX_PIXELS;
 	unsigned int warmed = 0;
 	boolean hardware = false;
 
@@ -1725,7 +2436,7 @@ void R_ContinueLevelSpritePrecache(void)
 	/* A large true-colour PNG can take several milliseconds even though only
 	 * one upload was requested. Leave a few completed frames between expensive
 	 * conversions so background warming cannot become a regular stutter. */
-	if (levelprecachecooldown)
+	if (levelprecachecooldown && !blocking_warmup)
 	{
 		levelprecachecooldown--;
 		return;
@@ -1753,89 +2464,65 @@ void R_ContinueLevelSpritePrecache(void)
 		return;
 	}
 
+	/* A hosted game is already simulating by the time its title card appears.
+	 * Even a nominally small OpenGL conversion can consume several frames at a
+	 * high refresh rate, so do not run speculative GPU uploads during live
+	 * netgame play. The bounded map-load preload above handles the important
+	 * current-map artwork without turning background work into regular stutter. */
+	if (hardware && netgame && !blocking_warmup)
+		return;
+
+	if (!hardware)
+	{
+		const size_t maxpixels = blocking_warmup
+			? LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_SINGLE_PIXELS
+			: backgroundmaxpixels;
+		boolean warmedgraphic = false;
+
+		if (levelprecacheprefertexture)
+		{
+			warmedgraphic = R_PrewarmNextSoftwareLevelTexture(maxpixels);
+			if (!warmedgraphic)
+				warmedgraphic = R_PrewarmNextSoftwareLevelFlat(maxpixels);
+			levelprecacheprefertexture = false;
+		}
+		else
+		{
+			warmedgraphic = R_PrewarmNextSoftwareLevelFlat(maxpixels);
+			if (!warmedgraphic)
+				warmedgraphic = R_PrewarmNextSoftwareLevelTexture(maxpixels);
+			levelprecacheprefertexture = true;
+		}
+		if (warmedgraphic)
+			warmed++;
+	}
+
 #ifdef HWRENDER
-	while (hardware && levelflatpriority
-	&& levelflatpriority_index < levelflatpriority_count && warmed < 1)
+	if (hardware)
 	{
-		const INT32 flat = levelflatpriority[levelflatpriority_index];
-		if (R_PrewarmLevelFlat((size_t)flat))
-			warmed++;
-		if (!levelflatprecachepresent[flat])
-			levelflatpriority_index++;
-	}
-	if (levelflatpriority && levelflatpriority_index >= levelflatpriority_count)
-	{
-		free(levelflatpriority);
-		levelflatpriority = NULL;
-		levelflatpriority_count = levelflatpriority_index = 0;
-	}
+		const size_t maxpixels = blocking_warmup
+			? LEVELGRAPHICS_INITIAL_MAX_SINGLE_PIXELS
+			: backgroundmaxpixels;
+		boolean warmedgraphic = false;
 
-	/* Any flat left outside the bounded loading-screen preload remains eligible
-	 * for the cautious one-item live warmer. */
-	while (hardware && levelflatprecachepresent
-	&& levelflatprecache_flat < numlevelflats && warmed < 1)
-	{
-		if (!levelflatprecachepresent[levelflatprecache_flat])
+		/* Alternate walls and flats across frames. Exhausting the flat queue first
+		 * could consume an entire title card while an animated skybox wall waited. */
+		if (levelprecacheprefertexture)
 		{
-			levelflatprecache_flat++;
-			continue;
+			warmedgraphic = R_PrewarmNextLevelTexture(maxpixels);
+			if (!warmedgraphic)
+				warmedgraphic = R_PrewarmNextLevelFlat(maxpixels);
+			levelprecacheprefertexture = false;
 		}
-
-		if (R_PrewarmLevelFlat(levelflatprecache_flat))
-			warmed++;
-
-		if (!levelflatprecachepresent[levelflatprecache_flat])
-			levelflatprecache_flat++;
-	}
-	if (levelflatprecachepresent && levelflatprecache_flat >= numlevelflats)
-	{
-		free(levelflatprecachepresent);
-		levelflatprecachepresent = NULL;
-	}
-
-	while (hardware && leveltexturepriority
-	&& leveltexturepriority_index < leveltexturepriority_count && warmed < 1)
-	{
-		const INT32 texture = leveltexturepriority[leveltexturepriority_index];
-		if (R_PrewarmLevelTexture(texture))
-			warmed++;
-		if (!leveltexturepresent[texture])
-			leveltexturepriority_index++;
-	}
-	if (leveltexturepriority
-	&& leveltexturepriority_index >= leveltexturepriority_count)
-	{
-		free(leveltexturepriority);
-		leveltexturepriority = NULL;
-		leveltexturepriority_count = leveltexturepriority_index = 0;
-	}
-
-	/* Warm wall textures before decorative sprites. First entering a gallery or
-	 * basement commonly exposes many wall PNGs at once; uploading one while a
-	 * previous frame has headroom prevents that cost from landing on the first
-	 * visible frame. Opaque and masked variants are distinct GPU textures. */
-	while (hardware && leveltexturepresent
-	&& leveltextureprecache_texture < (size_t)numtextures && warmed < 1)
-	{
-		UINT8 variants = leveltexturepresent[leveltextureprecache_texture];
-
-		if (!variants)
+		else
 		{
-			leveltextureprecache_texture++;
-			continue;
+			warmedgraphic = R_PrewarmNextLevelFlat(maxpixels);
+			if (!warmedgraphic)
+				warmedgraphic = R_PrewarmNextLevelTexture(maxpixels);
+			levelprecacheprefertexture = true;
 		}
-
-		if (R_PrewarmLevelTexture((INT32)leveltextureprecache_texture))
+		if (warmedgraphic)
 			warmed++;
-
-		if (!leveltexturepresent[leveltextureprecache_texture])
-			leveltextureprecache_texture++;
-	}
-
-	if (leveltexturepresent && leveltextureprecache_texture >= (size_t)numtextures)
-	{
-		free(leveltexturepresent);
-		leveltexturepresent = NULL;
 	}
 #endif
 
@@ -1843,7 +2530,7 @@ void R_ContinueLevelSpritePrecache(void)
 	 * can still make the driver wait, so never start a second upload in the same
 	 * frame even when the first one happened to finish inside the time budget. */
 	while (levelspritepresent && levelspriteprecache_sprite < numsprites
-	&& (!hardware || warmed < 1))
+	&& warmed < 1)
 	{
 		spriteframe_t *sf;
 		size_t angles;
@@ -1871,7 +2558,7 @@ void R_ContinueLevelSpritePrecache(void)
 			if (sf->rotate == SRF_2D)
 				angle = angle ? 6 : 2;
 			if (R_PrecacheSpriteLumpBounded(sf->lumppat[angle],
-				LEVELTEXTURE_BACKGROUND_MAX_PIXELS))
+				backgroundmaxpixels))
 				warmed++;
 		}
 
@@ -1891,7 +2578,7 @@ void R_ContinueLevelSpritePrecache(void)
 		levelspritepresent = NULL;
 	}
 
-	if (warmed)
+	if (warmed && !blocking_warmup)
 	{
 		const precise_t elapsed = I_GetPreciseTime() - started;
 		const precise_t precision = I_GetPrecisePrecision();
@@ -1907,6 +2594,7 @@ void R_ContinueLevelSpritePrecache(void)
 void R_PrecacheLevel(void)
 {
 	UINT8 *texturepresent;
+	UINT8 *textureanimationframes = NULL;
 	char *spritepresent;
 	size_t i, j, k;
 	lumpnum_t lump;
@@ -1929,9 +2617,12 @@ void R_PrecacheLevel(void)
 	levelspriteprecache_angle = 0;
 	leveltextureprecache_texture = 0;
 	levelflatprecache_flat = 0;
+	leveltexturewipe_index = levelflatwipe_index = 0;
+	levelwipeprefertexture = true;
 	leveltexturepriority_count = leveltexturepriority_index = 0;
 	levelflatpriority_count = levelflatpriority_index = 0;
 	levelprecachecooldown = 0;
+	levelprecacheprefertexture = true;
 
 	/* A dedicated/headless server still loads sprite and texture definitions so
 	 * its game state matches clients, but it never draws their patch data. The
@@ -1950,9 +2641,9 @@ void R_PrecacheLevel(void)
 #endif
 	)
 	{
-		// Software composites its flats up front; OpenGL uploads them on demand.
+		// Both renderers can prepare level graphics from the ranked queue below.
 		if (rendermode == render_soft)
-			flatmemory = P_PrecacheLevelFlats();
+			flatmemory = 0;
 
 	//
 	// Precache textures.
@@ -1984,56 +2675,62 @@ void R_PrecacheLevel(void)
 			texturepresent[sides[j].bottomtexture] |= LEVELTEXTURE_OPAQUE;
 	}
 
-	/* Rendered 3D-floor sides always request a chromakeyed middle texture. A
-	 * transfer-line floor can source that texture from any line in its control
-	 * sector; a normal floor sources it from the master line itself. Add those
-	 * variants explicitly instead of pessimistically duplicating every middle
-	 * texture in the level. */
+	/* Rendered 3D-floor sides always request a chromakeyed middle texture. Resolve
+	 * the same target-line-to-control-line mapping used by the renderer. Merely
+	 * scanning the control sector missed transferred sides such as the IRLWALL
+	 * corridor, leaving a 35-60 ms upload on first basement entry. */
 	for (j = 0; j < (size_t)numsectors; j++)
 	{
 		ffloor_t *rover;
 		for (rover = sectors[j].ffloors; rover; rover = rover->next)
 		{
-			line_t *master = rover->master;
-			if (!master || !(rover->fofflags & FOF_EXISTS)
+			size_t targetline;
+			if (!rover->master || !(rover->fofflags & FOF_EXISTS)
 			|| !(rover->fofflags & FOF_RENDERSIDES)
 			|| (rover->fofflags & FOF_FOG))
 				continue;
 
-			if (master->flags & ML_TFERLINE)
+			for (targetline = 0; targetline < sectors[j].linecount; targetline++)
 			{
-				sector_t *control = master->frontsector;
-				size_t control_line;
-				if (!control)
+				line_t *source = R_GetFFloorLine(sectors[j].lines[targetline],
+					rover, &sectors[j]);
+				size_t sideindex;
+				INT32 texture;
+				if (!source || (sideindex = source->sidenum[0]) == NO_SIDEDEF
+				|| sideindex >= numsides)
 					continue;
-				for (control_line = 0; control_line < control->linecount;
-					control_line++)
-				{
-					line_t *source = control->lines[control_line];
-					size_t sideindex;
-					INT32 texture;
-					if (!source || (sideindex = source->sidenum[0]) == NO_SIDEDEF
-					|| sideindex >= numsides)
-						continue;
-					texture = sides[sideindex].midtexture;
-					if (texture >= 0 && texture < numtextures)
-						texturepresent[texture] |= LEVELTEXTURE_MASKED;
-				}
-			}
-			else if (master->sidenum[0] != NO_SIDEDEF
-			&& master->sidenum[0] < numsides)
-			{
-				const INT32 texture = sides[master->sidenum[0]].midtexture;
+				texture = sides[sideindex].midtexture;
 				if (texture >= 0 && texture < numtextures)
 					texturepresent[texture] |= LEVELTEXTURE_MASKED;
 			}
 		}
 	}
 
+	/* Remember which frames are being introduced only because a used texture is
+	 * animated. They need first-tic priority even when their texture numbers are
+	 * far from the base frame in a large combined add-on stack. */
+#ifdef HWRENDER
+	if (rendermode == render_opengl && vid.glstate == VID_GL_LIBRARY_LOADED)
+	{
+		textureanimationframes = malloc((size_t)numtextures
+			* sizeof (*textureanimationframes));
+		if (numtextures && !textureanimationframes)
+			I_Error("%s: Out of memory ranking animated textures", "R_PrecacheLevel");
+		memcpy(textureanimationframes, texturepresent,
+			(size_t)numtextures * sizeof (*textureanimationframes));
+	}
+#endif
+
 	/* A used animation is a set, not just whichever frame texturetranslation
 	 * happens to select at leveltime zero. Preparing the whole set here avoids
 	 * recurring first-use stalls from FIREA-style custom animations. */
 	P_ExpandTextureAnimationPresence(texturepresent, (size_t)numtextures);
+#ifdef HWRENDER
+	if (textureanimationframes)
+		for (j = 0; j < (size_t)numtextures; j++)
+			textureanimationframes[j] = texturepresent[j]
+				&& !textureanimationframes[j];
+#endif
 
 	// Sky texture is always present.
 	// Note that F_SKY1 is the name used to indicate a sky floor/ceiling as a flat,
@@ -2042,24 +2739,31 @@ void R_PrecacheLevel(void)
 
 	if (rendermode == render_soft)
 	{
+#if defined(_WIN32) && !defined(DEDICATED)
+		const precise_t preload_started = I_GetPreciseTime();
+#endif
 		texturememory = 0;
-		for (j = 0; j < (unsigned)numtextures; j++)
-		{
-			if (!texturepresent[j])
-				continue;
-
-			if (!texturecache[j])
-				R_GenerateTexture(j);
-			// pre-caching individual patches that compose textures became obsolete,
-			// since we cache entire composite textures
-		}
-		free(texturepresent);
+		leveltexturepresent = texturepresent;
+		levelflatprecachepresent = calloc(numlevelflats,
+			sizeof (*levelflatprecachepresent));
+		if (numlevelflats && !levelflatprecachepresent)
+			I_Error("%s: Out of memory looking up level flats", "R_PrecacheLevel");
+		for (j = 0; j < numlevelflats; j++)
+			if (levelflats[j].type != LEVELFLAT_NONE)
+				levelflatprecachepresent[j] = LEVELTEXTURE_OPAQUE;
+		R_BuildLevelGraphicPriorities(NULL);
+		R_PrewarmInitialSoftwareLevelGraphics();
+#if defined(_WIN32) && !defined(DEDICATED)
+		I_ReportHitch("initial Software level graphics preload",
+			preload_started, 25);
+#endif
 	}
 #ifdef HWRENDER
 	else
 	{
 		precise_t preload_started;
 		size_t flat;
+		size_t polyobject;
 		size_t sector;
 
 		leveltexturepresent = texturepresent;
@@ -2090,7 +2794,31 @@ void R_PrecacheLevel(void)
 					levelflatprecachepresent[*rover->bottompic] |= LEVELTEXTURE_MASKED;
 			}
 		}
-		R_BuildLevelGraphicPriorities();
+
+		/* Polyobject planes use the same separate chromakeyed flat variant as
+		 * splat FOFs, but they are not part of any sector's ffloor list. Include
+		 * their control-sector flats so the first moving/swinging platform in a
+		 * newly entered room cannot create that variant during a rendered frame. */
+		for (polyobject = 0; polyobject < (size_t)numPolyObjects; polyobject++)
+		{
+			polyobj_t *po = &PolyObjects[polyobject];
+			sector_t *polysector;
+			if (!(po->flags & POF_RENDERPLANES) || !(po->flags & POF_SPLAT)
+			|| po->isBad || !po->numLines || !po->lines || !po->lines[0]
+			|| !(polysector = po->lines[0]->backsector))
+				continue;
+			if (polysector->floorpic >= 0
+			&& (size_t)polysector->floorpic < numlevelflats)
+				levelflatprecachepresent[polysector->floorpic]
+					|= LEVELTEXTURE_MASKED;
+			if (polysector->ceilingpic >= 0
+			&& (size_t)polysector->ceilingpic < numlevelflats)
+				levelflatprecachepresent[polysector->ceilingpic]
+					|= LEVELTEXTURE_MASKED;
+		}
+		R_BuildLevelGraphicPriorities(textureanimationframes);
+		free(textureanimationframes);
+		textureanimationframes = NULL;
 
 		preload_started = I_GetPreciseTime();
 		R_PrewarmInitialLevelGraphics();

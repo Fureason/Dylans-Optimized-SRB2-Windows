@@ -1361,7 +1361,16 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-	// move up (backward) in console textbuffer
+	// Mouse wheel scrolls history without changing or submitting the prompt.
+ if (key == KEY_MOUSEWHEELUP || key == KEY_MOUSEWHEELDOWN)
+ {
+  size_t maximum = CON_MaxScroll();
+  if (key == KEY_MOUSEWHEELUP) con_scrollup = min(maximum, con_scrollup+3);
+  else con_scrollup = con_scrollup > 3 ? con_scrollup-3 : 0;
+  return true;
+ }
+
+ // move up (backward) in console textbuffer
 	if (key == KEY_PGUP)
 	{
 		if (con_scrollup < CON_MaxScroll())
@@ -1979,6 +1988,9 @@ static void CON_DrawConsole(void)
 
 		if (rendermode == render_none) return;
 
+#ifdef HWRENDER
+		HWR_BeginTextBatch();
+#endif
 		for (y = (con_curlines-minheight) % charheight; y <= con_curlines-minheight; y += charheight, i++)
 		{
 			INT32 x;
@@ -2003,6 +2015,9 @@ static void CON_DrawConsole(void)
 					V_DrawCharacter(x, y, (INT32)(*p) | charflags | cv_constextsize.value | V_NOSCALESTART, true);
 			}
 		}
+#ifdef HWRENDER
+		HWR_EndTextBatch();
+#endif
 	}
 
 	// draw prompt if enough place (not while game startup)

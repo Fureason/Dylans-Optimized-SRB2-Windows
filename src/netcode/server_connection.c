@@ -478,11 +478,23 @@ void SV_JoinStateTicker(void)
 
 		if (playerconfigrepairattempts[i] < PLAYERCONFIG_REPAIR_ATTEMPTS)
 		{
+			boolean requested = false;
+			boolean replayed;
+
 			if (!playerconfigrepairattempts[i])
 				D_WriteJoinStateReport("server-missing-player-config", i,
 					(SINT8)node, 0);
 
-			if (SV_ReplayPlayerAssignments((SINT8)node))
+			/* Replaying XD_ADDPLAYER repairs a missing local mapping, but it travels
+			 * through the shared tic-command stream. A connected optimized client
+			 * treats a duplicate reliable PT_SERVERCFG as an idempotent request to
+			 * resend its own skin/color command. Stock clients safely ignore it and
+			 * retain the assignment-replay fallback below. */
+			if (!Net_HasPendingReliablePacket(node, PT_SERVERCFG))
+				requested = SV_SendServerConfig(node);
+			replayed = SV_ReplayPlayerAssignments((SINT8)node);
+
+			if (requested || replayed)
 			{
 				playerconfigrepairattempts[i]++;
 				playerconfigrepairnext[i] = now + PLAYERCONFIG_REPAIR_DELAY;

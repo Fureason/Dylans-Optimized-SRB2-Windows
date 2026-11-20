@@ -11,6 +11,7 @@
 /// \brief Client connection handling
 
 #include "client_connection.h"
+#include "server_browser.h"
 #include "gamestate.h"
 #include "d_clisrv.h"
 #include "d_netfil.h"
@@ -24,6 +25,7 @@
 #include "../i_video.h"
 #include "../keys.h"
 #include "../m_menu.h"
+#include "../m_argv.h"
 #include "../m_misc.h"
 #include "../snake.h"
 #include "../s_sound.h"
@@ -42,6 +44,7 @@ boolean serverisfull = false; // lets us be aware if the server was full after w
 tic_t firstconnectattempttime = 0;
 UINT8 mynode;
 static void *snake = NULL;
+static boolean cl_addon_totals_set;
 
 static boolean IsDownloadingFile(void)
 {
@@ -55,17 +58,18 @@ static void DrawConnectionStatusBox(void)
 {
 	M_DrawTextBox(BASEVIDWIDTH/2-128-8, BASEVIDHEIGHT-16-8, 32, 1);
 
-	if (cl_mode == CL_CONFIRMCONNECT || IsDownloadingFile())
+	if (cl_mode == CL_CONFIRMCONNECT)
 		return;
 
-	V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-16, V_YELLOWMAP, "Press ESC to abort");
+	V_DrawCenteredString(BASEVIDWIDTH/2, IsDownloadingFile() ? BASEVIDHEIGHT-24 : BASEVIDHEIGHT-32,
+		V_YELLOWMAP, "Press ESC to abort");
 }
 
 static void DrawFileProgress(fileneeded_t *file, int y)
 {
 	Net_GetNetStat();
 
-	INT32 dldlength = (INT32)((file->currentsize/(double)file->totalsize) * 256);
+	INT32 dldlength = file->totalsize ? (INT32)((file->currentsize/(double)file->totalsize) * 256) : 0;
 	if (dldlength > 256)
 		dldlength = 256;
 	V_DrawFill(BASEVIDWIDTH/2-128, y, 256, 8, 111);
@@ -123,7 +127,7 @@ static void CL_DrawConnectionStatus(void)
 				{
 					fileneeded_t *file = &fileneeded[filedownload.current];
 
-					cltext = M_GetText("Downloading game state...");
+					cltext = M_GetText("Downloading game state (not an add-on)...");
 
 					DrawFileProgress(file, BASEVIDHEIGHT-16);
 				}
@@ -174,7 +178,7 @@ static void CL_DrawConnectionStatus(void)
 
 			// Loading progress
 			V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-24, V_YELLOWMAP, "Loading server addons...");
-			totalfileslength = (INT32)((loadcompletednum/(double)(fileneedednum)) * 256);
+			totalfileslength = (INT32)((loadcompletednum/(double)max(1, fileneedednum)) * 256);
 			M_DrawTextBox(BASEVIDWIDTH/2-128-8, BASEVIDHEIGHT-16-8, 32, 1);
 			V_DrawFill(BASEVIDWIDTH/2-128, BASEVIDHEIGHT-16, 256, 8, 111);
 			V_DrawFill(BASEVIDWIDTH/2-128, BASEVIDHEIGHT-16, totalfileslength, 8, 96);
@@ -226,7 +230,7 @@ static void CL_DrawConnectionStatus(void)
 			const char *download_str = M_GetText("Downloading \"%s\"");
 #endif
 
-			V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-24, V_ALLOWLOWERCASE|V_YELLOWMAP,
+			V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-48, V_ALLOWLOWERCASE|V_YELLOWMAP,
 				va(download_str, tempname));
 
 			// Rusty: actually lets do this instead
@@ -246,15 +250,18 @@ static void CL_DrawConnectionStatus(void)
 					strlcpy(tempname, http_source, sizeof(tempname));
 				}
 
-				V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-16, V_ALLOWLOWERCASE|V_YELLOWMAP,
+				V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-40, V_ALLOWLOWERCASE|V_YELLOWMAP,
 					va(M_GetText("from %s"), tempname));
 			}
 			else
 			{
-				V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-16-16, V_ALLOWLOWERCASE|V_YELLOWMAP,
+				V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-40, V_ALLOWLOWERCASE|V_YELLOWMAP,
 					M_GetText("from the server"));
 			}
 
+			V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT-32, V_YELLOWMAP,
+				va("Add-ons: %u/%u downloaded (%u local)", (unsigned)max(0, filedownload.completednum),
+					(unsigned)max(1, filedownload.totalnum), (unsigned)filedownload.localnum));
 			DrawFileProgress(file, BASEVIDHEIGHT-16);
 		}
 		else
@@ -362,43 +369,29 @@ static UINT32 SL_SearchServer(INT32 node)
 
 static void SL_InsertServer(serverinfo_pak* info, SINT8 node)
 {
-	UINT32 i;
-
-	// search if not already on it
-	i = SL_SearchServer(node);
-	if (i == UINT32_MAX)
-	{
-		// not found add it
-		if (serverlistcount >= MAXSERVERLIST)
-			return; // list full
-
-		// check it later if connecting to this one
-		if (node != servernode)
-		{
-			if (info->_255 != 255)
-				return; // Old packet format
-
-			if (info->packetversion != PACKETVERSION)
-				return; // Old new packet format
-
-			if (info->version != VERSION)
-				return; // Not same version.
-
-			if (info->subversion != SUBVERSION)
-				return; // Close, but no cigar.
-
-			if (strcmp(info->application, SRB2APPLICATION))
-				return; // That's a different mod
-		}
-
-		i = serverlistcount++;
-	}
-
-	serverlist[i].info = *info;
-	serverlist[i].node = node;
-
-	// resort server list
-	M_SortServerList();
+ UINT32 i;
+ if (node != servernode)
+ {
+  if (info->_255 != 255 || info->packetversion != PACKETVERSION)
+  { SB_Unavailable(node, "Different protocol version"); return; }
+  if (info->version != VERSION || info->subversion != SUBVERSION)
+  { SB_Unavailable(node, "Different game version"); return; }
+  if (strcmp(info->application, SRB2APPLICATION))
+  { SB_Unavailable(node, "Different game build"); return; }
+ }
+ /* Browser advertisements remain visible even when the stock node list is
+  * full. A selected endpoint can still be queried/joined by address. */
+ SB_Info(node, info, min((size_t)MAXFILENEEDED,
+  (size_t)doomcom->datalength - BASEPACKETSIZE - offsetof(serverinfo_pak, fileneeded)));
+ i = SL_SearchServer(node);
+ if (i == UINT32_MAX)
+ {
+  if (serverlistcount >= MAXSERVERLIST) return;
+  i = serverlistcount++;
+ }
+ serverlist[i].info = *info;
+ serverlist[i].node = node;
+ M_SortServerList();
 }
 
 #if defined (MASTERSERVER) && defined (HAVE_THREADS)
@@ -414,6 +407,17 @@ Fetch_servers_thread (struct Fetch_servers_ctx *ctx)
 	msg_server_t *server_list;
 
 	server_list = GetShortServersList(ctx->room, ctx->id);
+	if (!server_list)
+	{
+		boolean current;
+		I_lock_mutex(&ms_QueryId_mutex);
+		current = ctx->id == ms_QueryId;
+		I_unlock_mutex(ms_QueryId_mutex);
+		I_lock_mutex(&m_menu_mutex);
+		if (current && m_waiting_mode == M_WAITING_SERVERS)
+			m_waiting_mode = M_NOT_WAITING; // permit a retry after an HTTP failure
+		I_unlock_mutex(m_menu_mutex);
+	}
 
 	if (server_list)
 	{
@@ -658,20 +662,39 @@ static const char *GetPrintableFileSize(UINT64 filesize)
 	return downloadsize;
 }
 
+static void CL_SetAddonTotals(void)
+{
+ if (cl_addon_totals_set) return;
+ cl_addon_totals_set = true;
+ filedownload.requirednum = fileneedednum;
+ filedownload.localnum = 0;
+ filedownload.totalnum = 0;
+ for (INT32 i = 0; i < fileneedednum; i++)
+ {
+  if (IsFileDownloadable(&fileneeded[i])) filedownload.totalnum++;
+  else if (fileneeded[i].status == FS_FOUND || fileneeded[i].status == FS_OPEN) filedownload.localnum++;
+ }
+ CONS_Printf("Server add-ons: %d required, %d already on this device, %d to download.\n",
+  filedownload.requirednum, filedownload.localnum, filedownload.totalnum);
+}
+
 static void ShowDownloadConsentMessage(void)
 {
 	UINT64 totalsize = 0;
+	UINT32 downloads = 0;
 
-	filedownload.completednum = 0;
-	filedownload.completedsize = 0;
+	CL_SetAddonTotals();
 
 	if (fileneeded == NULL)
 		I_Error("CL_FinishedFileList: fileneeded == NULL");
 
 	for (int i = 0; i < fileneedednum; i++)
 	{
-		if (IsFileDownloadable(&fileneeded[i]))
+		if (IsFileDownloadable(&fileneeded[i]) || fileneeded[i].status == FS_FALLBACK)
+		{
 			totalsize += fileneeded[i].totalsize;
+			downloads++;
+		}
 	}
 
 	const char *downloadsize = GetPrintableFileSize(totalsize);
@@ -679,18 +702,20 @@ static void ShowDownloadConsentMessage(void)
 	if (serverisfull)
 		M_StartMessage(va(M_GetText(
 			"This server is full!\n"
-			"Download of %s of additional\ncontent is required to join.\n"
+			"Download %u add-ons (%s).\n"
+			"%u of %u already on this device.\n"
 			"\n"
 			"You may download server addons,\nand wait for a slot.\n"
 			"\n"
 			"Press ENTER to continue\nor ESC to cancel.\n"
-		), downloadsize), M_ConfirmConnect, MM_EVENTHANDLER);
+		), downloads, downloadsize, filedownload.localnum, filedownload.requirednum), M_ConfirmConnect, MM_EVENTHANDLER);
 	else
 		M_StartMessage(va(M_GetText(
-			"Download of %s of additional\ncontent is required to join.\n"
+			"Download %u add-ons (%s).\n"
+			"%u of %u already on this device.\n"
 			"\n"
 			"Press ENTER to continue\nor ESC to cancel.\n"
-		), downloadsize), M_ConfirmConnect, MM_EVENTHANDLER);
+		), downloads, downloadsize, filedownload.localnum, filedownload.requirednum), M_ConfirmConnect, MM_EVENTHANDLER);
 
 	cl_mode = CL_CONFIRMCONNECT;
 	curfadevalue = 0;
@@ -753,37 +778,21 @@ static void HandleDirectDownloadFail(UINT8 dlstatus)
 static boolean CL_FinishedFileList(void)
 {
 	INT32 i = CL_CheckFiles();
+	if (i < 2) CL_SetAddonTotals();
 	if (i == 4) // still checking ...
 	{
 		return true;
 	}
-	else if (i == 3) // too many files
-	{
-		AbortConnection();
-		M_StartMessage(M_GetText(
-			"You have too many WAD files loaded\n"
-			"to add ones the server is using.\n"
-			"Please restart SRB2 before connecting.\n\n"
-			"Press ESC\n"
-		), NULL, MM_NOTHING);
-		return false;
-	}
-	else if (i == 2) // cannot join for some reason
-	{
-		AbortConnection();
-		M_StartMessage(M_GetText(
-			"You have the wrong addons loaded.\n"
-			"The console names the first mismatch.\n"
-			"\n"
-			"To play on this server, restart\n"
-			"the game and don't load any addons.\n"
-			"SRB2 will automatically add\n"
-			"everything you need when you join.\n"
-			"\n"
-			"Press ESC\n"
-		), NULL, MM_NOTHING);
-		return false;
-	}
+	else if (i == 3 || i == 2)
+ {
+#ifdef HAVE_SDL
+  const char *address = I_GetNodeAddress ? I_GetNodeAddress(servernode) : NULL;
+  if (address && (i == 2 || numwadfiles > mainwads) && I_RestartForServer(address)) I_Quit();
+#endif
+  AbortConnection();
+  M_StartMessage("This server requires a fresh session\nor too many add-ons for this client.\nThe automatic restart was unavailable.\n\nPlease reopen SRB2 and try again.\n", NULL, MM_NOTHING);
+  return false;
+ }
 	else if (i == 1)
 	{
 		if (serverisfull)
@@ -1051,6 +1060,12 @@ static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic
 	switch (cl_mode)
 	{
 		case CL_SEARCHING:
+   if ((tic_t)(I_GetTime()-firstconnectattempttime) > 12*TICRATE)
+   {
+    AbortConnection();
+    M_StartMessage("The server did not answer.\nIt may be offline, unreachable, or\nusing a different game version.\n\nPlease check the address and try again.\n", NULL, MM_NOTHING);
+    return false;
+   }
 			if (!CL_ServerConnectionSearchTicker(asksent))
 				return false;
 			break;
@@ -1063,7 +1078,7 @@ static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic
 				if (CL_AskFileList(fileneedednum))
 				{
 					cl_lastcheckedfilecount = fileneedednum;
-					*asksent = I_GetTime() + NEWTICRATE;
+					*asksent = I_GetTime() + max(1, NEWTICRATE/4);
 				}
 			}
 			break;
@@ -1253,6 +1268,10 @@ void CL_ConnectToServer(void)
 	sprintf(tmpsave, "%s" PATHSEP TMPSAVENAME, srb2home);
 
 	filedownload.current = -1;
+	filedownload.remaining = 0;
+	filedownload.completednum = filedownload.completedsize = 0;
+	filedownload.requirednum = filedownload.localnum = filedownload.totalnum = 0;
+	cl_addon_totals_set = false;
 
 	cl_mode = CL_SEARCHING;
 
@@ -1320,6 +1339,7 @@ void CL_ConnectToServer(void)
 
 	DEBFILE(va("Synchronisation Finished\n"));
 
+	if (M_CheckParm("-cleanjoin")) M_ClearMenus(true);
 	displayplayer = consoleplayer;
 }
 
@@ -1331,6 +1351,8 @@ void CL_ConnectToServer(void)
   */
 void PT_ServerInfo(SINT8 node)
 {
+	if (doomcom->datalength < (INT32)(BASEPACKETSIZE + offsetof(serverinfo_pak, fileneeded)))
+		return;
 	// compute ping in ms
 	const tic_t ticnow = I_GetTime();
 	const tic_t ticthen = (tic_t)LONG(netbuffer->u.serverinfo.time);
@@ -1341,6 +1363,8 @@ void PT_ServerInfo(SINT8 node)
 		[sizeof netbuffer->u.serverinfo.application - 1] = '\0';
 	netbuffer->u.serverinfo.gametypename
 		[sizeof netbuffer->u.serverinfo.gametypename - 1] = '\0';
+	netbuffer->u.serverinfo.mapname[sizeof netbuffer->u.serverinfo.mapname - 1] = '\0';
+	netbuffer->u.serverinfo.maptitle[sizeof netbuffer->u.serverinfo.maptitle - 1] = '\0';
 
 	SL_InsertServer(&netbuffer->u.serverinfo, node);
 }
@@ -1358,6 +1382,7 @@ static boolean ServerOnly(SINT8 node)
 
 void PT_MoreFilesNeeded(SINT8 node)
 {
+	if (SB_MoreFiles(node)) return;
 	if (server && serverrunning)
 	{ // But wait I thought I'm the server?
 		Net_CloseConnection(node);

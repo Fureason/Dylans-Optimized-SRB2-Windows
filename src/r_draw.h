@@ -116,6 +116,7 @@ enum
 // Initialize color translation tables, for player rendering etc.
 UINT8* R_GetTranslationColormap(INT32 skinnum, skincolornum_t color, UINT8 flags);
 void R_FlushTranslationColormapCache(void);
+void R_InvalidateColorNameCache(void);
 UINT16 R_GetColorByName(const char *name);
 UINT16 R_GetSuperColorByName(const char *name);
 
@@ -153,7 +154,7 @@ void R_VideoErase(size_t ofs, INT32 count);
 // -----------------
 
 void R_DrawColumn_8(void);
-void R_DrawSkyColumn_8(void);
+void R_DrawSkyColumn_8(INT64 fracstep);
 void R_DrawColumnClamped_8(void);
 void R_Draw2sMultiPatchColumn_8(void);
 void R_DrawShadeColumn_8(void);

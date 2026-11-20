@@ -162,6 +162,9 @@ typedef struct
 {
 	// ack return to send (like sliding window protocol)
 	UINT8 firstacktosend;
+	UINT8 previousacktosend;
+	boolean ackpending;
+	tic_t lastacksent;
 
 	// detect connection lost
 	tic_t lasttimepacketreceived;
@@ -323,19 +326,18 @@ static boolean GetFreeAcknum(UINT8 *freeack)
 	return false;
 }
 
-// Get the latest consecutive acknowledgement for this node.
-static UINT8 GetAcktosend(INT32 node)
+static void SendAcks(INT32 node)
 {
-	return nodes[node].firstacktosend;
+	// Stock SRB2 reads a full selective ACK list even for a cumulative ACK.
+	netbuffer->packettype = PT_NOTHING;
+	memset(netbuffer->u.textcmd, 0, MAXACKTOSEND);
+	HSendPacket(node, false, 0, MAXACKTOSEND);
 }
 
 static void RemoveAck(INT32 i)
 {
-	INT32 node = ackpak[i].destinationnode;
 	DEBFILE(va("Remove ack %d\n",ackpak[i].acknum));
 	ackpak[i].acknum = 0;
-	if (nodes[node].flags & NF_CLOSE)
-		Net_CloseConnection(node);
 }
 
 // We have got a packet, proceed the ack request and ack return
@@ -345,7 +347,8 @@ static boolean Processackpak(void)
 	node_t *node = &nodes[doomcom->remotenode];
 
 	// Received an ack return, so remove the ack in the list
-	if (netbuffer->ackreturn && cmpack(node->remotefirstack, netbuffer->ackreturn) < 0)
+	if (netbuffer->ackreturn && cmpack(node->remotefirstack, netbuffer->ackreturn) < 0
+		&& cmpack(netbuffer->ackreturn, node->nextacknum) < 0)
 	{
 		node->remotefirstack = netbuffer->ackreturn;
 		// Search the ackbuffer and free it
@@ -361,6 +364,7 @@ static boolean Processackpak(void)
 	if (netbuffer->ack)
 	{
 		UINT8 ack = netbuffer->ack;
+		node->ackpending = true;
 		getackpacket++;
 		if (cmpack(ack, node->firstacktosend) <= 0)
 		{
@@ -378,6 +382,7 @@ static boolean Processackpak(void)
 
 			if (ack == nextfirstack)
 			{
+				node->previousacktosend = node->firstacktosend;
 				node->firstacktosend = nextfirstack;
 			}
 			else // Out of order packet
@@ -388,6 +393,23 @@ static boolean Processackpak(void)
 		}
 	}
 	return goodpacket;
+}
+
+static void ProcessSelectiveAcks(void)
+{
+	boolean acknowledged[UINT8_MAX + 1] = {false};
+	const INT32 node = doomcom->remotenode;
+
+	if (doomcom->datalength != BASEPACKETSIZE + MAXACKTOSEND)
+		return;
+
+	for (INT32 i = 0; i < MAXACKTOSEND; i++)
+		acknowledged[netbuffer->u.textcmd[i]] = true;
+
+	for (INT32 i = 0; i < MAXACKPACKETS; i++)
+		if (ackpak[i].acknum && ackpak[i].destinationnode == node
+			&& acknowledged[ackpak[i].acknum])
+			RemoveAck(i);
 }
 
 void Net_ConnectionTimeout(INT32 node)
@@ -470,6 +492,9 @@ void Net_AckTicker(void)
 		// This is something like node open flag
 		if (nodes[i].firstacktosend)
 		{
+			if (nodes[i].ackpending && I_GetTime() - nodes[i].lastacksent >= ACKTOSENDTIMEOUT)
+				SendAcks(i);
+
 			UINT16 retries;
 			UINT16 queued = Net_GetReliableBacklog(i, &retries);
 			if (server && queued >= 24 && retries >= 3
@@ -496,11 +521,9 @@ void Net_AckTicker(void)
 void Net_UnAcknowledgePacket(INT32 node)
 {
 	DEBFILE(va("UnAcknowledge node %d\n", node));
-	if (!node)
+	if (!node || !netbuffer->ack || nodes[node].firstacktosend != netbuffer->ack)
 		return;
-	nodes[node].firstacktosend--;
-	if (!nodes[node].firstacktosend)
-		nodes[node].firstacktosend = UINT8_MAX;
+	nodes[node].firstacktosend = nodes[node].previousacktosend;
 }
 
 /** Checks if all acks have been received
@@ -544,6 +567,9 @@ void Net_WaitAllAckReceived(UINT32 timeout)
 static void InitNode(node_t *node)
 {
 	node->firstacktosend = 0;
+	node->previousacktosend = 0;
+	node->ackpending = false;
+	node->lastacksent = I_GetTime();
 	node->nextacknum = 1;
 	node->remotefirstack = 0;
 	node->flags = 0;
@@ -601,12 +627,9 @@ void Net_CloseConnection(INT32 node)
 
 	nodes[node].flags |= NF_CLOSE;
 
-	// Send a final empty packet carrying our latest acknowledgement.
-	if (GetAcktosend(node))
-	{
-		netbuffer->packettype = PT_NOTHING;
-		HSendPacket(node, false, 0, 0);
-	}
+	// Send a final packet carrying our latest acknowledgement.
+	if (nodes[node].firstacktosend)
+		SendAcks(node);
 
 	// check if we are waiting for an ack from this node
 	for (INT32 i = 0; i < MAXACKPACKETS; i++)
@@ -941,7 +964,7 @@ boolean HSendPacket(INT32 node, boolean reliable, UINT8 acknum, size_t packetlen
 	}
 
 	if (node < MAXNETNODES) // Can be a broadcast
-		netbuffer->ackreturn = GetAcktosend(node);
+		netbuffer->ackreturn = nodes[node].firstacktosend;
 	else
 		netbuffer->ackreturn = 0;
 	if (reliable)
@@ -952,6 +975,11 @@ boolean HSendPacket(INT32 node, boolean reliable, UINT8 acknum, size_t packetlen
 	else
 		netbuffer->ack = acknum;
 
+	if (node < MAXNETNODES)
+	{
+		nodes[node].ackpending = false;
+		nodes[node].lastacksent = I_GetTime();
+	}
 	netbuffer->checksum = NetbufferChecksum();
 	sendbytes += packetheaderlength + doomcom->datalength; // For stat
 
@@ -1024,6 +1052,8 @@ boolean HGetPacket(void)
 			DEBFILE(va("Received packet from node %d!\n", doomcom->remotenode));
 			continue;
 		}
+		if (doomcom->datalength < (INT16)BASEPACKETSIZE)
+			continue;
 
 		nodes[doomcom->remotenode].lasttimepacketreceived = I_GetTime();
 
@@ -1056,13 +1086,22 @@ boolean HGetPacket(void)
 			continue;
 		}*/
 
-		// Proceed the ack and ackreturn field
-		if (!Processackpak())
-			continue; // discarded (duplicated)
-
-		// A packet with just ackreturn
-		if (netbuffer->packettype == PT_NOTHING)
-			continue;
+		// Finish processing the incoming packet before closing a node.
+		// Closing can send another packet and overwrite the shared buffer.
+		{
+			const INT32 node = doomcom->remotenode;
+			const boolean valid = Processackpak();
+			const boolean acks = netbuffer->packettype == PT_NOTHING;
+			if (valid && acks)
+				ProcessSelectiveAcks();
+			if ((nodes[node].flags & NF_CLOSE) && !Net_GetReliableBacklog(node, NULL))
+			{
+				Net_CloseConnection(node);
+				continue;
+			}
+			if (!valid || acks)
+				continue;
+		}
 		break;
 	}
 

@@ -35,6 +35,11 @@
 INT32 patchformat = GL_TEXFMT_AP_88; // use alpha for holes
 INT32 textureformat = GL_TEXFMT_P_8; // use chromakey for hole
 
+static size_t gl_numtextures = 0; // Texture count
+static GLMapTexture_t *gl_textures; // For all textures
+static GLMapTexture_t *gl_flats; // For texture flats
+boolean gl_maptexturesloaded = false;
+
 RGBA_t mapPalette[256] = {0}; // the palette for the currently loaded level or menu etc.
 
 // Returns a pointer to the palette which should be used for caching textures.
@@ -588,12 +593,40 @@ static UINT8 *MakeBlock(GLMipmap_t *grMipmap)
 	return block;
 }
 
-static boolean HWR_TextureHasTrueColorPNG(texture_t *texture)
+/* The common gallery texture is one untransformed PNG at its native size.
+ * Recognizing it must not build a software patch merely to choose RGBA. */
+static boolean HWR_SimpleTrueColorPNG(texture_t *texture)
+{
+#ifndef NO_PNG_LUMPS
+	texpatch_t *source;
+	UINT8 *data;
+	size_t length;
+	INT32 width, height;
+
+	if (!cv_gltruecolorpngs.value || !texture || texture->patchcount != 1
+	|| texture->flip)
+		return false;
+	source = &texture->patches[0];
+	if (source->originx || source->originy || source->flip
+	|| source->style != AST_COPY)
+		return false;
+	length = W_LumpLengthPwad(source->wad, source->lump);
+	data = W_CacheLumpNumPwad(source->wad, source->lump, PU_CACHE);
+	return Picture_IsLumpPNG(data, length)
+		&& Picture_PNGDimensionsFromHeader(data, length, &width, &height)
+		&& width == texture->width && height == texture->height;
+#else
+	(void)texture;
+	return false;
+#endif
+}
+
+static boolean HWR_DetectTrueColorPNG(texture_t *texture)
 {
 	INT32 i;
 
-	if (!cv_gltruecolorpngs.value)
-		return false;
+	if (HWR_SimpleTrueColorPNG(texture))
+		return true;
 	for (i = 0; i < texture->patchcount; i++)
 	{
 		texpatch_t *source = &texture->patches[i];
@@ -610,6 +643,62 @@ static boolean HWR_TextureHasTrueColorPNG(texture_t *texture)
 #endif
 	}
 	return false;
+}
+
+static boolean HWR_TextureHasTrueColorPNG(INT32 texnum)
+{
+	GLMapTexture_t *grtex;
+
+	if (!cv_gltruecolorpngs.value)
+		return false;
+
+	/* Floors and FOFs request the same texture many times per frame. Checking
+	 * a loose lump's size opens its file, even when the pixels are cached.
+	 * Keep both answers with the wall/flat cache, which is recreated when
+	 * texture resources or the true-colour setting change. */
+	grtex = &gl_textures[texnum];
+	if (!grtex->png_checked)
+	{
+		grtex->has_truecolor_png = HWR_DetectTrueColorPNG(textures[texnum]);
+		grtex->png_checked = true;
+	}
+	return grtex->has_truecolor_png;
+}
+
+/* Decode straight to the original RGBA channels. Software palette matching
+ * and column/post construction are unnecessary for an OpenGL map texture.
+ * Keep the ordinary patch path for sprites, composites and transformed art. */
+static boolean HWR_CopyUncachedSimplePNG(texture_t *texture, UINT8 *block)
+{
+#ifndef NO_PNG_LUMPS
+	texpatch_t *source;
+	UINT8 *data;
+	void *flat;
+	RGBA_t *rgba = NULL;
+	INT32 width, height;
+	size_t length;
+	boolean copied;
+
+	if (!HWR_SimpleTrueColorPNG(texture))
+		return false;
+	source = &texture->patches[0];
+	length = W_LumpLengthPwad(source->wad, source->lump);
+	data = W_CacheLumpNumPwad(source->wad, source->lump, PU_CACHE);
+	flat = Picture_PNGConvertWithRGBA(data, PICFMT_FLAT32, &width, &height,
+		NULL, NULL, length, NULL, 0, &rgba);
+	copied = flat && rgba && width == texture->width && height == texture->height;
+	if (copied)
+		memcpy(block, rgba, (size_t)width * (size_t)height * sizeof (*rgba));
+	if (flat && flat != rgba)
+		Z_Free(flat);
+	if (rgba)
+		Z_Free(rgba);
+	return copied;
+#else
+	(void)texture;
+	(void)block;
+	return false;
+#endif
 }
 
 /* Some otherwise-opaque PNG wall textures contain a tiny transparent run at
@@ -652,6 +741,70 @@ static void HWR_RepairTinyTrailingPNGEdge(RGBA_t *pixels, INT32 width,
 			pixels[i] = pixels[i - 1];
 }
 
+static boolean HWR_RGBARequiresChromaKey(const RGBA_t *pixels, size_t count)
+{
+	RGBA_t *palette = pMasterPalette ? pMasterPalette : HWR_GetTexturePalette();
+	size_t i;
+
+	for (i = 0; i < count; i++)
+		if (pixels[i].s.alpha
+		&& pixels[i].s.red == palette[HWR_PATCHES_CHROMAKEY_COLORINDEX].s.red
+		&& pixels[i].s.green == palette[HWR_PATCHES_CHROMAKEY_COLORINDEX].s.green
+		&& pixels[i].s.blue == palette[HWR_PATCHES_CHROMAKEY_COLORINDEX].s.blue)
+			return true;
+	return false;
+}
+
+/* An RGBA texture can share its ordinary GPU object with masked walls unless
+ * an opaque source pixel actually matches palette index 255. Palette formats
+ * keep their traditional separate upload because the backend interprets the
+ * TF_CHROMAKEYED flag while expanding them. */
+static void HWR_CheckTextureChromaKey(GLMapTexture_t *grtex,
+	const GLMipmap_t *mipmap)
+{
+	const RGBA_t *pixels;
+	size_t count;
+
+	grtex->chromakey_checked = true;
+	grtex->chromakey_required = true;
+	if (mipmap != &grtex->mipmap || mipmap->format != GL_TEXFMT_RGBA
+	|| !mipmap->data)
+		return;
+
+	pixels = (const RGBA_t *)mipmap->data;
+	count = (size_t)mipmap->width * mipmap->height;
+	grtex->chromakey_required = HWR_RGBARequiresChromaKey(pixels, count);
+}
+
+/* A masked request may be the texture's first use. Inspect the decoded source
+ * of the common one-PNG case before building an output bitmap, so a genuine
+ * chromakey texture still takes the established one-generation variant path. */
+static boolean HWR_CheckSimpleTextureChromaKey(GLMapTexture_t *grtex,
+	texture_t *texture)
+{
+	texpatch_t *source;
+	patch_t *realpatch;
+
+	if (texture->patchcount != 1 || texture->flip)
+		return false;
+	source = &texture->patches[0];
+	if (source->originx != 0 || source->originy != 0 || source->flip
+	|| source->style != AST_COPY)
+		return false;
+	realpatch = W_GetCachedPatchNumPwad(source->wad, source->lump);
+	if (!realpatch)
+		realpatch = W_CachePatchNumPwad(source->wad, source->lump, PU_PATCH);
+	if (!realpatch || !realpatch->hardware_pixels
+	|| realpatch->width != texture->width || realpatch->height != texture->height)
+		return false;
+
+	grtex->chromakey_checked = true;
+	grtex->chromakey_required = HWR_RGBARequiresChromaKey(
+		realpatch->hardware_pixels,
+		(size_t)realpatch->width * (size_t)realpatch->height);
+	return true;
+}
+
 //
 // Create a composite texture from patches, adapt the texture size to a power of 2
 // height and width for the hardware texture cache.
@@ -671,7 +824,7 @@ static void HWR_GenerateTexture(INT32 texnum, GLMapTexture_t *grtex, GLMipmap_t 
 	blockwidth = texture->width;
 	blockheight = texture->height;
 	blocksize = blockwidth * blockheight;
-	if (HWR_TextureHasTrueColorPNG(texture))
+	if (HWR_TextureHasTrueColorPNG(texnum))
 		mipmap->format = GL_TEXFMT_RGBA;
 	block = MakeBlock(mipmap);
 
@@ -693,6 +846,11 @@ static void HWR_GenerateTexture(INT32 texnum, GLMapTexture_t *grtex, GLMipmap_t 
 		{
 			memcpy(block, realpatch->hardware_pixels,
 				(size_t)blocksize * sizeof (RGBA_t));
+			copied_simple_png = true;
+			mipmap->flags |= TF_PALETTE_INDEPENDENT;
+		}
+		else if (HWR_CopyUncachedSimplePNG(texture, block))
+		{
 			copied_simple_png = true;
 			mipmap->flags |= TF_PALETTE_INDEPENDENT;
 		}
@@ -775,6 +933,8 @@ static void HWR_GenerateTexture(INT32 texnum, GLMapTexture_t *grtex, GLMipmap_t 
 
 	grtex->scaleX = 1.0f/(texture->width*FRACUNIT);
 	grtex->scaleY = 1.0f/(texture->height*FRACUNIT);
+	if (mipmap == &grtex->mipmap)
+		HWR_CheckTextureChromaKey(grtex, mipmap);
 }
 
 // patch may be NULL if grMipmap has been initialised already and makebitmap is false
@@ -822,11 +982,6 @@ void HWR_MakePatch (patch_t *patch, GLPatch_t *grPatch, GLMipmap_t *grMipmap, bo
 // =================================================
 //             CACHING HANDLING
 // =================================================
-
-static size_t gl_numtextures = 0; // Texture count
-static GLMapTexture_t *gl_textures; // For all textures
-static GLMapTexture_t *gl_flats; // For all (texture) flats, as normal flats don't need to be cached
-boolean gl_maptexturesloaded = false;
 
 void HWR_FreeTextureData(patch_t *patch)
 {
@@ -940,6 +1095,7 @@ static void HWR_FreePatchCache(boolean freeall)
 // free all textures after each level
 void HWR_ClearAllTextures(void)
 {
+	HWR_ClearTextCache();
 	HWD.pfnClearMipMapCache(); // free references to the textures
 	HWR_FreePatchCache(true);
 }
@@ -951,6 +1107,7 @@ void HWR_ClearAllTextures(void)
 // system-memory data before they can be rebuilt with the new palette.
 void HWR_ClearLevelTextures(void)
 {
+	HWR_ClearTextCache();
 	if (!cv_glretaintextures.value)
 	{
 		HWR_ClearAllTextures();
@@ -964,6 +1121,7 @@ void HWR_ClearLevelTextures(void)
 
 void HWR_FreeColormapCache(void)
 {
+	HWR_ClearTextCache();
 	HWR_FreePatchCache(false);
 }
 
@@ -1046,10 +1204,12 @@ boolean HWR_MapTexturesAreCurrent(size_t pnumtextures)
 // --------------------------------------------------------------------------
 GLMapTexture_t *HWR_GetTexture(INT32 tex, boolean chromakeyed)
 {
+	const precise_t request_started = I_GetPreciseTime();
 	precise_t upload_started = 0;
 	precise_t prepare_started = 0;
 	precise_t driver_started = 0;
-	char upload_operation[96];
+	char upload_operation[128];
+	const char *variant = chromakeyed ? "masked" : "opaque";
 
 	if (tex < 0 || tex >= (signed)gl_numtextures)
 	{
@@ -1077,11 +1237,54 @@ GLMapTexture_t *HWR_GetTexture(INT32 tex, boolean chromakeyed)
 		originalMipmap->format = textureformat;
 	}
 
+	/* Only true-colour PNG textures can safely share their opaque upload with a
+	 * masked use. Generate/inspect the base once, then remember the answer for
+	 * every later frame. Palette textures retain the established separate path. */
+	if (chromakeyed && !grtex->chromakey_checked)
+	{
+		if (!HWR_TextureHasTrueColorPNG(tex))
+		{
+			grtex->chromakey_checked = true;
+			grtex->chromakey_required = true;
+		}
+		else if (originalMipmap->data)
+			HWR_CheckTextureChromaKey(grtex, originalMipmap);
+		else if (HWR_SimpleTrueColorPNG(textures[tex]))
+		{
+			/* A masked draw can be the first request. Prepare the RGBA base
+			 * once so the chromakey test can inspect it without quantizing an
+			 * otherwise unused software patch. Genuine chromakey colours still
+			 * select the separate masked variant below. */
+			prepare_started = I_GetPreciseTime();
+			HWR_GenerateTexture(tex, grtex, originalMipmap);
+			snprintf(upload_operation, sizeof upload_operation,
+				"OpenGL texture prepare %.8s id=%d base %ux%u",
+				textures[tex]->name, tex, (unsigned)originalMipmap->width,
+				(unsigned)originalMipmap->height);
+			I_ReportHitch(upload_operation, prepare_started, 10);
+		}
+		else if (!HWR_CheckSimpleTextureChromaKey(grtex, textures[tex]))
+		{
+			/* Composite/transformed PNGs conservatively keep the established
+			 * chromakey variant. Decoding two full composites merely to discover
+			 * whether they could share would cost more than it saves. */
+			grtex->chromakey_checked = true;
+			grtex->chromakey_required = true;
+		}
+	}
+
 	/* Software treats palette index 255 as transparent for every masked wall,
 	 * including packed patches that already contain post-shaped holes.  Keep a
 	 * chromakey variant for those textures too; otherwise OpenGL displays index
 	 * 255 as an ordinary colour while software correctly leaves it empty. */
-	if (chromakeyed)
+	if (chromakeyed && !grtex->chromakey_required)
+	{
+		/* No visible chromakey pixels exist, so the ordinary RGBA texture already
+		 * has exactly the pixels a masked draw needs. */
+		grMipmap = originalMipmap;
+		variant = "masked-shared";
+	}
+	else if (chromakeyed)
 	{
 		UINT32 alphaflags;
 		// Allocate it if it wasn't already
@@ -1116,13 +1319,15 @@ GLMapTexture_t *HWR_GetTexture(INT32 tex, boolean chromakeyed)
 	}
 
 	if (!grMipmap->downloaded)
-		upload_started = I_GetPreciseTime();
+		upload_started = request_started;
 	if (!grMipmap->data && !grMipmap->downloaded)
 	{
 		prepare_started = I_GetPreciseTime();
 		HWR_GenerateTexture(tex, grtex, grMipmap);
 		snprintf(upload_operation, sizeof upload_operation,
-			"OpenGL texture prepare %.8s", textures[tex]->name);
+			"OpenGL texture prepare %.8s id=%d %s %ux%u",
+			textures[tex]->name, tex, variant, (unsigned)grMipmap->width,
+			(unsigned)grMipmap->height);
 		I_ReportHitch(upload_operation, prepare_started, 10);
 	}
 
@@ -1131,7 +1336,9 @@ GLMapTexture_t *HWR_GetTexture(INT32 tex, boolean chromakeyed)
 		driver_started = I_GetPreciseTime();
 		HWD.pfnSetTexture(grMipmap);
 		snprintf(upload_operation, sizeof upload_operation,
-			"OpenGL driver upload %.8s", textures[tex]->name);
+			"OpenGL driver upload %.8s id=%d %s %ux%u",
+			textures[tex]->name, tex, variant, (unsigned)grMipmap->width,
+			(unsigned)grMipmap->height);
 		I_ReportHitch(upload_operation, driver_started, 10);
 	}
 	HWR_SetCurrentTexture(grMipmap);
@@ -1141,12 +1348,16 @@ GLMapTexture_t *HWR_GetTexture(INT32 tex, boolean chromakeyed)
 		ps_hw_textureuploadtime.value.p += upload_elapsed;
 		ps_hw_textureuploads.value.i++;
 		snprintf(upload_operation, sizeof upload_operation,
-			"OpenGL texture upload %.8s", textures[tex]->name);
+			"OpenGL texture upload %.8s id=%d %s %ux%u",
+			textures[tex]->name, tex, variant, (unsigned)grMipmap->width,
+			(unsigned)grMipmap->height);
 		I_ReportHitch(upload_operation, upload_started, 20);
 	}
 
 	if (grMipmap->data)
 		Z_ChangeTag(grMipmap->data, PU_HWRCACHE_UNLOCKED);
+	if (grMipmap != originalMipmap && originalMipmap->data)
+		Z_ChangeTag(originalMipmap->data, PU_HWRCACHE_UNLOCKED);
 
 	return grtex;
 }
@@ -1203,7 +1414,7 @@ void HWR_GetLevelFlat(levelflat_t *levelflat, boolean chromakeyed)
 {
 	INT32 texturenum;
 	precise_t upload_started = 0;
-	char upload_operation[96];
+	char upload_operation[128];
 
 	if (levelflat->type == LEVELFLAT_NONE || levelflat->texture_id < 0
 		|| levelflat->texture_id >= numtextures
@@ -1217,6 +1428,14 @@ void HWR_GetLevelFlat(levelflat_t *levelflat, boolean chromakeyed)
 	if (texturenum < 0 || texturenum >= (signed)gl_numtextures)
 	{
 		HWR_SetCurrentTexture(NULL);
+		return;
+	}
+	/* Wall and flat users have identical wrapping/filtering for true-colour map
+	 * textures. Share one decoded image and one GPU name instead of uploading
+	 * large PNGs such as IRLWALL once for each use. */
+	if (HWR_TextureHasTrueColorPNG(texturenum))
+	{
+		(void)HWR_GetTexture(texturenum, chromakeyed);
 		return;
 	}
 
@@ -1234,16 +1453,28 @@ void HWR_GetLevelFlat(levelflat_t *levelflat, boolean chromakeyed)
 	if (!originalMipmap->width || !originalMipmap->height)
 		MakeLevelFlatMipmap(originalMipmap, texturenum, TF_WRAPXY);
 
+	/* The decoded pixels are intentionally purgeable once their GPU texture is
+	 * resident. Do not rebuild a megabyte-scale true-colour flat merely because
+	 * that optional system-memory copy was reclaimed; drawing only needs the
+	 * already-downloaded texture. A chromakey variant has its own GPU name, so it
+	 * can take the same fast path once that variant has also been uploaded. */
+	if (!chromakeyed && originalMipmap->downloaded)
+	{
+		HWR_SetCurrentTexture(originalMipmap);
+		return;
+	}
+	if (chromakeyed && originalMipmap->nextcolormap
+	&& originalMipmap->nextcolormap->downloaded)
+	{
+		HWR_SetCurrentTexture(originalMipmap->nextcolormap);
+		return;
+	}
+
 	if (!originalMipmap->data)
 	{
-		if (HWR_TextureHasTrueColorPNG(textures[texturenum]))
-			HWR_GenerateTexture(texturenum, grtex, originalMipmap);
-		else
-		{
-			size_t size = originalMipmap->width * originalMipmap->height;
-			memcpy(Z_Malloc(size, PU_HWRCACHE, &originalMipmap->data),
-				R_GetFlatForTexture(texturenum), size);
-		}
+		size_t size = originalMipmap->width * originalMipmap->height;
+		memcpy(Z_Malloc(size, PU_HWRCACHE, &originalMipmap->data),
+			R_GetFlatForTexture(texturenum), size);
 	}
 
 	// If chroma-keyed, create or use a different mipmap for the variant
@@ -1299,7 +1530,10 @@ void HWR_GetLevelFlat(levelflat_t *levelflat, boolean chromakeyed)
 	if (upload_started)
 	{
 		snprintf(upload_operation, sizeof upload_operation,
-			"OpenGL flat upload %.8s", textures[texturenum]->name);
+			"OpenGL flat upload %.8s id=%d %s %ux%u",
+			textures[texturenum]->name, texturenum,
+			chromakeyed ? "masked" : "opaque",
+			(unsigned)grMipmap->width, (unsigned)grMipmap->height);
 		I_ReportHitch(upload_operation, upload_started, 20);
 	}
 
@@ -1666,6 +1900,9 @@ void HWR_SetPalette(RGBA_t *palette)
 	}
 }
 
+static RGBA_t paletteLookupPalette[256];
+static boolean paletteLookupValid = false;
+
 static void HWR_SetPaletteLookup(RGBA_t *palette)
 {
 	int r, g, b;
@@ -1687,6 +1924,20 @@ static void HWR_SetPaletteLookup(RGBA_t *palette)
 #undef STEP_SIZE
 	HWD.pfnSetPaletteLookup(lut);
 	Z_Free(lut);
+	memcpy(paletteLookupPalette, palette, sizeof paletteLookupPalette);
+	paletteLookupValid = true;
+}
+
+/* The portal fog pass can use the palette lookup shader even when ordinary
+ * palette rendering is disabled. Generate the 3-D lookup lazily and retain it
+ * until the active texture palette actually changes. */
+void HWR_EnsurePaletteLookup(void)
+{
+	RGBA_t *palette = HWR_GetTexturePalette();
+
+	if (!paletteLookupValid
+	|| memcmp(paletteLookupPalette, palette, sizeof paletteLookupPalette))
+		HWR_SetPaletteLookup(palette);
 }
 
 // Updates mapPalette to reflect the loaded level or other game state.

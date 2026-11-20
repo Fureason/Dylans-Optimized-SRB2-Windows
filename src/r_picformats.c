@@ -58,6 +58,43 @@
 
 #ifdef PICTURE_PNG_USELOOKUP
 static colorlookup_t png_colorlookup;
+#elif defined(HAVE_PNG)
+/* Exact RGB memoization for PNG-to-software conversion. Large decorative
+ * sprites repeat many colours; scanning all 256 palette entries per repeated
+ * pixel made their first appearance expensive even in OpenGL. */
+static struct
+{
+	RGBA_t palette[256];
+	UINT32 keys[65536];
+	UINT8 values[65536];
+	boolean initialized;
+} png_exactlookup;
+
+static void Picture_InitPNGExactLookup(void)
+{
+	if (!png_exactlookup.initialized
+	|| memcmp(png_exactlookup.palette, pMasterPalette, sizeof png_exactlookup.palette))
+	{
+		memcpy(png_exactlookup.palette, pMasterPalette, sizeof png_exactlookup.palette);
+		memset(png_exactlookup.keys, 0, sizeof png_exactlookup.keys);
+		png_exactlookup.initialized = true;
+	}
+}
+
+static UINT8 Picture_PNGNearestColor(UINT8 r, UINT8 g, UINT8 b)
+{
+	/* Zero is the empty key, including for pure black. Hash collisions only
+	 * evict a cached result; the complete RGB key is always compared. */
+	const UINT32 key = 1u + ((UINT32)r | ((UINT32)g << 8) | ((UINT32)b << 16));
+	const UINT32 slot = (key * 2654435761u) >> 16;
+	if (png_exactlookup.keys[slot] != key)
+	{
+		png_exactlookup.values[slot] = NearestPaletteColor(r, g, b,
+			png_exactlookup.palette);
+		png_exactlookup.keys[slot] = key;
+	}
+	return png_exactlookup.values[slot];
+}
 #endif
 
 /** Converts a picture between two formats.
@@ -1397,6 +1434,9 @@ static void *Picture_PNGConvertInternal(
 #ifdef PICTURE_PNG_USELOOKUP
 	if (outbpp != PICDEPTH_32BPP)
 		InitColorLUT(&png_colorlookup, pMasterPalette, false);
+#else
+	if (outbpp != PICDEPTH_32BPP)
+		Picture_InitPNGExactLookup();
 #endif
 
 	if (outbpp == PICDEPTH_32BPP)
@@ -1475,7 +1515,7 @@ static void *Picture_PNGConvertInternal(
 #ifdef PICTURE_PNG_USELOOKUP
 						UINT8 palidx = GetColorLUT(&png_colorlookup, red, green, blue);
 #else
-						UINT8 palidx = NearestColor(red, green, blue);
+						UINT8 palidx = Picture_PNGNearestColor(red, green, blue);
 #endif
 						outflat[((y * width) + x)] = (0xFF << 8) | palidx;
 					}
@@ -1520,7 +1560,7 @@ static void *Picture_PNGConvertInternal(
 #ifdef PICTURE_PNG_USELOOKUP
 						UINT8 palidx = GetColorLUT(&png_colorlookup, red, green, blue);
 #else
-						UINT8 palidx = NearestColor(red, green, blue);
+						UINT8 palidx = Picture_PNGNearestColor(red, green, blue);
 #endif
 						outflat[((y * width) + x)] = palidx;
 					}

@@ -58,32 +58,73 @@ static UINT8 softwaretranstogl[11]    = {  0, 25, 51, 76,102,127,153,178,204,229
 static UINT8 softwaretranstogl_hi[11] = {  0, 51,102,153,204,255,255,255,255,255,255};
 static UINT8 softwaretranstogl_lo[11] = {  0, 12, 24, 36, 48, 60, 71, 83, 95,111,127};
 
+#include "hw_textbatch.inc"
+
+/* Software starts sampling at the first source texel rather than at a fraction
+ * of it. Align the quad with destination pixel centres, retaining a small
+ * subpixel margin so an edge cannot exclude its first row on one triangle. */
+static void HWR_AlignPatchPixels(double *x, double *y)
+{
+	const float sampleoffset = 0.5f - 1.0f/64.0f;
+	*x = round(*x) + sampleoffset;
+	*y = round(*y) + sampleoffset;
+}
+
+/* Resolve exact source-texel boundaries consistently on both quad triangles.
+ * The positive bias agrees with Software's upward-rounded sampling step. */
+static void HWR_StabilizePatchSampling(FOutVector vertices[4],
+	const patch_t *patch, const GLPatch_t *hardware)
+{
+	float sx, sy;
+	INT32 i;
+	if (patch->width <= 0 || patch->height <= 0)
+		return;
+	sx = hardware->max_s / ((float)patch->width * 1024.0f);
+	sy = hardware->max_t / ((float)patch->height * 1024.0f);
+	for (i = 0; i < 4; i++)
+	{
+		vertices[i].s += sx;
+		vertices[i].t += sy;
+	}
+}
+
 void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale, fixed_t vscale, INT32 option, const UINT8 *colormap)
 {
 	FOutVector v[4];
 	FBITFIELD flags;
-	float cx = FIXED_TO_FLOAT(x);
-	float cy = FIXED_TO_FLOAT(y);
+	double cx = (double)x / FRACUNIT;
+	double cy = (double)y / FRACUNIT;
 	UINT8 alphalevel = ((option & V_ALPHAMASK) >> V_ALPHASHIFT);
 	UINT8 blendmode = ((option & V_BLENDMASK) >> V_BLENDSHIFT);
 	UINT8 opacity = 0xFF;
 	GLPatch_t *hwrPatch;
+	GLPatch_t atlasPatch = {0};
+	text_glyph_t *glyph = HWR_TextGlyph(gpatch, colormap);
 
 //  3--2
 //  | /|
 //  |/ |
 //  0--1
-	float dup, fscalew, fscaleh, fwidth, fheight;
+	double dup, fscalew, fscaleh, fwidth, fheight;
 
 	UINT8 perplayershuffle = 0;
 
 	// make patch ready in hardware cache
-	if (!colormap)
-		HWR_GetPatch(gpatch);
+	if (glyph)
+	{
+		atlasPatch.max_s = atlasPatch.max_t = 1.0f;
+		hwrPatch = &atlasPatch;
+	}
 	else
-		HWR_GetMappedPatch(gpatch, colormap);
+	{
+		HWR_FlushTextBatch();
+		if (!colormap)
+			HWR_GetPatch(gpatch);
+		else
+			HWR_GetMappedPatch(gpatch, colormap);
 
-	hwrPatch = ((GLPatch_t *)gpatch->hardware);
+		hwrPatch = ((GLPatch_t *)gpatch->hardware);
+	}
 
 	if (alphalevel)
 	{
@@ -108,24 +149,24 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 		break;
 	}
 
-	fscalew = fscaleh = FIXED_TO_FLOAT(pscale);
+	fscalew = fscaleh = (double)pscale / FRACUNIT;
 	if (vscale != pscale)
-		fscaleh = FIXED_TO_FLOAT(vscale);
+		fscaleh = (double)vscale / FRACUNIT;
 
 	// See my comments in v_video.c's V_DrawFixedPatch
 	// -- Monster Iestyn 29/10/18
 	{
-		float offsetx = 0.0f, offsety = 0.0f;
+		double offsetx = 0.0, offsety = 0.0;
 
 		// left offset
 		if (option & V_FLIP)
-			offsetx = (float)(gpatch->width - gpatch->leftoffset) * fscalew;
+			offsetx = ((double)FixedMul((gpatch->width - gpatch->leftoffset)<<FRACBITS, pscale) + 1.0) / FRACUNIT;
 		else
-			offsetx = (float)(gpatch->leftoffset) * fscalew;
+			offsetx = (double)FixedMul(gpatch->leftoffset<<FRACBITS, pscale) / FRACUNIT;
 
 		// top offset
 		// TODO: make some kind of vertical version of V_FLIP
-		offsety = (float)(gpatch->topoffset) * fscaleh;
+		offsety = (double)FixedMul(gpatch->topoffset<<FRACBITS, vscale) / FRACUNIT;
 
 		cx -= offsetx;
 		cy -= offsety;
@@ -203,6 +244,8 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 	{
 		cx = cx * dup;
 		cy = cy * dup;
+		cx = round(cx);
+		cy = round(cy);
 
 		if (!(option & V_SCALEPATCHMASK))
 		{
@@ -224,22 +267,22 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 				if (option & V_SNAPTORIGHT)
 					cx += ((float)vid.width - ((float)BASEVIDWIDTH * dup));
 				else if (!(option & V_SNAPTOLEFT))
-					cx += ((float)vid.width - ((float)BASEVIDWIDTH * dup))/2;
+					cx += floor((vid.width - BASEVIDWIDTH * dup)/2.0);
 				if (perplayershuffle & 4)
-					cx -= ((float)vid.width - ((float)BASEVIDWIDTH * dup))/4;
+					cx -= floor((vid.width - BASEVIDWIDTH * dup)/4.0);
 				else if (perplayershuffle & 8)
-					cx += ((float)vid.width - ((float)BASEVIDWIDTH * dup))/4;
+					cx += floor((vid.width - BASEVIDWIDTH * dup)/4.0);
 			}
 			if (fabsf((float)vid.height - (float)BASEVIDHEIGHT * dup) > 1.0E-36f)
 			{
 				if (option & V_SNAPTOBOTTOM)
 					cy += ((float)vid.height - ((float)BASEVIDHEIGHT * dup));
 				else if (!(option & V_SNAPTOTOP))
-					cy += ((float)vid.height - ((float)BASEVIDHEIGHT * dup))/2;
+					cy += floor((vid.height - BASEVIDHEIGHT * dup)/2.0);
 				if (perplayershuffle & 1)
-					cy -= ((float)vid.height - ((float)BASEVIDHEIGHT * dup))/4;
+					cy -= floor((vid.height - BASEVIDHEIGHT * dup)/4.0);
 				else if (perplayershuffle & 2)
-					cy += ((float)vid.height - ((float)BASEVIDHEIGHT * dup))/4;
+					cy += floor((vid.height - BASEVIDHEIGHT * dup)/4.0);
 			}
 		}
 	}
@@ -255,13 +298,16 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 		fheight = (float)(gpatch->height) * dup;
 	}
 
+	HWR_AlignPatchPixels(&cx, &cy);
+	if (option & V_FLIP)
+		cx += floor(fwidth) - fwidth + 1.0/32.0;
 	// positions of the cx, cy, are between 0 and vid.width/vid.height now, we need them to be between -1 and 1
-	cx = -1 + (cx / (vid.width/2));
-	cy = 1 - (cy / (vid.height/2));
+	cx = -1 + (cx / (vid.width/2.0));
+	cy = 1 - (cy / (vid.height/2.0));
 
 	// fwidth and fheight are similar
-	fwidth /= vid.width / 2;
-	fheight /= vid.height / 2;
+	fwidth /= vid.width / 2.0;
+	fheight /= vid.height / 2.0;
 
 	// set the polygon vertices to the right positions
 	v[0].x = v[3].x = cx;
@@ -285,9 +331,16 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 
 	v[0].t = v[1].t = 0.0f;
 	v[2].t = v[3].t = hwrPatch->max_t;
+	HWR_StabilizePatchSampling(v, gpatch, hwrPatch);
 
 	// clip it since it is used for bunny scroll in doom I
 	flags = HWR_GetBlendModeFlag(blendmode+1)|PF_NoDepthTest;
+	if (glyph)
+	{
+		if (alphalevel) flags |= PF_Modulated;
+		HWR_QueueTextQuad(glyph, v, flags, opacity);
+		return;
+	}
 
 	if (alphalevel)
 	{
@@ -303,10 +356,11 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 
 void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale, fixed_t vscale, INT32 option, const UINT8 *colormap, fixed_t sx, fixed_t sy, fixed_t w, fixed_t h)
 {
+	HWR_FlushTextBatch();
 	FOutVector v[4];
 	FBITFIELD flags;
-	float cx = FIXED_TO_FLOAT(x);
-	float cy = FIXED_TO_FLOAT(y);
+	double cx = (double)x / FRACUNIT;
+	double cy = (double)y / FRACUNIT;
 	UINT8 alphalevel = ((option & V_ALPHAMASK) >> V_ALPHASHIFT);
 	UINT8 blendmode = ((option & V_BLENDMASK) >> V_BLENDSHIFT);
 	GLPatch_t *hwrPatch;
@@ -315,7 +369,7 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 //  | /|
 //  |/ |
 //  0--1
-	float dup, fscalew, fscaleh, fwidth, fheight;
+	double dup, fscalew, fscaleh, fwidth, fheight;
 
 	UINT8 perplayershuffle = 0;
 
@@ -342,12 +396,12 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		break;
 	}
 
-	fscalew = fscaleh = FIXED_TO_FLOAT(pscale);
+	fscalew = fscaleh = (double)pscale / FRACUNIT;
 	if (vscale != pscale)
-		fscaleh = FIXED_TO_FLOAT(vscale);
+		fscaleh = (double)vscale / FRACUNIT;
 
-	cx -= (float)(gpatch->leftoffset) * fscalew;
-	cy -= (float)(gpatch->topoffset) * fscaleh;
+	cx -= (double)FixedMul(gpatch->leftoffset<<FRACBITS, pscale) / FRACUNIT;
+	cy -= (double)FixedMul(gpatch->topoffset<<FRACBITS, vscale) / FRACUNIT;
 
 	if (splitscreen && (option & V_PERPLAYER))
 	{
@@ -421,6 +475,8 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 	{
 		cx = cx * dup;
 		cy = cy * dup;
+		cx = round(cx);
+		cy = round(cy);
 
 		if (!(option & V_SCALEPATCHMASK))
 		{
@@ -433,28 +489,28 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 				if (option & V_SNAPTORIGHT)
 					cx += ((float)vid.width - ((float)BASEVIDWIDTH * dup));
 				else if (!(option & V_SNAPTOLEFT))
-					cx += ((float)vid.width - ((float)BASEVIDWIDTH * dup))/2;
+					cx += floor((vid.width - BASEVIDWIDTH * dup)/2.0);
 				if (perplayershuffle & 4)
-					cx -= ((float)vid.width - ((float)BASEVIDWIDTH * dup))/4;
+					cx -= floor((vid.width - BASEVIDWIDTH * dup)/4.0);
 				else if (perplayershuffle & 8)
-					cx += ((float)vid.width - ((float)BASEVIDWIDTH * dup))/4;
+					cx += floor((vid.width - BASEVIDWIDTH * dup)/4.0);
 			}
 			if (fabsf((float)vid.height - (float)BASEVIDHEIGHT * dup) > 1.0E-36f)
 			{
 				if (option & V_SNAPTOBOTTOM)
 					cy += ((float)vid.height - ((float)BASEVIDHEIGHT * dup));
 				else if (!(option & V_SNAPTOTOP))
-					cy += ((float)vid.height - ((float)BASEVIDHEIGHT * dup))/2;
+					cy += floor((vid.height - BASEVIDHEIGHT * dup)/2.0);
 				if (perplayershuffle & 1)
-					cy -= ((float)vid.height - ((float)BASEVIDHEIGHT * dup))/4;
+					cy -= floor((vid.height - BASEVIDHEIGHT * dup)/4.0);
 				else if (perplayershuffle & 2)
-					cy += ((float)vid.height - ((float)BASEVIDHEIGHT * dup))/4;
+					cy += floor((vid.height - BASEVIDHEIGHT * dup)/4.0);
 			}
 		}
 	}
 
-	fwidth = FIXED_TO_FLOAT(w);
-	fheight = FIXED_TO_FLOAT(h);
+	fwidth = (double)w / FRACUNIT;
+	fheight = (double)h / FRACUNIT;
 
 	if (sx + w > gpatch->width<<FRACBITS)
 		fwidth = FIXED_TO_FLOAT((gpatch->width<<FRACBITS) - sx);
@@ -473,13 +529,14 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		fheight *= dup;
 	}
 
+	HWR_AlignPatchPixels(&cx, &cy);
 	// positions of the cx, cy, are between 0 and vid.width/vid.height now, we need them to be between -1 and 1
-	cx = -1 + (cx / (vid.width/2));
-	cy = 1 - (cy / (vid.height/2));
+	cx = -1 + (cx / (vid.width/2.0));
+	cy = 1 - (cy / (vid.height/2.0));
 
 	// fwidth and fheight are similar
-	fwidth /= vid.width / 2;
-	fheight /= vid.height / 2;
+	fwidth /= vid.width / 2.0;
+	fheight /= vid.height / 2.0;
 
 	// set the polygon vertices to the right positions
 	v[0].x = v[3].x = cx;
@@ -571,6 +628,7 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		}
 #undef flerp
 	}
+	HWR_StabilizePatchSampling(v, gpatch, hwrPatch);
 
 	// clip it since it is used for bunny scroll in doom I
 	flags = HWR_GetBlendModeFlag(blendmode+1)|PF_NoDepthTest;
@@ -691,7 +749,7 @@ void HWR_FadeScreenMenuBack(UINT16 color, UINT8 strength)
 				Surf.LightInfo.light_level = strength;
 				HWD.pfnMakeScreenTexture(scr_tex);
 				HWD.pfnSetShader(HWR_GetShaderFromTarget(SHADER_UI_COLORMAP_FADE));
-				HWD.pfnDrawScreenTexture(scr_tex, &Surf, PF_ColorMapped|PF_NoDepthTest);
+				HWD.pfnDrawScreenTexture(scr_tex, &Surf, PF_ColorMapped|PF_NoDepthTest, true);
 				HWD.pfnUnSetShader();
 
 				return;
@@ -719,6 +777,7 @@ void HWR_FadeScreenMenuBack(UINT16 color, UINT8 strength)
 // -----------------+
 void HWR_DrawFadeFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT16 actualcolor, UINT8 strength)
 {
+	HWR_FlushTextBatch();
 	FOutVector v[4];
 	FSurfaceInfo Surf;
 	float fx, fy, fw, fh;
@@ -1096,6 +1155,7 @@ void HWR_drawAMline(const fline_t *fl, INT32 color)
 // -------------------+
 void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32 actualcolor)
 {
+	HWR_FlushTextBatch();
 	FOutVector v[4];
 	FSurfaceInfo Surf;
 	float fx, fy, fw, fh;
@@ -1262,6 +1322,7 @@ void HWR_DrawConsoleFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color, UINT32
 // -----------------+
 void HWR_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 color)
 {
+	HWR_FlushTextBatch();
 	FOutVector v[4];
 	FSurfaceInfo Surf;
 	float fx, fy, fw, fh;
@@ -1514,15 +1575,31 @@ static inline boolean saveTGA(const char *file_name, void *buffer,
 // screen shot
 // --------------------------------------------------------------------------
 
+boolean HWR_ReadScreenshot(UINT8 *buffer)
+{
+	int tex;
+
+	if (!buffer)
+		return false;
+
+	tex = HWR_ShouldUsePaletteRendering()
+		? HWD_SCREENTEXTURE_GENERIC3 : HWD_SCREENTEXTURE_GENERIC2;
+	// returns 24bit 888 RGB
+	HWD.pfnReadScreenTexture(tex, (void *)buffer);
+	return true;
+}
+
 UINT8 *HWR_GetScreenshot(void)
 {
 	UINT8 *buf = malloc(vid.width * vid.height * 3 * sizeof (*buf));
-	int tex = HWR_ShouldUsePaletteRendering() ? HWD_SCREENTEXTURE_GENERIC3 : HWD_SCREENTEXTURE_GENERIC2;
 
 	if (!buf)
 		return NULL;
-	// returns 24bit 888 RGB
-	HWD.pfnReadScreenTexture(tex, (void *)buf);
+	if (!HWR_ReadScreenshot(buf))
+	{
+		free(buf);
+		return NULL;
+	}
 	return buf;
 }
 
@@ -1530,7 +1607,6 @@ boolean HWR_Screenshot(const char *pathname)
 {
 	boolean ret;
 	UINT8 *buf = malloc(vid.width * vid.height * 3 * sizeof (*buf));
-	int tex = HWR_ShouldUsePaletteRendering() ? HWD_SCREENTEXTURE_GENERIC3 : HWD_SCREENTEXTURE_GENERIC2;
 
 	if (!buf)
 	{
@@ -1538,8 +1614,11 @@ boolean HWR_Screenshot(const char *pathname)
 		return false;
 	}
 
-	// returns 24bit 888 RGB
-	HWD.pfnReadScreenTexture(tex, (void *)buf);
+	if (!HWR_ReadScreenshot(buf))
+	{
+		free(buf);
+		return false;
+	}
 
 #ifdef USE_PNG
 	ret = M_SavePNG(pathname, buf, vid.width, vid.height, NULL);

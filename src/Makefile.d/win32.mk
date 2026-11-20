@@ -15,7 +15,7 @@ endif
 
 sources+=win32/Srb2win.rc
 opts+=-DSTDC_HEADERS
-libs+=-ladvapi32 -lkernel32 -lmsvcrt -luser32
+libs+=-ladvapi32 -lkernel32 -lmsvcrt -luser32 -lole32 -lmfuuid
 
 ifndef DEDICATED
 ifndef DUMMY

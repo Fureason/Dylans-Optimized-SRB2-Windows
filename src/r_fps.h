@@ -32,6 +32,7 @@ extern ps_metric_t ps_interp_lag;
 
 UINT32 R_GetFramerateCap(void);
 boolean R_UsingFrameInterpolation(void);
+fixed_t R_NetworkTimeFrac(precise_t now, tic_t tic, fixed_t fallback, boolean active);
 
 enum viewcontext_e
 {

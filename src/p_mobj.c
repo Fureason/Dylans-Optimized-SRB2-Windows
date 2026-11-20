@@ -26,6 +26,7 @@
 #include "r_splats.h"
 #include "s_sound.h"
 #include "m_perfstats.h"
+#include "m_hostguard.h"
 #include "z_zone.h"
 #include "m_random.h"
 #include "m_cheat.h"
@@ -10658,6 +10659,7 @@ mobj_t *P_SpawnMobj(fixed_t x, fixed_t y, fixed_t z, mobjtype_t type, ...)
 	mobj->thinker.function.acp1 = (actionf_p1)P_MobjThinker;
 	mobj->type = type;
 	mobj->info = info;
+	HG_RecordSpawn();
 
 	mobj->x = x;
 	mobj->y = y;
@@ -11191,6 +11193,7 @@ void P_RemoveMobj(mobj_t *mobj)
 	if (P_MobjWasRemoved(mobj) || mobj->thinker.removing)
 		return; // Something already removed or is removing this mobj.
 
+	HG_RecordRemoval();
 	mobj->thinker.removing = true; // Set earlier to avoid recursion.
 	LUA_HookMobj(mobj, MOBJ_HOOK(MobjRemoved));
 

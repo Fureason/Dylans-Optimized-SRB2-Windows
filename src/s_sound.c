@@ -123,6 +123,7 @@ consvar_t cv_1upsound = CVAR_INIT ("1upsound", "Jingle", CV_SAVE, cons_1upsound_
 // Sound system toggles, saved into the config
 consvar_t cv_gamedigimusic = CVAR_INIT ("digimusic", "On", CV_SAVE|CV_CALL|CV_NOINIT, CV_OnOff, GameDigiMusic_OnChange);
 consvar_t cv_gamemidimusic = CVAR_INIT ("midimusic", "On", CV_SAVE|CV_CALL|CV_NOINIT, CV_OnOff, GameMIDIMusic_OnChange);
+consvar_t cv_soundclipping = CVAR_INIT("soundclipping", "On", CV_SAVE, CV_OnOff, NULL);
 consvar_t cv_gamesounds = CVAR_INIT ("sounds", "On", CV_SAVE|CV_CALL|CV_NOINIT, CV_OnOff, GameSounds_OnChange);
 
 // Music preference
@@ -296,6 +297,7 @@ void S_RegisterSoundStuff(void)
 	CV_RegisterVar(&cv_playsoundsifunfocused);
 	CV_RegisterVar(&cv_playmusicifunfocused);
 	CV_RegisterVar(&cv_gamesounds);
+	CV_RegisterVar(&cv_soundclipping);
 	CV_RegisterVar(&cv_gamedigimusic);
 	CV_RegisterVar(&cv_gamemidimusic);
 	CV_RegisterVar(&cv_musicpref);
@@ -907,8 +909,12 @@ void S_UpdateSounds(void)
 		goto notinlevel;
 	}
 
-	if (dedicated || sound_disabled)
+	if (dedicated)
 		return;
+	// Music fades and queued track changes still need the backend ticker when
+	// sound effects are switched off. Only skip positional SFX work here.
+	if (sound_disabled)
+		goto updateaudio;
 
 	if (players[displayplayer].awayviewtics)
 		listenmobj = players[displayplayer].awayviewmobj;
@@ -1038,6 +1044,7 @@ notinlevel:
 	if (cv_precachelevelsounds.value
 	&& R_GetAdaptiveEffectsLevel() == 0)
 		S_ProcessBackgroundSoundPrecache();
+updateaudio:
 	I_UpdateSound();
 }
 
@@ -2747,7 +2754,10 @@ void GameSounds_OnChange(void)
 	if (M_CheckParm("-nosound") || M_CheckParm("-noaudio"))
 		return;
 
-	if (sound_disabled)
+	// Reapplying a setting must not invert the live audio state.
+	if (sound_disabled == (cv_gamesounds.value == 0))
+		return;
+	if (cv_gamesounds.value)
 	{
 		sound_disabled = false;
 		I_StartupSound(); // will return early if initialised
@@ -2768,7 +2778,9 @@ void GameDigiMusic_OnChange(void)
 	else if (M_CheckParm("-nodigmusic"))
 		return;
 
-	if (digital_disabled)
+	if (digital_disabled == (cv_gamedigimusic.value == 0))
+		return;
+	if (cv_gamedigimusic.value)
 	{
 		digital_disabled = false;
 		I_StartupSound(); // will return early if initialised
@@ -2803,7 +2815,9 @@ void GameMIDIMusic_OnChange(void)
 	else if (M_CheckParm("-nomidimusic"))
 		return;
 
-	if (midi_disabled)
+	if (midi_disabled == (cv_gamemidimusic.value == 0))
+		return;
+	if (cv_gamemidimusic.value)
 	{
 		midi_disabled = false;
 		I_StartupSound(); // will return early if initialised

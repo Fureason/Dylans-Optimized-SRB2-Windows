@@ -487,6 +487,7 @@ void readfreeslots(MYFILE *f)
 						FREE_SKINCOLORS[i] = Z_Malloc(strlen(word)+1, PU_STATIC, NULL);
 						strcpy(FREE_SKINCOLORS[i],word);
 						M_AddMenuColor(numskincolors++);
+						R_InvalidateColorNameCache();
 						break;
 					}
 			}
@@ -753,6 +754,7 @@ void readskincolor(MYFILE *f, INT32 num)
 				}
 
 				strlcpy(skincolors[num].name, truncword, namesize); // already truncated
+				R_InvalidateColorNameCache();
 
 				free(truncword);
 			}

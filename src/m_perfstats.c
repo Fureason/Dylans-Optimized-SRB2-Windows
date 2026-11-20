@@ -10,6 +10,7 @@
 /// \brief Performance measurement tools.
 
 #include "m_perfstats.h"
+#include "m_custombuild.h"
 #include "v_video.h"
 #include "i_video.h"
 #include "screen.h"
@@ -110,7 +111,7 @@ static UINT32 ps_spawn_total;
 static char ps_slowest_lua[LUA_IDSIZE + 80];
 static precise_t ps_slowest_lua_time;
 
-#define PS_LUA_TOTAL_SLOTS 64
+#define PS_LUA_TOTAL_SLOTS 1024
 typedef struct
 {
 	char description[LUA_IDSIZE + 80];
@@ -119,6 +120,8 @@ typedef struct
 	UINT32 calls;
 } ps_lua_total_t;
 static ps_lua_total_t ps_lua_totals[PS_LUA_TOTAL_SLOTS];
+static UINT32 ps_lua_omitted_calls;
+static precise_t ps_lua_omitted_time;
 
 static const char *PS_MobjTypeName(mobjtype_t type)
 {
@@ -265,6 +268,11 @@ void PS_RecordLuaHook(const char *description, precise_t time_taken)
 			break;
 		}
 	}
+	if (i == PS_LUA_TOTAL_SLOTS)
+	{
+		ps_lua_omitted_calls++;
+		ps_lua_omitted_time += time_taken;
+	}
 }
 
 static void PS_FormatLuaTotals(char *buffer, size_t buffer_size)
@@ -301,6 +309,11 @@ static void PS_FormatLuaTotals(char *buffer, size_t buffer_size)
 	}
 	if (!offset)
 		snprintf(buffer, buffer_size, "No attributed Lua hooks were captured.\r\n");
+	if (ps_lua_omitted_calls && offset < buffer_size-1)
+		snprintf(buffer+offset, buffer_size-offset,
+			"Unattributed samples beyond %u groups: %u calls, %.3f ms total.\r\n",
+			(unsigned)PS_LUA_TOTAL_SLOTS, ps_lua_omitted_calls,
+			precision ? (double)ps_lua_omitted_time*1000.0/precision : 0.0);
 }
 
 static void PS_FormatMobjTotals(char *buffer, size_t buffer_size)
@@ -540,7 +553,7 @@ void PS_PerformanceReport_f(void)
 	PS_FormatMobjTotals(mobj_totals, sizeof mobj_totals);
 	M_GetMovieDiagnostics(movie, sizeof movie);
 	length = snprintf(report, sizeof report,
-		"SRB2 V5.52 performance report\r\n"
+		"SRB2 performance report\r\ncustom_build=" CUSTOM_BUILD_ID "\r\nengine_version=" VERSIONSTRING "\r\nreport_format=2\r\n"
 		"timestamp=%04d-%02d-%02d %02d:%02d:%02d\r\n"
 		"map=%d gametic=%u leveltime=%u\r\n"
 		"renderer=%s resolution=%dx%d fullscreen=%d fps_cap=%u vsync=%s pacing=%s\r\n"
@@ -591,6 +604,8 @@ void PS_PerformanceReport_f(void)
 	CONS_Printf("Likely causes:\n%s", causes);
 	CONS_Printf("Full details are in performance-report.txt. Deep profiling is active for 5 seconds.\n");
 	memset(ps_lua_totals, 0, sizeof ps_lua_totals);
+	ps_lua_omitted_calls = 0;
+	ps_lua_omitted_time = 0;
 	memset(ps_mobjtype_totals, 0, sizeof ps_mobjtype_totals);
 	memset(ps_mobjtype_total_calls, 0, sizeof ps_mobjtype_total_calls);
 	PS_ArmDeepProfile();

@@ -110,8 +110,10 @@ boolean Playing(void);
 //  to notify of game exit
 void D_QuitNetGame(void);
 
-//? How many ticks to run?
-boolean TryRunTics(tic_t realtic);
+boolean D_HasDeferredNetTics(void);
+boolean D_PollLateNetTics(void);
+boolean TryRunTics(tic_t realtics, precise_t frame_deadline);
+void D_FormatNetTicHitch(char *buffer, size_t size, precise_t frame_start);
 
 // extra data for lmps
 // these functions scare me. they contain magic.

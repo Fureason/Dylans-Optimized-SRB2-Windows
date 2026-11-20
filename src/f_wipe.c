@@ -18,6 +18,7 @@
 
 #include "r_state.h" // fadecolormap
 #include "r_draw.h" // transtable
+#include "r_data.h" // post-load wipe texture preparation
 #include "p_pspr.h" // tr_transxxx
 #include "p_local.h"
 #include "st_stuff.h"
@@ -527,11 +528,12 @@ boolean F_TryColormapFade(UINT8 wipecolor)
 /** After setting up the screens you want to wipe,
   * calling this will do a 'typical' wipe.
   */
-void F_RunWipe(UINT8 wipetype, boolean drawMenu)
+static void F_RunWipeInternal(UINT8 wipetype, boolean drawMenu, boolean precache)
 {
 #ifdef NOWIPE
 	(void)wipetype;
 	(void)drawMenu;
+	(void)precache;
 #else
 	tic_t nowtime;
 	UINT8 wipeframe = 0;
@@ -549,6 +551,7 @@ void F_RunWipe(UINT8 wipetype, boolean drawMenu)
 	// on for fade-to-black
 	for (;;)
 	{
+		boolean warmed = false;
 		// get fademask first so we can tell if it exists or not
 		fmask = F_GetFadeMask(wipetype, wipeframe++);
 		if (!fmask)
@@ -557,6 +560,17 @@ void F_RunWipe(UINT8 wipetype, boolean drawMenu)
 		// wait loop
 		while (!((nowtime = I_GetTime()) - lastwipetic))
 		{
+			/* Use only the early part of a genuine wait for the next wipe tic.
+			 * Refresh the clock before admitting work; at normal speed a fraction
+			 * below 1/4 leaves over 21 ms before the next 35 Hz presentation. */
+			I_UpdateTime(cv_timescale.value);
+			if (precache && !warmed && gamestate == GS_LEVEL
+			&& cv_timescale.value == FRACUNIT && g_time.timefrac < FRACUNIT/4
+			&& I_GetTime() == lastwipetic)
+			{
+				R_ContinueLevelWipePrecache();
+				warmed = true;
+			}
 			I_Sleep(cv_sleep.value);
 			I_UpdateTime(cv_timescale.value);
 		}
@@ -621,6 +635,16 @@ void F_RunWipe(UINT8 wipetype, boolean drawMenu)
 	WipeInAction = false;
 	WipeStageTitle = false;
 #endif
+}
+
+void F_RunWipe(UINT8 wipetype, boolean drawMenu)
+{
+	F_RunWipeInternal(wipetype, drawMenu, false);
+}
+
+void F_RunWipeWithLevelPrecache(UINT8 wipetype, boolean drawMenu)
+{
+	F_RunWipeInternal(wipetype, drawMenu, true);
 }
 
 /** Returns tic length of wipe

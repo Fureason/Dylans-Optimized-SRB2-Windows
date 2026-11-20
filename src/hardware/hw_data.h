@@ -76,6 +76,12 @@ struct GLMapTexture_s
 	GLMipmap_t  mipmap;
 	float       scaleX; // Used for scaling textures on walls
 	float       scaleY;
+	/* True-colour masked walls only need a second texture when the source
+	 * actually contains SRB2's palette chromakey colour. */
+	boolean     chromakey_checked;
+	boolean     chromakey_required;
+	boolean     png_checked;
+	boolean     has_truecolor_png;
 };
 typedef struct GLMapTexture_s GLMapTexture_t;
 

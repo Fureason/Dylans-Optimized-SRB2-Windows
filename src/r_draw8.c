@@ -101,22 +101,21 @@ void R_DrawColumn_8(void)
 }
 
 /**
- * Draw a sky column without vertically tiling it.
+ * Draw a repeating sky column with a 32.32 texture step.
  *
- * Ordinary walls intentionally wrap their texture coordinates, but doing the
- * same for a sky makes a second copy appear above or below short sky textures.
- * Hardware rendering clamps those edges, so software should extend the first
- * or last row as well.
+ * A 16.16 step loses enough precision at high resolutions to choose a different
+ * sky row. Keep the fraction through the entire column and retain the ordinary
+ * wall drawer's vertical wrapping, including for non-power-of-two textures.
  */
-void R_DrawSkyColumn_8(void)
+void R_DrawSkyColumn_8(INT64 fracstep)
 {
 	INT32 count = dc_yh - dc_yl;
 	UINT8 *restrict dest;
 	const UINT8 *restrict source = dc_source;
 	const lighttable_t *restrict colormap = dc_colormap;
-	intptr_t frac;
-	const intptr_t fracstep = dc_iscale;
-	const intptr_t texheight = dc_texheight;
+	INT64 frac;
+	const INT32 texheight = dc_texheight;
+	const UINT32 heightmask = texheight - 1;
 
 	if (count < 0 || texheight <= 0)
 		return;
@@ -127,22 +126,31 @@ void R_DrawSkyColumn_8(void)
 #endif
 
 	dest = &topleft[dc_yl*vid.width + dc_x];
-	frac = dc_texturemid
-		+ FixedMul((dc_yl << FRACBITS) - centeryfrac, fracstep);
+	frac = (INT64)dc_texturemid * FRACUNIT
+		+ ((INT64)dc_yl - (centeryfrac >> FRACBITS))*fracstep
+		- (((centeryfrac & (FRACUNIT-1)) * fracstep) >> FRACBITS);
 
-	do
+	if (!(texheight & heightmask))
 	{
-		intptr_t index = frac >> FRACBITS;
-
-		if (index < 0)
-			index = 0;
-		else if (index >= texheight)
-			index = texheight - 1;
-
-		*dest = colormap[source[index]];
-		dest += vid.width;
-		frac += fracstep;
-	} while (count--);
+		do
+		{
+			*dest = colormap[source[((UINT64)frac >> 32) & heightmask]];
+			dest += vid.width;
+			frac += fracstep;
+		} while (count--);
+	}
+	else
+	{
+		do
+		{
+			INT32 index = (INT32)((frac >> 32) % texheight);
+			if (index < 0)
+				index += texheight;
+			*dest = colormap[source[index]];
+			dest += vid.width;
+			frac += fracstep;
+		} while (count--);
+	}
 }
 
 /**	\brief The R_DrawColumnClamped_8 function

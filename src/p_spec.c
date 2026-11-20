@@ -275,6 +275,35 @@ void P_ExpandTextureAnimationPresence(UINT8 *present, size_t count)
 	}
 }
 
+/* Give every frame the reference priority of the most-used frame in its set.
+ * Presence expansion alone left later frames behind all directly referenced
+ * textures, even though an animation can select them within a few tics. */
+void P_ExpandTextureAnimationUsage(UINT32 *usage, size_t count)
+{
+	anim_t *anim;
+
+	if (!usage || !anims || !lastanim)
+		return;
+
+	for (anim = anims; anim < lastanim; anim++)
+	{
+		UINT32 references = 0;
+		INT32 i;
+
+		if (anim->basepic < 0 || anim->numpics <= 0
+		|| (size_t)anim->basepic >= count
+		|| (size_t)anim->numpics > count - (size_t)anim->basepic)
+			continue;
+
+		for (i = 0; i < anim->numpics; i++)
+			references = max(references, usage[anim->basepic + i]);
+		if (!references)
+			continue;
+		for (i = 0; i < anim->numpics; i++)
+			usage[anim->basepic + i] = max(usage[anim->basepic + i], references);
+	}
+}
+
 void P_ParseANIMDEFSLump(INT32 wadNum, UINT16 lumpnum)
 {
 	char *animdefsLump;

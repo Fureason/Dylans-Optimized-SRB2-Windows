@@ -790,9 +790,15 @@ void V_DrawStretchyFixedPatch(fixed_t x, fixed_t y, fixed_t pscale, fixed_t vsca
 			dest = desttop;
 			if (scrn & V_FLIP)
 				dest = deststart + (destend - desttop);
-			dest += FixedInt(FixedMul(post->topdelta<<FRACBITS,vdup))*vid.width;
+			/* Keep one source-pixel phase for the whole column. Rounding each
+			 * transparent post's top down and restarting ofs at zero made small
+			 * scaled graphics gain rows or give adjacent strokes unequal widths. */
+			const INT64 sourcebegin = (INT64)post->topdelta * FRACUNIT;
+			const INT32 firstrow = (INT32)((sourcebegin + rowfrac - 1) / rowfrac);
+			dest += firstrow * vid.width;
 
-			for (ofs = 0; dest < deststop && (size_t)(ofs>>FRACBITS) < post->length; ofs += rowfrac)
+			for (ofs = (fixed_t)((INT64)firstrow * rowfrac - sourcebegin);
+				dest < deststop && (size_t)(ofs>>FRACBITS) < post->length; ofs += rowfrac)
 			{
 				if (dest >= screens[scrn&V_PARAMMASK]) // don't draw off the top of the screen (CRASH PREVENTION)
 					*dest = patchdrawfunc(dest, source, ofs);
@@ -1056,13 +1062,12 @@ void V_DrawCroppedPatch(fixed_t x, fixed_t y, fixed_t pscale, fixed_t vscale, IN
 			INT32 topdelta = post->topdelta;
 			source = column->pixels + post->data_offset;
 			dest = desttop;
-			if ((topdelta<<FRACBITS)-sy > 0)
-			{
-				dest += FixedInt(FixedMul((topdelta<<FRACBITS)-sy,vdup))*vid.width;
-				ofs = 0;
-			}
-			else
-				ofs = sy-(topdelta<<FRACBITS);
+			const INT64 sourcebegin = (INT64)topdelta * FRACUNIT;
+			const INT64 distance = sourcebegin - sy;
+			const INT32 firstrow = distance > 0
+				? (INT32)((distance + rowfrac - 1) / rowfrac) : 0;
+			dest += firstrow * vid.width;
+			ofs = (fixed_t)((INT64)sy + (INT64)firstrow * rowfrac - sourcebegin);
 
 			for (; dest < deststop && (size_t)(ofs>>FRACBITS) < post->length && ((ofs - sy) + (topdelta<<FRACBITS)) < h; ofs += rowfrac)
 			{
@@ -1966,7 +1971,13 @@ void V_DrawFontCharacter(INT32 x, INT32 y, INT32 c, boolean lowercaseallowed, fi
 	if (x + w > vid.width)
 		return;
 
+#ifdef HWRENDER
+	HWR_BeginTextBatch();
+#endif
 	V_DrawFixedPatch(x*FRACUNIT, y*FRACUNIT, scale, flags, font.chars[c], color);
+#ifdef HWRENDER
+	HWR_EndTextBatch();
+#endif
 }
 
 // Precompile a wordwrapped string to any given width, using a specified font.
@@ -2090,6 +2101,9 @@ void V_DrawFontStringAtFixed(fixed_t x, fixed_t y, INT32 option, fixed_t pscale,
 			break;
 	}
 
+#ifdef HWRENDER
+	HWR_BeginTextBatch();
+#endif
 	for (;;ch++)
 	{
 		if (!*ch)
@@ -2135,6 +2149,9 @@ void V_DrawFontStringAtFixed(fixed_t x, fixed_t y, INT32 option, fixed_t pscale,
 
 		cx += w + (font.kerning<<FRACBITS);
 	}
+#ifdef HWRENDER
+	HWR_EndTextBatch();
+#endif
 }
 
 void V_DrawAlignedFontStringAtFixed(fixed_t x, fixed_t y, INT32 option, fixed_t pscale, fixed_t vscale, const char *string, fontdef_t font, enum string_align align)

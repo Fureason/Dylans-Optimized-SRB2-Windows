@@ -21,6 +21,7 @@
 
 #ifdef HWRENDER
 #include "hardware/hw_glob.h"
+#include "hardware/hw_main.h"
 #endif
 
 //
@@ -137,6 +138,7 @@ static void Patch_FreeData(patch_t *patch)
 #endif
 
 #ifdef HWRENDER
+	HWR_ForgetTextPatch(patch);
 	if (patch->hardware)
 		HWR_FreeTexture(patch);
 	if (patch->hardware_pixels)

@@ -3800,11 +3800,27 @@ static boolean P_LoadExtendedSubsectorsAndSegs(UINT8 **data, nodetype_t nodetype
 
 				segs[k].side = READUINT8((*data));
 			}
-			while (segs[subsectors[i].firstline].glseg)
 			{
-				subsectors[i].firstline++;
-				if (subsectors[i].firstline == k)
+				const size_t first = subsectors[i].firstline;
+				size_t leading = 0;
+				seg_t *saved;
+				while (first + leading < k && segs[first + leading].glseg)
+					leading++;
+				if (first + leading == k)
 					I_Error("P_LoadExtendedSubsectorsAndSegs: Subsector %s does not have any valid segs!", sizeu1(i));
+				/* Sector lookup needs a real first seg, but advancing firstline
+				 * while retaining numlines makes every BSP walk read into the next
+				 * subsector. Rotate the closed loop instead, preserving both its
+				 * complete boundary and its original array range. */
+				if (leading)
+				{
+					saved = Z_Malloc(leading * sizeof (*saved), PU_STATIC, NULL);
+					memcpy(saved, &segs[first], leading * sizeof (*saved));
+					memmove(&segs[first], &segs[first + leading],
+						(k - first - leading) * sizeof (*saved));
+					memcpy(&segs[k - leading], saved, leading * sizeof (*saved));
+					Z_Free(saved);
+				}
 			}
 			break;
 
@@ -8525,6 +8541,9 @@ void P_EndAddonBatch(void)
 	precise_t started;
 
 	if (!addonbatchdepth || --addonbatchdepth)
+		return;
+	if (!addonbatchanimations && !addonbatchhud && !addonbatchmodels
+	&& !addonbatchstatusbar)
 		return;
 	started = I_GetPreciseTime();
 	if (addonbatchanimations)

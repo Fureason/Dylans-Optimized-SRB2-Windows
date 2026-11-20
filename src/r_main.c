@@ -91,6 +91,7 @@ INT32 viewangletox[FINEANGLES/2];
 // to the lowest viewangle that maps back to x ranges
 // from clipangle to -clipangle.
 angle_t xtoviewangle[MAXVIDWIDTH+1];
+angle_t textureviewangle[MAXVIDWIDTH+1];
 
 lighttable_t *scalelight[LIGHTLEVELS][MAXLIGHTSCALE];
 lighttable_t *scalelightfixed[MAXLIGHTSCALE];
@@ -141,6 +142,7 @@ static void MSAA_OnChange(void);
 static void R_SetFov(fixed_t playerfov);
 
 static void Fov_OnChange(void);
+static void ScreenShake_OnChange(void);
 static void ChaseCam_OnChange(void);
 static void ChaseCam2_OnChange(void);
 static void FlipCam_OnChange(void);
@@ -167,6 +169,27 @@ consvar_t cv_drawdist_nights = CVAR_INIT ("drawdist_nights", "2048", CV_SAVE, dr
 consvar_t cv_drawdist_precip = CVAR_INIT ("drawdist_precip", "1024", CV_SAVE, drawdist_precip_cons_t, NULL);
 consvar_t cv_fov = CVAR_INIT ("fov", "90", CV_SAVE|CV_FLOAT|CV_CALL, fov_cons_t, Fov_OnChange);
 consvar_t cv_fovchange = CVAR_INIT ("fovchange", "Off", CV_SAVE, CV_OnOff, NULL);
+consvar_t cv_screenshake = CVAR_INIT ("screenshake", "On", CV_SAVE|CV_CALL, CV_OnOff, ScreenShake_OnChange);
+
+/* Suppress presentation only. Quake timers, damage, mod hooks and player
+ * state still run normally on every peer, regardless of this local option. */
+static void ScreenShake_OnChange(void)
+{
+	if (!cv_screenshake.value)
+	{
+		quake.x = quake.y = quake.z = 0;
+		R_ResetViewInterpolation(0);
+	}
+}
+
+angle_t R_GetViewRollAngle(const player_t *player)
+{
+	/* NiGHTS uses roll for its movement axes. Keep that orientation while
+	 * disabling cosmetic mod roll everywhere else, without changing state. */
+	if (!cv_screenshake.value && player->powers[pw_carry] != CR_NIGHTSMODE)
+		return 0;
+	return player->viewrollangle;
+}
 
 static void MSAA_OnChange(void)
 {
@@ -529,6 +552,11 @@ static void R_InitTextureMapping(void)
 		while (viewangletox[i] > x)
 			i++;
 		xtoviewangle[x] = (i<<ANGLETOFINESHIFT) - ANGLE_90;
+		/* Visibility needs the shared quantized boundary above. Texture rays
+		 * retain their sub-angle precision so a wall does not change texel when
+		 * switching to OpenGL's continuous projection at the same viewpoint. */
+		textureviewangle[x] = (angle_t)(INT64)(atan(((double)centerx-x)
+			/ focallengthf) * ((double)ANGLE_180/M_PI));
 	}
 
 	// Take out the fencepost cases from viewangletox.
@@ -629,7 +657,7 @@ void R_CheckViewMorph(void)
 	float fisheyemap[MAXVIDWIDTH/2 + 1];
 #endif
 
-	angle_t rollangle = players[displayplayer].viewrollangle;
+	angle_t rollangle = R_GetViewRollAngle(&players[displayplayer]);
 #ifdef WOUGHMP_WOUGHMP
 	fixed_t fisheye = cv_cam2_turnmultiplier.value; // temporary test value
 #endif
@@ -1173,7 +1201,9 @@ void R_SetupFrame(player_t *player)
 		}
 	}
 
-	if (quake.time && !ispaused)
+	if (!cv_screenshake.value)
+		quake.x = quake.y = quake.z = 0;
+	else if (quake.time && !ispaused)
 	{
 		fixed_t ir = quake.intensity>>1;
 
@@ -1320,9 +1350,12 @@ void R_SkyboxFrame(player_t *player)
 
 		// Earthquake effects should be scaled in the skybox
 		// (if an axis isn't used, the skybox won't shake in that direction)
-		campos.x += quake.x;
-		campos.y += quake.y;
-		campos.z += quake.z;
+		if (cv_screenshake.value)
+		{
+			campos.x += quake.x;
+			campos.y += quake.y;
+			campos.z += quake.z;
+		}
 
 		if (skyboxmo[1]) // Is there a viewpoint?
 		{
@@ -1671,6 +1704,7 @@ void R_RegisterEngineStuff(void)
 	CV_RegisterVar(&cv_drawdist_nights);
 	CV_RegisterVar(&cv_drawdist_precip);
 	CV_RegisterVar(&cv_fovchange);
+	CV_RegisterVar(&cv_screenshake);
 	CV_RegisterVar(&cv_fov);
 
 	CV_RegisterVar(&cv_chasecam);

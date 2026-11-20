@@ -1687,6 +1687,7 @@ static int lib_setSkinColor(lua_State *L)
 
 	// clear the skincolor to start with, in case of missing table elements
 	memset(info,0,sizeof(skincolor_t));
+	R_InvalidateColorNameCache();
 
 	Color_cons_t[cnum].value = cnum;
 	lua_pushnil(L);
@@ -1796,6 +1797,7 @@ static int skincolor_set(lua_State *L)
 	if (fastcmp(field,"name")) {
 		const char* n = luaL_checkstring(L, 3);
 		strlcpy(info->name, n, MAXCOLORNAME+1);
+		R_InvalidateColorNameCache();
 		if (strlen(n) > MAXCOLORNAME)
 			CONS_Alert(CONS_WARNING, "skincolor_t field 'name' ('%s') longer than %d chars; clipped to %s.\n", n, MAXCOLORNAME, info->name);
 #if 0

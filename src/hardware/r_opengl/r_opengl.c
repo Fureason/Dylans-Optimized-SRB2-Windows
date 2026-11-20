@@ -74,6 +74,43 @@ static  FBITFIELD   CurrentPolyFlags;
 static FTextureInfo *TexCacheTail = NULL;
 static FTextureInfo *TexCacheHead = NULL;
 
+/* Keep lookup independent of upload order. Retained sprite/colour variants can
+ * make the list large; searching it again for every map teardown was quadratic. */
+#define TEXTURE_CACHE_BUCKET_COUNT 4096u
+static FTextureInfo *TexCacheBuckets[TEXTURE_CACHE_BUCKET_COUNT];
+
+static UINT32 TextureCacheBucket(UINT32 downloaded)
+{
+	return (downloaded * 2654435761u) >> 20;
+}
+
+static FTextureInfo *FindTextureCacheEntry(UINT32 downloaded)
+{
+	FTextureInfo *entry;
+	for (entry = TexCacheBuckets[TextureCacheBucket(downloaded)]; entry;
+		entry = entry->hashnext)
+		if (entry->downloaded == downloaded)
+			return entry;
+	return NULL;
+}
+
+static void UnlinkTextureCacheEntry(FTextureInfo *entry)
+{
+	FTextureInfo **link = &TexCacheBuckets[TextureCacheBucket(entry->downloaded)];
+	while (*link && *link != entry)
+		link = &(*link)->hashnext;
+	if (*link)
+		*link = entry->hashnext;
+	if (entry->prev)
+		entry->prev->next = entry->next;
+	else
+		TexCacheHead = entry->next;
+	if (entry->next)
+		entry->next->prev = entry->prev;
+	else
+		TexCacheTail = entry->prev;
+}
+
 static RGBA_t *textureBuffer = NULL;
 static size_t textureBufferSize = 0;
 
@@ -92,6 +129,8 @@ GLbyte  screen_depth    = 0;
 GLint   textureformatGL = 0;
 GLint maximumAnisotropy = 0;
 static GLboolean MipMap = GL_FALSE;
+static GLubyte *screen_readback_row = NULL;
+static size_t screen_readback_row_size = 0;
 static GLint min_filter = GL_LINEAR;
 static GLint mag_filter = GL_LINEAR;
 static GLboolean SpriteMipMap = GL_FALSE;
@@ -478,6 +517,11 @@ static PFNglDeleteBuffers pglDeleteBuffers;
 typedef void (APIENTRY * PFNglBlendEquation) (GLenum mode);
 static PFNglBlendEquation pglBlendEquation;
 
+/* Core/ARB and EXT entry points have the same signature. Keep this optional
+ * so older compatibility contexts can retain automatic mipmap generation. */
+typedef void (APIENTRY * PFNglGenerateMipmap) (GLenum target);
+static PFNglGenerateMipmap pglGenerateMipmap;
+
 
 /* 1.2 Parms */
 /* GL_CLAMP_TO_EDGE_EXT */
@@ -699,8 +743,26 @@ static GLRGBAFloat shader_defaultcolor = {1.0f, 1.0f, 1.0f, 1.0f};
 
 #endif	// GL_SHADERS
 
+static void SetupMipmapGeneration(void)
+{
+	const char *version = (const char *)pglGetString(GL_VERSION);
+	INT32 major = 0;
+
+	/* Resolve again for each context: an earlier context's function pointer
+	 * must not survive a renderer/video-mode switch. */
+	pglGenerateMipmap = NULL;
+	if ((version && sscanf(version, "%d", &major) == 1 && major >= 3)
+	|| (gl_extensions && isExtAvailable("GL_ARB_framebuffer_object", gl_extensions)))
+		pglGenerateMipmap = GetGLFunc("glGenerateMipmap");
+	if (!pglGenerateMipmap && gl_extensions
+	&& isExtAvailable("GL_EXT_framebuffer_object", gl_extensions))
+		pglGenerateMipmap = GetGLFunc("glGenerateMipmapEXT");
+}
+
 void SetupGLFunc4(void)
 {
+	SetupMipmapGeneration();
+
 	/* 1.2 funcs */
 	pglTexImage3D = GetGLFunc("glTexImage3D");
 	/* 1.3 funcs */
@@ -1221,32 +1283,22 @@ void SetStates(void)
 // -----------------+
 EXPORT void HWRAPI(DeleteTexture) (GLMipmap_t *pTexInfo)
 {
-	FTextureInfo *head = TexCacheHead;
+	FTextureInfo *entry;
+	UINT32 downloaded;
 
-	if (!pTexInfo)
+	if (!pTexInfo || !pTexInfo->downloaded)
 		return;
-	else if (pTexInfo->downloaded)
-		pglDeleteTextures(1, (GLuint *)&pTexInfo->downloaded);
 
-	while (head)
+	downloaded = pTexInfo->downloaded;
+	pglDeleteTextures(1, (GLuint *)&pTexInfo->downloaded);
+	if (tex_downloaded == downloaded)
+		tex_downloaded = 0;
+	entry = FindTextureCacheEntry(downloaded);
+	if (entry)
 	{
-		if (head->downloaded == pTexInfo->downloaded)
-		{
-			if (head->next)
-				head->next->prev = head->prev;
-			else // no next -> tail is being deleted -> update TexCacheTail
-				TexCacheTail = head->prev;
-			if (head->prev)
-				head->prev->next = head->next;
-			else // no prev -> head is being deleted -> update TexCacheHead
-				TexCacheHead = head->next;
-			free(head);
-			break;
-		}
-
-		head = head->next;
+		UnlinkTextureCacheEntry(entry);
+		free(entry);
 	}
-
 	pTexInfo->downloaded = 0;
 }
 
@@ -1259,6 +1311,7 @@ void Flush(void)
 {
 	GLuint delete_batch[256];
 	GLsizei delete_count = 0;
+	memset(TexCacheBuckets, 0, sizeof TexCacheBuckets);
 
 	//GL_DBG_Printf ("HWR_Flush()\n");
 
@@ -1322,14 +1375,7 @@ void FlushPaletteDependentTextures(void)
 		if (texture)
 			texture->downloaded = 0;
 
-		if (entry->prev)
-			entry->prev->next = entry->next;
-		else
-			TexCacheHead = entry->next;
-		if (entry->next)
-			entry->next->prev = entry->prev;
-		else
-			TexCacheTail = entry->prev;
+		UnlinkTextureCacheEntry(entry);
 		free(entry);
 		entry = next;
 	}
@@ -1389,32 +1435,36 @@ EXPORT void HWRAPI(ClearMipMapCache) (void)
 EXPORT void HWRAPI(ReadScreenTexture) (int tex, UINT8 *dst_data)
 {
 	INT32 i;
-	int dst_stride = screen_width * 3; // stride between rows of image data
+	size_t dst_stride = (size_t)screen_width * 3; // stride between rows of image data
 	GLubyte*top = (GLvoid*)dst_data, *bottom = top + dst_stride * (screen_height - 1);
-	GLubyte *row;
-	row = malloc(dst_stride);
-	if (!row) return;
+	if (screen_readback_row_size < dst_stride)
+	{
+		GLubyte *newrow = realloc(screen_readback_row, dst_stride);
+		if (!newrow)
+			return;
+		screen_readback_row = newrow;
+		screen_readback_row_size = dst_stride;
+	}
 	// at the time this function is called, generic2 can be found drawn on the framebuffer
 	// if some other screen texture is needed, draw it to the framebuffer
 	// and draw generic2 back after reading the framebuffer.
 	// this hack is for some reason **much** faster than the simple solution of using glGetTexImage.
 	if (tex != HWD_SCREENTEXTURE_GENERIC2)
-		DrawScreenTexture(tex, NULL, 0);
+		DrawScreenTexture(tex, NULL, 0, true);
 	pglPixelStorei(GL_PACK_ALIGNMENT, 1);
 	pglReadPixels(0, 0, screen_width, screen_height, GL_RGB, GL_UNSIGNED_BYTE, dst_data);
 	if (tex != HWD_SCREENTEXTURE_GENERIC2)
-		DrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0);
+		DrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0, true);
 	// Flip image upside down.
 	// In other words, convert OpenGL's "bottom->top" row order into "top->bottom".
 	for(i = 0; i < screen_height/2; i++)
 	{
-		memcpy(row, top, dst_stride);
+		memcpy(screen_readback_row, top, dst_stride);
 		memcpy(top, bottom, dst_stride);
-		memcpy(bottom, row, dst_stride);
+		memcpy(bottom, screen_readback_row, dst_stride);
 		top += dst_stride;
 		bottom -= dst_stride;
 	}
-	free(row);
 }
 
 
@@ -1919,12 +1969,20 @@ EXPORT void HWRAPI(UpdateTexture) (GLMipmap_t *pTexInfo)
 		pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, active_min_filter);
 	}
 
+	/* GL_GENERATE_MIPMAP can take tens of milliseconds for an ordinary NPOT
+	 * gallery image on current drivers. Upload level zero, then explicitly
+	 * generate its mip chain when available, preserving filters and LODs. The
+	 * legacy path remains available on older OpenGL implementations. Reset
+	 * automatic generation even for an update that no longer needs mipmaps. */
+	if (supportMipMap)
+		pglTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP,
+			(activeMipMap && !pglGenerateMipmap) ? GL_TRUE : GL_FALSE);
+
 	if (pTexInfo->format == GL_TEXFMT_ALPHA_INTENSITY_88)
 	{
 		//pglTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptex);
 		if (activeMipMap)
 		{
-			pglTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
 			pglTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptex);
 			pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, 0);
 			if ((pTexInfo->flags & TF_TRANSPARENT) && !(pTexInfo->flags & TF_SPRITE))
@@ -1946,7 +2004,6 @@ EXPORT void HWRAPI(UpdateTexture) (GLMipmap_t *pTexInfo)
 		//pglTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptex);
 		if (activeMipMap)
 		{
-			pglTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
 			pglTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptex);
 			pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, 0);
 			if ((pTexInfo->flags & TF_TRANSPARENT) && !(pTexInfo->flags & TF_SPRITE))
@@ -1967,7 +2024,6 @@ EXPORT void HWRAPI(UpdateTexture) (GLMipmap_t *pTexInfo)
 	{
 		if (activeMipMap)
 		{
-			pglTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
 			pglTexImage2D(GL_TEXTURE_2D, 0, textureformatGL, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptex);
 			// Control the mipmap level of detail
 			pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, 0); // the lower the number, the higer the detail
@@ -1984,6 +2040,9 @@ EXPORT void HWRAPI(UpdateTexture) (GLMipmap_t *pTexInfo)
 				pglTexImage2D(GL_TEXTURE_2D, 0, textureformatGL, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptex);
 		}
 	}
+
+	if (activeMipMap && pglGenerateMipmap)
+		pglGenerateMipmap(GL_TEXTURE_2D);
 
 	if (pTexInfo->flags & TF_WRAPX)
 		pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -2019,15 +2078,20 @@ EXPORT void HWRAPI(SetTexture) (GLMipmap_t *pTexInfo)
 	}
 	else
 	{
-		FTextureInfo *newTex = calloc(1, sizeof (*newTex));
+		FTextureInfo *newTex;
 
 		UpdateTexture(pTexInfo);
+		if (!pTexInfo->downloaded)
+			return;
+		newTex = calloc(1, sizeof (*newTex));
 
 		newTex->texture = pTexInfo;
 		newTex->downloaded = (UINT32)pTexInfo->downloaded;
 		newTex->width = (UINT32)pTexInfo->width;
 		newTex->height = (UINT32)pTexInfo->height;
 		newTex->format = (UINT32)pTexInfo->format;
+		newTex->hashnext = TexCacheBuckets[TextureCacheBucket(newTex->downloaded)];
+		TexCacheBuckets[TextureCacheBucket(newTex->downloaded)] = newTex;
 
 		// insertion at the tail
 		if (TexCacheTail)
@@ -2659,6 +2723,13 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 
 		case HWD_SET_PORTALSTENCIL:
 			portal_stencil_write_ref = 0;
+			/* Portal selection always restores ordinary world depth testing. Keep
+			 * the cached polygon flags synchronized with that direct GL change so
+			 * the next PF_NoDepthTest polygon (notably a full-aperture fog tint)
+			 * actually switches back to GL_ALWAYS instead of being rejected by the
+			 * destination view's unrelated depth values. */
+			pglDepthFunc(GL_LEQUAL);
+			CurrentPolyFlags &= ~PF_NoDepthTest;
 			if (Value >= 2000)
 			{
 				portal_stencil_write_ref = Value - 2000 + 1;
@@ -2689,6 +2760,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 			{
 				ApplyPortalScissor(Value - 200);
 				/* Select one recursive portal layer without changing it. */
+				pglEnable(GL_STENCIL_TEST);
 				pglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 				pglStencilMask(0x00);
 				pglStencilFunc(GL_EQUAL, Value - 200, 0xff);
@@ -2725,6 +2797,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 
 				case 2: // Draw only through the marked portal aperture.
 					ApplyPortalScissor(1);
+					pglEnable(GL_STENCIL_TEST);
 					pglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 					pglStencilMask(0x00);
 					pglStencilFunc(GL_EQUAL, 1, 0xff);
@@ -2734,10 +2807,21 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 
 				case 3: // Draw only outside every recursive portal layer.
 					ApplyPortalScissor(0);
+					pglEnable(GL_STENCIL_TEST);
 					pglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 					pglStencilMask(0x00);
 					pglStencilFunc(GL_EQUAL, 0, 0xff);
 					pglStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+					break;
+
+				case 4: // Draw through the union of all portal recursion layers.
+					ApplyPortalScissor(0);
+					pglEnable(GL_STENCIL_TEST);
+					pglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+					pglStencilMask(0x00);
+					pglStencilFunc(GL_NOTEQUAL, 0, 0xff);
+					pglStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+					pglDepthFunc(GL_LEQUAL);
 					break;
 
 				default:
@@ -3333,8 +3417,12 @@ EXPORT void HWRAPI(SetTransform) (FTransform *stransform)
 	pglMatrixMode(GL_PROJECTION);
 	pglLoadIdentity();
 
-	// Simulate Software's y-shearing
-	// https://zdoom.org/wiki/Y-shearing
+	/* Software projects wall spans at integer screen coordinates. OpenGL samples
+	 * their centres; align that origin without rounding the camera or vertices. */
+	if (stransform && viewport[2] > 0 && viewport[3] > 0)
+		pglTranslatef(1.0f / viewport[2], -1.0f / viewport[3], 0.0f);
+
+	// Simulate Software's y-shearing: https://zdoom.org/wiki/Y-shearing
 	if (shearing)
 	{
 		float fdy = stransform->viewaiming * 2;
@@ -3482,7 +3570,7 @@ EXPORT void HWRAPI(FlushScreenTextures) (void)
 		screenTextures[i] = 0;
 }
 
-EXPORT void HWRAPI(DrawScreenTexture)(int tex, FSurfaceInfo *surf, FBITFIELD polyflags)
+EXPORT void HWRAPI(DrawScreenTexture)(int tex, FSurfaceInfo *surf, FBITFIELD polyflags, FBOOLEAN clear)
 {
 	float xfix, yfix;
 	INT32 texsize = 512;
@@ -3516,7 +3604,20 @@ EXPORT void HWRAPI(DrawScreenTexture)(int tex, FSurfaceInfo *surf, FBITFIELD pol
 	fix[6] = xfix;
 	fix[7] = 0.0f;
 
-	pglClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	if (clear)
+		pglClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	else
+	{
+		/* Portal postprocessing draws directly in clip space while the world
+		 * camera projection is still active. Preserve both matrices so the
+		 * screen quad covers the selected stencil exactly. */
+		pglMatrixMode(GL_PROJECTION);
+		pglPushMatrix();
+		pglLoadIdentity();
+		pglMatrixMode(GL_MODELVIEW);
+		pglPushMatrix();
+		pglLoadIdentity();
+	}
 
 	pglBindTexture(GL_TEXTURE_2D, screenTextures[tex]);
 	PreparePolygon(surf, NULL, surf ? polyflags : (PF_NoDepthTest));
@@ -3526,6 +3627,15 @@ EXPORT void HWRAPI(DrawScreenTexture)(int tex, FSurfaceInfo *surf, FBITFIELD pol
 	pglTexCoordPointer(2, GL_FLOAT, 0, fix);
 	pglVertexPointer(3, GL_FLOAT, 0, screenVerts);
 	pglDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+	if (!clear)
+	{
+		pglMatrixMode(GL_MODELVIEW);
+		pglPopMatrix();
+		pglMatrixMode(GL_PROJECTION);
+		pglPopMatrix();
+		pglMatrixMode(GL_MODELVIEW);
+	}
 
 	tex_downloaded = screenTextures[tex];
 }

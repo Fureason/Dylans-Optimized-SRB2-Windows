@@ -637,13 +637,13 @@ void R_DrawPlanes(void)
 static void R_DrawSkyPlane(visplane_t *pl)
 {
 	INT32 texture = texturetranslation[skytexture];
-
-	// Sky columns use the normal wrapping column drawer. Short sky textures are
-	// intentionally repeated as the camera pitches, matching SRB2's established
-	// software projection instead of stretching one edge row across the screen.
 	colfunc = colfuncs[BASEDRAWFUNC];
-
 	dc_iscale = skyscale;
+
+	/* Preserve the sky's continuous vertical projection separately from wall
+	 * clipping. Fine-angle and 16.16 rounding moved cloud rows up or down when
+	 * switching renderers, especially toward the sides of a wide viewport. */
+	const double scale = (BASEVIDWIDTH / 2.0) * FRACUNIT / projectiony;
 
 	dc_colormap = colormaps;
 	dc_texturemid = skytexturemid;
@@ -659,10 +659,15 @@ static void R_DrawSkyPlane(visplane_t *pl)
 		if (dc_yl <= dc_yh)
 		{
 			INT32 angle = (pl->viewangle + xtoviewangle[x])>>ANGLETOSKYSHIFT;
-			dc_iscale = FixedMul(skyscale, FINECOSINE(xtoviewangle[x]>>ANGLETOFINESHIFT));
+			const double ray = ((double)centerx-x) / focallengthf;
+			/* Round outward by one 32.32 unit. Texel edges exactly above the
+			 * horizon then stay on the same side of the sampling boundary as
+			 * the dome, without a visible whole-pixel or half-texel offset. */
+			const INT64 skyfracstep = 1 + (INT64)(scale
+				/ sqrt(1.0 + ray*ray) * 4294967296.0);
 			dc_x = x;
 			dc_source = R_GetColumn(texture, -angle)->pixels; // get negative of angle for each column to display sky correct way round! --Monster Iestyn 27/01/18
-			colfunc();
+			R_DrawSkyColumn_8(skyfracstep);
 		}
 	}
 }

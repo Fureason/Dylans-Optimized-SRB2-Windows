@@ -1295,6 +1295,16 @@ boolean HWR_DrawModel(gl_vissprite_t *spr)
 	if (spr->precip)
 		return false;
 
+	/* A visible-sprite record can outlive an object that an add-on removed or
+	 * replaced during the same frame. It can also briefly observe a malformed
+	 * custom state while that object is being spawned. Never hand either case
+	 * to the model animator: falling back to the sprite renderer is safe, while
+	 * reading state animation fields here would dereference stale memory. */
+	if (P_MobjWasRemoved(spr->mobj)
+	|| spr->mobj->state < states
+	|| spr->mobj->state >= states + NUMSTATES)
+		return false;
+
 	// Lactozilla: Disallow certain models from rendering
 	if (!HWR_AllowModel(spr->mobj))
 		return false;

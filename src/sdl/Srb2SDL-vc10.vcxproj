@@ -353,6 +353,7 @@
     <ClInclude Include="..\m_misc.h" />
     <ClInclude Include="..\m_tokenizer.h" />
     <ClInclude Include="..\m_perfstats.h" />
+    <ClInclude Include="..\m_hostguard.h" />
     <ClInclude Include="..\m_queue.h" />
     <ClInclude Include="..\m_vector.h" />
     <ClInclude Include="..\m_random.h" />
@@ -535,6 +536,7 @@
     <ClCompile Include="..\m_misc.c" />
     <ClCompile Include="..\m_tokenizer.c" />
     <ClCompile Include="..\m_perfstats.c" />
+    <ClCompile Include="..\m_hostguard.c" />
     <ClCompile Include="..\m_queue.c" />
     <ClCompile Include="..\m_vector.c" />
     <ClCompile Include="..\m_random.c" />

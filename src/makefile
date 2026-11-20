@@ -284,12 +284,19 @@ LDFLAGS ... $(libs)
 endef
 $(info $(flags))
 endif
-# don't generate dependency files if only cleaning
+endif
+endif
+
+# Keep dependencies active after make restarts and in silent builds. Otherwise
+# a regenerated .d file drops header/included-drawer prerequisites from the next
+# pass, leaving old object code linked against newly compiled callers.
 ifndef cleanonly
+ifndef SILENT
+ifndef MAKE_RESTARTS
 $(info Checking dependency files...)
+endif
+endif
 include $(depends)
-endif
-endif
 endif
 
 LD:=$(CC)

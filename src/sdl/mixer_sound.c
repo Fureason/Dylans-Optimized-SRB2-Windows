@@ -36,6 +36,7 @@
 
 #include "../sounds.h"
 #include "../s_sound.h"
+#include "../i_time.h"
 #include "../i_sound.h"
 #include "../w_wad.h"
 #include "../z_zone.h"
@@ -230,6 +231,8 @@ static size_t probesize;
 static int result;
 #endif
 
+#include "mixer_headroom.inc"
+
 #ifdef HAVE_MIXERX
 static void Midiplayer_Onchange(void)
 {
@@ -367,9 +370,11 @@ void I_StartupSound(void)
 		return;
 
 #ifdef _WIN32
-	// Force DirectSound instead of WASAPI
+	// Prefer DirectSound instead of WASAPI unless the user selects a driver.
 	// SDL 2.0.6+ defaults to the latter and it screws up our sound effects
-	SDL_setenv("SDL_AUDIODRIVER", "directsound", 1);
+	// Keep DirectSound as the default, but respect an explicitly selected
+	// driver, including SDL's silent driver used for recorder tests.
+	SDL_setenv("SDL_AUDIODRIVER", "directsound", 0);
 #endif
 
 	// EE inits audio first so we're following along.
@@ -385,6 +390,7 @@ void I_StartupSound(void)
 		return;
 	}
 
+	CONS_Printf("Audio driver: %s\n", SDL_GetCurrentAudioDriver());
 	fading_nocleanup = false;
 
 	var_cleanup();
@@ -419,7 +425,11 @@ void I_StartupSound(void)
 
 	sound_started = true;
 	songpaused = false;
-	Mix_AllocateChannels(256);
+	Mix_AllocateChannels(SFX_MIX_CHANNELS);
+	memset(mix_voices,0,sizeof mix_voices);
+	memset(mix_peaks,0,sizeof mix_peaks);
+	mix_headroom_gain=AUDIO_GAIN_ONE;
+	mix_voice_limit=0; mix_headroom_tic=0; mix_music_applied=-1;
 }
 
 void I_ShutdownSound(void)
@@ -455,6 +465,7 @@ void I_UpdateSound(void)
 		fading_callback = NULL;
 		fading_do_callback = false;
 	}
+	I_RebalanceSfx(-1,true);
 }
 
 /// ------------------------
@@ -700,6 +711,7 @@ void *I_GetSfx(sfxinfo_t *sfx)
 
 void I_FreeSfx(sfxinfo_t *sfx)
 {
+	mix_peaks[sfx-S_sfx].chunk=NULL;
 	if (sfx->data)
 	{
 		Mix_Chunk *chunk = (Mix_Chunk*)sfx->data;
@@ -710,6 +722,8 @@ void I_FreeSfx(sfxinfo_t *sfx)
 			// I believe this should ensure the sound is not playing when we free it
 			abufdata = chunk->abuf;
 		}
+		for (INT32 i = 0; i < mix_voice_limit; i++)
+			if (mix_voices[i].chunk == chunk) mix_voices[i].active = false;
 		Mix_FreeChunk(sfx->data);
 		if (abufdata)
 		{
@@ -723,45 +737,55 @@ void I_FreeSfx(sfxinfo_t *sfx)
 
 INT32 I_StartSound(sfxenum_t id, UINT8 vol, UINT8 sep, UINT8 pitch, UINT8 priority, INT32 channel)
 {
-	UINT8 volume = (((UINT16)vol + 1) * (UINT16)sfx_volume) / 62; // (256 * 31) / 62 == 127
-	INT32 handle;
-	if (!S_sfx[id].data)
-		return -1;
-	handle = Mix_PlayChannel(channel, S_sfx[id].data, 0);
-	Mix_Volume(handle, volume);
-	Mix_SetPanning(handle, min((UINT16)(0xff-sep)<<1, 0xff), min((UINT16)(sep)<<1, 0xff));
-	(void)pitch; // Mixer can't handle pitch
-	(void)priority; // priority and channel management is handled by SRB2...
-	return handle;
+ Mix_Chunk *chunk=S_sfx[id].data;
+ INT32 handle;
+ if (!chunk) return -1;
+ if (channel < 0) channel=Mix_GroupAvailable(-1);
+ if (channel < 0 || channel >= SFX_MIX_CHANNELS) return -1;
+ Mix_HaltChannel(channel);
+ mix_voices[channel].chunk=chunk;
+ mix_voices[channel].peak=I_SfxPeak(id,chunk);
+ mix_voices[channel].volume=vol;
+ mix_voices[channel].pan=sep;
+ mix_voices[channel].active=true;
+ mix_voices[channel].applied=-1;
+ mix_voice_limit=max(mix_voice_limit,channel+1);
+ // Configure gain and panning before audio starts; a reused channel must
+ // not emit its first samples at the previous/default loud volume.
+ I_RebalanceSfx(channel,false);
+ Mix_SetPanning(channel,min((UINT16)(255-sep)<<1,255),min((UINT16)sep<<1,255));
+ handle=Mix_PlayChannel(channel,chunk,0);
+ if (handle < 0) mix_voices[channel].active=false;
+ (void)pitch; (void)priority;
+ return handle;
 }
 
 void I_StopSound(INT32 handle)
 {
-	if (handle < 0 || handle >= Mix_AllocateChannels(-1))
-		return;
-	Mix_HaltChannel(handle);
+ if (handle < 0 || handle >= SFX_MIX_CHANNELS) return;
+ Mix_HaltChannel(handle);
+ mix_voices[handle].active=false;
 }
 
 boolean I_SoundIsPlaying(INT32 handle)
 {
-	if (handle < 0 || handle >= Mix_AllocateChannels(-1))
-		return false;
-	return Mix_Playing(handle);
+ if (handle < 0 || handle >= SFX_MIX_CHANNELS) return false;
+ return Mix_Playing(handle);
 }
 
 void I_UpdateSoundParams(INT32 handle, UINT8 vol, UINT8 sep, UINT8 pitch)
 {
-	UINT8 volume = (((UINT16)vol + 1) * (UINT16)sfx_volume) / 62; // (256 * 31) / 62 == 127
-	if (handle < 0 || handle >= Mix_AllocateChannels(-1))
-		return;
-	Mix_Volume(handle, volume);
-	Mix_SetPanning(handle, min((UINT16)(0xff-sep)<<1, 0xff), min((UINT16)(sep)<<1, 0xff));
-	(void)pitch;
+ if (handle < 0 || handle >= SFX_MIX_CHANNELS) return;
+ mix_voices[handle].volume=vol;
+ mix_voices[handle].pan=sep;
+ Mix_SetPanning(handle,min((UINT16)(255-sep)<<1,255),min((UINT16)sep<<1,255));
+ (void)pitch;
 }
 
 void I_SetSfxVolume(UINT8 volume)
 {
-	sfx_volume = volume;
+ sfx_volume=volume;
+ I_RebalanceSfx(-1,false);
 }
 
 /// ------------------------
@@ -771,15 +795,9 @@ void I_SetSfxVolume(UINT8 volume)
 static UINT32 get_real_volume(UINT8 volume)
 {
 #ifdef _WIN32
-	if (I_SongType() == MU_MID)
-		// HACK: Until we stop using native MIDI,
-		// disable volume changes
-		return ((UINT32)31*128/31); // volume = 31
-	else
+ if (I_SongType() == MU_MID) return I_NominalMusicVolume(volume);
 #endif
-		// convert volume to mixer's 128 scale
-		// then apply internal_volume as a percentage
-		return ((UINT32)volume*128/31) * (UINT32)internal_volume / 100;
+ return (UINT32)((UINT64)I_NominalMusicVolume(volume)*mix_headroom_gain/AUDIO_GAIN_ONE);
 }
 
 static UINT32 get_adjusted_position(UINT32 position)
@@ -890,7 +908,7 @@ static void mix_gme(void *udata, Uint8 *stream, int len)
 
 	// apply volume to stream
 	for (i = 0, p = (short *)stream; i < len / 2; i++, p++)
-		*p = ((INT32)*p) * music_volume * internal_volume / 100 / 20;
+		*p = (INT32)(((INT64)*p) * music_volume * internal_volume * mix_headroom_gain / (100LL*20*AUDIO_GAIN_ONE));
 }
 #endif
 
@@ -914,7 +932,7 @@ static void mix_openmpt(void *udata, Uint8 *stream, int len)
 
 	// apply volume to stream
 	for (i = 0, p = (short *)stream; i < len / 2; i++, p++)
-		*p = ((INT32)*p) * music_volume * internal_volume / 100 / 20;
+		*p = (INT32)(((INT64)*p) * music_volume * internal_volume * mix_headroom_gain / (100LL*20*AUDIO_GAIN_ONE));
 }
 #endif
 
@@ -1575,8 +1593,13 @@ void I_ResumeSong(void)
 
 void I_SetMusicVolume(UINT8 volume)
 {
+	// Remember settings applied before the first track has been loaded.
+	music_volume = volume;
 	if (!I_SongPlaying())
+	{
+		mix_music_applied = -1;
 		return;
+	}
 
 #ifdef _WIN32
 	if (I_SongType() == MU_MID)
@@ -1587,7 +1610,11 @@ void I_SetMusicVolume(UINT8 volume)
 #endif
 		music_volume = volume;
 
-	Mix_VolumeMusic(get_real_volume(music_volume));
+	// SDL_mixer can reset a track's applied volume when playback starts.
+	// An explicit volume set must reach this track even if the cached scalar
+	// happens to match the previous song's volume.
+	mix_music_applied = -1;
+	I_RebalanceSfx(-1,false);
 }
 
 boolean I_SetSongTrack(INT32 track)

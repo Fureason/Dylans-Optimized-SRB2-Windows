@@ -579,21 +579,28 @@ static lumpinfo_t* ResGetLumpsWad (FILE* handle, UINT16* nlmp, const char* filen
  */
 static boolean ResFindSignature (FILE* handle, char endPat[], UINT32 startpos)
 {
+	unsigned char buffer[4096];
+	size_t count, i;
 	char *s;
-	int c;
 
-	fseek(handle, startpos, SEEK_SET);
+	if (fseek(handle, startpos, SEEK_SET) != 0)
+		return false;
 	s = endPat;
-	while((c = fgetc(handle)) != EOF)
+	while ((count = fread(buffer, 1, sizeof buffer, handle)) != 0)
 	{
-		if (*s != c && s > endPat) // No match?
-			s = endPat; // We "reset" the counter by sending the s pointer back to the start of the array.
-		if (*s == c)
+		for (i = 0; i < count; i++)
 		{
-			s++;
-			if (*s == 0x00) // The array pointer has reached the key char which marks the end. It means we have matched the signature.
+			if (*s != buffer[i] && s > endPat)
+				s = endPat;
+			if (*s == buffer[i])
 			{
-				return true;
+				s++;
+				if (*s == '\0')
+				{
+					/* Callers expect the stream immediately after the signature,
+					 * including when a match crosses the read boundary. */
+					return fseek(handle, -(long)(count - i - 1), SEEK_CUR) == 0;
+				}
 			}
 		}
 	}
@@ -957,6 +964,7 @@ UINT16 W_InitFileVerified(const char *filename, boolean mainfile, boolean startu
 #endif
 	UINT8 md5sum[16];
 	int important;
+	precise_t phase_started;
 
 	if (!(refreshdirmenu & REFRESHDIR_ADDFILE))
 		refreshdirmenu = REFRESHDIR_NORMAL|REFRESHDIR_ADDFILE; // clean out cons_alerts that happened earlier
@@ -985,6 +993,8 @@ UINT16 W_InitFileVerified(const char *filename, boolean mainfile, boolean startu
 	if ((handle = W_OpenWadFile(&filename, true)) == NULL)
 		return W_InitFileError(filename, startup);
 
+	I_SetCrashContext(va("verifying archive contents: %.200s", filename));
+	phase_started = I_GetPreciseTime();
 	// The release's core archives are authenticated against exact MD5s after
 	// loading. Avoid scanning their ZIP directories and local headers once here
 	// and then doing the same work again in ResGetLumpsZip(). Add-ons (including
@@ -1005,8 +1015,11 @@ UINT16 W_InitFileVerified(const char *filename, boolean mainfile, boolean startu
 
 		important = !important;
 	}
+	I_ReportHitch("add-on archive content verification", phase_started, 25);
 
 #ifndef NOMD5
+	I_SetCrashContext(va("checking archive checksum: %.200s", filename));
+	phase_started = I_GetPreciseTime();
 	//
 	// w-waiiiit!
 	// Let's not add a wad file if the MD5 matches
@@ -1030,8 +1043,11 @@ UINT16 W_InitFileVerified(const char *filename, boolean mainfile, boolean startu
 			return W_InitFileError(filename, false);
 		}
 	}
+	I_ReportHitch("add-on archive checksum", phase_started, 25);
 #endif
 
+	I_SetCrashContext(va("indexing archive: %.200s", filename));
+	phase_started = I_GetPreciseTime();
 	switch(type = ResourceFileDetect(filename))
 	{
 	case RET_SOC:
@@ -1049,6 +1065,7 @@ UINT16 W_InitFileVerified(const char *filename, boolean mainfile, boolean startu
 	default:
 		CONS_Alert(CONS_ERROR, "Unsupported file format\n");
 	}
+	I_ReportHitch("add-on archive directory indexing", phase_started, 25);
 
 	if (lumpinfo == NULL)
 	{
@@ -3080,6 +3097,7 @@ static int
 W_VerifyPK3 (FILE *fp, lumpchecklist_t *checklist, boolean status)
 {
 	int verified = true;
+	int result = true;
 
     zend_t zend;
     zentry_t zentry;
@@ -3088,7 +3106,7 @@ W_VerifyPK3 (FILE *fp, lumpchecklist_t *checklist, boolean status)
 	long file_size;/* size of zip file */
 	long data_size;/* size of data inside zip file */
 
-	long old_position;
+	UINT32 *localoffsets;
 
 	UINT16 numlumps;
 	size_t i;
@@ -3097,11 +3115,6 @@ W_VerifyPK3 (FILE *fp, lumpchecklist_t *checklist, boolean status)
 	char pat_end[] = {0x50, 0x4b, 0x05, 0x06, 0x00};
 
 	char lumpname[9];
-
-	// Haha the ResGetLumpsZip function doesn't
-	// check for file errors, so neither will I.
-
-	// Central directory bullshit
 
 	fseek(fp, 0, SEEK_END);
 	file_size = ftell(fp);
@@ -3116,6 +3129,9 @@ W_VerifyPK3 (FILE *fp, lumpchecklist_t *checklist, boolean status)
 	data_size = sizeof zend;
 
 	numlumps = zend.entries;
+	localoffsets = malloc(max((size_t)numlumps, 1) * sizeof *localoffsets);
+	if (!localoffsets)
+		return -1;
 
 	fseek(fp, zend.cdiroffset, SEEK_SET);
 	for (i = 0; i < numlumps; i++)
@@ -3125,15 +3141,24 @@ W_VerifyPK3 (FILE *fp, lumpchecklist_t *checklist, boolean status)
 		char* dotpos;
 
 		if (fread(&zentry, 1, sizeof(zentry_t), fp) < sizeof(zentry_t))
-			return true;
+			goto done;
 		if (memcmp(zentry.signature, pat_central, 4))
-			return true;
+			goto done;
+		localoffsets[i] = zentry.offset;
 
 		if (verified == true)
 		{
 			fullname = malloc(zentry.namelen + 1);
+			if (!fullname)
+			{
+				result = -1;
+				goto done;
+			}
 			if (fgets(fullname, zentry.namelen + 1, fp) != fullname)
-				return true;
+			{
+				free(fullname);
+				goto done;
+			}
 
 			// Strip away file address and extension for the 8char name.
 			if ((trimname = strrchr(fullname, '/')) != 0)
@@ -3161,47 +3186,53 @@ W_VerifyPK3 (FILE *fp, lumpchecklist_t *checklist, boolean status)
 
 			// skip and ignore comments/extra fields
 			if (fseek(fp, zentry.xtralen + zentry.commlen, SEEK_CUR) != 0)
-				return true;
+				goto done;
 		}
 		else
 		{
 			if (fseek(fp, zentry.namelen + zentry.xtralen + zentry.commlen, SEEK_CUR) != 0)
-				return true;
+				goto done;
 		}
 
 		data_size +=
 			sizeof zentry + zentry.namelen + zentry.xtralen + zentry.commlen;
 
-		old_position = ftell(fp);
+	}
 
-		if (fseek(fp, zentry.offset, SEEK_SET) != 0)
-			return true;
-
+	/* Keep the central directory scan sequential. Seeking to every local
+	 * header and back discarded the stdio buffer twice per archive entry.
+	 * This temporary offset list is freed before verification returns. */
+	for (i = 0; i < numlumps; i++)
+	{
+		if (fseek(fp, localoffsets[i], SEEK_SET) != 0)
+			goto done;
 		if (fread(&zlentry, 1, sizeof(zlentry_t), fp) < sizeof (zlentry_t))
-			return true;
+			goto done;
 
 		data_size +=
 			sizeof zlentry + zlentry.namelen + zlentry.xtralen + zlentry.compsize;
-
-		fseek(fp, old_position, SEEK_SET);
 	}
 
 	if (data_size < file_size)
 	{
 		const char * error = "ZIP file has holes (%ld extra bytes)\n";
 		CONS_Alert(CONS_ERROR, error, (file_size - data_size));
-		return -1;
+		result = -1;
 	}
 	else if (data_size > file_size)
 	{
 		const char * error = "Reported size of ZIP file contents exceeds file size (%ld extra bytes)\n";
 		CONS_Alert(CONS_ERROR, error, (data_size - file_size));
-		return -1;
+		result = -1;
 	}
 	else
 	{
-		return verified;
+		result = verified;
 	}
+
+done:
+	free(localoffsets);
+	return result;
 }
 
 // Note: This never opens lumps themselves and therefore doesn't have to

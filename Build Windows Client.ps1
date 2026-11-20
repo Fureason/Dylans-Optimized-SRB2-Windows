@@ -1,38 +1,55 @@
+param(
+    [string]$ToolchainBin,
+    [switch]$Rebuild
+)
+
 $ErrorActionPreference = 'Stop'
-
-$sourceRoot = $PSScriptRoot
-$toolchainRoot = 'C:\ProgramData\SRB2TC64'
-$buildDrive = 'R:'
-
-if (-not (Test-Path -LiteralPath $sourceRoot)) {
-	throw "Windows source is missing: $sourceRoot"
-}
-
-if (-not (Test-Path -LiteralPath "$toolchainRoot\bin\mingw32-make.exe")) {
-	throw "Windows compiler is missing: $toolchainRoot"
-}
-
-if (Get-PSDrive -Name $buildDrive.TrimEnd(':') -ErrorAction SilentlyContinue) {
-	throw "$buildDrive is already in use. Remove that mapping before building."
-}
-
-subst $buildDrive $sourceRoot
+$originalPath = $env:Path
+$buildDirectory = $PSScriptRoot
+$buildDrive = $null
 
 try {
-	$env:Path = "$toolchainRoot\bin;" + $env:Path
-	Push-Location "$buildDrive\"
-	try {
-		& "$toolchainRoot\bin\mingw32-make.exe" -C src MINGW64=1 SDL=1 WINDOWSHELL=1 CC=gcc 'EXENAME=srb2win64.exe' 'DBGNAME=srb2win64.debug' -j4 all
-		if ($LASTEXITCODE -ne 0) {
-			throw "SRB2 build failed with exit code $LASTEXITCODE"
-		}
-	}
-	finally {
-		Pop-Location
-	}
-}
-finally {
-	subst $buildDrive /D
-}
+    if ($ToolchainBin) {
+        $resolvedBin = (Resolve-Path -LiteralPath $ToolchainBin).Path
+        $env:Path = $resolvedBin + ';' + $env:Path
+    }
 
-Write-Host "Build complete: $sourceRoot\bin\srb2win64.exe"
+    $make = Get-Command -Name 'make.exe', 'mingw32-make.exe' -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    $gcc = Get-Command -Name 'gcc.exe' -CommandType Application -ErrorAction SilentlyContinue
+    if (!$make -or !$gcc) {
+        throw 'Install a 64-bit MinGW-w64 toolchain and add its bin directory to PATH, or pass -ToolchainBin.'
+    }
+
+    if ($buildDirectory -match '\s') {
+        foreach ($letter in 'W', 'V', 'U', 'T', 'S', 'Q') {
+            $drive = $letter + ':'
+            if (!(Test-Path -LiteralPath ($drive + '\'))) {
+                & subst.exe $drive $buildDirectory
+                if ($LASTEXITCODE -ne 0) { throw "Unable to map source directory to $drive." }
+                $buildDrive = $drive
+                $buildDirectory = $buildDrive + '\'
+                break
+            }
+        }
+        if (!$buildDrive) { throw 'A free drive letter is needed for this source path.' }
+    }
+
+    $makeName = [IO.Path]::GetFileNameWithoutExtension($make.Source)
+    $makeArguments = @(
+        'all', "MAKE=$makeName", 'MINGW64=1', 'SDL=1', 'WINDOWSHELL=1', 'CC=gcc',
+        ('SHELL=' + $env:ComSpec.Replace('\', '/')), '-j6'
+    )
+    if ($Rebuild) { $makeArguments += '-B' }
+
+    Push-Location -LiteralPath $buildDirectory
+    try {
+        & $make.Source @makeArguments
+        if ($LASTEXITCODE -ne 0) { throw "Windows compilation failed with exit code $LASTEXITCODE." }
+    } finally {
+        Pop-Location
+    }
+} finally {
+    $env:Path = $originalPath
+    if ($buildDrive) { & subst.exe $buildDrive /d }
+}

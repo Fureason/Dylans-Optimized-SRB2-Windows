@@ -81,6 +81,7 @@ typedef struct
 	UINT32 currentsize;
 	UINT32 totalsize;
 	UINT32 ackresendposition; // Used when resuming downloads
+	tic_t lastacksent;
 } fileneeded_t;
 
 #define FILENEEDEDSIZE 23
@@ -94,6 +95,7 @@ typedef struct
 	INT32 current;
 	INT32 remaining;
 	INT32 completednum;
+	INT32 requirednum, localnum, totalnum; // fixed add-on totals; game state excluded
 	UINT32 completedsize;
 
 	boolean http_failed;

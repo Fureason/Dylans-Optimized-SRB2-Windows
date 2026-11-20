@@ -55,7 +55,19 @@ typedef struct
 typedef struct
 {
 	poly_t *planepoly;  // the generated convex polygon
+	poly_t *boundedpoly; // raised/island surfaces, bounded by real sector geometry
+	sector_t *floorbackground, *ceilingbackground;
+	struct hwr_plane_region_s *plane_regions;
 } extrasubsector_t;
+
+/* Real neighboring sectors covering the part trimmed from a BSP leaf. These
+ * own persistent plane geometry because translucent floors are drawn later. */
+typedef struct hwr_plane_region_s
+{
+	extrasubsector_t xsub;
+	sector_t *sector;
+	struct hwr_plane_region_s *next;
+} hwr_plane_region_t;
 
 // needed for sprite rendering
 // equivalent of the software renderer's vissprites
@@ -85,6 +97,10 @@ typedef struct gl_vissprite_s
 	 * should not repeatedly inspect the same mobj/frame flags. */
 	boolean sortblended;
 	boolean sorttracerblended;
+	/* The translucent-FOF relation scans delayed wall geometry. Cache it for
+	 * the frame so linkdraw/deferred decisions do not repeat the same scan. */
+	boolean fofrelationcached;
+	UINT8 fofrelation;
 	UINT8 translucency;       //alpha level 0-255
 
 	angle_t angle; // for splats
@@ -141,6 +157,7 @@ void HWR_UnlockCachedPatch(GLPatch_t *gpatch);
 
 void HWR_SetPalette(RGBA_t *palette);
 void HWR_SetMapPalette(void);
+void HWR_EnsurePaletteLookup(void);
 UINT32 HWR_CreateLightTable(UINT8 *lighttable, RGBA_t *hw_lighttable);
 void HWR_UpdateLightTable(UINT32 id, UINT8 *lighttable, RGBA_t *hw_lighttable);
 UINT32 HWR_GetLightTableID(extracolormap_t *colormap);

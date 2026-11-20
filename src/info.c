@@ -21,6 +21,7 @@
 #include "z_zone.h"
 #include "d_player.h"
 #include "v_video.h" // V_*MAP constants
+#include "r_draw.h"
 #include "lzf.h"
 #ifdef HWRENDER
 #include "hardware/hw_light.h"
@@ -22084,6 +22085,7 @@ void P_PatchInfoTables(void)
 		skincolors[i].accessible = false;
 		skincolors[i].name[0] = '\0';
 	}
+	R_InvalidateColorNameCache();
 	for (i = MT_FIRSTFREESLOT; i <= MT_LASTFREESLOT; i++)
 		mobjinfo[i].doomednum = -1;
 }
@@ -22171,6 +22173,7 @@ void P_ResetData(INT32 flags)
 			lzf_decompress(skincolorsbackup, skincolorsbackupsize, skincolors, sizeof(skincolors));
 		else
 			M_Memcpy(skincolors, skincolorsbackup, sizeof(skincolorsbackup));
+		R_InvalidateColorNameCache();
 	}
 #endif
 }

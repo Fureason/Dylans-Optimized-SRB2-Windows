@@ -222,66 +222,45 @@ I_start_threads (void)
 void
 I_stop_threads (void)
 {
-	Link        link;
-	Link        next;
+ Link link, next;
+ Thread thread;
+ if (!SDL_AtomicCAS(&i_threads_running, 1, 0)) return;
+ /* Workers stop first. Zone/WAD cleanup still needs its synchronization. */
+ I_lock_mutex(&i_thread_pool_mutex);
+ for (link = i_thread_pool; link; link = next)
+ {
+  next = link->next;
+  thread = link->data;
+  SDL_WaitThread(thread->thread, NULL);
+  free(thread);
+  free(link);
+ }
+ i_thread_pool = NULL;
+ I_unlock_mutex(i_thread_pool_mutex);
+}
 
-	Thread      th;
-	SDL_mutex * mutex;
-	SDL_cond  * cond;
-
-	if (i_threads_running.value)
-	{
-		/* rely on the good will of thread-san */
-		SDL_AtomicSet(&i_threads_running, 0);
-
-		I_lock_mutex(&i_thread_pool_mutex);
-		{
-			for (
-					link = i_thread_pool;
-					link;
-					link = next
-			){
-				next = link->next;
-				th   = link->data;
-
-				SDL_WaitThread(th->thread, NULL);
-
-				free(th);
-				free(link);
-			}
-		}
-		I_unlock_mutex(i_thread_pool_mutex);
-
-		for (
-				link = i_mutex_pool;
-				link;
-				link = next
-		){
-			next  = link->next;
-			mutex = link->data;
-
-			SDL_DestroyMutex(mutex);
-
-			free(link);
-		}
-
-		for (
-				link = i_cond_pool;
-				link;
-				link = next
-		){
-			next = link->next;
-			cond = link->data;
-
-			SDL_DestroyCond(cond);
-
-			free(link);
-		}
-
-		SDL_DestroyMutex(i_thread_pool_mutex);
-		SDL_DestroyMutex(i_mutex_pool_mutex);
-		SDL_DestroyMutex(i_cond_pool_mutex);
-	}
+void
+I_release_thread_sync(void)
+{
+ Link link, next;
+ if (SDL_AtomicGet(&i_threads_running) || !i_thread_pool_mutex) return;
+ for (link = i_mutex_pool; link; link = next)
+ {
+  next = link->next;
+  SDL_DestroyMutex(link->data);
+  free(link);
+ }
+ for (link = i_cond_pool; link; link = next)
+ {
+  next = link->next;
+  SDL_DestroyCond(link->data);
+  free(link);
+ }
+ SDL_DestroyMutex(i_thread_pool_mutex);
+ SDL_DestroyMutex(i_mutex_pool_mutex);
+ SDL_DestroyMutex(i_cond_pool_mutex);
+ i_mutex_pool = i_cond_pool = NULL;
+ i_thread_pool_mutex = i_mutex_pool_mutex = i_cond_pool_mutex = NULL;
 }
 
 void

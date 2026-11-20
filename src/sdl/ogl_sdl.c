@@ -329,7 +329,7 @@ void OglSdlFinishUpdate(INT32 waitvbl)
 	//			effects that want to take the old screen can do so after this
 	// Generic2 has the screen image without palette rendering brightness adjustments.
 	// Using that here will prevent brightness adjustments being applied twice.
-	DrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0);
+	DrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0, true);
 }
 
 void OglSdlPresentSoftware(const void *pixels, INT32 width, INT32 height, INT32 waitvbl)

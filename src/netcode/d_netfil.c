@@ -97,7 +97,6 @@ static filetran_t transfer[MAXNETNODES];
 // Receiver structure
 INT32 fileneedednum; // Number of files needed to join the server
 fileneeded_t *fileneeded; // List of needed files
-static tic_t lasttimeackpacketsent = 0;
 static I_mutex downloadmutex;
 char downloaddir[512] = "DOWNLOAD";
 
@@ -484,142 +483,56 @@ void PT_RequestFile(SINT8 node)
   */
 INT32 CL_CheckFiles(void)
 {
-	INT32 i, j;
-	char wadfilename[MAX_WADPATH];
-	size_t filestoload = 0;
-	boolean downloadrequired = false;
-	UINT8 fileschecked = 0;
-	const precise_t checkstarted = I_GetPreciseTime();
-	precise_t checkbudget = (precise_t)(I_GetPrecisePrecision() / 250); // 4 ms
+ INT32 i, j;
+ size_t filestoload = 0;
+ boolean downloadrequired = false;
+ UINT32 fileschecked = 0;
+ const precise_t started = I_GetPreciseTime();
+ const precise_t budget = max((precise_t)1, I_GetPrecisePrecision()/250);
 
-	if (!checkbudget)
-		checkbudget = 1;
-
-	// Modified game handling -- the already-loaded prefix must be identical and
-	// in order. A server may have appended files while this client was connected;
-	// allow that strict tail extension to be found/downloaded and loaded during
-	// the automatic reconnect instead of requiring a full process restart.
-	if (modifiedgame)
-	{
-		CONS_Debug(DBG_NETPLAY, "game is modified; only doing basic checks\n");
-		for (i = 0, j = mainwads; i < fileneedednum || j < numwadfiles;)
-		{
-			if (j < numwadfiles && !wadfiles[j]->important)
-			{
-				// Unimportant on our side.
-				++j;
-				continue;
-			}
-
-			// Local extra files or a changed middle entry remain incompatible.
-			if (i >= fileneedednum)
-			{
-				CONS_Alert(CONS_ERROR,
-					"Add-on list mismatch at position %d: client=%s, server=%s.\n",
-					i + 1,
-					j < numwadfiles ? wadfiles[j]->filename : "<end of list>",
-					i < fileneedednum ? fileneeded[i].filename : "<end of list>");
-				return 2;
-			}
-
-			// Runtime addfile always appends. Check the server's remaining tail
-			// exactly like a clean join so it can be loaded or downloaded.
-			if (j >= numwadfiles)
-			{
-				for (; i < fileneedednum; i++)
-				{
-					if (fileneeded[i].status == FS_NOTCHECKED)
-					{
-						if (fileneeded[i].folder)
-							fileneeded[i].status = FS_NOTFOUND;
-						else
-							fileneeded[i].status = findfile(fileneeded[i].filename,
-								fileneeded[i].md5sum, true);
-					}
-
-					if (fileneeded[i].status == FS_NOTFOUND
-					|| fileneeded[i].status == FS_MD5SUMBAD
-					|| fileneeded[i].status == FS_FALLBACK)
-						downloadrequired = true;
-					if (fileneeded[i].status != FS_OPEN)
-						filestoload++;
-				}
-
-				if (numwadfiles + filestoload > MAX_WADFILES)
-					return 3;
-				return downloadrequired ? 0 : 1;
-			}
-
-			// For the sake of speed, only bother with a md5 check
-			if (memcmp(wadfiles[j]->md5sum, fileneeded[i].md5sum, 16))
-			{
-				CONS_Alert(CONS_ERROR,
-					"Add-on checksum/order mismatch at position %d: client=%s, server=%s.\n",
-					i + 1, wadfiles[j]->filename, fileneeded[i].filename);
-				return 2;
-			}
-
-			// It's accounted for! let's keep going.
-			CONS_Debug(DBG_NETPLAY, "'%s' accounted for\n", fileneeded[i].filename);
-			fileneeded[i].status = FS_OPEN;
-			++i;
-			++j;
-		}
-		return 1;
-	}
-
-	for (i = 0; i < fileneedednum; i++)
-	{
-		if (fileneeded[i].status == FS_NOTFOUND || fileneeded[i].status == FS_MD5SUMBAD || fileneeded[i].status == FS_FALLBACK)
-			downloadrequired = true;
-
-		if (fileneeded[i].status != FS_OPEN)
-			filestoload++;
-
-		if (fileneeded[i].status != FS_NOTCHECKED) //since we're running this over multiple tics now, its possible for us to come across files checked in previous tics
-			continue;
-
-		CONS_Debug(DBG_NETPLAY, "searching for '%s' ", fileneeded[i].filename);
-
-		if (fileneeded[i].folder)
-		{
-			fileneeded[i].status = FS_NOTFOUND;
-		}
-		else
-		{
-			boolean alreadyloaded = false;
-
-			// Check in already loaded files
-			for (j = mainwads; j < numwadfiles; j++)
-			{
-				nameonly(strcpy(wadfilename, wadfiles[j]->filename));
-				if (!stricmp(wadfilename, fileneeded[i].filename) &&
-					!memcmp(wadfiles[j]->md5sum, fileneeded[i].md5sum, 16))
-				{
-					CONS_Debug(DBG_NETPLAY, "already loaded\n");
-					fileneeded[i].status = FS_OPEN;
-					alreadyloaded = true;
-					break;
-				}
-			}
-
-			if (!alreadyloaded)
-				fileneeded[i].status = findfile(fileneeded[i].filename, fileneeded[i].md5sum, true);
-		}
-
-		CONS_Debug(DBG_NETPLAY, "found %d\n", fileneeded[i].status);
-		fileschecked++;
-		if (fileschecked >= 16 || I_GetPreciseTime() - checkstarted >= checkbudget)
-			return 4;
-	}
-
-	//now making it here means we've checked the entire list and no FS_NOTCHECKED files remain
-	if (numwadfiles+filestoload > MAX_WADFILES)
-		return 3;
-	else if (downloadrequired)
-		return 0; //some stuff is FS_NOTFOUND, needs download
-	else
-		return 1; //everything is FS_OPEN or FS_FOUND, proceed to loading
+ /* The loaded, important prefix must match exactly. Checking the unloaded
+  * tail uses the same bounded search in both clean and modified sessions. */
+ if (modifiedgame)
+ {
+  i = 0;
+  for (j = mainwads; j < numwadfiles; j++)
+  {
+   if (!wadfiles[j]->important) continue;
+   if (i >= fileneedednum || memcmp(wadfiles[j]->md5sum, fileneeded[i].md5sum, 16))
+   {
+    CONS_Alert(CONS_ERROR, "Add-on checksum/order mismatch at position %d: client=%s, server=%s.\n",
+     i+1, wadfiles[j]->filename, i < fileneedednum ? fileneeded[i].filename : "<end of list>");
+    return 2;
+   }
+   fileneeded[i++].status = FS_OPEN;
+  }
+ }
+ for (i = 0; i < fileneedednum; i++)
+ {
+  if (fileneeded[i].status != FS_NOTCHECKED) continue;
+  if (fileschecked && I_GetPreciseTime()-started >= budget) return 4;
+  if (fileneeded[i].folder) fileneeded[i].status = FS_NOTFOUND;
+  else
+  {
+   for (j = mainwads; !modifiedgame && j < numwadfiles; j++)
+    if (!stricmp(wadfiles[j]->filename + strlen(wadfiles[j]->filename) - nameonlylength(wadfiles[j]->filename), fileneeded[i].filename)
+     && !memcmp(wadfiles[j]->md5sum, fileneeded[i].md5sum, 16))
+    { fileneeded[i].status = FS_OPEN; break; }
+   if (fileneeded[i].status == FS_NOTCHECKED)
+    fileneeded[i].status = findfile(fileneeded[i].filename, fileneeded[i].md5sum, true);
+  }
+  fileschecked++;
+ }
+ /* Account after searching, including the last file. The previous code
+  * could report success before counting a file it had just found missing. */
+ for (i = 0; i < fileneedednum; i++)
+ {
+  if (fileneeded[i].status != FS_OPEN) filestoload++;
+  if (fileneeded[i].status == FS_NOTFOUND || fileneeded[i].status == FS_MD5SUMBAD
+   || fileneeded[i].status == FS_FALLBACK) downloadrequired = true;
+ }
+ if (numwadfiles + filestoload > MAX_WADFILES) return 3;
+ return downloadrequired ? 0 : 1;
 }
 
 // Load it now
@@ -1435,6 +1348,7 @@ void PT_FileReceived(SINT8 node)
 static void SendAckPacket(fileack_pak *packet, UINT8 fileid)
 {
 	size_t packetsize;
+	if (!packet || !packet->numsegments) return;
 
 	packetsize = sizeof(*packet) + packet->numsegments * sizeof(*packet->segments);
 
@@ -1450,6 +1364,7 @@ static void SendAckPacket(fileack_pak *packet, UINT8 fileid)
 	netbuffer->packettype = PT_FILEACK;
 	M_Memcpy(&netbuffer->u.fileack, packet, packetsize);
 	HSendPacket(servernode, false, 0, packetsize);
+	if (fileid < fileneedednum) fileneeded[fileid].lastacksent = I_GetTime();
 
 	// Clear the packet
 	memset(packet, 0, sizeof(*packet) + 512);
@@ -1457,7 +1372,7 @@ static void SendAckPacket(fileack_pak *packet, UINT8 fileid)
 
 static void AddFragmentToAckPacket(fileack_pak *packet, UINT8 iteration, UINT32 fragmentpos, UINT8 fileid)
 {
-	fileacksegment_t *segment = &packet->segments[packet->numsegments - 1];
+	fileacksegment_t *segment = packet->numsegments ? &packet->segments[packet->numsegments - 1] : NULL;
 
 	packet->iteration = max(packet->iteration, iteration);
 
@@ -1475,7 +1390,7 @@ static void AddFragmentToAckPacket(fileack_pak *packet, UINT8 iteration, UINT32 
 	}
 
 	// Set the bit that represents the fragment
-	segment->acks |= 1 << (fragmentpos - segment->start);
+	segment->acks |= 1u << (fragmentpos - segment->start);
 }
 
 void FileReceiveTicker(void)
@@ -1486,7 +1401,8 @@ void FileReceiveTicker(void)
 
 		if (file->status == FS_DOWNLOADING)
 		{
-			if (lasttimeackpacketsent - I_GetTime() > TICRATE / 2)
+			// Batch acknowledgements for two tics; never emit empty packets.
+			if ((tic_t)(I_GetTime() - file->lastacksent) >= 2)
 				SendAckPacket(file->ackpacket, i);
 
 			// When resuming a tranfer, start with telling
@@ -1641,10 +1557,11 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 					CONS_Printf("\x82NOTICE:\x80 %s already exists; old file saved as %s\n", filename, backup_filename);
 			}
 			OpenNewFileForDownload(file, file->filename);
-			CONS_Printf("Downloading addon \"%s\" from the server...\n", filename);
+			if (file->type == FILENEEDED_SAVEGAME) CONS_Printf("Downloading game state from the server...\n");
+			else CONS_Printf("Downloading addon \"%s\" from the server...\n", filename);
 		}
 
-		lasttimeackpacketsent = I_GetTime();
+		file->lastacksent = I_GetTime();
 	}
 
 	if (file->status == FS_DOWNLOADING)
@@ -1690,8 +1607,11 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 				}
 				else
 				{
-					filedownload.completednum++;
-					filedownload.completedsize += file->totalsize;
+					if (file->type == FILENEEDED_WAD)
+					{
+						filedownload.completednum++;
+						filedownload.completedsize += file->totalsize;
+					}
 					filedownload.remaining--;
 				}
 
@@ -2734,6 +2654,23 @@ static filestatus_t CheckExactAddonPath(char *filename, const char *directory,
 	return status;
 }
 
+static boolean AddonSearchSameDirectory(const char *a, const char *b)
+{
+ char left[1024], right[1024];
+#ifdef _WIN32
+ if (!_fullpath(left, a, sizeof left) || !_fullpath(right, b, sizeof right)) return false;
+ for (char *p = left; *p; p++) if (*p == '\\') *p = '/';
+ for (char *p = right; *p; p++) if (*p == '\\') *p = '/';
+ return !strcasecmp(left, right);
+#else
+ char *la = realpath(a, NULL), *rb = realpath(b, NULL);
+ boolean same = la && rb && !strcmp(la, rb);
+ (void)left; (void)right;
+ free(la); free(rb);
+ return same;
+#endif
+}
+
 // Rewritten by Monster Iestyn to be less stupid
 // Note: if completepath is true, "filename" is modified, but only if FS_FOUND is going to be returned
 // (Don't worry about WinCE's version of filesearch, nobody cares about that OS anymore)
@@ -2782,7 +2719,8 @@ filestatus_t findfile(char *filename, const UINT8 *wantedmd5sum, boolean complet
 	// if not found at all, just move on without doing anything
 
 	// next, check SRB2's "path" directory
-	homecheck = filesearch(filename, srb2path, wantedmd5sum, completepath, 10);
+	homecheck = AddonSearchSameDirectory(srb2path, srb2home) ? FS_NOTFOUND
+		: filesearch(filename, srb2path, wantedmd5sum, completepath, 10);
 
 	if (homecheck == FS_FOUND) // we found the file, so return that we have :)
 		return FS_FOUND;
@@ -2791,7 +2729,8 @@ filestatus_t findfile(char *filename, const UINT8 *wantedmd5sum, boolean complet
 	// if not found at all, just move on without doing anything
 
 	// finally check "." directory
-	homecheck = filesearch(filename, ".", wantedmd5sum, completepath, 10);
+	homecheck = AddonSearchSameDirectory(".", srb2home) || AddonSearchSameDirectory(".", srb2path) ? FS_NOTFOUND
+		: filesearch(filename, ".", wantedmd5sum, completepath, 10);
 
 	if (homecheck != FS_NOTFOUND) // if not found this time, fall back on the below return statement
 		return homecheck; // otherwise return the result we got

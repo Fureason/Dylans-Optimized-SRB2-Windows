@@ -225,7 +225,7 @@ endif()
 
 if("${CMAKE_SYSTEM_NAME}" MATCHES Windows)
 	target_link_libraries(SRB2SDL2 PRIVATE
-		ws2_32
+		ws2_32 ole32 mfuuid
 	)
 	target_compile_options(SRB2SDL2 PRIVATE
 		-U_WINDOWS

@@ -61,6 +61,9 @@
 #include "netcode/mserv.h"
 #include "netcode/server_connection.h"
 #include "netcode/client_connection.h"
+#include "netcode/server_browser.h"
+#include "netcode/i_net.h"
+#include "netcode/gamestate.h"
 #include "m_misc.h"
 #include "m_anigif.h"
 #include "byteptr.h"
@@ -96,7 +99,6 @@
 #define SMALLLINEHEIGHT 8
 #define SLIDER_RANGE 9
 #define SLIDER_WIDTH 78
-#define SERVERS_PER_PAGE 11
 
 typedef enum
 {
@@ -151,6 +153,34 @@ static char *char_notes = NULL;
 
 boolean menuactive = false;
 boolean fromlevelselect = false;
+static void M_MenuMouse_OnChange(void);
+static consvar_t cv_menumouse = CVAR_INIT("menumouse", "On", CV_SAVE|CV_CALL, CV_OnOff, M_MenuMouse_OnChange);
+
+typedef void (*menumouse_select_t)(INT32, INT32);
+typedef struct
+{
+	INT32 x, y, w, h, item, key, first, second;
+	menumouse_select_t select;
+ boolean hoverselect;
+	consvar_t *slider;
+} menumouse_hit_t;
+
+static menumouse_hit_t *menumouse_hits;
+static size_t menumouse_count, menumouse_capacity;
+static menu_t *menumouse_menu, *menumouse_scrollmenu;
+static INT32 menumouse_x, menumouse_y, menumouse_scrolly;
+static INT32 menumouse_rawx, menumouse_rawy;
+static boolean menumouse_position, menumouse_navigation, menumouse_scrollheld;
+static boolean menumouse_dragging;
+static menumouse_hit_t menumouse_drag;
+static tic_t menumouse_dragtic;
+static consvar_t cv_menumousesound = CVAR_INIT("menumousesound", "On", CV_SAVE, CV_OnOff, NULL);
+static tic_t menumouse_soundtic;
+static void M_MenuHoverSound(void)
+{
+ if (cv_menumousesound.value && menumouse_soundtic != I_GetTime()+1)
+ { S_StartSound(NULL, sfx_menu1); menumouse_soundtic=I_GetTime()+1; }
+}
 
 typedef enum
 {
@@ -164,7 +194,6 @@ levellist_mode_t levellistmode = LLM_CREATESERVER;
 UINT8 maplistoption = 0;
 
 static char joystickInfo[MAX_JOYSTICKS+1][29];
-static UINT32 serverlistpage;
 
 static UINT8 numsaves = 0;
 static saveinfo_t* savegameinfo = NULL; // Extra info about the save games.
@@ -316,6 +345,11 @@ static void M_ServerOptions(INT32 choice);
 static void M_StartServerMenu(INT32 choice);
 static void M_ConnectMenu(INT32 choice);
 static void M_ConnectMenuModChecks(INT32 choice);
+static void Command_ServerBrowser_f(void);
+static void Command_ServerFavorite_f(void);
+static void Command_ServerBrowserStatus_f(void);
+static void M_BrowserWheel(INT32 direction);
+static boolean M_BrowserPointer(event_t *ev);
 static void M_Refresh(INT32 choice);
 static void M_Connect(INT32 choice);
 static void M_ChooseRoom(INT32 choice);
@@ -1035,31 +1069,7 @@ enum
 
 static menuitem_t MP_ConnectMenu[] =
 {
-	{IT_STRING | IT_CALL,       NULL, "Room...",  M_RoomMenu,         4},
-	{IT_STRING | IT_CVAR,       NULL, "Sort By",  &cv_serversort,     12},
-	{IT_STRING | IT_KEYHANDLER, NULL, "Page",     M_HandleServerPage, 20},
-	{IT_STRING | IT_CALL,       NULL, "Refresh",  M_Refresh,          28},
-
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,          48-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,          60-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,          72-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,          84-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,          96-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,         108-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,         120-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,         132-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,         144-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,         156-4},
-	{IT_STRING | IT_SPACE, NULL, "",              M_Connect,         168-4},
-};
-
-enum
-{
-	mp_connect_room,
-	mp_connect_sort,
-	mp_connect_page,
-	mp_connect_refresh,
-	FIRSTSERVERLINE
+	{IT_KEYHANDLER, NULL, "", M_HandleServerPage, 0},
 };
 
 menuitem_t MP_RoomMenu[] =
@@ -1190,6 +1200,9 @@ static menuitem_t OP_ChangeControlsMenu[] =
 	{IT_CALL | IT_STRING2, NULL, "Custom Action 3",  M_ChangeControl, GC_CUSTOM3     },
 };
 
+#ifdef HAVE_SDL
+#include "m_gamepadsetup.inc"
+#else
 static menuitem_t OP_Joystick1Menu[] =
 {
 	{IT_STRING | IT_CALL,  NULL, "Select Gamepad...", M_Setup1PJoystickMenu, 10},
@@ -1226,6 +1239,8 @@ static menuitem_t OP_Joystick2Menu[] =
 	{IT_STRING | IT_CVAR | IT_CV_FLOATSLIDER, NULL, "Digital Deadzone", &cv_digitaldeadzone2,150},
 };
 
+#endif
+
 static menuitem_t OP_JoystickSetMenu[1+MAX_JOYSTICKS];
 
 static menuitem_t OP_MouseOptionsMenu[] =
@@ -1241,6 +1256,7 @@ static menuitem_t OP_MouseOptionsMenu[] =
 	                      NULL, "Mouse X Sensitivity",    &cv_mousesens,        70},
 	{IT_STRING | IT_CVAR | IT_CV_SLIDER,
 	                      NULL, "Mouse Y Sensitivity",    &cv_mouseysens,        80},
+	{IT_STRING | IT_CVAR, NULL, "Mouse in Menus", &cv_menumouse, 90},
 };
 
 static menuitem_t OP_Mouse2OptionsMenu[] =
@@ -1413,19 +1429,21 @@ static menuitem_t OP_VideoOptionsMenu[] =
 	{IT_STRING | IT_CVAR, NULL, "Weather Draw Dist.",        &cv_drawdist_precip, 181},
 	{IT_STRING | IT_CVAR, NULL, "NiGHTS Hoop Draw Dist.",    &cv_drawdist_nights, 186},
 	{IT_STRING | IT_CVAR, NULL, "Rotated Sprite Cache",      &cv_rotspritecache,  191},
+	{IT_STRING | IT_CVAR, NULL, "Screen Shake",              &cv_screenshake,     196},
 
 	{IT_HEADER, NULL, "Diagnostic", NULL, 204},
 	{IT_STRING | IT_CVAR, NULL, "Show FPS",                  &cv_ticrate,         210},
 	{IT_STRING | IT_CVAR, NULL, "Clear Before Redraw",       &cv_homremoval,      215},
 	{IT_STRING | IT_CVAR, NULL, "Show \"FOCUS LOST\"",       &cv_showfocuslost,   220},
 
-#ifdef HWRENDER
 	{IT_HEADER, NULL, "Renderer", NULL, 228},
+#ifdef HWRENDER
 	{IT_CALL | IT_STRING, NULL, "OpenGL Options...",         M_OpenGLOptionsMenu, 234},
+#endif
 	{IT_STRING | IT_CVAR, NULL, "FPS Cap",                   &cv_fpscap,          239},
 	{IT_STRING | IT_CVAR, NULL, "Smooth Frame Pacing",        &cv_smoothframepacing, 244},
 	{IT_STRING | IT_CVAR, NULL, "Adaptive Visual Effects",     &cv_adaptiveeffects, 249},
-#endif
+	{IT_STRING | IT_CVAR, NULL, "Shadows",                    &cv_shadow,          259},
 };
 
 static menuitem_t OP_VideoModeMenu[] =
@@ -1485,22 +1503,23 @@ static menuitem_t OP_OpenGLOptionsMenu[] =
 	{IT_HEADER, NULL, "General", NULL, 43},
 	{IT_STRING|IT_CVAR,         NULL, "Shaders",             &cv_glshaders,            56},
 	{IT_STRING|IT_CVAR,         NULL, "Palette rendering",   &cv_glpaletterendering,   66},
-	{IT_STRING|IT_CVAR,         NULL, "Field of view",       &cv_fov,                  76},
-	{IT_STRING|IT_CVAR,         NULL, "Fake contrast",       &cv_glfakecontrast,       86},
-	{IT_STRING|IT_CVAR,         NULL, "Visuportals",         &cv_glvisuportals,        96},
+	{IT_STRING|IT_CVAR,         NULL, "Lack of perspective", &cv_glshearing,           76},
+	{IT_STRING|IT_CVAR,         NULL, "Field of view",       &cv_fov,                  86},
+	{IT_STRING|IT_CVAR,         NULL, "Fake contrast",       &cv_glfakecontrast,       96},
+	{IT_STRING|IT_CVAR,         NULL, "Visuportals",         &cv_glvisuportals,       106},
 
-	{IT_HEADER, NULL, "Miscellaneous", NULL, 106},
-	{IT_STRING|IT_CVAR,         NULL, "Bit depth",           &cv_scr_depth,           119},
-	{IT_STRING|IT_CVAR,         NULL, "Texture smoothness",  &cv_glfiltermode,        129},
-	{IT_STRING|IT_CVAR,         NULL, "Sprite smoothness",   &cv_glspritefiltermode,  139},
-	{IT_STRING|IT_CVAR,         NULL, "Anisotropic",         &cv_glanisotropicmode,   149},
-	{IT_STRING|IT_CVAR,         NULL, "True-color PNGs",     &cv_gltruecolorpngs,     159},
-	{IT_STRING|IT_CVAR,         NULL, "Retain texture cache",&cv_glretaintextures,    169},
+	{IT_HEADER, NULL, "Miscellaneous", NULL, 116},
+	{IT_STRING|IT_CVAR,         NULL, "Bit depth",           &cv_scr_depth,           129},
+	{IT_STRING|IT_CVAR,         NULL, "Texture smoothness",  &cv_glfiltermode,        139},
+	{IT_STRING|IT_CVAR,         NULL, "Sprite smoothness",   &cv_glspritefiltermode,  149},
+	{IT_STRING|IT_CVAR,         NULL, "Anisotropic",         &cv_glanisotropicmode,   159},
+	{IT_STRING|IT_CVAR,         NULL, "True-color PNGs",     &cv_gltruecolorpngs,     169},
+	{IT_STRING|IT_CVAR,         NULL, "Retain texture cache",&cv_glretaintextures,    179},
 #ifdef ALAM_LIGHTING
-	{IT_SUBMENU|IT_STRING,      NULL, "Lighting...",         &OP_OpenGLLightingDef,   173},
+	{IT_SUBMENU|IT_STRING,      NULL, "Lighting...",         &OP_OpenGLLightingDef,   183},
 #endif
 #if defined (_WINDOWS) && (!(defined (__unix__) || defined (UNIXCOMMON) || defined (HAVE_SDL)))
-	{IT_STRING|IT_CVAR,         NULL, "Fullscreen",          &cv_fullscreen,          173},
+	{IT_STRING|IT_CVAR,         NULL, "Fullscreen",          &cv_fullscreen,          183},
 #endif
 };
 
@@ -1536,7 +1555,11 @@ static menuitem_t OP_SoundOptionsMenu[] =
 	{IT_STRING | IT_CVAR, NULL, "Reset Music Upon Dying", &cv_resetmusic, 77},
 	{IT_STRING | IT_CVAR, NULL, "Default 1-Up sound", &cv_1upsound, 82},
 
-	{IT_STRING | IT_SUBMENU, NULL, "Advanced Settings...", &OP_SoundAdvancedDef, 92},
+	#ifndef __ANDROID__
+ {IT_STRING | IT_CVAR, NULL, "Mouse Menu Sound", &cv_menumousesound, 92},
+#endif
+ {IT_STRING | IT_CVAR, NULL, "Sound Clipping Protection", &cv_soundclipping, 104},
+ {IT_STRING | IT_SUBMENU, NULL, "Advanced Settings...", &OP_SoundAdvancedDef, 116},
 };
 
 #ifdef HAVE_OPENMPT
@@ -2154,12 +2177,22 @@ menu_t OP_Mouse2OptionsDef = DEFAULTMENUSTYLE(
 	MTREE3(MN_OP_MAIN, MN_OP_P2CONTROLS, MN_OP_P2MOUSE),
 	"M_CONTRO", OP_Mouse2OptionsMenu, &OP_P2ControlsDef, 35, 30);
 
+#ifdef HAVE_SDL
+menu_t OP_Joystick1Def = {MTREE3(MN_OP_MAIN, MN_OP_P1CONTROLS, MN_OP_P1JOYSTICK),
+ "M_CONTRO", sizeof(OP_Joystick1Menu)/sizeof(menuitem_t), &OP_P1ControlsDef,
+ OP_Joystick1Menu, M_DrawGamepadOptions, 40, 25, 0, NULL};
+menu_t OP_Joystick2Def = {MTREE3(MN_OP_MAIN, MN_OP_P2CONTROLS, MN_OP_P2JOYSTICK),
+ "M_CONTRO", sizeof(OP_Joystick2Menu)/sizeof(menuitem_t), &OP_P2ControlsDef,
+ OP_Joystick2Menu, M_DrawGamepadOptions, 40, 25, 0, NULL};
+#else
 menu_t OP_Joystick1Def = DEFAULTMENUSTYLE(
 	MTREE3(MN_OP_MAIN, MN_OP_P1CONTROLS, MN_OP_P1JOYSTICK),
 	"M_CONTRO", OP_Joystick1Menu, &OP_P1ControlsDef, 50, 30);
 menu_t OP_Joystick2Def = DEFAULTMENUSTYLE(
 	MTREE3(MN_OP_MAIN, MN_OP_P2CONTROLS, MN_OP_P2JOYSTICK),
 	"M_CONTRO", OP_Joystick2Menu, &OP_P2ControlsDef, 50, 30);
+
+#endif
 
 menu_t OP_JoystickSetDef =
 {
@@ -3239,6 +3272,24 @@ static void M_GoBack(INT32 choice)
 		M_ClearMenus(true);
 }
 
+static boolean M_VolumeCvar(const consvar_t *cv)
+{
+ return cv == &cv_soundvolume || cv == &cv_digmusicvolume || cv == &cv_midimusicvolume;
+}
+
+static void M_PreviewVolume(consvar_t *cv)
+{
+ static tic_t previewtic;
+ if (cv == &cv_soundvolume)
+ {
+  S_SetSfxVolume(cv->value);
+  if (I_GetTime() >= previewtic)
+  { S_StartSound(NULL, sfx_menu1); previewtic=I_GetTime()+3; }
+ }
+ else if (cv == &cv_digmusicvolume) S_SetDigMusicVolume(cv->value);
+ else if (cv == &cv_midimusicvolume) S_SetMIDIMusicVolume(cv->value);
+}
+
 static void M_ChangeCvar(INT32 choice)
 {
 	consvar_t *cv = (consvar_t *)currentMenu->menuitems[itemOn].itemaction;
@@ -3253,6 +3304,7 @@ static void M_ChangeCvar(INT32 choice)
 			return;
 		}
 		CV_Set(cv,cv->defaultvalue);
+		M_PreviewVolume(cv);
 		return;
 	}
 
@@ -3309,6 +3361,7 @@ static void M_ChangeCvar(INT32 choice)
 	}
 	else
 		CV_AddValue(cv,choice);
+	M_PreviewVolume(cv);
 }
 
 static boolean M_ChangeStringCvar(INT32 choice)
@@ -3362,6 +3415,259 @@ static void M_ResetCvars(void)
 	}
 }
 
+/* Pointer targets are recorded by the actual drawing routines. Hidden rows
+ * and scrolling therefore cannot leave active, displaced click areas. */
+static void M_ResetMenuMouse(void)
+{
+ menumouse_count = 0;
+ menumouse_menu = menumouse_scrollmenu = NULL;
+ menumouse_scrollheld = menumouse_dragging = false;
+}
+
+static void M_MenuMouseSliderRegion(const consvar_t *cv, INT32 x, INT32 y, INT32 width);
+static const char *M_CVarDisplayString(const consvar_t *cv);
+static boolean M_VolumeCvar(const consvar_t *cv);
+static void M_PreviewVolume(consvar_t *cv);
+
+static void M_MenuMouse_OnChange(void)
+{
+ M_ResetMenuMouse();
+ I_UpdateMouseGrab();
+}
+
+static void M_SetMenuMouseNavigation(boolean pointer)
+{
+ if (!pointer)
+ {
+  menumouse_dragging=false;
+  menumouse_scrollheld=false;
+ }
+ if (menumouse_navigation == pointer) return;
+ menumouse_navigation=pointer;
+ I_UpdateMouseGrab();
+}
+
+static void M_MenuMouseAdd(INT32 item, INT32 key, INT32 x, INT32 y, INT32 w, INT32 h,
+ menumouse_select_t select, INT32 first, INT32 second, consvar_t *slider)
+{
+ menumouse_hit_t *hit;
+ if (!menuactive || !cv_menumouse.value || w <= 0 || h <= 0)
+  return;
+ if (menumouse_menu != currentMenu)
+ {
+  menumouse_count = 0;
+  menumouse_menu = currentMenu;
+ }
+ if (menumouse_count == menumouse_capacity)
+ {
+  menumouse_capacity += 32;
+  menumouse_hits = Z_Realloc(menumouse_hits, menumouse_capacity*sizeof (*menumouse_hits), PU_STATIC, NULL);
+ }
+ hit = &menumouse_hits[menumouse_count++];
+ hit->x=x; hit->y=y; hit->w=w; hit->h=h;
+ hit->item=item; hit->key=key; hit->select=select;
+ hit->first=first; hit->second=second; hit->slider=slider;
+ hit->hoverselect=true;
+}
+
+static void M_MenuMouseItem(INT32 item, INT32 x, INT32 y, INT32 h, boolean centered)
+{
+ const menuitem_t *entry = &currentMenu->menuitems[item];
+ if (!cv_menumouse.value) return;
+ INT32 left=x-2, width=max(40, V_StringWidth(entry->text ? entry->text : "", 0)+4);
+ if (((entry->status & IT_TYPE) & IT_SPACE) || !entry->itemaction)
+  return;
+ if (centered) left=x-width/2;
+ else width=max(width, BASEVIDWIDTH-2*x+4);
+ if ((entry->status & IT_TYPE) == IT_CVAR && (entry->status & IT_CVARTYPE) == IT_CV_STRING)
+  h=24;
+ M_MenuMouseAdd(item, (entry->status & IT_TYPE) == IT_KEYHANDLER ? 0 : KEY_ENTER,
+  left, y-1, width, h+2, NULL, 0, 0, NULL);
+ if ((entry->status & IT_TYPE) == IT_CVAR
+ && ((entry->status & IT_CVARTYPE) == IT_CV_SLIDER || (entry->status & IT_CVARTYPE) == IT_CV_FLOATSLIDER))
+ {
+  const INT32 track=BASEVIDWIDTH-x-SLIDER_WIDTH;
+  M_MenuMouseSliderRegion((const consvar_t *)entry->itemaction,track+2,y,SLIDER_RANGE*8+1);
+  M_MenuMouseAdd(item,KEY_LEFTARROW,track-12,y-2,14,12,NULL,0,0,NULL);
+  M_MenuMouseAdd(item,KEY_RIGHTARROW,track+80,y-2,14,12,NULL,0,0,NULL);
+ }
+ if ((entry->status & IT_TYPE) == IT_CVAR
+ && (entry->status & IT_CVARTYPE) != IT_CV_STRING
+ && (entry->status & IT_CVARTYPE) != IT_CV_SLIDER
+ && (entry->status & IT_CVARTYPE) != IT_CV_FLOATSLIDER)
+ {
+  const consvar_t *cv=(const consvar_t *)entry->itemaction;
+  const INT32 valueleft=BASEVIDWIDTH-x-V_StringWidth(M_CVarDisplayString(cv), 0);
+  M_MenuMouseAdd(item, KEY_LEFTARROW, valueleft-13, y-2, 13, 12, NULL, 0, 0, NULL);
+  M_MenuMouseAdd(item, KEY_RIGHTARROW, BASEVIDWIDTH-x+1, y-2, 13, 12, NULL, 0, 0, NULL);
+ }
+}
+
+static void M_MenuMouseButton(INT32 item, INT32 key, INT32 x, INT32 y, INT32 width, const char *label)
+{
+ if (!cv_menumouse.value) return;
+ if (M_MenuMouseVisible())
+ {
+  V_DrawFill(x,y,width,12,159);
+  V_DrawCenteredString(x+width/2+(!label[1] && label[0] >= '\x1A' && label[0] <= '\x1D' ? 2 : 0),y+2,V_YELLOWMAP,label);
+ }
+ // Keep the target ready so a click can resume pointer navigation immediately.
+ M_MenuMouseAdd(item,key,x,y,width,12,NULL,0,0,NULL);
+}
+
+static INT32 M_MenuMouseScrollY(INT32 computed)
+{
+ if (menumouse_navigation && menumouse_scrollheld && menumouse_scrollmenu == currentMenu)
+  return menumouse_scrolly;
+ menumouse_scrollmenu=currentMenu;
+ menumouse_scrolly=computed;
+ menumouse_scrollheld=true;
+ return computed;
+}
+
+static menumouse_hit_t *M_MenuMouseHit(void)
+{
+ size_t i=menumouse_count;
+ if (!menumouse_position || menumouse_menu != currentMenu)
+  return NULL;
+ while (i--)
+ {
+  menumouse_hit_t *hit=&menumouse_hits[i];
+  if (menumouse_x >= hit->x && menumouse_x < hit->x+hit->w
+  && menumouse_y >= hit->y && menumouse_y < hit->y+hit->h)
+   return hit;
+ }
+ return NULL;
+}
+
+static void M_MenuMouseSelect(const menumouse_hit_t *hit, boolean clicked)
+{
+ if (hit->item >= 0 && hit->item < currentMenu->numitems && itemOn != hit->item)
+ {
+  itemOn=(INT16)hit->item;
+  M_UpdateItemOn();
+  if (!clicked) M_MenuHoverSound();
+ }
+ if (hit->select && (clicked || hit->hoverselect)) hit->select(hit->first,hit->second);
+}
+
+static void M_MenuMouseSlider(const menumouse_hit_t *hit)
+{
+ consvar_t *cv=hit->slider;
+ INT32 last=0, value, position;
+ INT64 low, high;
+ char text[32];
+ if (!cv || !cv->PossibleValue || hit->w <= 1)
+  return;
+ while (cv->PossibleValue[last+1].strvalue) last++;
+ low=cv->PossibleValue[0].value; high=cv->PossibleValue[last].value;
+ if (high <= low) return;
+ position=max(0,min(hit->w-1,menumouse_x-hit->x));
+ if (cv == &cv_captionscale)
+ {
+  const INT32 half=(hit->w-1)/2;
+  if (position <= half) value=(INT32)(low+(FRACUNIT-low)*position/max(1,half));
+  else value=(INT32)(FRACUNIT+(high-FRACUNIT)*(position-half)/max(1,hit->w-1-half));
+ }
+ else value=(INT32)(low+((high-low)*position+(hit->w-1)/2)/(hit->w-1));
+ if (value == cv->value) return;
+ if (cv->flags & CV_FLOAT)
+ {
+  snprintf(text,sizeof text,"%.6f",(double)value/FRACUNIT);
+  CV_Set(cv,text);
+ }
+ else CV_SetValue(cv,value);
+ M_PreviewVolume(cv);
+}
+
+/* Return true for consumed motion/drag/empty-space clicks, or produce a key
+ * for the existing responder. Actions retain its validation and menu rules. */
+static boolean M_MenuMouseInput(event_t *ev, INT32 *key)
+{
+ menumouse_hit_t *hit;
+ if (!M_MenuMouseActive()) return false;
+ if (ev->type == ev_mouse) return true;
+ if (ev->type == ev_mouseabsolute)
+ {
+  const INT32 scale=max(1,vid.dup);
+  const INT32 x=(ev->x-(vid.width-BASEVIDWIDTH*scale)/2)/scale;
+  const INT32 y=(ev->y-(vid.height-BASEVIDHEIGHT*scale)/2)/scale;
+  const boolean moved=!menumouse_position || ev->x != menumouse_rawx || ev->y != menumouse_rawy;
+  menumouse_rawx=ev->x; menumouse_rawy=ev->y;
+  menumouse_x=x; menumouse_y=y; menumouse_position=true;
+  if (moved) M_SetMenuMouseNavigation(true);
+  if (currentMenu == &MP_ConnectDef && M_BrowserPointer(ev)) return true;
+  if (menumouse_dragging)
+  {
+   if (menumouse_menu != currentMenu) menumouse_dragging=false;
+   else if (menumouse_dragtic != I_GetTime())
+   {
+    M_MenuMouseSlider(&menumouse_drag);
+    menumouse_dragtic=I_GetTime();
+   }
+  }
+  else if (moved && (hit=M_MenuMouseHit())) M_MenuMouseSelect(hit,false);
+  return true;
+ }
+ if (ev->type == ev_keyup && ev->key == KEY_MOUSE1)
+ {
+  if (currentMenu == &MP_ConnectDef) M_BrowserPointer(ev);
+  if (menumouse_dragging) M_MenuMouseSlider(&menumouse_drag);
+  menumouse_dragging=false;
+  keydown=0;
+  return true;
+ }
+ if (ev->type != ev_keydown) return false;
+ if (currentMenu == &MP_ConnectDef && M_BrowserPointer(ev)) return true;
+ switch (ev->key)
+ {
+  case KEY_MOUSEWHEELUP:
+  case KEY_MOUSEWHEELDOWN:
+   keydown=0; // Each wheel event is a separate press, with no keyup event.
+   M_SetMenuMouseNavigation(true);
+   if (currentMenu == &MP_ConnectDef)
+   {
+    M_BrowserWheel(ev->key == KEY_MOUSEWHEELUP ? -1 : 1);
+    return true;
+   }
+   menumouse_scrollheld=false;
+   if (currentMenu == &SP_LoadDef || currentMenu->drawroutine == M_DrawImageDef)
+    *key=ev->key == KEY_MOUSEWHEELUP ? KEY_LEFTARROW : KEY_RIGHTARROW;
+   else *key=ev->key == KEY_MOUSEWHEELUP ? KEY_UPARROW : KEY_DOWNARROW;
+   return false;
+  case KEY_MOUSE1+1:
+  case KEY_MOUSE1+3:
+   keydown=0;
+   M_SetMenuMouseNavigation(true);
+   *key=KEY_ESCAPE;
+   return false;
+  case KEY_MOUSE1:
+   keydown=0;
+   M_SetMenuMouseNavigation(true);
+   hit=M_MenuMouseHit();
+   if (!hit)
+   {
+    if (currentMenu == &MessageDef && currentMenu->menuitems[0].alphaKey == MM_NOTHING)
+    { *key=KEY_ENTER; return false; }
+    return true;
+   }
+   M_MenuMouseSelect(hit,true);
+   if (hit->slider)
+   {
+    menumouse_drag=*hit;
+    menumouse_dragging=true;
+    menumouse_dragtic=I_GetTime();
+    M_MenuMouseSlider(&menumouse_drag);
+    return true;
+   }
+   if (hit->select) menumouse_scrollheld=false;
+   if (!hit->key) return true;
+   *key=hit->key;
+   return false;
+  default: return false;
+ }
+}
+
 static void M_NextOpt(void)
 {
 	INT16 oldItemOn = itemOn; // prevent infinite loop
@@ -3404,9 +3710,16 @@ static void Command_Manual_f(void)
 //
 // M_Responder
 //
+static boolean M_BackInputIsMouse(const event_t *ev)
+{
+	return ev->type == ev_keydown && ev->key >= KEY_MOUSE1
+		&& ev->key < KEY_MOUSE1 + MOUSEBUTTONS;
+}
+
 boolean M_Responder(event_t *ev)
 {
 	INT32 ch = -1;
+	INT32 pointerkey = -1;
 //	INT32 i;
 	static tic_t joywait = 0, mousewait = 0;
 	static INT32 pjoyx = 0, pjoyy = 0;
@@ -3425,17 +3738,33 @@ boolean M_Responder(event_t *ev)
 	if (CON_Ready() && gamestate != GS_WAITINGPLAYERS)
 		return false;
 
+	if ((ev->type == ev_keydown && ev->key < KEY_MOUSE1) || ev->type == ev_joystick || ev->type == ev_joystick2)
+		M_SetMenuMouseNavigation(false);
+	if (!menuactive && gamestate == GS_TITLESCREEN && M_MenuMouseActive()
+	&& ev->type == ev_keydown && ev->key == KEY_MOUSE1)
+	{
+		M_SetMenuMouseNavigation(true);
+		M_StartControlPanel();
+		noFurtherInput=true;
+		return true;
+	}
+	#ifdef HAVE_SDL
+	if (M_GPCaptureResponder(ev)) return true;
+#endif
 	if (noFurtherInput)
 	{
+		if (menuactive && ev->type == ev_keyup && ev->key == KEY_MOUSE1
+		&& M_MenuMouseInput(ev, &pointerkey)) return true;
 		// Ignore input after enter/escape/other buttons
 		// (but still allow shift keyup so caps doesn't get stuck)
 		return false;
 	}
 	else if (menuactive)
 	{
+		if (M_MenuMouseInput(ev, &pointerkey)) return true;
 		if (ev->type == ev_keydown || ev->type == ev_text)
 		{
-			ch = ev->key;
+			ch = pointerkey >= 0 ? pointerkey : ev->key;
 			if (ev->type == ev_keydown)
 			{
 				keydown++;
@@ -3514,7 +3843,7 @@ boolean M_Responder(event_t *ev)
 					pjoyx = 0;
 			}
 		}
-		else if (ev->type == ev_mouse && mousewait < I_GetTime())
+		else if (ev->type == ev_mouse && !cv_menumouse.value && mousewait < I_GetTime())
 		{
 			pmousey -= ev->y;
 			if (pmousey < lasty-30)
@@ -3552,7 +3881,7 @@ boolean M_Responder(event_t *ev)
 
 	if (ch == -1)
 		return false;
-	else if (ev->type != ev_text && (ch == gamecontrol[GC_SYSTEMMENU][0] || ch == gamecontrol[GC_SYSTEMMENU][1])) // allow remappable ESC key
+	else if (pointerkey < 0 && ev->type != ev_text && (ch == gamecontrol[GC_SYSTEMMENU][0] || ch == gamecontrol[GC_SYSTEMMENU][1])) // allow remappable ESC key for physical inputs
 		ch = KEY_ESCAPE;
 
 	// F-Keys
@@ -3714,7 +4043,8 @@ boolean M_Responder(event_t *ev)
 			if (routine && ((currentMenu->menuitems[itemOn].status & IT_TYPE) == IT_ARROWS
 				|| (currentMenu->menuitems[itemOn].status & IT_TYPE) == IT_CVAR))
 			{
-				S_StartSound(NULL, sfx_menu1);
+				if (routine != M_ChangeCvar || !M_VolumeCvar((consvar_t *)currentMenu->menuitems[itemOn].itemaction))
+				 S_StartSound(NULL, sfx_menu1);
 				routine(0);
 			}
 			return true;
@@ -3723,7 +4053,8 @@ boolean M_Responder(event_t *ev)
 			if (routine && ((currentMenu->menuitems[itemOn].status & IT_TYPE) == IT_ARROWS
 				|| (currentMenu->menuitems[itemOn].status & IT_TYPE) == IT_CVAR))
 			{
-				S_StartSound(NULL, sfx_menu1);
+				if (routine != M_ChangeCvar || !M_VolumeCvar((consvar_t *)currentMenu->menuitems[itemOn].itemaction))
+				 S_StartSound(NULL, sfx_menu1);
 				routine(1);
 			}
 			return true;
@@ -3733,6 +4064,10 @@ boolean M_Responder(event_t *ev)
 			currentMenu->lastOn = itemOn;
 			if (routine)
 			{
+				const boolean back_action = routine == M_GoBack
+					|| ((currentMenu->menuitems[itemOn].status & IT_TYPE) == IT_SUBMENU
+						&& currentMenu->prevMenu
+						&& currentMenu->menuitems[itemOn].itemaction == currentMenu->prevMenu);
 				if (((currentMenu->menuitems[itemOn].status & IT_TYPE)==IT_CALL
 				 || (currentMenu->menuitems[itemOn].status & IT_TYPE)==IT_SUBMENU)
 				 && (currentMenu->menuitems[itemOn].status & IT_CALLTYPE))
@@ -3748,7 +4083,9 @@ boolean M_Responder(event_t *ev)
 					}
 #endif
 				}
-				S_StartSound(NULL, sfx_menu1);
+				if ((!back_action || M_BackInputIsMouse(ev))
+					&& (routine != M_ChangeCvar || !M_VolumeCvar((consvar_t *)currentMenu->menuitems[itemOn].itemaction)))
+				 S_StartSound(NULL, sfx_menu1);
 				switch (currentMenu->menuitems[itemOn].status & IT_TYPE)
 				{
 					case IT_CVAR:
@@ -3770,6 +4107,8 @@ boolean M_Responder(event_t *ev)
 			noFurtherInput = true;
 			currentMenu->lastOn = itemOn;
 
+			if (M_BackInputIsMouse(ev))
+				S_StartSound(NULL, sfx_menu1);
 			M_GoBack(0);
 
 			return true;
@@ -3794,7 +4133,8 @@ boolean M_Responder(event_t *ev)
 					return true;
 
 				if (currentMenu != &OP_SoundOptionsDef || itemOn > 3)
-					S_StartSound(NULL, sfx_menu1);
+					if (routine != M_ChangeCvar || !M_VolumeCvar((consvar_t *)currentMenu->menuitems[itemOn].itemaction))
+				 S_StartSound(NULL, sfx_menu1);
 				routine(-1);
 				return true;
 			}
@@ -3829,6 +4169,8 @@ boolean M_Responder(event_t *ev)
 void M_Drawer(void)
 {
 	boolean wipe = WipeInAction;
+	menumouse_count=0;
+	menumouse_menu=currentMenu;
 
 	if (currentMenu == &MessageDef)
 		menuactive = true;
@@ -3841,6 +4183,35 @@ void M_Drawer(void)
 
 		if (currentMenu->drawroutine)
 			currentMenu->drawroutine(); // call current menu Draw routine
+		if (currentMenu == &SP_PlayerDef)
+		{
+			M_MenuMouseButton(0,KEY_UPARROW,148,188,42,"Prev");
+			M_MenuMouseButton(0,KEY_ENTER,192,188,60,"Play");
+			M_MenuMouseButton(0,KEY_DOWNARROW,254,188,42,"Next");
+		}
+
+		/* Custom native pages retain their existing responder; expose its
+		 * navigation when that page has no individual pointer targets. */
+		if (cv_menumouse.value && !menumouse_count && currentMenu != &MessageDef
+		&& (currentMenu->menuitems[itemOn].status & IT_TYPE) == IT_KEYHANDLER)
+		{
+			M_MenuMouseButton(itemOn,KEY_LEFTARROW,116,184,16,"\x1C");
+			M_MenuMouseButton(itemOn,KEY_RIGHTARROW,134,184,16,"\x1D");
+			M_MenuMouseButton(itemOn,KEY_UPARROW,152,184,16,"\x1A");
+			M_MenuMouseButton(itemOn,KEY_DOWNARROW,170,184,16,"\x1B");
+			M_MenuMouseButton(itemOn,KEY_ENTER,188,184,56,"Select");
+		}
+
+		if (cv_menumouse.value && currentMenu != &MainDef && currentMenu != &MessageDef && currentMenu->prevMenu)
+		{
+			if (M_MenuMouseVisible())
+			{
+				V_DrawFill(2,2,16,11,159);
+				/* Center the glyph's visible 4x7 ink, rather than its 8x8 cell. */
+				V_DrawString(8,4,V_YELLOWMAP,"\x1C");
+			}
+			M_MenuMouseAdd(-1,KEY_ESCAPE,2,2,16,11,NULL,0,0,NULL);
+		}
 
 		// Draw version down in corner
 		// ... but only in the MAIN MENU.  I'm a picky bastard.
@@ -3894,6 +4265,7 @@ void M_StartControlPanel(void)
 	}
 
 	menuactive = true;
+	M_ResetMenuMouse();
 
 	if (!Playing())
 	{
@@ -4006,6 +4378,7 @@ void M_StartControlPanel(void)
 	}
 
 	CON_ToggleOff(); // move away console
+	I_UpdateMouseGrab();
 }
 
 void M_EndModeAttackRun(void)
@@ -4032,6 +4405,7 @@ void M_ClearMenus(boolean callexitmenufunc)
 		currentMenu = &MainDef; // Not like it matters
 	menuactive = false;
 	hidetitlemap = false;
+	M_ResetMenuMouse();
 
 	I_UpdateMouseGrab();
 }
@@ -4041,6 +4415,7 @@ void M_ClearMenus(boolean callexitmenufunc)
 //
 void M_SetupNextMenu(menu_t *menudef)
 {
+	M_ResetMenuMouse();
 	INT16 i;
 
 #if defined (MASTERSERVER) && defined (HAVE_THREADS)
@@ -4108,12 +4483,25 @@ void M_SetupNextMenu(menu_t *menudef)
 	M_UpdateItemOn();
 
 	hidetitlemap = false;
+	I_UpdateMouseGrab();
 }
 
 // Guess I'll put this here, idk
+boolean M_MenuMouseActive(void)
+{
+ if (!cv_menumouse.value || (!menuactive && gamestate != GS_TITLESCREEN)) return false;
+ return !(menuactive && currentMenu == &MessageDef
+  && currentMenu->menuitems[0].alphaKey == MM_EVENTHANDLER);
+}
+
+boolean M_MenuMouseVisible(void)
+{
+ return M_MenuMouseActive() && menumouse_navigation;
+}
+
 boolean M_MouseNeeded(void)
 {
-	return (currentMenu == &MessageDef && currentMenu->prevMenu == &OP_ChangeControlsDef);
+ return M_MenuMouseActive() || (currentMenu == &MessageDef && currentMenu->prevMenu == &OP_ChangeControlsDef);
 }
 
 //
@@ -4124,6 +4512,14 @@ void M_Ticker(void)
 	// reset input trigger
 	noFurtherInput = false;
 	M_UpdateCompanionAdmin();
+#ifdef HAVE_SDL
+	M_GPCaptureTicker();
+#endif
+	if (menuactive && currentMenu == &MP_ConnectDef)
+	{
+		if (!SB_Active()) M_Refresh(0); // also resume after canceling room selection
+		SB_Ticker();
+	}
 
 	if (dedicated)
 		return;
@@ -4164,6 +4560,8 @@ void M_RegisterEarlyHostingVariables(void)
 	/* config.cfg is executed before M_Init. These saved variables must exist
 	 * by then or SRB2 rejects them as unknown commands and silently falls back
 	 * to Listen hosting on the next launch. */
+	CV_RegisterVar(&cv_menumouse);
+	CV_RegisterVar(&cv_menumousesound);
 	CV_RegisterVar(&cv_hostmode);
 	CV_RegisterVar(&cv_autoportmap);
 }
@@ -4171,7 +4569,10 @@ void M_RegisterEarlyHostingVariables(void)
 void M_Init(void)
 {
 	int i;
-
+	SB_Init();
+	COM_AddCommand("serverbrowser", Command_ServerBrowser_f, COM_LOCAL);
+	COM_AddCommand("serverfavorite", Command_ServerFavorite_f, COM_LOCAL);
+	COM_AddCommand("serverbrowserstatus", Command_ServerBrowserStatus_f, COM_LOCAL);
 	COM_AddCommand("manual", Command_Manual_f, COM_LUA);
 	COM_AddCommand("easydedicatedhost", Command_EasyDedicatedHost_f, COM_LUA);
 
@@ -4293,9 +4694,21 @@ static const char *M_CreateSecretMenuOption(const char *str)
 	return qbuf;
 }
 
+static void M_MenuMouseSliderRegion(const consvar_t *cv, INT32 x, INT32 y, INT32 width)
+{
+ INT32 i;
+ for (i=0;i<currentMenu->numitems;i++)
+  if (currentMenu->menuitems[i].itemaction == cv && (currentMenu->menuitems[i].status & IT_TYPE) == IT_CVAR)
+  {
+   M_MenuMouseAdd(i,KEY_ENTER,x,y-2,width,12,NULL,0,0,currentMenu->menuitems[i].itemaction);
+   return;
+  }
+}
+
 static void M_DrawThermo(INT32 x, INT32 y, consvar_t *cv)
 {
 	INT32 xx = x, i;
+	M_MenuMouseSliderRegion(cv,x+8,y,121);
 	lumpnum_t leftlump, rightlump, centerlump[2], cursorlump;
 	patch_t *p;
 
@@ -4343,6 +4756,7 @@ static void M_DrawSlider(INT32 x, INT32 y, const consvar_t *cv, boolean ontop)
 	patch_t *p;
 
 	x = BASEVIDWIDTH - x - SLIDER_WIDTH;
+	/* Mouse regions are registered after the generic menu row. */
 
 	V_DrawScaledPatch(x, y, 0, W_CachePatchName("M_SLIDEL", PU_PATCH));
 
@@ -4621,6 +5035,10 @@ static void M_DrawGenericMenu(void)
 
 	for (i = 0; i < currentMenu->numitems; i++)
 	{
+		const UINT16 display=currentMenu->menuitems[i].status & IT_DISPLAY;
+		const INT32 hitY=(currentMenu->menuitems[i].alphaKey && (display==IT_STRING || display==IT_WHITESTRING))
+			? currentMenu->y+currentMenu->menuitems[i].alphaKey : y;
+		M_MenuMouseItem(i,x,hitY,(display==IT_PATCH || display==IT_BIGSLIDER) ? LINEHEIGHT : STRINGHEIGHT,false);
 		if (i == itemOn)
 			cursory = y;
 		switch (currentMenu->menuitems[i].status & IT_DISPLAY)
@@ -4869,6 +5287,8 @@ static void M_DrawGenericScrollMenu(void)
 	else
 		tempcentery = currentMenu->y - currentMenu->menuitems[itemOn].alphaKey*2 + scrollareaheight;
 
+	tempcentery=M_MenuMouseScrollY(tempcentery);
+
 	for (i = 0; i < currentMenu->numitems; i++)
 	{
 		if (currentMenu->menuitems[i].status != IT_DISABLED && currentMenu->menuitems[i].alphaKey*2 + tempcentery >= currentMenu->y)
@@ -4898,6 +5318,7 @@ static void M_DrawGenericScrollMenu(void)
 	for (; i < max; i++)
 	{
 		y = currentMenu->menuitems[i].alphaKey*2 + tempcentery;
+		M_MenuMouseItem(i,x,y,STRINGHEIGHT,false);
 		if (i == itemOn)
 			cursory = y;
 		switch (currentMenu->menuitems[i].status & IT_DISPLAY)
@@ -5160,6 +5581,10 @@ static void M_DrawCenteredMenu(void)
 
 	for (i = 0; i < currentMenu->numitems; i++)
 	{
+		const UINT16 display=currentMenu->menuitems[i].status & IT_DISPLAY;
+		const INT32 hitY=(currentMenu->menuitems[i].alphaKey && (display==IT_STRING || display==IT_WHITESTRING))
+			? currentMenu->y+currentMenu->menuitems[i].alphaKey : y;
+		M_MenuMouseItem(i,x,hitY,(display==IT_PATCH || display==IT_BIGSLIDER) ? LINEHEIGHT : STRINGHEIGHT,true);
 		if (i == itemOn)
 			cursory = y;
 		switch (currentMenu->menuitems[i].status & IT_DISPLAY)
@@ -5996,6 +6421,23 @@ void M_DrawLevelPlatterHeader(INT32 y, const char *header, boolean headerhighlig
 	V_DrawFill(19, y, 282, 1, 26);
 }
 
+static void M_MenuMouseLevel(INT32 row, INT32 col)
+{
+ if (row < 0 || row >= levelselect.numrows || col < 0 || col > 2) return;
+ lsrow=(UINT8)row;
+ lscol=(UINT8)col;
+ lshli=lsrow;
+}
+
+static void M_MenuMouseMap(UINT8 row, UINT8 col, INT32 x, INT32 y, INT32 width)
+{
+ const size_t before=menumouse_count;
+ M_MenuMouseAdd(0,KEY_ENTER,x,y,width,58,M_MenuMouseLevel,row,col,NULL);
+ /* Re-centering a platter while hovering would move the tile under the
+  * pointer. Select and activate it together only on a click. */
+ if (menumouse_count > before) menumouse_hits[menumouse_count-1].hoverselect=false;
+}
+
 static void M_DrawLevelPlatterWideMap(UINT8 row, UINT8 col, INT32 x, INT32 y, boolean highlight)
 {
 	patch_t *patch;
@@ -6003,6 +6445,7 @@ static void M_DrawLevelPlatterWideMap(UINT8 row, UINT8 col, INT32 x, INT32 y, bo
 	INT32 map = levelselect.rows[row].maplist[col];
 	if (map <= 0)
 		return;
+	M_MenuMouseMap(row,col,x,y,282);
 
 	//  A 564x100 image of the level as entry MAPxxW
 	if (!(levelselect.rows[row].mapavailable[col]))
@@ -6034,6 +6477,7 @@ static void M_DrawLevelPlatterMap(UINT8 row, UINT8 col, INT32 x, INT32 y, boolea
 	INT32 map = levelselect.rows[row].maplist[col];
 	if (map <= 0)
 		return;
+	M_MenuMouseMap(row,col,x,y,80);
 
 	//  A 160x100 image of the level as entry MAPxxP
 	if (!(levelselect.rows[row].mapavailable[col]))
@@ -6073,6 +6517,7 @@ static void M_DrawLevelPlatterRow(UINT8 row, INT32 y)
 
 	if (levellistmode == LLM_CREATESERVER && !row)
 	{
+		M_MenuMouseMap(row,0,lsbasex,y,282);
 		if (!char_notes)
 			char_notes = V_WordWrap(0, 282 - 8, V_ALLOWLOWERCASE, gametypedesc[cv_newgametype.value].notes);
 
@@ -6391,6 +6836,7 @@ menu_t MessageDef =
 
 void M_StartMessage(const char *string, void *routine, menumessagetype_t itemtype)
 {
+	M_ResetMenuMouse();
 	static char *message;
 	Z_Free(message);
 	message = V_WordWrap(0,0,V_ALLOWLOWERCASE,string);
@@ -6423,6 +6869,7 @@ void M_StartMessage(const char *string, void *routine, menumessagetype_t itemtyp
 	currentMenu = &MessageDef;
 	itemOn = 0;
 	M_UpdateItemOn();
+	I_UpdateMouseGrab();
 }
 
 static void M_DrawMessageMenu(void)
@@ -6454,6 +6901,20 @@ static void M_DrawMessageMenu(void)
 
 	M_DrawTextBox(currentMenu->x, currentMenu->y - 8, 2+V_StringWidth(msg, 0)/8, V_StringHeight(msg, V_RETURN8)/8);
 	V_DrawCenteredString(BASEVIDWIDTH/2, currentMenu->y, V_ALLOWLOWERCASE|V_RETURN8, msg);
+	if (cv_menumouse.value && currentMenu == &MessageDef && currentMenu->menuitems[0].alphaKey != MM_EVENTHANDLER)
+	{
+		const INT32 by=min(184,currentMenu->y+V_StringHeight(msg,V_RETURN8)+4);
+		if (currentMenu->menuitems[0].alphaKey == MM_YESNO)
+		{
+			M_MenuMouseButton(-1,'y',94,by,56,"Yes");
+			M_MenuMouseButton(-1,'n',170,by,56,"No");
+		}
+		else
+		{
+			M_MenuMouseButton(-1,KEY_ENTER,132,by,56,"OK");
+		}
+	}
+
 }
 
 // default message handler
@@ -6724,6 +7185,12 @@ static boolean M_AddonsRefresh(void)
 	return false;
 }
 
+static void M_MenuMouseAddon(INT32 selected, INT32 depth)
+{
+ if (depth >= 0 && (size_t)depth == menudepthleft && selected >= 0 && (size_t)selected < sizedirmenu)
+  dir_on[menudepthleft]=(size_t)selected;
+}
+
 static void M_DrawAddons(void)
 {
 	INT32 x, y;
@@ -6808,6 +7275,10 @@ static void M_DrawAddons(void)
 		}
 	}
 
+	t=(size_t)max(0,M_MenuMouseScrollY((INT32)t));
+	t=min(t,sizedirmenu > addonmenusize ? sizedirmenu-addonmenusize : 0);
+	b=min(sizedirmenu-1,t+addonmenusize-1);
+
 	// draw the scrollbar!
 	V_DrawFill((x-21) + boxwidth-1, (y - 1) + i, 1, m, hilicol);
 
@@ -6825,6 +7296,7 @@ static void M_DrawAddons(void)
 	for (i = t; i <= b; i++)
 	{
 		UINT32 flags = V_ALLOWLOWERCASE;
+		M_MenuMouseAdd(0,KEY_ENTER,x-21,y,MAXSTRINGLENGTH*8+6,16,M_MenuMouseAddon,(INT32)i,menudepthleft,NULL);
 		if (y > BASEVIDHEIGHT) break;
 		if (dirmenu[i])
 #define type (UINT8)(dirmenu[i][DIR_TYPE])
@@ -8614,6 +9086,8 @@ static void M_DrawLoadGameData(void)
 				diff = 0;
 			y -= diff;
 		}
+		M_MenuMouseAdd(0,i < 0 ? KEY_LEFTARROW : (i > 0 ? KEY_RIGHTARROW : KEY_ENTER),
+			x,y,84,136,NULL,0,0,NULL);
 
 		if (savetodraw == 0)
 		{
@@ -8925,6 +9399,12 @@ static void M_DrawLoad(void)
 		loadgameoffset = 0;
 
 	M_DrawLoadGameData();
+	if (!usedCheats)
+	{
+		M_MenuMouseButton(0,KEY_LEFTARROW,85,188,36,"Prev");
+		M_MenuMouseButton(0,KEY_ENTER,123,188,74,"Play");
+		M_MenuMouseButton(0,KEY_RIGHTARROW,199,188,36,"Next");
+	}
 
 	if (usedCheats)
 	{
@@ -9588,6 +10068,7 @@ static void M_HandleChoosePlayerMenu(INT32 choice)
 static void M_DrawSetupChoosePlayerMenu(void)
 {
 	const INT32 my = 16;
+	M_MenuMouseAdd(0,KEY_ENTER,8,32,128,144,NULL,0,0,NULL);
 
 	skin_t *charskin = skins[0];
 	INT32 skinnum = 0;
@@ -11349,84 +11830,7 @@ static void M_EndGame(INT32 choice)
 // Connect Menu
 //===========================================================================
 
-#define SERVERHEADERHEIGHT 44
-#define SERVERLINEHEIGHT 12
-
-#define S_LINEY(n) currentMenu->y + SERVERHEADERHEIGHT + (n * SERVERLINEHEIGHT)
-
-static UINT32 localservercount;
-
-static void M_HandleServerPage(INT32 choice)
-{
-	boolean exitmenu = false; // exit to previous menu
-
-	switch (choice)
-	{
-		case KEY_DOWNARROW:
-			M_NextOpt();
-			S_StartSound(NULL, sfx_menu1);
-			break;
-		case KEY_UPARROW:
-			M_PrevOpt();
-			S_StartSound(NULL, sfx_menu1);
-			break;
-		case KEY_BACKSPACE:
-		case KEY_ESCAPE:
-			exitmenu = true;
-			break;
-
-		case KEY_ENTER:
-		case KEY_RIGHTARROW:
-			S_StartSound(NULL, sfx_menu1);
-			if ((serverlistpage + 1) * SERVERS_PER_PAGE < serverlistcount)
-				serverlistpage++;
-			break;
-		case KEY_LEFTARROW:
-			S_StartSound(NULL, sfx_menu1);
-			if (serverlistpage > 0)
-				serverlistpage--;
-			break;
-
-		default:
-			break;
-	}
-	if (exitmenu)
-	{
-		if (currentMenu->prevMenu)
-			M_SetupNextMenu(currentMenu->prevMenu);
-		else
-			M_ClearMenus(true);
-	}
-}
-
-static void M_Connect(INT32 choice)
-{
-	// do not call menuexitfunc
-	M_ClearMenus(false);
-
-	COM_BufAddText(va("connect node %d\n", serverlist[choice-FIRSTSERVERLINE + serverlistpage * SERVERS_PER_PAGE].node));
-}
-
-static void M_Refresh(INT32 choice)
-{
-	(void)choice;
-
-	// Display a little "please wait" message.
-	M_DrawTextBox(52, BASEVIDHEIGHT/2-10, 25, 3);
-	V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT/2, 0, "Searching for servers...");
-	V_DrawCenteredString(BASEVIDWIDTH/2, (BASEVIDHEIGHT/2)+12, 0, "Please wait.");
-	I_OsPolling();
-	I_UpdateNoBlit();
-	if (rendermode == render_soft)
-		I_FinishUpdate(); // page flip or blit buffer
-
-	// note: this is the one case where 0 is a valid room number
-	// because it corresponds to "All"
-	CL_UpdateServerList(cv_masterserver_room_id.value >= 0, cv_masterserver_room_id.value);
-
-	// first page of servers
-	serverlistpage = 0;
-}
+#include "m_serverbrowser.inc"
 
 static INT32 menuRoomIndex = 0;
 
@@ -11495,85 +11899,9 @@ static void M_DrawRoomMenu(void)
 	}
 }
 
-static void M_DrawConnectMenu(void)
-{
-	UINT16 i;
-	char *gt;
-	INT32 numPages = (serverlistcount+(SERVERS_PER_PAGE-1))/SERVERS_PER_PAGE;
-
-	for (i = FIRSTSERVERLINE; i < min(localservercount, SERVERS_PER_PAGE)+FIRSTSERVERLINE; i++)
-		MP_ConnectMenu[i].status = IT_STRING | IT_SPACE;
-
-	if (!numPages)
-		numPages = 1;
-
-	// Room name
-	if (cv_masterserver_room_id.value < 0)
-		V_DrawRightAlignedString(BASEVIDWIDTH - currentMenu->x, currentMenu->y + MP_ConnectMenu[mp_connect_room].alphaKey,
-		                         V_YELLOWMAP, (itemOn == mp_connect_room) ? "<Select to change>" : "<Unlisted Mode>");
-	else
-		V_DrawRightAlignedString(BASEVIDWIDTH - currentMenu->x, currentMenu->y + MP_ConnectMenu[mp_connect_room].alphaKey,
-		                         V_YELLOWMAP, room_list[menuRoomIndex].name);
-
-	// Page num
-	V_DrawRightAlignedString(BASEVIDWIDTH - currentMenu->x, currentMenu->y + MP_ConnectMenu[mp_connect_page].alphaKey,
-	                         V_YELLOWMAP, va("%u of %d", serverlistpage+1, numPages));
-
-	// Horizontal line!
-	V_DrawFill(1, currentMenu->y+40, 318, 1, 0);
-
-	if (serverlistcount <= 0)
-		V_DrawString(currentMenu->x,currentMenu->y+SERVERHEADERHEIGHT, 0, "No servers found");
-	else
-	for (i = 0; i < min(serverlistcount - serverlistpage * SERVERS_PER_PAGE, SERVERS_PER_PAGE); i++)
-	{
-		INT32 slindex = i + serverlistpage * SERVERS_PER_PAGE;
-		UINT32 globalflags = (serverlist[slindex].info.refusereason ? V_TRANSLUCENT : 0)
-			|((itemOn == FIRSTSERVERLINE+i) ? V_YELLOWMAP : 0)|V_ALLOWLOWERCASE;
-
-		V_DrawString(currentMenu->x, S_LINEY(i), globalflags, serverlist[slindex].info.servername);
-
-		// Don't use color flags intentionally, the global yellow color will auto override the text color code
-		if (serverlist[slindex].info.modifiedgame)
-			V_DrawSmallString(currentMenu->x+202, S_LINEY(i)+8, globalflags, "\x85" "Mod");
-		if (serverlist[slindex].info.cheatsenabled)
-			V_DrawSmallString(currentMenu->x+222, S_LINEY(i)+8, globalflags, "\x83" "Cheats");
-		if (Net_IsNodeIPv6(serverlist[slindex].node))
-			V_DrawSmallString(currentMenu->x+252, S_LINEY(i)+8, globalflags, "\x84" "IPv6");
-
-		V_DrawSmallString(currentMenu->x, S_LINEY(i)+8, globalflags,
-		                     va("Ping: %u", (UINT32)LONG(serverlist[slindex].info.time)));
-
-		gt = serverlist[slindex].info.gametypename;
-
-		V_DrawSmallString(currentMenu->x+46,S_LINEY(i)+8, globalflags,
-		                         va("Players: %02d/%02d", serverlist[slindex].info.numberofplayer, serverlist[slindex].info.maxplayer));
-
-		if (strlen(gt) > 11)
-			gt = va("Gametype: %.11s...", gt);
-		else
-			gt = va("Gametype: %s", gt);
-
-		V_DrawSmallString(currentMenu->x+112, S_LINEY(i)+8, globalflags, gt);
-
-		MP_ConnectMenu[i+FIRSTSERVERLINE].status = IT_STRING | IT_CALL;
-	}
-
-	localservercount = serverlistcount;
-
-	M_DrawGenericMenu();
-
-	if (m_waiting_mode)
-	{
-		// Display a little "please wait" message.
-		M_DrawTextBox(52, BASEVIDHEIGHT/2-10, 25, 3);
-		V_DrawCenteredString(BASEVIDWIDTH/2, BASEVIDHEIGHT/2, 0, "Searching for servers...");
-		V_DrawCenteredString(BASEVIDWIDTH/2, (BASEVIDHEIGHT/2)+12, 0, "Please wait.");
-	}
-}
-
 static boolean M_CancelConnect(void)
 {
+	SB_Close();
 	D_CloseConnection();
 	return true;
 }
@@ -11757,37 +12085,32 @@ Check_new_version_thread (int *id)
 
 static void M_ConnectMenu(INT32 choice)
 {
-	(void)choice;
-	// modified game check: no longer handled
-	// we don't request a restart unless the filelist differs
-
-	// first page of servers
-	serverlistpage = 0;
-	if (cv_masterserver_room_id.value < 0)
-	{
-		M_RoomMenu(0); // Select a room instead of staring at an empty list
-		// This prevents us from returning to the modified game alert.
-		currentMenu->prevMenu = &MP_MainDef;
-	}
-	else
-		M_SetupNextMenu(&MP_ConnectDef);
-	itemOn = 0;
-	M_UpdateItemOn();
-	M_Refresh(0);
+ (void)choice;
+ // Pick Standard on the first ordinary visit. Later explicit room/LAN
+ // choices, including a command-line room override, remain in effect.
+ if (!browser_room_initialized)
+ {
+  browser_room_initialized=true;
+  if (cv_masterserver_room_id.value < 0 && !cv_masterserver_room_id.changed)
+   CV_SetValue(&cv_masterserver_room_id,BROWSER_STANDARD_ROOM);
+ }
+ browser_detail = BDETAIL_NONE;
+ browser_searching = browser_addressediting = browser_dragbar = false;
+ browser_focus = BFOCUS_LIST;
+ browser_lastclick = -1;
+ browser_scroll = browser_detailscroll = 0;
+ browser_selected = -1;
+ M_SetupNextMenu(&MP_ConnectDef);
+ SB_Open();
+ M_BrowserApplyLookup();
+ itemOn = 0;
+ M_UpdateItemOn();
+ M_Refresh(0);
 }
 
 static void M_ConnectMenuModChecks(INT32 choice)
 {
-	(void)choice;
-	// okay never mind we want to COMMUNICATE to the player pre-emptively instead of letting them try and then get confused when it doesn't work
-
-	if (modifiedgame)
-	{
-		M_StartMessage(M_GetText("You have add-ons loaded.\nYou won't be able to join netgames!\n\nTo play online, restart the game\nand don't load any addons.\nSRB2 will automatically add\neverything you need when you join.\n\n(Press a key)\n"),M_ConnectMenu,MM_EVENTHANDLER);
-		return;
-	}
-
-	M_ConnectMenu(-1);
+ M_ConnectMenu(choice); // Compatibility is checked against the chosen server.
 }
 
 UINT32 roomIds[NUM_LIST_ROOMS];
@@ -11885,7 +12208,7 @@ static void M_ChooseRoom(INT32 choice)
 		menuRoomIndex = choice - 1;
 	}
 
-	serverlistpage = 0;
+	browser_scroll = 0;
 	/*
 	We were on the Multiplayer menu? That means that we must have been trying to
 	view the server browser, but we hadn't selected a room yet. So we need to go
@@ -12418,6 +12741,7 @@ static void M_DrawConnectIP(void)
 {
 	INT32 x = currentMenu->x;
 	INT32 y = currentMenu->y + 22;
+	M_MenuMouseAdd(2,0,x+5,y+9,BASEVIDWIDTH-2*(x+5),14,NULL,0,0,NULL);
 	char drawnstr_buffer[CONNIP_LEN];
 
 	const INT32 boxwidth = /*16*8 + 6*/ (BASEVIDWIDTH - 2*(x+5));
@@ -12491,6 +12815,8 @@ static void M_DrawMPMainMenu(void)
 		((itemOn == 8) ? V_YELLOWMAP : 0), "(splitscreen)");
 
 	M_DrawConnectIP();
+	/* Focusing the address field must not connect before text is entered. */
+	M_MenuMouseButton(2,KEY_ENTER,BASEVIDWIDTH-currentMenu->x-60,currentMenu->y+44,60,"Connect");
 }
 
 #undef DOTS
@@ -12908,6 +13234,20 @@ static void M_DrawPlayerSetupFollowItem(INT32 x, INT32 y, fixed_t scale, INT32 f
 	V_DrawFixedPatch(x, y, scale, flags, patch, colormap);
 }
 
+static void M_MenuMouseColor(INT32 color, INT32 unused)
+{
+ (void)unused;
+ if (color > 0 && color < numskincolors && skincolors[color].accessible)
+  setupm_fakecolor=M_GridIndexToMenuColor(M_GetColorGridIndex((UINT16)color));
+}
+
+static void M_MenuMouseColorTarget(INT32 x, INT32 y, INT32 width, UINT16 color, INT32 key)
+{
+ const size_t before=menumouse_count;
+ M_MenuMouseAdd(2,key,x,y,width,16,M_MenuMouseColor,color,0,NULL);
+ if (menumouse_count > before) menumouse_hits[menumouse_count-1].hoverselect=false;
+}
+
 static void M_DrawSetupMultiPlayerMenu(void)
 {
 	INT32 x, y, cursory = 0, flags = 0;
@@ -12933,6 +13273,7 @@ static void M_DrawSetupMultiPlayerMenu(void)
 
 	// draw name string
 	V_DrawFill(x, y, 282/*(MAXPLAYERNAME+1)*8+6*/, 14, 159);
+	M_MenuMouseAdd(0,0,x,y,282,14,NULL,0,0,NULL);
 	V_DrawString(x + 8, y + 3, V_ALLOWLOWERCASE, setupm_name);
 	if (skullAnimCounter < 4 && itemOn == 0)
 		V_DrawCharacter(x + 8 + V_StringWidth(setupm_name, V_ALLOWLOWERCASE), y + 3,
@@ -12941,6 +13282,11 @@ static void M_DrawSetupMultiPlayerMenu(void)
 	y += 20;
 
 	M_DrawLevelPlatterHeader(y - (lsheadingheight - 12), "Character", true, false);
+	if ((MP_PlayerSetupMenu[1].status & IT_TYPE) != IT_SPACE)
+	{
+		M_MenuMouseAdd(1,KEY_RIGHTARROW,x,y-2,282,12,NULL,0,0,NULL);
+		M_MenuMouseAdd(1,KEY_LEFTARROW,BASEVIDWIDTH-x-13-V_StringWidth(skins[setupm_fakeskin]->realname,V_ALLOWLOWERCASE),y-2,13,12,NULL,0,0,NULL);
+	}
 	if (itemOn == 1)
 		cursory = y;
 
@@ -13084,6 +13430,7 @@ colordraw:
 				if (skincolors[mc->color].accessible)
 				{
 					M_DrawColorRamp(x + i*w, y + j*16, w, 1, skincolors[mc->color]);
+					M_MenuMouseColorTarget(x+i*w,y+j*16,w,mc->color,KEY_ENTER);
 
 					if (mc == setupm_fakecolor) // store current color position
 					{
@@ -13117,8 +13464,10 @@ colordraw:
 		// Draw arrows, if needed
 		if (pos > 0)
 			V_DrawCharacter(264, y - (skullAnimCounter/5), '\x1A' | V_YELLOWMAP, false);
+		M_MenuMouseAdd(2,KEY_UPARROW,262,y-4,12,16,NULL,0,0,NULL);
 		if (!stoprow)
 			V_DrawCharacter(264, y+120 + (skullAnimCounter/5), '\x1B' | V_YELLOWMAP, false);
+		M_MenuMouseAdd(2,KEY_DOWNARROW,262,y+116,12,16,NULL,0,0,NULL);
 
 		// Draw cursor & current skincolor
 		V_DrawFill(cx - 2, cy - 2, 12, 20, 0);
@@ -13148,6 +13497,7 @@ colordraw:
 
 		// Draw color header & string
 		M_DrawLevelPlatterHeader(y - (lsheadingheight - 12), "Color...", true, false);
+		M_MenuMouseAdd(2,KEY_ENTER,x,y-2,282,12,NULL,0,0,NULL);
 		V_DrawRightAlignedString(BASEVIDWIDTH - x, y,
 								 ((MP_PlayerSetupMenu[2].status & IT_TYPE) == IT_SPACE ? V_TRANSLUCENT : 0)|(itemOn == 2 ? V_YELLOWMAP : 0)|V_ALLOWLOWERCASE,
 								 skincolors[setupm_fakecolor->color].name);
@@ -13169,6 +13519,7 @@ colordraw:
 		x += numcolors*w;
 		y += 11;
 		M_DrawColorRamp(x, y, charw, 1, skincolors[setupm_fakecolor->color]);
+		M_MenuMouseAdd(2,KEY_ENTER,x,y,charw,16,NULL,0,0,NULL);
 
 		// Draw colors from middle to left
 		for (i = 0; i < numcolors; i++)
@@ -13177,6 +13528,7 @@ colordraw:
 			while (!skincolors[mc->color].accessible) // Find accessible color before this one
 				mc = mc->prev;
 			M_DrawColorRamp(x, y, w, 1, skincolors[mc->color]);
+			M_MenuMouseColorTarget(x,y,w,mc->color,0);
 			mc = mc->prev;
 		}
 
@@ -13188,6 +13540,7 @@ colordraw:
 			while (!skincolors[mc->color].accessible) // Find accessible color after this one
 				mc = mc->next;
 			M_DrawColorRamp(x, y, w, 1, skincolors[mc->color]);
+			M_MenuMouseColorTarget(x,y,w,mc->color,0);
 			x += w;
 			mc = mc->next;
 		}
@@ -13205,6 +13558,7 @@ colordraw:
 			: V_TRANSLUCENT)
 		| ((itemOn == 3) ? V_YELLOWMAP : 0),
 		"Save as default");
+	M_MenuMouseAdd(3,KEY_ENTER,x,y-1,282,10,NULL,0,0,NULL);
 	if (itemOn == 3)
 		cursory = y;
 
@@ -13840,6 +14194,7 @@ static void M_DrawJoystick(void)
 
 	for (i = 0; i <= MAX_JOYSTICKS; i++) // See MAX_JOYSTICKS
 	{
+		M_MenuMouseAdd(i,KEY_ENTER,OP_JoystickSetDef.x-8,OP_JoystickSetDef.y+LINEHEIGHT*i-12,240,16,NULL,0,0,NULL);
 		M_DrawTextBox(OP_JoystickSetDef.x-8, OP_JoystickSetDef.y+LINEHEIGHT*i-12, 28, 1);
 		//M_DrawSaveLoadBorder(OP_JoystickSetDef.x+4, OP_JoystickSetDef.y+1+LINEHEIGHT*i);
 
@@ -14123,6 +14478,10 @@ static void M_DrawControl(void)
 		else
 			i = max - controlheight;
 	}*/
+	i=max(0,M_MenuMouseScrollY(i));
+	iter=controlheight;
+	for (max=i; max < currentMenu->numitems && iter; max++)
+		if (currentMenu->menuitems[max].status != IT_GRAYEDOUT2) iter--;
 
 	// draw title (or big pic)
 	M_DrawMenuTitle();
@@ -14154,6 +14513,7 @@ static void M_DrawControl(void)
 
 		if (currentMenu->menuitems[i].status == IT_CONTROL)
 		{
+			M_MenuMouseItem(i,x,y,SMALLLINEHEIGHT,false);
 			V_DrawString(x, y, ((i == itemOn) ? V_YELLOWMAP : 0), currentMenu->menuitems[i].text);
 			keys[0] = setupcontrols[currentMenu->menuitems[i].alphaKey][0];
 			keys[1] = setupcontrols[currentMenu->menuitems[i].alphaKey][1];
@@ -14209,6 +14569,7 @@ static void M_ChangecontrolResponse(event_t *ev)
 		{
 			// ignore mouse/joy movements, just get buttons
 			case ev_mouse:
+			case ev_mouseabsolute:
 			case ev_mouse2:
 			case ev_joystick:
 			case ev_joystick2:
@@ -14484,6 +14845,12 @@ static void M_DrawMainVideoMenu(void)
 }
 
 // Draw the video modes list, a-la-Quake
+static void M_MenuMouseVideoMode(INT32 selected, INT32 unused)
+{
+ (void)unused;
+ if (!vidm_testingmode && selected >= 0 && selected < vidm_nummodes) vidm_selected=selected;
+}
+
 static void M_DrawVideoMode(void)
 {
 	INT32 i, j, row, col;
@@ -14504,6 +14871,7 @@ static void M_DrawVideoMode(void)
 		else
 			V_DrawString(row, col, (modedescs[i].goodratio) ? V_GREENMAP : 0, modedescs[i].desc);
 
+		if (!vidm_testingmode) M_MenuMouseAdd(0,KEY_ENTER,row-2,col-1,85,9,M_MenuMouseVideoMode,i,0,NULL);
 		col += 8;
 		if ((i % vidm_column_size) == (vidm_column_size-1))
 		{
@@ -14515,6 +14883,8 @@ static void M_DrawVideoMode(void)
 	if (vidm_testingmode > 0)
 	{
 		INT32 testtime = (vidm_testingmode/TICRATE) + 1;
+		M_MenuMouseAdd(0,KEY_ENTER,60,OP_VideoModeDef.y+136,200,12,NULL,0,0,NULL);
+		M_MenuMouseAdd(0,KEY_ESCAPE,60,OP_VideoModeDef.y+156,200,12,NULL,0,0,NULL);
 
 		V_DrawCenteredString(BASEVIDWIDTH/2, OP_VideoModeDef.y + 116, 0,
 			va("Previewing mode %c%dx%d",
@@ -14587,6 +14957,8 @@ static void M_DrawColorMenu(void)
 	else
 		tempcentery = currentMenu->y - currentMenu->menuitems[itemOn].alphaKey*2 + scrollareaheight;
 
+	tempcentery=M_MenuMouseScrollY(tempcentery);
+
 	for (i = 0; i < currentMenu->numitems; i++)
 	{
 		if (currentMenu->menuitems[i].status != IT_DISABLED && currentMenu->menuitems[i].alphaKey*2 + tempcentery >= currentMenu->y)
@@ -14610,6 +14982,7 @@ static void M_DrawColorMenu(void)
 	for (; i < max; i++)
 	{
 		y = currentMenu->menuitems[i].alphaKey*2 + tempcentery;
+		M_MenuMouseItem(i,x,y,STRINGHEIGHT,false);
 		if (i == itemOn)
 			cursory = y;
 		switch (currentMenu->menuitems[i].status & IT_DISPLAY)
@@ -14805,6 +15178,7 @@ static void M_DrawScreenshotMenu(void)
 		tempcentery = currentMenu->y - currentMenu->menuitems[currentMenu->numitems-1].alphaKey*2 + 2*scrollareaheight;
 	else
 		tempcentery = currentMenu->y - currentMenu->menuitems[itemOn].alphaKey*2 + scrollareaheight;
+	tempcentery=M_MenuMouseScrollY(tempcentery);
 
 	for (i = 0; i < 1; ++i)
 	{

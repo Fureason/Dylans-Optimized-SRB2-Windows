@@ -32,7 +32,7 @@
 
 #define LEFT_X ((BASEVIDWIDTH - MAP_WIDTH) / 2 - BORDER_SIZE)
 #define RIGHT_X (LEFT_X + MAP_WIDTH + BORDER_SIZE * 2 - 1)
-#define BOTTOM_Y (BASEVIDHEIGHT - 48)
+#define BOTTOM_Y (BASEVIDHEIGHT - 49) // Leave a full text line above the download footer.
 #define TOP_Y (BOTTOM_Y - MAP_HEIGHT - BORDER_SIZE * 2 + 1)
 
 enum bonustype_s {

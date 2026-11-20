@@ -106,6 +106,7 @@ extern angle_t doubleclipangle;
 
 extern INT32 viewangletox[FINEANGLES/2];
 extern angle_t xtoviewangle[MAXVIDWIDTH+1];
+extern angle_t textureviewangle[MAXVIDWIDTH+1];
 
 extern fixed_t rw_distance;
 extern angle_t rw_normalangle;

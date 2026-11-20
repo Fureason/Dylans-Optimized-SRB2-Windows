@@ -607,29 +607,95 @@ void R_FlushTranslationColormapCache(void)
 			memset(translationtablecache[i], 0, MAXSKINCOLORS * sizeof(UINT8**));
 }
 
+#define COLOR_NAME_HASH_SIZE 4096u
+
+static UINT16 colornamehash[COLOR_NAME_HASH_SIZE];
+static UINT16 colornamehashcount;
+static boolean colornamehashvalid;
+
+static UINT32 R_HashColorName(const char *name)
+{
+	UINT32 hash = 2166136261u;
+	UINT8 c;
+
+	while ((c = (UINT8)*name++) != '\0')
+	{
+		if (c >= 'A' && c <= 'Z')
+			c = (UINT8)(c + ('a' - 'A'));
+		hash = (hash ^ c) * 16777619u;
+	}
+	return hash;
+}
+
+void R_InvalidateColorNameCache(void)
+{
+	colornamehashvalid = false;
+}
+
+static void R_BuildColorNameCache(void)
+{
+	UINT16 color;
+
+	memset(colornamehash, 0, sizeof colornamehash);
+	for (color = 1; color < numskincolors; color++)
+	{
+		UINT32 slot;
+		UINT32 probes;
+
+		if (!skincolors[color].name[0])
+			continue;
+		slot = R_HashColorName(skincolors[color].name)
+			& (COLOR_NAME_HASH_SIZE - 1u);
+		for (probes = 0; probes < COLOR_NAME_HASH_SIZE; probes++)
+		{
+			const UINT16 previous = colornamehash[slot];
+			if (!previous)
+			{
+				colornamehash[slot] = color;
+				break;
+			}
+			/* Match the old linear search's duplicate-name behaviour by keeping
+			 * the first (lowest-numbered) colour in the table. */
+			if (!stricmp(skincolors[previous].name, skincolors[color].name))
+				break;
+			slot = (slot + 1u) & (COLOR_NAME_HASH_SIZE - 1u);
+		}
+	}
+
+	colornamehashcount = numskincolors;
+	colornamehashvalid = true;
+}
+
 UINT16 R_GetColorByName(const char *name)
 {
 	UINT16 color = (UINT16)atoi(name);
+	UINT32 slot;
+	UINT32 probes;
+
 	if (color > 0 && color < numskincolors)
 		return color;
-	for (color = 1; color < numskincolors; color++)
+	if (!colornamehashvalid || colornamehashcount != numskincolors)
+		R_BuildColorNameCache();
+
+	slot = R_HashColorName(name) & (COLOR_NAME_HASH_SIZE - 1u);
+	for (probes = 0; probes < COLOR_NAME_HASH_SIZE; probes++)
+	{
+		color = colornamehash[slot];
+		if (!color)
+			break;
 		if (!stricmp(skincolors[color].name, name))
 			return color;
+		slot = (slot + 1u) & (COLOR_NAME_HASH_SIZE - 1u);
+	}
 	return SKINCOLOR_NONE;
 }
 
 UINT16 R_GetSuperColorByName(const char *name)
 {
-	UINT16 i, color = SKINCOLOR_NONE;
-	char *realname = Z_Malloc(MAXCOLORNAME+1, PU_STATIC, NULL);
+	char realname[MAXCOLORNAME+1];
+
 	snprintf(realname, MAXCOLORNAME+1, "Super %s 1", name);
-	for (i = 1; i < numskincolors; i++)
-		if (!stricmp(skincolors[i].name, realname)) {
-			color = i;
-			break;
-		}
-	Z_Free(realname);
-	return color;
+	return R_GetColorByName(realname);
 }
 
 // ==========================================================================

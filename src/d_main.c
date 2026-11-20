@@ -72,6 +72,7 @@
 #include "filesrch.h" // refreshdirmenu
 #include "g_input.h" // tutorial mode control scheming
 #include "m_perfstats.h"
+#include "m_custombuild.h"
 #include "m_random.h"
 #include "command.h"
 #include "discord_presence.h"
@@ -648,7 +649,7 @@ static void D_Display(void)
 				wipestyleflags &= ~WSF_FADEOUT;
 			}
 
-			F_RunWipe(wipetypepost,
+			F_RunWipeWithLevelPrecache(wipetypepost,
 				gamestate != GS_TIMEATTACK && gamestate != GS_TITLESCREEN);
 		}
 
@@ -760,6 +761,7 @@ void D_SRB2Loop(void)
 
 	// hack to start on a nice clear console screen.
 	COM_ImmedExecute("cls;version");
+	CONS_Printf("Optimized build: %s\n", CUSTOM_BUILD_ID);
 
 	I_FinishUpdate(); // page flip or blit buffer
 	/*
@@ -841,15 +843,18 @@ void D_SRB2Loop(void)
 
 		refreshdirmenu = 0; // not sure where to put this, here as good as any?
 
-		if (realtics > 0 || singletics)
+		const boolean pace_client_tics = interp && (!framecap || framecap > TICRATE)
+			&& cv_timescale.value == FRACUNIT && !singletics;
+		if (realtics > 0 || singletics || (pace_client_tics && D_PollLateNetTics()))
 		{
 			// don't skip more than 10 frames at a time
 			// (fadein / fadeout cause massive frame skip!)
 			if (realtics > 8)
 				realtics = 1;
 
-			// process tics (but maybe not if realtic == 0)
-			TryRunTics(realtics);
+			// Give the client a chance to draw before starting another costly tic.
+			// Already-due tics can resume between the regular 35 Hz input polls.
+			TryRunTics(realtics, pace_client_tics ? enterprecise + I_GetPrecisePrecision() / 60 : 0);
 
 			if (lastdraw || singletics || gametic > rendergametic)
 			{
@@ -858,7 +863,8 @@ void D_SRB2Loop(void)
 
 				doDisplay = true;
 			}
-			else if (rendertimeout < entertic) // in case the server hang or netsplit
+			else if (realtics && ((client && netgame && gamestate == GS_LEVEL) || rendertimeout < entertic))
+			// Keep the local camera responsive from the first missing network tic.
 			{
 				// Lagless camera! Yay!
 				if (gamestate == GS_LEVEL && netgame)
@@ -899,7 +905,7 @@ void D_SRB2Loop(void)
 				doDisplay = true;
 			}
 
-			renderisnewtic = true;
+			renderisnewtic = realtics > 0 || singletics;
 		}
 		else
 		{
@@ -929,6 +935,9 @@ void D_SRB2Loop(void)
 			renderdeltatics = realtics * FRACUNIT;
 			rendertimefrac = FRACUNIT;
 		}
+		rendertimefrac = R_NetworkTimeFrac(I_GetPreciseTime(), gametic, rendertimefrac,
+			interp && client && netgame && gamestate == GS_LEVEL && leveltime > 3
+			&& !demoplayback && !(paused || P_AutoPause()) && cv_timescale.value == FRACUNIT);
 
 		if (interp || doDisplay)
 		{
@@ -978,7 +987,7 @@ void D_SRB2Loop(void)
 			}
 
 			if (warmup_now - enterprecise + warmup_margin < warmup_budget)
-				R_ContinueLevelSpritePrecache();
+				R_ContinueLevelSpritePrecache(false);
 		}
 
 		// Fully completed frame made.
@@ -1362,6 +1371,11 @@ void D_SRB2Main(void)
 
 	INT32 pstartmap = 1;
 	boolean autostart = false;
+
+	/* The previous client must finish saving before this one reads settings. */
+#ifdef HAVE_SDL
+	I_WaitForRestart();
+#endif
 
 	/* break the version string into version numbers, for netplay */
 	D_ConvertVersionNumbers();
@@ -1760,7 +1774,7 @@ void D_SRB2Main(void)
 	// user settings come before "+" parameters.
 	if (dedicated)
 		COM_ImmedExecute(va("exec \"%s"PATHSEP"adedserv.cfg\"\n", srb2home));
-	else
+	else if (!M_CheckParm("-cleanjoin"))
 		COM_ImmedExecute(va("exec \"%s"PATHSEP"autoexec.cfg\" -noerror\n", srb2home));
 
 	if (!autostart)

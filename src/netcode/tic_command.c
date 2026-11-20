@@ -401,7 +401,8 @@ void PT_ServerTics(SINT8 node, INT32 netconsole)
 	realend = realstart + packet->numtics;
 
 	realend = min(realend, gametic + CLIENTBACKUPTICS);
-	cl_packetmissed = realstart > neededtic;
+	if (realstart > neededtic)
+		cl_packetmissed = true;
 
 	if (realstart <= neededtic && realend > neededtic)
 	{
@@ -421,6 +422,8 @@ void PT_ServerTics(SINT8 node, INT32 netconsole)
 		}
 
 		neededtic = realend;
+		// A duplicate from before the gap must not cancel our resend request.
+		cl_packetmissed = false;
 	}
 	else
 	{

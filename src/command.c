@@ -98,6 +98,7 @@ static INT32 joyaxis2_count = 0;
 #define MAX_ALIAS_RECURSION 100 // max recursion allowed for aliases
 
 static INT32 com_wait; // one command per frame (for cmd sequences)
+static UINT16 com_bufexecute_depth;
 
 boolean com_sudo = false;
 
@@ -226,6 +227,14 @@ void COM_BufExecute(void)
 	char *ptext;
 	char line[1024] = "";
 	INT32 quotes;
+	const boolean outermost = (com_bufexecute_depth++ == 0);
+
+	/* Config files commonly place one addfile command on each line. Keep the
+	 * resource refresh batch open through the complete outer command-buffer
+	 * drain so those adjacent files share one final rebuild. Nested executions
+	 * (aliases, Lua and SOC scripts) remain part of the same ordered batch. */
+	if (outermost)
+		P_BeginAddonBatch();
 
 	while (com_text.cursize)
 	{
@@ -276,6 +285,9 @@ void COM_BufExecute(void)
 	}
 
 	com_flags = 0;
+	com_bufexecute_depth--;
+	if (outermost)
+		P_EndAddonBatch();
 }
 
 /** Executes a string immediately.  Used for skirting around WAIT commands.

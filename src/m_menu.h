@@ -355,6 +355,8 @@ void M_ClearMenus(boolean callexitmenufunc);
 
 // Maybe this goes here????? Who knows.
 boolean M_MouseNeeded(void);
+boolean M_MenuMouseActive(void);
+boolean M_MenuMouseVisible(void);
 
 #ifdef HAVE_THREADS
 extern I_mutex m_menu_mutex;

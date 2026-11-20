@@ -47,8 +47,11 @@
 #include "../lua_libs.h"
 #include "../md5.h"
 #include "../m_perfstats.h"
+#include "../m_custombuild.h"
+#include "../m_hostguard.h"
 #include "../w_wad.h"
 #include "server_connection.h"
+#include "server_browser.h"
 #include "client_connection.h"
 #include "tic_command.h"
 #include "net_command.h"
@@ -141,11 +144,28 @@ static CV_PossibleValue_t netlowlatency_cons_t[] = {
 consvar_t cv_netlowlatency = CVAR_INIT ("netlowlatency", "Adaptive", CV_SAVE,
 	netlowlatency_cons_t, NULL);
 
-static tic_t netlatency_last_stall;
 static tic_t netlatency_recovery_until;
-static tic_t netlatency_stable_since;
+static tic_t netlatency_target_since;
 static UINT32 netlatency_stalls;
 static UINT32 netlatency_recoveries;
+static tic_t netlatency_target;
+static boolean netlatency_playout, netlatency_starved;
+static tic_t deferred_net_tics_until;
+static INT32 deferred_net_tics_mode;
+static tic_t late_net_tic_until;
+static INT32 late_net_tic_mode;
+static precise_t next_late_net_poll;
+static UINT32 late_net_tic_resumes;
+
+static struct
+{
+	precise_t start, duration;
+	tic_t ran, queued;
+} net_tic_batch;
+
+#define ADAPTIVE_MAX_BUFFER 4
+#define ADAPTIVE_STABLE_TIME (8*TICRATE)
+
 static boolean hosthealth_watch;
 static tic_t hosthealth_next_report;
 
@@ -227,56 +247,131 @@ static boolean D_NodeIsLoopback(INT32 node)
 
 static INT32 D_EffectiveNetTicBuffer(void)
 {
-	tic_t now;
-
 	if (cv_netlowlatency.value == 0)
 		return cv_netticbuffer.value;
-	/* Maximum is an explicit request for zero added safety-buffer tics.  A
-	 * normal zero-buffer catch-up can look like starvation on the following
-	 * frame, so applying the recovery timer here made Maximum spend nearly all
-	 * of its time at one buffered tic and appear to do nothing. */
-	if (cv_netlowlatency.value == 3)
-		return 0;
-
-	now = I_GetTime();
-	if (netlatency_recovery_until > now)
-		return 1;
-
-	/* On normally runs at zero buffered tics, but retains the safety recovery
-	 * below so a jittery connection cannot repeatedly starve the game loop. */
+	if (cv_netlowlatency.value == 2)
+		return (INT32)netlatency_target;
 	if (cv_netlowlatency.value == 1)
-		return 0;
+		return netlatency_recovery_until > I_GetTime();
+	return 0;
+}
 
-	/* Adaptive begins with one buffered tic, then reaches zero after half a
-	 * stable second.  A detected stall still gets the longer recovery window. */
-	if (!netlatency_stable_since)
-		netlatency_stable_since = now ? now : 1;
-	return now < netlatency_stable_since + TICRATE/2 ? 1 : 0;
+static tic_t D_QueuedServerTics(void)
+{
+	return neededtic > gametic ? neededtic - gametic : 0;
+}
+
+static boolean D_InLiveNetLevel(void)
+{
+	return client && netgame && cl_mode == CL_CONNECTED
+		&& gamestate == GS_LEVEL && leveltime > 3 && !cl_redownloadinggamestate
+		&& !demoplayback && !paused && !P_AutoPause();
+}
+
+boolean D_HasDeferredNetTics(void)
+{
+	return neededtic > gametic && D_InLiveNetLevel()
+		&& ((deferred_net_tics_until > gametic && deferred_net_tics_mode == cv_netlowlatency.value)
+			|| (late_net_tic_until > gametic && late_net_tic_mode == cv_netlowlatency.value
+				&& cv_netlowlatency.value != 0));
+}
+
+boolean D_PollLateNetTics(void)
+{
+	precise_t now, interval;
+
+	if (D_HasDeferredNetTics())
+		return true;
+	if (late_net_tic_until <= gametic || late_net_tic_mode != cv_netlowlatency.value
+		|| !cv_netlowlatency.value || !D_InLiveNetLevel())
+		return false;
+
+	/* A local tic was due, but its server update had not arrived. Check again
+	 * between rendered frames instead of adding another full 35 Hz wait. Bound
+	 * receive polling at 250 Hz even with an unlimited rendering frame rate. */
+	now = I_GetPreciseTime();
+	interval = max((precise_t)1, I_GetPrecisePrecision() / 250);
+	if (now >= next_late_net_poll)
+	{
+		next_late_net_poll = now + interval;
+		GetPackets();
+	}
+	return D_HasDeferredNetTics();
+}
+
+void D_FormatNetTicHitch(char *buffer, size_t size, precise_t frame_start)
+{
+	const boolean sampled = net_tic_batch.start >= frame_start;
+	const precise_t precision = I_GetPrecisePrecision();
+
+	buffer[0] = '\0';
+	if (!client || !netgame)
+		return;
+
+	snprintf(buffer, size, " net_buffer=%s net_tics=%u net_tic_batch_ms=%.3f "
+		"net_queue_before=%u net_queue_after=%u net_stalls=%u net_resend_pending=%d",
+		cv_netlowlatency.string, sampled ? net_tic_batch.ran : 0,
+		sampled && precision ? net_tic_batch.duration * (1000.0 / precision) : 0.0,
+		sampled ? net_tic_batch.queued : D_QueuedServerTics(), D_QueuedServerTics(),
+		netlatency_stalls, cl_packetmissed);
 }
 
 static void D_RecordNetTicStall(void)
 {
-	tic_t now;
-
 	if (cv_netlowlatency.value == 0)
 		return;
-
-	now = I_GetTime();
 	netlatency_stalls++;
+	if (cv_netlowlatency.value == 1)
+	{
+		const tic_t now = I_GetTime();
+		if (netlatency_recovery_until <= now)
+			netlatency_recoveries++;
+		netlatency_recovery_until = now + 2*TICRATE;
+	}
+}
 
-	netlatency_last_stall = now;
-	netlatency_stable_since = now;
-	/* Maximum deliberately accepts visible jitter instead of silently adding
-	 * the tic of latency the user asked to remove. Keep the stall statistic,
-	 * but do not arm a recovery buffer in this mode. */
-	if (cv_netlowlatency.value == 3)
-		return;
+static void D_ResetAdaptivePlayout(void)
+{
+	netlatency_target = 0;
+	netlatency_playout = netlatency_starved = false;
+}
 
-	/* A short safety buffer stops the safer zero-buffer modes from repeatedly
-	 * starving after actual network jitter. */
-	if (netlatency_recovery_until <= now)
-		netlatency_recoveries++;
-	netlatency_recovery_until = now + 2*TICRATE;
+static tic_t D_AdaptiveTicBudget(tic_t realtics, tic_t available)
+{
+	const tic_t now = I_GetTime();
+
+	if (!netlatency_playout)
+	{
+		netlatency_playout = true;
+		// A level can start with server updates already queued during loading.
+		netlatency_target = available > realtics;
+		netlatency_target_since = now;
+	}
+
+	if (!available)
+	{
+		if (realtics && !netlatency_starved)
+		{
+			netlatency_starved = true;
+			netlatency_recoveries++;
+		}
+		netlatency_target = min(ADAPTIVE_MAX_BUFFER, netlatency_target + realtics);
+		netlatency_target_since = now;
+		return 0;
+	}
+
+	netlatency_starved = false;
+	if (netlatency_target && now - netlatency_target_since >= ADAPTIVE_STABLE_TIME)
+	{
+		netlatency_target--;
+		netlatency_target_since = now;
+	}
+
+	// Keep the reserve from late updates that arrive together. Holding a ready
+	// update would extend a network stall and cannot fix a slow server tick rate.
+	if (available > realtics + netlatency_target)
+		realtics++;
+	return min(available, realtics);
 }
 
 static CV_PossibleValue_t resynchattempts_cons_t[] = {{1, "MIN"}, {20, "MAX"}, {0, "No"}, {0, NULL}};
@@ -306,11 +401,14 @@ void ResetNode(INT32 node)
 void CL_Reset(void)
 {
 	D_ResetJoinStateRepair();
-	netlatency_last_stall = 0;
 	netlatency_recovery_until = 0;
-	netlatency_stable_since = 0;
 	netlatency_stalls = 0;
 	netlatency_recoveries = 0;
+	deferred_net_tics_until = 0;
+	late_net_tic_until = 0;
+	next_late_net_poll = 0;
+	late_net_tic_resumes = 0;
+	D_ResetAdaptivePlayout();
 
 	if (metalrecording)
 		G_StopMetalRecording(false);
@@ -1374,7 +1472,7 @@ static void HandlePacketFromAwayNode(SINT8 node)
 		case PT_CLIENTJOIN     : PT_ClientJoin     (node    ); break;
 		case PT_SERVERSHUTDOWN : PT_ServerShutdown (node    ); break;
 		case PT_CLIENTCMD      :                               break; // This is not an "unknown packet"
-		case PT_PLAYERINFO     :                               break; // This is not an "unknown packet"
+		case PT_PLAYERINFO     : SB_PlayerInfo    (node    ); break;
 
 		default:
 			DEBFILE(va("unknown packet received (%d) from unknown host\n",netbuffer->packettype));
@@ -1435,7 +1533,17 @@ static void HandlePacketFromPlayer(SINT8 node)
 		case PT_WILLRESENDGAMESTATE: PT_WillResendGamestate(node            ); break;
 		case PT_SENDINGLUAFILE     : PT_SendingLuaFile     (node            ); break;
 		case PT_SERVERSHUTDOWN     : PT_ServerShutdown     (node            ); break;
-		case PT_SERVERCFG          :                                           break;
+		case PT_SERVERCFG          :
+			/* Once connected, the server's ordinary configuration packet is
+			 * otherwise a no-op. Optimized servers reuse its reliable delivery as a
+			 * protocol-compatible request for an incomplete join to resend the
+			 * player's appearance/preferences. */
+			if (client && node == servernode && cl_mode == CL_CONNECTED)
+			{
+				D_SendPlayerConfigForced();
+				DEBFILE("server requested a player config refresh\n");
+			}
+			break;
 		/* A client retries PT_CLIENTJOIN until its reliable PT_SERVERCFG is
 		 * received. Once SV_AddNode marks it in-game, those retries arrive in
 		 * this dispatcher rather than HandlePacketFromAwayNode. Do not discard
@@ -1469,39 +1577,66 @@ void GetPackets(void)
 	}
 }
 
-boolean TryRunTics(tic_t realtics)
+boolean TryRunTics(tic_t realtics, precise_t frame_deadline)
 {
-	// the machine has lagged but it is not so bad
-	if (realtics > TICRATE/7)
+	const boolean continuing = !realtics && !singletics;
+	const tic_t prior_gametic = gametic;
+	const tic_t deferred = deferred_net_tics_until;
+	const INT32 deferred_mode = deferred_net_tics_mode;
+	const tic_t late = late_net_tic_mode == cv_netlowlatency.value ? late_net_tic_until : 0;
+	boolean live_net_level, adaptive, runnable;
+	tic_t available, rununtil, batch_first;
+	INT32 mode;
+
+	deferred_net_tics_until = 0;
+	late_net_tic_until = 0;
+
+	if (!continuing)
 	{
-		if (server)
+		if (realtics > TICRATE/7)
+			realtics = server ? 1 : TICRATE/7;
+		if (singletics)
 			realtics = 1;
-		else
-			realtics = TICRATE/7;
-	}
 
-	if (singletics)
-		realtics = 1;
-
-	if (realtics >= 1)
-	{
 		COM_BufTicker();
 		if (mapchangepending)
 			D_MapChange(-1, 0, ultimatemode, false, 2, false, fromlevelselect); // finish the map change
+		NetUpdate();
+
+		if (demoplayback)
+		{
+			neededtic = gametic + realtics;
+			// start a game after a demo
+			maketic += realtics;
+			firstticstosend = maketic;
+			tictoclear = firstticstosend;
+		}
+		GetPackets();
 	}
 
-	NetUpdate();
-
-	if (demoplayback)
+	live_net_level = D_InLiveNetLevel();
+	mode = cv_netlowlatency.value;
+	available = D_QueuedServerTics();
+	adaptive = mode == 2 && live_net_level;
+	if (continuing)
 	{
-		neededtic = gametic + realtics;
-		// start a game after a demo
-		maketic += realtics;
-		firstticstosend = maketic;
-		tictoclear = firstticstosend;
+		if (!live_net_level)
+			return false;
+		/* Only consume work already due on the preceding local tick. A late
+		 * update never creates another input command or advances the clock. */
+		rununtil = min(neededtic, max(deferred_mode == mode ? deferred : 0, mode ? late : 0));
 	}
-
-	GetPackets();
+	else if (adaptive)
+	{
+		const tic_t due = deferred_mode == mode && prior_gametic == gametic && deferred > gametic
+			? min(available, deferred - gametic) : 0;
+		rununtil = gametic + D_AdaptiveTicBudget(realtics + due, available);
+	}
+	else
+	{
+		D_ResetAdaptivePlayout();
+		rununtil = neededtic;
+	}
 
 #ifdef DEBUGFILE
 	if (debugfile && (realtics || neededtic > gametic))
@@ -1512,10 +1647,16 @@ boolean TryRunTics(tic_t realtics)
 	}
 #endif
 
-	if (neededtic > gametic)
+	batch_first = gametic;
+	if (live_net_level)
 	{
-		if (realtics)
-			hu_stopped = false;
+		net_tic_batch.start = I_GetPreciseTime();
+		net_tic_batch.queued = available;
+	}
+	runnable = rununtil > gametic;
+	if (runnable)
+	{
+		hu_stopped = false;
 
 		if (advancedemo)
 		{
@@ -1526,7 +1667,7 @@ boolean TryRunTics(tic_t realtics)
 		}
 		else
 			// run the count * tics
-			while (neededtic > gametic)
+			while (neededtic > gametic && (!(adaptive || continuing) || rununtil > gametic))
 			{
 				boolean update_stats = !(paused || P_AutoPause());
 
@@ -1546,6 +1687,7 @@ boolean TryRunTics(tic_t realtics)
 				if (update_stats)
 				{
 					PS_STOP_TIMING(ps_tictime);
+					HG_RecordTick(ps_tictime.value.p);
 				#if defined(_WIN32) && !defined(DEDICATED)
 					/* A 35 Hz game tic has a 28.6 ms budget. Logging ordinary
 					 * 20-28 ms tics created thousands of false "hitches" and kept
@@ -1556,24 +1698,53 @@ boolean TryRunTics(tic_t realtics)
 				}
 
 				// Leave a certain amount of tics present in the net buffer as long as we've ran at least one tic this frame.
-				if (client && gamestate == GS_LEVEL && leveltime > 3
+				if (!adaptive && client && gamestate == GS_LEVEL && leveltime > 3
 					&& neededtic <= gametic + D_EffectiveNetTicBuffer())
 					break;
+
+				if (frame_deadline && live_net_level && update_stats
+					&& neededtic > gametic && rununtil > gametic)
+				{
+					const precise_t now = I_GetPreciseTime();
+					/* Always run the first due tic. Before starting another, use
+					 * that tic's cost to leave room for the renderer. Keep the
+					 * already-scheduled work eligible on the very next frame. */
+					if ((now >= frame_deadline || ps_tictime.value.p >= frame_deadline - now)
+						&& D_InLiveNetLevel())
+					{
+						deferred_net_tics_until = (adaptive || continuing) ? min(rununtil, neededtic)
+							: neededtic - D_EffectiveNetTicBuffer();
+						deferred_net_tics_mode = mode;
+						break;
+					}
+				}
 			}
-
-		return true;
 	}
-	else
+	else if (realtics)
 	{
-		if (realtics)
+		hu_stopped = !available;
+		if (!available && client && gamestate == GS_LEVEL && leveltime > 3
+			&& !paused && !P_AutoPause())
+			D_RecordNetTicStall();
+		if (live_net_level && mode && !available)
 		{
-			hu_stopped = true;
-			if (client && gamestate == GS_LEVEL && leveltime > 3)
-				D_RecordNetTicStall();
+			/* One missing tick may resume before the next local input poll.
+			 * Expire this allowance on the next regular tick; do not build up
+			 * simulation debt throughout a long outage. */
+			late_net_tic_until = gametic + 1;
+			late_net_tic_mode = mode;
+			next_late_net_poll = 0;
 		}
-
-		return false;
 	}
+
+	if (live_net_level)
+	{
+		net_tic_batch.duration = I_GetPreciseTime() - net_tic_batch.start;
+		net_tic_batch.ran = gametic >= batch_first ? gametic - batch_first : 0;
+		if (continuing && late > batch_first && gametic > batch_first)
+			late_net_tic_resumes++;
+	}
+	return runnable;
 }
 
 static void UpdatePingTable(void)
@@ -1725,17 +1896,23 @@ static void D_ClientJoinStateTicker(void)
 			joinstate_next_action = now + TICRATE;
 			return;
 		}
-		if (!joinstate_config_attempts)
-			D_WriteJoinStateReport(problem, consoleplayer, servernode, 0);
-
-		D_SendPlayerConfigForced();
-		joinstate_config_attempts++;
+		// A pending text command already has transport retries. Additional
+		// appearance commands would compete with it and with queued chat.
 		joinstate_next_action = now + JOINSTATE_REPAIR_DELAY;
-		CONS_Alert(CONS_WARNING,
-			"Local player appearance/config was incomplete; resending it (attempt %u/%u).\n",
-			(unsigned)joinstate_config_attempts,
-			(unsigned)JOINSTATE_REPAIR_ATTEMPTS);
-		return;
+		if (!Net_HasPendingReliablePacket(servernode, PT_TEXTCMD))
+		{
+			if (!joinstate_config_attempts)
+				D_WriteJoinStateReport(problem, consoleplayer, servernode, 0);
+			D_SendPlayerConfigForced();
+			joinstate_config_attempts++;
+			CONS_Alert(CONS_WARNING,
+				"Local player appearance/config was incomplete; resending it (attempt %u/%u).\n",
+				(unsigned)joinstate_config_attempts,
+				(unsigned)JOINSTATE_REPAIR_ATTEMPTS);
+			return;
+		}
+		if (now - joinstate_first_bad < JOINSTATE_REPAIR_GRACE + JOINSTATE_REPAIR_ATTEMPTS * JOINSTATE_REPAIR_DELAY)
+			return;
 	}
 
 	if (!joinstate_failure_reported)
@@ -2035,36 +2212,29 @@ static void Command_NetLatencyStats(void)
 {
 	const INT32 effective = D_EffectiveNetTicBuffer();
 	const INT32 configured = cv_netticbuffer.value;
-	const INT32 removed = max(0, configured - effective);
-	const double milliseconds = effective * (1000.0 / TICRATE);
-	const double savedmilliseconds = removed * (1000.0 / TICRATE);
 	const boolean haveping = netgame && consoleplayer >= 0
 		&& consoleplayer < MAXPLAYERS && playeringame[consoleplayer];
-	const UINT32 pingms = haveping ? playerpingtable[consoleplayer] : 0;
-	const boolean loopback = client && D_NodeIsLoopback(servernode);
 
 	CONS_Printf("Network buffer reduction: %s\n", cv_netlowlatency.string);
-	CONS_Printf("Configured/effective safety buffer: %d/%d tics\n",
+	CONS_Printf("Manual buffer setting / current reserve target: %d / %d tics\n",
 		configured, effective);
-	CONS_Printf("Effective buffer delay: about %.1f ms; reduction saves about %.1f ms\n",
-		milliseconds, savedmilliseconds);
 	if (haveping)
-	{
-		CONS_Printf("Measured round-trip ping: %u ms\n", pingms);
-		if (loopback)
-			CONS_Printf("Connection path: local loopback (displayed as 0 ms; simulation still advances at 35 Hz)\n");
-		CONS_Printf("Estimated authoritative response floor: at least %.1f ms, plus server tick scheduling\n",
-			pingms + milliseconds);
-	}
+		CONS_Printf("Server-reported ping: %u ms\n", playerpingtable[consoleplayer]);
 	else
-		CONS_Printf("Measured round-trip ping: unavailable (not connected as a player)\n");
-	CONS_Printf("Local movement prediction: Off (this lockstep client waits for server-authoritative movement)\n");
+		CONS_Printf("Server-reported ping: unavailable\n");
+	if (client && netgame)
+	{
+		const tic_t queued = D_QueuedServerTics();
+		CONS_Printf("Queued server updates: %u tics (%.1f ms of simulation)\n",
+			queued, queued * (1000.0 / TICRATE));
+	}
 	if (cv_netlowlatency.value == 3)
-		CONS_Printf("Maximum keeps the added buffer at zero even during jitter; visible stutter is possible.\n");
-	if (haveping && pingms >= 100)
-		CONS_Printf("High ping is the dominant delay; buffer reduction cannot remove physical network latency.\n");
+		CONS_Printf("Maximum keeps no reserve. Gaps between incoming updates can be visible.\n");
+	else if (cv_netlowlatency.value == 2)
+		CONS_Printf("Adaptive uses spare updates from packet bursts and resumes when updates arrive.\n");
 	CONS_Printf("Network tic stalls: %u; jitter recoveries: %u\n",
 		netlatency_stalls, netlatency_recoveries);
+	CONS_Printf("Late server updates resumed between local ticks: %u\n", late_net_tic_resumes);
 }
 
 static void D_PrintHostHealth(void)
@@ -2194,6 +2364,7 @@ void D_ClientServerInit(void)
 	COM_AddCommand("consistencyreport", Command_ConsistencyReport, COM_LUA);
 	COM_AddCommand("netlatencystats", Command_NetLatencyStats, COM_LUA);
 	COM_AddCommand("hosthealth", Command_HostHealth, COM_LUA);
+	HG_Register();
 	COM_AddCommand("repairjoin", Command_RepairJoin, 0);
 #ifdef PACKETDROP
 	COM_AddCommand("drop", Command_Drop, COM_LUA);
@@ -2538,11 +2709,13 @@ void D_WriteConsistencyReport(const char *trigger, tic_t tic, SINT8 node,
 	INT32 received_match_count = 0;
 	tic_t received_match_tics[16];
 	consistency_snapshot_t *focus = NULL;
+	boolean have_peer_checksum;
 	size_t totalmemory = 0;
 	size_t freememory = I_GetFreeMem(&totalmemory);
 
 	if (!trigger)
 		trigger = "unknown";
+	have_peer_checksum = server && !strcmp(trigger, "server-mismatch");
 	if (node >= 0 && node < MAXNETNODES)
 		playernum = netnodes[node].player;
 	for (i = 0; i < numwadfiles; i++)
@@ -2565,6 +2738,7 @@ void D_WriteConsistencyReport(const char *trigger, tic_t tic, SINT8 node,
 	}
 
 	fprintf(report, "SRB2 optimized consistency/resync report\n");
+	fprintf(report, "custom_build=%s\n", CUSTOM_BUILD_ID);
 	fprintf(report, "trigger=%s\nside=%s\nversion=%s\nprocess_bits=%u\n",
 		trigger, server ? "server" : "client", VERSIONSTRING,
 		(unsigned)(sizeof(void *) * 8));
@@ -2577,18 +2751,22 @@ void D_WriteConsistencyReport(const char *trigger, tic_t tic, SINT8 node,
 		node, playernum,
 		(playernum >= 0 && playernum < MAXPLAYERS) ? player_names[playernum] : "unknown",
 		expected, received);
+	if (!have_peer_checksum)
+		fprintf(report, "checksum_evidence=local_snapshot_only\n"
+			"server_failed_tic=unknown\nserver_expected_checksum=unknown\nserver_received_checksum=unknown\n"
+			"expected_received_fields=local_placeholders\n");
 	fprintf(report,
-		"mismatch_confirmation_policy=2 distinct samples within 1 second\n"
 		"reported_tic_age=%u\n",
 		(unsigned)(gametic >= tic ? gametic - tic : 0));
 	fprintf(report, "likely_cause=%s\n",
-		local_lua_count ? "gameplay state diverged; local bypass Lua is relevant only if it changed synchronized state"
+		!have_peer_checksum ? "unknown from this local snapshot; pair a client resync notice with the host mismatch report"
+		: local_lua_count ? "gameplay state diverged; local bypass Lua is relevant only if it changed synchronized state"
 		: modifiedgame ? "gameplay add-on/script or engine state diverged between peers"
 		: "base-game engine state diverged between peers");
 	fprintf(report, "packet_loss_assessment=%s\n",
 		(lostpercent > 5.0f || gamelostpercent > 5.0f)
 		? "high loss can delay commands/recovery, but does not by itself create a checksum mismatch"
-		: "loss is not high enough to explain repeated recovery delays");
+		: "measured loss is below 5 percent; this snapshot does not rule out jitter");
 	fprintf(report, "renderer=%d\nresolution=%dx%d\nmodifiedgame=%d\nnetgame=%d\nmultiplayer=%d\n",
 		rendermode, vid.width, vid.height, modifiedgame, netgame, multiplayer);
 	/* Search the complete retained checksum history, not only the small excerpt
@@ -2603,7 +2781,7 @@ void D_WriteConsistencyReport(const char *trigger, tic_t tic, SINT8 node,
 			received_match_tics[received_match_count] = snapshot->tic;
 		received_match_count++;
 	}
-	fprintf(report, "received_checksum_matches_in_server_history=%d\n", received_match_count);
+	fprintf(report, "received_checksum_matches_in_local_history=%d\n", received_match_count);
 	for (i = 0; i < min(received_match_count,
 		(INT32)(sizeof received_match_tics / sizeof received_match_tics[0])); i++)
 	{
@@ -2616,14 +2794,16 @@ void D_WriteConsistencyReport(const char *trigger, tic_t tic, SINT8 node,
 		"game_tic_loss_percent=%.3f\nconnected_nodes=%d\njoin_or_leave_pause=%d\n"
 		"netlowlatency_mode=%d\nconfigured_tic_buffer=%d\neffective_tic_buffer=%d\n"
 		"local_ping_ms=%u\neffective_buffer_delay_ms=%.3f\nclient_movement_prediction=0\n"
+		"queued_server_tics=%u\nwaiting_for_missing_server_tic=%d\n"
 		"adaptive_stalls=%u\nadaptive_recoveries=%u\nadaptive_recovery_active=%d\n",
 		getbps, sendbps, lostpercent, gamelostpercent, D_NumNodes(false), hu_stopped,
 		cv_netlowlatency.value, cv_netticbuffer.value, D_EffectiveNetTicBuffer(),
 		(consoleplayer >= 0 && consoleplayer < MAXPLAYERS && playeringame[consoleplayer])
 			? (unsigned)playerpingtable[consoleplayer] : 0,
 		D_EffectiveNetTicBuffer() * (1000.0 / TICRATE),
+		client ? D_QueuedServerTics() : 0, client && cl_packetmissed,
 		netlatency_stalls, netlatency_recoveries,
-		netlatency_recovery_until > I_GetTime());
+		cv_netlowlatency.value == 2 ? netlatency_starved : netlatency_recovery_until > I_GetTime());
 	fprintf(report, "system_memory_free=%llu\nsystem_memory_total=%llu\n",
 		(unsigned long long)freememory, (unsigned long long)totalmemory);
 	if (playernum >= 0 && playernum < MAXPLAYERS)
@@ -2643,7 +2823,10 @@ void D_WriteConsistencyReport(const char *trigger, tic_t tic, SINT8 node,
 	}
 
 	fprintf(report, "\nprobable_cause_guide:\n");
-	fprintf(report, "- This report was emitted only after two distinct mismatching samples; a single transient sample is ignored.\n");
+	if (have_peer_checksum)
+		fprintf(report, "- The host observed two distinct mismatching samples; a single transient sample is ignored.\n");
+	else
+		fprintf(report, "- This is a local snapshot. A stock client resync notice carries no failing host tic or checksum; it cannot identify the cause by itself.\n");
 	fprintf(report, "- Different or hot-reloaded gameplay add-ons/scripts.\n");
 	fprintf(report, "- Bypass Lua is local by design and is only a cause if it directly changes synchronized gameplay state.\n");
 	fprintf(report, "- Nondeterministic Lua or an unsynchronized gameplay RNG call.\n");

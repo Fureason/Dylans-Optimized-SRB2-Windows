@@ -44,6 +44,11 @@ fixed_t rw_distance;
 static INT32 rw_x, rw_stopx;
 static angle_t rw_centerangle;
 static fixed_t rw_offset, rw_offsetx;
+static fixed_t rw_textureoffset, rw_texturedistance;
+static boolean rw_exactprojection;
+static double rw_projectedoffset, rw_normaldistance;
+static double rw_raynormal, rw_raynormalstep;
+static double rw_raytangent, rw_raytangentstep;
 static fixed_t rw_offset_top, rw_offset_mid, rw_offset_bottom;
 static fixed_t rw_scale, rw_scalestep;
 static fixed_t rw_midtexturemid, rw_toptexturemid, rw_bottomtexturemid;
@@ -1364,9 +1369,38 @@ static void R_DrawNoWall(UINT8 *source, INT32 height)
 	(void)height;
 }
 
+static fixed_t R_WallTextureTangent(angle_t angle)
+{
+	const UINT32 index = (angle >> ANGLETOFINESHIFT) & (FINEANGLES/2-1);
+	const fixed_t base = FINETANGENT(index);
+	const UINT32 fraction = angle & ((1u << ANGLETOFINESHIFT)-1);
+	/* Do not interpolate across the tangent's pole. */
+	if (index == 0 || index+1 == FINEANGLES/2)
+		return base;
+	return base + (fixed_t)((((INT64)FINETANGENT(index+1)-base)
+		* fraction) >> ANGLETOFINESHIFT);
+}
+
+static fixed_t R_WallTextureOffset(INT32 x)
+{
+	if (rw_exactprojection)
+	{
+		const double screenx = x - centerx;
+		const double denominator = rw_raynormal + screenx*rw_raynormalstep;
+		if (fabs(denominator) > 1.0e-12)
+		{
+			const double offset = rw_projectedoffset - rw_normaldistance
+				* (rw_raytangent + screenx*rw_raytangentstep) / denominator;
+			if (offset >= INT32_MIN && offset <= INT32_MAX)
+				return (fixed_t)llround(offset);
+		}
+	}
+	return rw_textureoffset - FixedMul(R_WallTextureTangent(
+		rw_centerangle + textureviewangle[x]), rw_texturedistance);
+}
+
 static void R_RenderSegLoop (void)
 {
-	angle_t angle;
 	fixed_t textureoffset;
 	size_t pindex;
 	INT32 yl;
@@ -1600,8 +1634,7 @@ static void R_RenderSegLoop (void)
 
 		//SoM: Calculate offsets for Thick fake floors.
 		// calculate texture offset
-		angle = (rw_centerangle + xtoviewangle[rw_x])>>ANGLETOFINESHIFT;
-		textureoffset = rw_offset - FixedMul(FINETANGENT(angle), rw_distance);
+		textureoffset = R_WallTextureOffset(rw_x);
 		texturecolumn = FixedDiv(textureoffset, rw_invmidtexturescalex);
 
 		// texturecolumn and lighting are independent of wall tiers
@@ -1969,6 +2002,22 @@ static fixed_t R_ScaleFromGlobalAngle(angle_t visangle)
 	return 64*FRACUNIT;
 }
 
+static fixed_t R_WallScaleAtX(INT32 x)
+{
+	if (rw_exactprojection && fabs(rw_normaldistance) > 0.0)
+	{
+		const double denominator = rw_raynormal + (x-centerx)*rw_raynormalstep;
+		const double scale = -(double)projectiony * FRACUNIT
+			* denominator / rw_normaldistance;
+		if (scale >= 64.0*FRACUNIT)
+			return 64*FRACUNIT;
+		if (scale <= 256.0)
+			return 256;
+		return (fixed_t)llround(scale);
+	}
+	return R_ScaleFromGlobalAngle(viewangle + textureviewangle[x]);
+}
+
 //
 // R_StoreWallRange
 // A wall segment will be drawn
@@ -2036,17 +2085,67 @@ void R_StoreWallRange(INT32 start, INT32 stop)
 	if (longboi)
 		rw_distance = (fixed_t)R_CalcSegDist(curline,viewx,viewy);
 
+	rw_exactprojection = false;
+	{
+		/* Keep visibility's shared clip tables, but project wall scales and
+		 * texture coordinates from the actual line. Angle-table distances
+		 * displaced nearby wall images when switching renderers. */
+		const vertex_t *origin = curline->side ? linedef->v2 : linedef->v1;
+		const vertex_t *end = curline->side ? linedef->v1 : linedef->v2;
+		const double dx = (double)end->x - origin->x;
+		const double dy = (double)end->y - origin->y;
+		const double vx = (double)viewx - origin->x;
+		const double vy = (double)viewy - origin->y;
+		const double length = hypot(dx, dy);
+		if (length > 0.0 && focallengthf > 0.0f)
+		{
+			/* BSP split vertices and their integer offsets are approximations.
+			 * Anchor every piece to its original sidedef so those approximations
+			 * cannot introduce a texture phase change at a segment boundary. */
+			const double offset = (vx*dx + vy*dy)/length;
+			const double distance = fabs(vx*dy - vy*dx)/length;
+			if (offset >= INT32_MIN && offset <= INT32_MAX && distance <= INT32_MAX)
+			{
+				/* Intersect the screen ray with the actual segment, rather than
+				 * feeding its rounded angle back through the tangent table. At a
+				 * grazing angle that remaining error moved magnified grass strips
+				 * several pixels even after correcting the wall's distance. */
+				static boolean haveyaw = false;
+				static angle_t lastyaw;
+				static double c, s;
+				if (!haveyaw || lastyaw != viewangle)
+				{
+					const double yaw = viewangle * (M_PI / (double)ANGLE_180);
+					c = cos(yaw);
+					s = sin(yaw);
+					lastyaw = viewangle;
+					haveyaw = true;
+				}
+				const double tx = dx/length, ty = dy/length;
+				rw_projectedoffset = offset;
+				rw_normaldistance = vy*tx - vx*ty;
+				rw_raynormal = -c*ty + s*tx;
+				rw_raynormalstep = (-s*ty - c*tx)/focallengthf;
+				rw_raytangent = c*tx + s*ty;
+				rw_raytangentstep = (s*tx - c*ty)/focallengthf;
+				rw_textureoffset = (fixed_t)llround(offset);
+				rw_distance = (fixed_t)llround(distance);
+				rw_exactprojection = (distance > 0.0);
+			}
+		}
+	}
+
 	ds_p->x1 = rw_x = start;
 	ds_p->x2 = stop;
 	ds_p->curline = curline;
 	rw_stopx = stop+1;
 
 	// calculate scale at both ends and step
-	ds_p->scale1 = rw_scale = R_ScaleFromGlobalAngle(viewangle + xtoviewangle[start]);
+	ds_p->scale1 = rw_scale = R_WallScaleAtX(start);
 
 	if (stop > start)
 	{
-		ds_p->scale2 = R_ScaleFromGlobalAngle(viewangle + xtoviewangle[stop]);
+		ds_p->scale2 = R_WallScaleAtX(stop);
 		range = stop-start;
 	}
 	else
@@ -2796,6 +2895,9 @@ void R_StoreWallRange(INT32 start, INT32 stop)
 			rw_offset = -rw_offset;
 
 		rw_offset += curline->offset;
+		if (!rw_exactprojection)
+			rw_textureoffset = rw_offset;
+		rw_texturedistance = rw_distance;
 		rw_centerangle = ANGLE_90 + viewangle - rw_normalangle;
 
 		rw_offset_top = sideoffset + sidedef->offsetx_top;

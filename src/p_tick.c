@@ -22,6 +22,7 @@
 #include "lua_script.h"
 #include "lua_hook.h"
 #include "m_perfstats.h"
+#include "m_hostguard.h"
 #include "i_system.h" // I_GetPreciseTime
 #include "r_main.h"
 #include "r_fps.h"
@@ -200,6 +201,7 @@ void Command_CountMobjs_f(void)
 void P_InitThinkers(void)
 {
 	UINT8 i;
+	HG_ResetMap();
 	for (i = 0; i < NUM_THINKERLISTS; i++)
 		thlist[i].prev = thlist[i].next = &thlist[i];
 }

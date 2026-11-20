@@ -407,7 +407,7 @@ void HWR_RenderBatches(void)
 		{
 			// check if a state change is required, set the change bools and next vars
 			int nextIndex = polygonIndexArray[polygonReadPos];
-			if (polygonArray[index].hash != polygonArray[nextIndex].hash)
+			/* A sorting hash does not prove that two draw states are identical. */
 			{
 				nextShader = polygonArray[nextIndex].shader;
 				nextTexture = polygonArray[nextIndex].texture;
@@ -435,6 +435,7 @@ void HWR_RenderBatches(void)
 					if (currentSurfaceInfo.PolyColor.rgba != nextSurfaceInfo.PolyColor.rgba ||
 						currentSurfaceInfo.TintColor.rgba != nextSurfaceInfo.TintColor.rgba ||
 						currentSurfaceInfo.FadeColor.rgba != nextSurfaceInfo.FadeColor.rgba ||
+						currentSurfaceInfo.LightTableId != nextSurfaceInfo.LightTableId ||
 						currentSurfaceInfo.LightInfo.light_level != nextSurfaceInfo.LightInfo.light_level ||
 						currentSurfaceInfo.LightInfo.fade_start != nextSurfaceInfo.LightInfo.fade_start ||
 						currentSurfaceInfo.LightInfo.fade_end != nextSurfaceInfo.LightInfo.fade_end)

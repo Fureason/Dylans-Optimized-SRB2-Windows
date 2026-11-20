@@ -63,6 +63,12 @@ void I_ReportRemoteExit(const char *playername, INT32 node, boolean timedout,
 	UINT32 ping_tics);
 #endif
 
+#ifdef HAVE_SDL
+/** Hand off a selected server to a fresh client after saving this session. */
+boolean I_RestartForServer(const char *address);
+void I_WaitForRestart(void);
+#endif
+
 /** Launch and manage a hidden local dedicated-server companion process. */
 boolean I_StartCompanionServer(const char *responsefile, const char *workingdir);
 void I_StopCompanionServer(void);

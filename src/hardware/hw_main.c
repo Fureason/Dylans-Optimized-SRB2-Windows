@@ -46,6 +46,7 @@
 #include "../d_main.h"
 #include "../p_slopes.h"
 #include "../p_spec.h"
+#include "../p_polyobj.h"
 
 // ==========================================================================
 // the hardware driver object
@@ -60,6 +61,7 @@ static void HWR_AddSprites(sector_t *sec);
 static void HWR_ProjectSprite(mobj_t *thing);
 static void HWR_ProjectPrecipitationSprite(precipmobj_t *thing);
 static void HWR_ProjectBoundingBox(mobj_t *thing);
+static void HWR_DrawDeferredTranslucentSprites(void);
 
 void HWR_AddTransparentFloor(levelflat_t *levelflat, extrasubsector_t *xsub, boolean isceiling, fixed_t fixedheight, INT32 lightlevel, INT32 alpha, sector_t *FOFSector, FBITFIELD blend, boolean fogplane, boolean chromakeyed, extracolormap_t *planecolormap);
 void HWR_AddTransparentPolyobjectFloor(levelflat_t *levelflat, polyobj_t *polysector, boolean isceiling, fixed_t fixedheight,
@@ -159,15 +161,17 @@ static boolean HWR_PointHiddenByPortalLine(fixed_t x, fixed_t y, line_t *line)
 		&& linefrac >= 0.0 && linefrac <= 1.0;
 }
 
-static boolean HWR_PointHiddenByLinePortal(fixed_t x, fixed_t y)
+static boolean HWR_PointHiddenByPortalDestination(fixed_t x, fixed_t y)
 {
-	size_t i;
-
 	/* Software rejects destination sprites on the back side of the paired
 	 * exit. Keep the same permanent half-plane rule in the hardware pass. */
-	if (hwr_portal_pass && hwr_portal_destination_line
-	&& HWR_PointBehindPortalLine(x, y, hwr_portal_destination_line))
-		return true;
+	return hwr_portal_pass && hwr_portal_destination_line
+		&& HWR_PointBehindPortalLine(x, y, hwr_portal_destination_line);
+}
+
+static boolean HWR_PointHiddenByMainPortal(fixed_t x, fixed_t y)
+{
+	size_t i;
 
 	if (!HWR_PortalSurfaceActive())
 		return false;
@@ -716,6 +720,7 @@ static void HWR_RenderPlane(subsector_t *subsector, extrasubsector_t *xsub, bool
 	static UINT16 numAllocedPlaneVerts = 0;
 	static UINT16 numAllocedPortalPlaneVerts = 0;
 	FOutVector *drawPlaneVerts;
+	poly_t *planepoly = xsub->planepoly;
 
 	if (!r_renderfloors)
 		return;
@@ -724,8 +729,45 @@ static void HWR_RenderPlane(subsector_t *subsector, extrasubsector_t *xsub, bool
 	if (!xsub->planepoly)
 		return;
 
-	pv = xsub->planepoly->pts;
-	nrPlaneVerts = xsub->planepoly->numpts;
+	if (xsub->boundedpoly)
+	{
+		sector_t *background = isceiling ? xsub->ceilingbackground
+			: xsub->floorbackground;
+		const boolean behind = background && gl_frontsector && !FOFsector
+			&& !xsub->plane_regions
+			&& (isceiling ? (!background->c_slope && !gl_frontsector->c_slope
+				&& background->ceilingheight > fixedheight)
+				: (!background->f_slope && !gl_frontsector->f_slope
+				&& background->floorheight < fixedheight));
+		if (behind)
+		{
+			extrasubsector_t fallback = *xsub;
+			sector_t *savedsector = gl_frontsector;
+			levelflat_t *backgroundflat = &levelflats[isceiling
+				? background->ceilingpic : background->floorpic];
+			fallback.boundedpoly = NULL;
+			gl_frontsector = background;
+			if ((isceiling ? background->ceilingpic : background->floorpic) != skyflatnum)
+			{
+				HWR_GetLevelFlat(backgroundflat, false);
+				HWR_RenderPlane(NULL, &fallback, isceiling,
+					isceiling ? background->ceilingheight : background->floorheight,
+					PF_Occlude, isceiling
+						? HWR_CeilingLightLevel(background, background->lightlevel)
+						: HWR_FloorLightLevel(background, background->lightlevel),
+					backgroundflat, NULL, 255, background->extra_colormap);
+			}
+			gl_frontsector = savedsector;
+			if (levelflat)
+				HWR_GetLevelFlat(levelflat, false);
+			else
+				HWR_SetCurrentTexture(NULL);
+		}
+		if (FOFsector || behind || xsub->plane_regions)
+			planepoly = xsub->boundedpoly;
+	}
+	pv = planepoly->pts;
+	nrPlaneVerts = planepoly->numpts;
 
 	if (nrPlaneVerts < 3) // not even a triangle?
 		return;
@@ -1092,6 +1134,21 @@ FBITFIELD HWR_TranstableToAlpha(INT32 transtablenum, FSurfaceInfo *pSurf)
 	pSurf->PolyColor.s.alpha = HWR_GetTranstableAlpha(transtablenum);
 	return PF_Translucent;
 }
+
+typedef struct
+{
+	FOutVector    wallVerts[4];
+	FSurfaceInfo  Surf;
+	INT32         texnum;
+	FBITFIELD     blend;
+	INT32         drawcount;
+	boolean fogwall;
+	INT32 lightlevel;
+	extracolormap_t *wallcolormap;
+} wallinfo_t;
+
+static wallinfo_t *wallinfo = NULL;
+static size_t numwalls = 0; // a list of transparent walls to be drawn
 
 static void HWR_AddTransparentWall(FOutVector *wallVerts, FSurfaceInfo *pSurf, INT32 texnum, FBITFIELD blend, boolean fogwall, INT32 lightlevel, extracolormap_t *wallcolormap);
 
@@ -1724,6 +1781,24 @@ static void HWR_ProcessSeg(void)
 		+ ((double)gl_curline->flength * FRACUNIT) * (double)segstart;
 	double cliphigh = (double)gl_curline->offset
 		+ ((double)gl_curline->flength * FRACUNIT) * (double)segend;
+	{
+		/* A GL polygon can refine a rounded BSP split vertex. Its stored seg
+		 * offset still belongs to the old vertex, so offset + drawn length no
+		 * longer describes the same texture. Project both drawn endpoints onto
+		 * the original sidedef, keeping every split on one continuous axis. */
+		const vertex_t *origin = gl_curline->side ? gl_linedef->v2 : gl_linedef->v1;
+		const vertex_t *end = gl_curline->side ? gl_linedef->v1 : gl_linedef->v2;
+		const double dx = (double)end->x - origin->x;
+		const double dy = (double)end->y - origin->y;
+		const double length = hypot(dx, dy);
+		if (length > 0.0)
+		{
+			cliplow = (((double)vs.x*FRACUNIT - origin->x)*dx
+				+ ((double)vs.y*FRACUNIT - origin->y)*dy) / length;
+			cliphigh = (((double)ve.x*FRACUNIT - origin->x)*dx
+				+ ((double)ve.y*FRACUNIT - origin->y)*dy) / length;
+		}
+	}
 
 	FUINT lightnum = HWR_SideLightLevel(gl_sidedef, gl_frontsector->lightlevel);
 	extracolormap_t *colormap = gl_frontsector->extra_colormap;
@@ -2996,6 +3071,186 @@ static boolean HWR_DoCulling(line_t *cullheight, line_t *viewcullheight, float v
 	return false;
 }
 
+/* Use the same FOF path for a leaf and its recovered neighboring regions. */
+static void HWR_RenderFFloorPlanes(subsector_t *sub, extrasubsector_t *xsub,
+	fixed_t locFloorHeight, fixed_t locCeilingHeight)
+{
+	INT32 light = 0;
+	ffloor_t *rover;
+	if (gl_frontsector->ffloors)
+	{
+		/// \todo fix light, xoffs, yoffs, extracolormap ?
+		for (rover = gl_frontsector->ffloors;
+			rover; rover = rover->next)
+		{
+			fixed_t bottomCullHeight, topCullHeight, centerHeight;
+
+			if (!(rover->fofflags & FOF_EXISTS) || !(rover->fofflags & FOF_RENDERPLANES))
+				continue;
+			if (sub && sub->validcount == validcount)
+				continue;
+
+			// rendering heights for bottom and top planes
+			bottomCullHeight = P_GetFFloorBottomZAt(rover, viewx, viewy);
+			topCullHeight = P_GetFFloorTopZAt(rover, viewx, viewy);
+
+			if (gl_frontsector->cullheight)
+			{
+				if (HWR_DoCulling(gl_frontsector->cullheight, viewsector->cullheight, gl_viewz, FIXED_TO_FLOAT(*rover->bottomheight), FIXED_TO_FLOAT(*rover->topheight)))
+					continue;
+			}
+
+			// bottom plane
+			centerHeight = P_GetFFloorBottomZAt(rover, gl_frontsector->soundorg.x, gl_frontsector->soundorg.y);
+
+			if (centerHeight <= locCeilingHeight &&
+			    centerHeight >= locFloorHeight &&
+			    ((viewz < bottomCullHeight && (rover->fofflags & FOF_BOTHPLANES || !(rover->fofflags & FOF_INVERTPLANES))) ||
+			     (viewz > bottomCullHeight && (rover->fofflags & FOF_BOTHPLANES || rover->fofflags & FOF_INVERTPLANES))))
+			{
+				if (rover->fofflags & FOF_FOG)
+				{
+					UINT8 alpha;
+
+					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < bottomCullHeight ? true : false);
+					alpha = HWR_FogBlockAlpha(HWR_FloorLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel), rover->master->frontsector->extra_colormap);
+
+					HWR_AddTransparentFloor(0,
+					                       xsub,
+										   false,
+					                       *rover->bottomheight,
+					                       HWR_FloorLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
+					                       alpha, rover->master->frontsector, PF_Fog|PF_NoTexture,
+										   true, false, rover->master->frontsector->extra_colormap);
+				}
+				else if ((rover->fofflags & FOF_TRANSLUCENT && !((rover->fofflags & FOF_SPLAT) && rover->alpha >= 255)) || rover->blend) // SoM: Flags are more efficient
+				{
+					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < bottomCullHeight ? true : false);
+
+					HWR_AddTransparentFloor(&levelflats[*rover->bottompic],
+					                       xsub,
+										   false,
+					                       *rover->bottomheight,
+					                       HWR_FloorLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
+					                       max(0, min(rover->alpha, 255)), rover->master->frontsector,
+					                       HWR_RippleBlend(gl_frontsector, rover, false) | (rover->blend ? HWR_GetBlendModeFlag(rover->blend) : PF_Translucent),
+					                       false, rover->fofflags & FOF_SPLAT, *gl_frontsector->lightlist[light].extra_colormap);
+				}
+				else
+				{
+					HWR_GetLevelFlat(&levelflats[*rover->bottompic], rover->fofflags & FOF_SPLAT);
+					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < bottomCullHeight ? true : false);
+					HWR_RenderPlane(sub, xsub, false, *rover->bottomheight, HWR_RippleBlend(gl_frontsector, rover, false)|PF_Occlude,
+					                HWR_FloorLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
+					                &levelflats[*rover->bottompic], rover->master->frontsector, 255, *gl_frontsector->lightlist[light].extra_colormap);
+				}
+			}
+
+			// top plane
+			centerHeight = P_GetFFloorTopZAt(rover, gl_frontsector->soundorg.x, gl_frontsector->soundorg.y);
+
+			if (centerHeight >= locFloorHeight &&
+			    centerHeight <= locCeilingHeight &&
+			    ((viewz > topCullHeight && (rover->fofflags & FOF_BOTHPLANES || !(rover->fofflags & FOF_INVERTPLANES))) ||
+			     (viewz < topCullHeight && (rover->fofflags & FOF_BOTHPLANES || rover->fofflags & FOF_INVERTPLANES))))
+			{
+				if (rover->fofflags & FOF_FOG)
+				{
+					UINT8 alpha;
+
+					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < topCullHeight ? true : false);
+					alpha = HWR_FogBlockAlpha(HWR_CeilingLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel), rover->master->frontsector->extra_colormap);
+
+					HWR_AddTransparentFloor(0,
+					                       xsub,
+										   true,
+					                       *rover->topheight,
+					                       HWR_CeilingLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
+					                       alpha, rover->master->frontsector, PF_Fog|PF_NoTexture,
+										   true, false, rover->master->frontsector->extra_colormap);
+				}
+				else if ((rover->fofflags & FOF_TRANSLUCENT && !((rover->fofflags & FOF_SPLAT) && rover->alpha >= 255)) || rover->blend)
+				{
+					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < topCullHeight ? true : false);
+
+					HWR_AddTransparentFloor(&levelflats[*rover->toppic],
+					                        xsub,
+											true,
+					                        *rover->topheight,
+					                        HWR_CeilingLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
+					                        max(0, min(rover->alpha, 255)), rover->master->frontsector,
+					                        HWR_RippleBlend(gl_frontsector, rover, false) | (rover->blend ? HWR_GetBlendModeFlag(rover->blend) : PF_Translucent),
+					                        false, rover->fofflags & FOF_SPLAT, *gl_frontsector->lightlist[light].extra_colormap);
+				}
+				else
+				{
+					HWR_GetLevelFlat(&levelflats[*rover->toppic], rover->fofflags & FOF_SPLAT);
+					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < topCullHeight ? true : false);
+					HWR_RenderPlane(sub, xsub, true, *rover->topheight, HWR_RippleBlend(gl_frontsector, rover, false)|PF_Occlude,
+					                  HWR_CeilingLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
+					                  &levelflats[*rover->toppic], rover->master->frontsector, 255, *gl_frontsector->lightlist[light].extra_colormap);
+				}
+			}
+		}
+	}
+}
+
+/* Base floors and ceilings must follow the same recovered sector coverage as
+ * FOFs when elevators expose the floor below them. Use current heights so the
+ * partition remains valid before, during and after a moving-sector effect. */
+static void HWR_RenderSectorPlanes(subsector_t *sub, extrasubsector_t *xsub,
+	INT32 floorlightlevel, INT32 ceilinglightlevel,
+	extracolormap_t *floorcolormap, extracolormap_t *ceilingcolormap)
+{
+	const fixed_t cullFloorHeight = P_GetSectorFloorZAt(gl_frontsector, viewx, viewy);
+	const fixed_t cullCeilingHeight = P_GetSectorCeilingZAt(gl_frontsector, viewx, viewy);
+	const fixed_t locFloorHeight = P_GetSectorFloorZAt(gl_frontsector, gl_frontsector->soundorg.x, gl_frontsector->soundorg.y);
+	const fixed_t locCeilingHeight = P_GetSectorCeilingZAt(gl_frontsector, gl_frontsector->soundorg.x, gl_frontsector->soundorg.y);
+
+	// render floor ?
+	// yeah, easy backface cull! :)
+	if (cullFloorHeight < viewz)
+	{
+		if (gl_frontsector->floorpic != skyflatnum
+		&& !HWR_FloorPortalSurfaceActive(gl_frontsector))
+		{
+			if (!sub || sub->validcount != validcount)
+			{
+				HWR_GetLevelFlat(&levelflats[gl_frontsector->floorpic], false);
+				HWR_RenderPlane(sub, xsub, false,
+					// Hack to make things continue to work around slopes.
+					locFloorHeight == cullFloorHeight ? locFloorHeight : gl_frontsector->floorheight,
+					// We now return you to your regularly scheduled rendering.
+					PF_Occlude, floorlightlevel, &levelflats[gl_frontsector->floorpic], NULL, 255, floorcolormap);
+			}
+		}
+	}
+
+	if (cullCeilingHeight > viewz)
+	{
+		if (gl_frontsector->ceilingpic != skyflatnum
+		&& !HWR_CeilingPortalSurfaceActive(gl_frontsector))
+		{
+			if (!sub || sub->validcount != validcount)
+			{
+				HWR_GetLevelFlat(&levelflats[gl_frontsector->ceilingpic], false);
+				HWR_RenderPlane(sub, xsub, true,
+					// Hack to make things continue to work around slopes.
+					locCeilingHeight == cullCeilingHeight ? locCeilingHeight : gl_frontsector->ceilingheight,
+					// We now return you to your regularly scheduled rendering.
+					PF_Occlude, ceilinglightlevel, &levelflats[gl_frontsector->ceilingpic], NULL, 255, ceilingcolormap);
+			}
+		}
+	}
+
+	// Moved here because before, when above the ceiling and the floor does not have the sky flat, it doesn't draw the sky
+	if (gl_frontsector->ceilingpic == skyflatnum || gl_frontsector->floorpic == skyflatnum
+	|| HWR_FloorPortalSurfaceActive(gl_frontsector)
+	|| HWR_CeilingPortalSurfaceActive(gl_frontsector))
+		drawsky = true;
+
+	HWR_RenderFFloorPlanes(sub, xsub, locFloorHeight, locCeilingHeight);}
+
 // -----------------+
 // HWR_Subsector    : Determine floor/ceiling planes.
 //                  : Add sprites of things in sector.
@@ -3010,12 +3265,8 @@ static void HWR_Subsector(size_t num)
 	static sector_t tempsec; //SoM: 4/7/2000
 	INT32 floorlightlevel;
 	INT32 ceilinglightlevel;
-	INT32 locFloorHeight, locCeilingHeight;
-	INT32 cullFloorHeight, cullCeilingHeight;
-	INT32 light = 0;
 	extracolormap_t *floorcolormap;
 	extracolormap_t *ceilingcolormap;
-	ffloor_t *rover;
 
 #ifdef PARANOIA //no risk while developing, enough debugging nights!
 	if (num >= addsubsector)
@@ -3053,172 +3304,31 @@ static void HWR_Subsector(size_t num)
 
 	floorcolormap = ceilingcolormap = gl_frontsector->extra_colormap;
 
-	cullFloorHeight   = P_GetSectorFloorZAt  (gl_frontsector, viewx, viewy);
-	cullCeilingHeight = P_GetSectorCeilingZAt(gl_frontsector, viewx, viewy);
-	locFloorHeight    = P_GetSectorFloorZAt  (gl_frontsector, gl_frontsector->soundorg.x, gl_frontsector->soundorg.y);
-	locCeilingHeight  = P_GetSectorCeilingZAt(gl_frontsector, gl_frontsector->soundorg.x, gl_frontsector->soundorg.y);
-
 	R_CheckSectorLightLists(sub->sector, gl_frontsector, &floorlightlevel, &ceilinglightlevel, &floorcolormap, &ceilingcolormap);
 
 	sub->sector->extra_colormap = gl_frontsector->extra_colormap;
 
-	// render floor ?
-	// yeah, easy backface cull! :)
-	if (cullFloorHeight < viewz)
+	HWR_RenderSectorPlanes(sub, &extrasubsectors[num], floorlightlevel, ceilinglightlevel,
+		floorcolormap, ceilingcolormap);
+
+	/* A clipped leaf can expose a neighboring surface, even when no seg of that
+	 * sector belongs to this leaf. Restore only its real exterior fragments. */
+	if (sub->validcount != validcount && extrasubsectors[num].plane_regions)
 	{
-		if (gl_frontsector->floorpic != skyflatnum
-		&& !HWR_FloorPortalSurfaceActive(gl_frontsector))
+		sector_t *savedsector = gl_frontsector;
+		hwr_plane_region_t *region;
+		sector_t regiontemp;
+		for (region = extrasubsectors[num].plane_regions; region; region = region->next)
 		{
-			if (sub->validcount != validcount)
-			{
-				HWR_GetLevelFlat(&levelflats[gl_frontsector->floorpic], false);
-				HWR_RenderPlane(sub, &extrasubsectors[num], false,
-					// Hack to make things continue to work around slopes.
-					locFloorHeight == cullFloorHeight ? locFloorHeight : gl_frontsector->floorheight,
-					// We now return you to your regularly scheduled rendering.
-					PF_Occlude, floorlightlevel, &levelflats[gl_frontsector->floorpic], NULL, 255, floorcolormap);
-			}
+			INT32 floorlight, ceilinglight;
+			extracolormap_t *floorcolor, *ceilingcolor;
+			gl_frontsector = R_FakeFlat(region->sector, &regiontemp, &floorlight, &ceilinglight, false);
+			floorcolor = ceilingcolor = gl_frontsector->extra_colormap;
+			R_CheckSectorLightLists(region->sector, gl_frontsector, &floorlight, &ceilinglight,
+				&floorcolor, &ceilingcolor);
+			HWR_RenderSectorPlanes(NULL, &region->xsub, floorlight, ceilinglight, floorcolor, ceilingcolor);
 		}
-	}
-
-	if (cullCeilingHeight > viewz)
-	{
-		if (gl_frontsector->ceilingpic != skyflatnum
-		&& !HWR_CeilingPortalSurfaceActive(gl_frontsector))
-		{
-			if (sub->validcount != validcount)
-			{
-				HWR_GetLevelFlat(&levelflats[gl_frontsector->ceilingpic], false);
-				HWR_RenderPlane(sub, &extrasubsectors[num], true,
-					// Hack to make things continue to work around slopes.
-					locCeilingHeight == cullCeilingHeight ? locCeilingHeight : gl_frontsector->ceilingheight,
-					// We now return you to your regularly scheduled rendering.
-					PF_Occlude, ceilinglightlevel, &levelflats[gl_frontsector->ceilingpic], NULL, 255, ceilingcolormap);
-			}
-		}
-	}
-
-	// Moved here because before, when above the ceiling and the floor does not have the sky flat, it doesn't draw the sky
-	if (gl_frontsector->ceilingpic == skyflatnum || gl_frontsector->floorpic == skyflatnum
-	|| HWR_FloorPortalSurfaceActive(gl_frontsector)
-	|| HWR_CeilingPortalSurfaceActive(gl_frontsector))
-		drawsky = true;
-
-	if (gl_frontsector->ffloors)
-	{
-		/// \todo fix light, xoffs, yoffs, extracolormap ?
-		for (rover = gl_frontsector->ffloors;
-			rover; rover = rover->next)
-		{
-			fixed_t bottomCullHeight, topCullHeight, centerHeight;
-
-			if (!(rover->fofflags & FOF_EXISTS) || !(rover->fofflags & FOF_RENDERPLANES))
-				continue;
-			if (sub->validcount == validcount)
-				continue;
-
-			// rendering heights for bottom and top planes
-			bottomCullHeight = P_GetFFloorBottomZAt(rover, viewx, viewy);
-			topCullHeight = P_GetFFloorTopZAt(rover, viewx, viewy);
-
-			if (gl_frontsector->cullheight)
-			{
-				if (HWR_DoCulling(gl_frontsector->cullheight, viewsector->cullheight, gl_viewz, FIXED_TO_FLOAT(*rover->bottomheight), FIXED_TO_FLOAT(*rover->topheight)))
-					continue;
-			}
-
-			// bottom plane
-			centerHeight = P_GetFFloorBottomZAt(rover, gl_frontsector->soundorg.x, gl_frontsector->soundorg.y);
-
-			if (centerHeight <= locCeilingHeight &&
-			    centerHeight >= locFloorHeight &&
-			    ((viewz < bottomCullHeight && (rover->fofflags & FOF_BOTHPLANES || !(rover->fofflags & FOF_INVERTPLANES))) ||
-			     (viewz > bottomCullHeight && (rover->fofflags & FOF_BOTHPLANES || rover->fofflags & FOF_INVERTPLANES))))
-			{
-				if (rover->fofflags & FOF_FOG)
-				{
-					UINT8 alpha;
-
-					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < bottomCullHeight ? true : false);
-					alpha = HWR_FogBlockAlpha(HWR_FloorLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel), rover->master->frontsector->extra_colormap);
-
-					HWR_AddTransparentFloor(0,
-					                       &extrasubsectors[num],
-										   false,
-					                       *rover->bottomheight,
-					                       HWR_FloorLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
-					                       alpha, rover->master->frontsector, PF_Fog|PF_NoTexture,
-										   true, false, rover->master->frontsector->extra_colormap);
-				}
-				else if ((rover->fofflags & FOF_TRANSLUCENT && !((rover->fofflags & FOF_SPLAT) && rover->alpha >= 255)) || rover->blend) // SoM: Flags are more efficient
-				{
-					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < bottomCullHeight ? true : false);
-
-					HWR_AddTransparentFloor(&levelflats[*rover->bottompic],
-					                       &extrasubsectors[num],
-										   false,
-					                       *rover->bottomheight,
-					                       HWR_FloorLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
-					                       max(0, min(rover->alpha, 255)), rover->master->frontsector,
-					                       HWR_RippleBlend(gl_frontsector, rover, false) | (rover->blend ? HWR_GetBlendModeFlag(rover->blend) : PF_Translucent),
-					                       false, rover->fofflags & FOF_SPLAT, *gl_frontsector->lightlist[light].extra_colormap);
-				}
-				else
-				{
-					HWR_GetLevelFlat(&levelflats[*rover->bottompic], rover->fofflags & FOF_SPLAT);
-					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < bottomCullHeight ? true : false);
-					HWR_RenderPlane(sub, &extrasubsectors[num], false, *rover->bottomheight, HWR_RippleBlend(gl_frontsector, rover, false)|PF_Occlude,
-					                HWR_FloorLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
-					                &levelflats[*rover->bottompic], rover->master->frontsector, 255, *gl_frontsector->lightlist[light].extra_colormap);
-				}
-			}
-
-			// top plane
-			centerHeight = P_GetFFloorTopZAt(rover, gl_frontsector->soundorg.x, gl_frontsector->soundorg.y);
-
-			if (centerHeight >= locFloorHeight &&
-			    centerHeight <= locCeilingHeight &&
-			    ((viewz > topCullHeight && (rover->fofflags & FOF_BOTHPLANES || !(rover->fofflags & FOF_INVERTPLANES))) ||
-			     (viewz < topCullHeight && (rover->fofflags & FOF_BOTHPLANES || rover->fofflags & FOF_INVERTPLANES))))
-			{
-				if (rover->fofflags & FOF_FOG)
-				{
-					UINT8 alpha;
-
-					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < topCullHeight ? true : false);
-					alpha = HWR_FogBlockAlpha(HWR_CeilingLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel), rover->master->frontsector->extra_colormap);
-
-					HWR_AddTransparentFloor(0,
-					                       &extrasubsectors[num],
-										   true,
-					                       *rover->topheight,
-					                       HWR_CeilingLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
-					                       alpha, rover->master->frontsector, PF_Fog|PF_NoTexture,
-										   true, false, rover->master->frontsector->extra_colormap);
-				}
-				else if ((rover->fofflags & FOF_TRANSLUCENT && !((rover->fofflags & FOF_SPLAT) && rover->alpha >= 255)) || rover->blend)
-				{
-					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < topCullHeight ? true : false);
-
-					HWR_AddTransparentFloor(&levelflats[*rover->toppic],
-					                        &extrasubsectors[num],
-											true,
-					                        *rover->topheight,
-					                        HWR_CeilingLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
-					                        max(0, min(rover->alpha, 255)), rover->master->frontsector,
-					                        HWR_RippleBlend(gl_frontsector, rover, false) | (rover->blend ? HWR_GetBlendModeFlag(rover->blend) : PF_Translucent),
-					                        false, rover->fofflags & FOF_SPLAT, *gl_frontsector->lightlist[light].extra_colormap);
-				}
-				else
-				{
-					HWR_GetLevelFlat(&levelflats[*rover->toppic], rover->fofflags & FOF_SPLAT);
-					light = R_GetPlaneLight(gl_frontsector, centerHeight, viewz < topCullHeight ? true : false);
-					HWR_RenderPlane(sub, &extrasubsectors[num], true, *rover->topheight, HWR_RippleBlend(gl_frontsector, rover, false)|PF_Occlude,
-					                  HWR_CeilingLightLevel(rover->master->frontsector, *gl_frontsector->lightlist[light].lightlevel),
-					                  &levelflats[*rover->toppic], rover->master->frontsector, 255, *gl_frontsector->lightlist[light].extra_colormap);
-				}
-			}
-		}
+		gl_frontsector = savedsector;
 	}
 
 	// Draw all the polyobjects in this subsector
@@ -3417,109 +3527,45 @@ typedef struct
 zbuffersprite_t linkdrawlist[MAXVISSPRITES];
 UINT32 linkdrawcount = 0;
 
-/* Translucent linkdraw effects (shields, overlays, etc.) deliberately avoid
- * the ordinary delayed depth list so other linked sprites can layer over
- * them.  A line portal still needs their silhouette when it cuts its stencil,
- * otherwise the destination view paints over the effect while leaving the
- * owning player's sprite intact.  Keep a small, main-view-only copy for the
- * portal stencil pass without changing normal sprite/FOF ordering. */
-static zbuffersprite_t portal_linkdrawlist[MAXVISSPRITES];
-static UINT32 portal_linkdrawcount = 0;
+/* Translucent map geometry is emitted after the main sprite pass. Track that
+ * interval so sprite colors can be placed on the correct side of the FOF pass.
+ * Do not use a colorless sprite depth silhouette here: it prevents a nearer
+ * translucent FOF from contributing to the sprite pixels and makes a genuinely
+ * transparent sprite look solid through water or translucent solids. */
+static boolean hwr_translucent_geometry_pending = false;
+static gl_vissprite_t *deferredtranslucentsprites[MAXVISSPRITES];
+static UINT32 deferredtranslucentspritecount = 0;
 
-/* Blended sprites are deliberately drawn without PF_Occlude so their
- * back-to-front color composition remains intact. Translucent FOFs and walls
- * are emitted afterwards, though, and therefore need a completed sprite depth
- * silhouette or a surface behind an aura/trail is blended over it. Record the
- * already-generated quads and submit a colorless depth pass after every sprite
- * has finished drawing. This is enabled only for views that actually contain
- * delayed translucent map geometry. */
-static zbuffersprite_t *translucentdepthlist = NULL;
-static size_t translucentdepthcount = 0;
-static size_t translucentdepthcapacity = 0;
-static boolean hwr_translucent_depth_pending = false;
-
-static void HWR_TranslucentDepthAdd(FOutVector *verts, gl_vissprite_t *spr)
+/* A visual portal must replace the opaque background before foreground
+ * translucency is blended.  Saving the projected sprite records lets the
+ * completed portal be composited without another BSP walk, and also avoids
+ * keeping pointers into the shared vissprite chunks while recursive views
+ * reuse them. */
+typedef struct
 {
-	size_t newcapacity;
+	gl_vissprite_t spr;
+	boolean aftergeometry;
+	boolean insideaperture;
+} portalsavedsprite_t;
 
-	if (!hwr_translucent_depth_pending || !spr || !spr->gpatch)
-		return;
-
-	/* PU_LEVEL can release this buffer between maps and clear its user pointer. */
-	if (!translucentdepthlist)
-		translucentdepthcapacity = 0;
-
-	if (translucentdepthcount >= translucentdepthcapacity)
-	{
-		newcapacity = translucentdepthcapacity
-			? translucentdepthcapacity + translucentdepthcapacity / 2 + 64
-			: 256;
-		if (newcapacity <= translucentdepthcapacity
-		|| newcapacity > (size_t)-1 / sizeof (*translucentdepthlist))
-			I_Error("OpenGL translucent sprite depth list overflow");
-
-		Z_Realloc(translucentdepthlist,
-			newcapacity * sizeof (*translucentdepthlist),
-			PU_LEVEL, &translucentdepthlist);
-		translucentdepthcapacity = newcapacity;
-	}
-
-	memcpy(translucentdepthlist[translucentdepthcount].verts, verts,
-		sizeof(FOutVector) * 4);
-	translucentdepthlist[translucentdepthcount].spr = spr;
-	translucentdepthcount++;
-}
+static portalsavedsprite_t mainportal_savedsprites[MAXVISSPRITES];
+static UINT32 mainportal_savedspritecount;
+static portalsavedsprite_t nestedportal_savedsprites[MAXVISSPRITES];
+static UINT32 nestedportal_savedspritecount;
+static boolean hwr_replaying_portal_translucency = false;
 
 // add the necessary data to the list for delayed z-buffer drawing
 static void HWR_LinkDrawHackAdd(FOutVector *verts, gl_vissprite_t *spr)
 {
+	if (hwr_replaying_portal_translucency)
+		return;
+
 	if (linkdrawcount < MAXVISSPRITES)
 	{
 		memcpy(linkdrawlist[linkdrawcount].verts, verts, sizeof(FOutVector) * 4);
 		linkdrawlist[linkdrawcount].spr = spr;
 		linkdrawcount++;
 	}
-}
-
-static void HWR_PortalLinkDrawAdd(FOutVector *verts, gl_vissprite_t *spr)
-{
-	if (!HWR_PortalSurfaceActive() || !spr->mobj
-	|| !(spr->mobj->flags2 & MF2_LINKDRAW) || !spr->mobj->tracer)
-		return;
-
-	if (portal_linkdrawcount < MAXVISSPRITES)
-	{
-		memcpy(portal_linkdrawlist[portal_linkdrawcount].verts, verts,
-			sizeof(FOutVector) * 4);
-		portal_linkdrawlist[portal_linkdrawcount].spr = spr;
-		portal_linkdrawcount++;
-	}
-}
-
-static void HWR_PortalLinkDrawFinish(void)
-{
-	UINT32 i;
-	FSurfaceInfo surf;
-
-	if (!portal_linkdrawcount)
-		return;
-
-	surf.PolyColor.rgba = 0xFFFFFFFF;
-	surf.TintColor.rgba = 0xFFFFFFFF;
-	surf.FadeColor.rgba = 0xFFFFFFFF;
-	surf.LightInfo.light_level = 0;
-	surf.LightInfo.fade_start = 0;
-	surf.LightInfo.fade_end = 31;
-
-	for (i = 0; i < portal_linkdrawcount; i++)
-	{
-		HWR_GetSpritePatch(portal_linkdrawlist[i].spr->gpatch);
-		HWR_ProcessPolygon(&surf, portal_linkdrawlist[i].verts, 4,
-			PF_Translucent|PF_Occlude|PF_Invisible, 0, false);
-	}
-
-	portal_linkdrawcount = 0;
-	HWD.pfnSetBlend(PF_Translucent|PF_Occlude|PF_Masked);
 }
 
 // process and clear the list of sprites for delayed z-buffer drawing
@@ -3541,39 +3587,6 @@ static void HWR_LinkDrawHackFinish(void)
 	}
 	// reset list
 	linkdrawcount = 0;
-}
-
-static void HWR_TranslucentDepthFinish(void)
-{
-	size_t i;
-	FSurfaceInfo surf;
-	const boolean batched = cv_glbatching.value
-		&& translucentdepthcount >= 16;
-
-	if (!translucentdepthcount)
-		return;
-
-	surf.PolyColor.rgba = 0xFFFFFFFF;
-	surf.TintColor.rgba = 0xFFFFFFFF;
-	surf.FadeColor.rgba = 0xFFFFFFFF;
-	surf.LightInfo.light_level = 0;
-	surf.LightInfo.fade_start = 0;
-	surf.LightInfo.fade_end = 31;
-
-	if (batched)
-		HWR_StartBatching();
-
-	for (i = 0; i < translucentdepthcount; i++)
-	{
-		HWR_GetSpritePatch(translucentdepthlist[i].spr->gpatch);
-		HWR_ProcessPolygon(&surf, translucentdepthlist[i].verts, 4,
-			PF_Translucent|PF_Occlude|PF_Invisible, SHADER_NONE, false);
-	}
-
-	if (batched)
-		HWR_RenderBatches();
-
-	translucentdepthcount = 0;
 }
 
 static void HWR_DrawDropShadow(mobj_t *thing, fixed_t scale)
@@ -3820,35 +3833,240 @@ static boolean HWR_SpriteUsesBlending(const mobj_t *mobj)
 		|| (blendmode > AST_TRANSLUCENT && blendmode < AST_OVERLAY);
 }
 
-static boolean HWR_SpriteIsOverTranslucentFOF(const gl_vissprite_t *spr)
+static INT32 HWR_FOFVerticalRegion(fixed_t z, fixed_t bottom, fixed_t top)
 {
-	const sector_t *sector;
-	const ffloor_t *rover;
+	if (z >= top)
+		return 1;
+	if (z <= bottom)
+		return -1;
+	return 0;
+}
 
-	if (!hwr_translucent_depth_pending || !spr || !spr->mobj
-	|| !spr->mobj->subsector)
+typedef enum
+{
+	HWR_FOFSPRITE_UNRELATED,
+	HWR_FOFSPRITE_SAME_SIDE,
+	HWR_FOFSPRITE_SEPARATED
+} hwr_fofspriterelation_t;
+
+static boolean HWR_IsDelayedTranslucentFOF(const ffloor_t *rover)
+{
+	const ffloortype_e flags = rover->fofflags;
+
+	if (!(flags & FOF_EXISTS)
+	|| !(flags & (FOF_RENDERPLANES|FOF_RENDERSIDES))
+	|| rover->alpha <= 0)
 		return false;
 
-	/* A delayed depth silhouette is only useful where the sprite actually
-	 * occupies a sector containing a translucent 3D floor. Restricting the pass
-	 * here avoids redrawing distant blended scenery merely because an unrelated
-	 * water surface is visible elsewhere in a large map. */
-	sector = spr->mobj->subsector->sector;
-	for (rover = sector->ffloors; rover; rover = rover->next)
-	{
-		const ffloortype_e flags = rover->fofflags;
-		if (!(flags & FOF_EXISTS)
-		|| !(flags & (FOF_RENDERPLANES|FOF_RENDERSIDES))
-		|| rover->alpha <= 0)
-			continue;
-
-		if (rover->alpha < 255
+	return rover->alpha < 255
 		|| (flags & (FOF_TRANSLUCENT|FOF_SWIMMABLE))
-		|| (rover->blend > AST_TRANSLUCENT && rover->blend < AST_OVERLAY))
+		|| (rover->blend > AST_TRANSLUCENT && rover->blend < AST_OVERLAY);
+}
+
+static boolean HWR_SectorHasTranslucentFOFSides(const sector_t *sector)
+{
+	const ffloor_t *rover;
+
+	if (!sector)
+		return false;
+
+	for (rover = sector->ffloors; rover; rover = rover->next)
+		if ((rover->fofflags & FOF_RENDERSIDES)
+		&& HWR_IsDelayedTranslucentFOF(rover))
 			return true;
-	}
 
 	return false;
+}
+
+/* Compare the sprite's projected width against the actual delayed wall
+ * segments. Three rays (center and both billboard edges) catch a FOF side
+ * crossing any substantial part of the sprite without treating unrelated
+ * translucent walls elsewhere in the map as ordering constraints. */
+static hwr_fofspriterelation_t HWR_TranslucentWallSpriteRelation(
+	const gl_vissprite_t *spr)
+{
+	const float camera_x = FIXED_TO_FLOAT(viewx);
+	const float camera_y = FIXED_TO_FLOAT(viewy);
+	const float camera_z = FIXED_TO_FLOAT(viewz);
+	const float sprite_bottom = min(spr->gz, spr->gzt);
+	const float sprite_top = max(spr->gz, spr->gzt);
+	float ray_x[3], ray_y[3];
+	boolean sawwallbehind = false;
+	size_t i;
+	INT32 ray;
+
+	ray_x[0] = FIXED_TO_FLOAT(spr->mobj->x);
+	ray_y[0] = FIXED_TO_FLOAT(spr->mobj->y);
+	ray_x[1] = spr->x1;
+	ray_y[1] = spr->z1;
+	ray_x[2] = spr->x2;
+	ray_y[2] = spr->z2;
+
+	for (i = 0; i < numwalls; i++)
+	{
+		const float wall_x = wallinfo[i].wallVerts[0].x;
+		const float wall_y = wallinfo[i].wallVerts[0].z;
+		const float wall_dx = wallinfo[i].wallVerts[1].x - wall_x;
+		const float wall_dy = wallinfo[i].wallVerts[1].z - wall_y;
+		float wall_bottom = wallinfo[i].wallVerts[0].y;
+		float wall_top = wall_bottom;
+		INT32 vertex;
+
+		for (vertex = 1; vertex < 4; vertex++)
+		{
+			wall_bottom = min(wall_bottom, wallinfo[i].wallVerts[vertex].y);
+			wall_top = max(wall_top, wallinfo[i].wallVerts[vertex].y);
+		}
+
+		for (ray = 0; ray < 3; ray++)
+		{
+			const float ray_dx = ray_x[ray] - camera_x;
+			const float ray_dy = ray_y[ray] - camera_y;
+			const float offset_x = wall_x - camera_x;
+			const float offset_y = wall_y - camera_y;
+			const float denominator = ray_dx * wall_dy - ray_dy * wall_dx;
+			float distance, wall_fraction;
+			float projected_bottom, projected_top;
+
+			if (denominator > -0.0001f && denominator < 0.0001f)
+				continue;
+
+			distance = (offset_x * wall_dy - offset_y * wall_dx)
+				/ denominator;
+			wall_fraction = (offset_x * ray_dy - offset_y * ray_dx)
+				/ denominator;
+			if (distance <= 0.0001f
+			|| wall_fraction < -0.0001f || wall_fraction > 1.0001f)
+				continue;
+
+			projected_bottom = camera_z
+				+ distance * (sprite_bottom - camera_z);
+			projected_top = camera_z
+				+ distance * (sprite_top - camera_z);
+			if (projected_bottom > projected_top)
+			{
+				const float swap = projected_bottom;
+				projected_bottom = projected_top;
+				projected_top = swap;
+			}
+
+			if (wall_top < projected_bottom || wall_bottom > projected_top)
+				continue;
+
+			if (distance <= 1.0001f)
+				return HWR_FOFSPRITE_SEPARATED;
+
+			sawwallbehind = true;
+		}
+	}
+
+	return sawwallbehind
+		? HWR_FOFSPRITE_SAME_SIDE : HWR_FOFSPRITE_UNRELATED;
+}
+
+/* Classify a blended sprite against the delayed translucent geometry.
+ * SAME_SIDE means those colors belong underneath the sprite, while SEPARATED
+ * means at least one FOF surface belongs over it. */
+static hwr_fofspriterelation_t HWR_CalculateTranslucentFOFSpriteRelation(
+	const gl_vissprite_t *spr)
+{
+	const mobj_t *mobj;
+	const sector_t *sector;
+	const ffloor_t *rover;
+	hwr_fofspriterelation_t wallrelation;
+	boolean sawtranslucentfof = false;
+	fixed_t spritez;
+
+	/* Main-view portal collection finishes before sprites are sorted, but its
+	 * transparent FOFs and midtextures still have exactly the same ordering
+	 * relationship to those sprites.  Do not disable the relation test merely
+	 * because a portal background will be composited between the two passes. */
+	if (!hwr_translucent_geometry_pending
+	|| !spr || spr->bbox || spr->precip || !spr->mobj
+	|| !spr->sortblended || !viewsector)
+		return HWR_FOFSPRITE_UNRELATED;
+
+	mobj = spr->mobj;
+	if (!mobj->subsector)
+		return HWR_FOFSPRITE_UNRELATED;
+
+	wallrelation = HWR_TranslucentWallSpriteRelation(spr);
+	if (wallrelation == HWR_FOFSPRITE_SEPARATED)
+		return wallrelation;
+
+	sector = mobj->subsector->sector;
+	if (sector != viewsector)
+	{
+		if (wallrelation != HWR_FOFSPRITE_UNRELATED)
+			return wallrelation;
+
+		/* Crossing into or out of a sector with translucent FOF sides puts
+		 * that boundary between the camera and sprite. Draw the sprite first
+		 * and, critically, leave its depth unwritten so the nearer side can
+		 * retain its texture and blend over the sprite. */
+		if (HWR_SectorHasTranslucentFOFSides(viewsector)
+		|| HWR_SectorHasTranslucentFOFSides(sector))
+			return HWR_FOFSPRITE_SEPARATED;
+
+		return HWR_FOFSPRITE_UNRELATED;
+	}
+
+	spritez = mobj->z + mobj->height / 2;
+	for (rover = sector->ffloors; rover; rover = rover->next)
+	{
+		fixed_t viewbottom, viewtop, spritebottom, spritetop;
+
+		if (!HWR_IsDelayedTranslucentFOF(rover))
+			continue;
+
+		sawtranslucentfof = true;
+		viewbottom = P_GetFFloorBottomZAt(rover, viewx, viewy);
+		viewtop = P_GetFFloorTopZAt(rover, viewx, viewy);
+		spritebottom = P_GetFFloorBottomZAt(rover, mobj->x, mobj->y);
+		spritetop = P_GetFFloorTopZAt(rover, mobj->x, mobj->y);
+		if (HWR_FOFVerticalRegion(viewz, viewbottom, viewtop)
+		!= HWR_FOFVerticalRegion(spritez, spritebottom, spritetop))
+			return HWR_FOFSPRITE_SEPARATED;
+	}
+
+	return (sawtranslucentfof
+		|| wallrelation == HWR_FOFSPRITE_SAME_SIDE)
+		? HWR_FOFSPRITE_SAME_SIDE : HWR_FOFSPRITE_UNRELATED;
+}
+
+static hwr_fofspriterelation_t HWR_TranslucentFOFSpriteRelation(
+	gl_vissprite_t *spr)
+{
+	if (!spr)
+		return HWR_FOFSPRITE_UNRELATED;
+
+	if (!spr->fofrelationcached)
+	{
+		const hwr_fofspriterelation_t relation =
+			HWR_CalculateTranslucentFOFSpriteRelation(spr);
+		spr->fofrelation = (UINT8)relation;
+		spr->fofrelationcached = true;
+	}
+
+	return (hwr_fofspriterelation_t)spr->fofrelation;
+}
+
+/* A translucent sprite and a translucent FOF cannot be composed correctly by
+ * drawing a depth silhouette between them: partially transparent pixels still
+ * need the FOF's color underneath. For the safe, common case where camera and
+ * sprite occupy the same sector and the same vertical side of the FOF, delay
+ * the sprite's color until after that sector's translucent nodes. If a FOF wall
+ * may separate different sectors, retain the conservative legacy ordering. */
+static boolean HWR_ShouldDeferTranslucentSprite(gl_vissprite_t *spr)
+{
+	if (!spr || !spr->mobj)
+		return false;
+
+	if ((spr->mobj->flags2 & MF2_SHADOW)
+	|| (spr->renderflags & RF_SHADOWEFFECTS))
+		return false;
+
+	return HWR_TranslucentFOFSpriteRelation(spr) == HWR_FOFSPRITE_SAME_SIDE;
 }
 
 static void HWR_SplitSprite(gl_vissprite_t *spr)
@@ -3864,7 +4082,6 @@ static void HWR_SplitSprite(gl_vissprite_t *spr)
 	FBITFIELD occlusion;
 	INT32 shader = SHADER_NONE;
 	boolean use_linkdraw_hack = false;
-	boolean use_translucent_depth_hack = false;
 	UINT8 alpha;
 
 	INT32 i;
@@ -3953,6 +4170,8 @@ static void HWR_SplitSprite(gl_vissprite_t *spr)
 	memcpy(wallVerts, baseWallVerts, sizeof(baseWallVerts));
 
 	const boolean linkdraw = (spr->mobj->flags2 & MF2_LINKDRAW) && spr->mobj->tracer;
+	const boolean fof_orders_linkdraw =
+		HWR_TranslucentFOFSpriteRelation(spr) != HWR_FOFSPRITE_UNRELATED;
 	fixed_t newalpha = HWR_GetSpriteAlpha(spr->mobj);
 
 	// if sprite has linkdraw, then dont write to z-buffer (by not using PF_Occlude)
@@ -3991,12 +4210,6 @@ static void HWR_SplitSprite(gl_vissprite_t *spr)
 
 	Surf.PolyColor.s.alpha = FixedMul(newalpha, Surf.PolyColor.s.alpha);
 	use_linkdraw_hack = linkdraw && Surf.PolyColor.s.alpha != 0;
-	use_translucent_depth_hack = HWR_SpriteIsOverTranslucentFOF(spr)
-		&& !linkdraw
-		&& !(spr->mobj->flags2 & MF2_SHADOW)
-		&& !(spr->renderflags & RF_SHADOWEFFECTS)
-		&& HWR_SpriteUsesBlending(spr->mobj)
-		&& Surf.PolyColor.s.alpha != 0;
 
 	if (HWR_UseShader())
 	{
@@ -4116,12 +4329,8 @@ static void HWR_SplitSprite(gl_vissprite_t *spr)
 		Surf.PolyColor.s.alpha = alpha;
 
 		HWR_ProcessPolygon(&Surf, wallVerts, 4, blend|PF_Modulated, shader, false);
-		HWR_PortalLinkDrawAdd(wallVerts, spr);
-
-		if (use_linkdraw_hack)
+		if (use_linkdraw_hack && !fof_orders_linkdraw)
 			HWR_LinkDrawHackAdd(wallVerts, spr);
-		if (use_translucent_depth_hack)
-			HWR_TranslucentDepthAdd(wallVerts, spr);
 
 		top = bot;
 		endtop = endbot;
@@ -4148,12 +4357,8 @@ static void HWR_SplitSprite(gl_vissprite_t *spr)
 	Surf.PolyColor.s.alpha = alpha;
 
 	HWR_ProcessPolygon(&Surf, wallVerts, 4, blend|PF_Modulated, shader, false);
-	HWR_PortalLinkDrawAdd(wallVerts, spr);
-
-	if (use_linkdraw_hack)
+	if (use_linkdraw_hack && !fof_orders_linkdraw)
 		HWR_LinkDrawHackAdd(wallVerts, spr);
-	if (use_translucent_depth_hack)
-		HWR_TranslucentDepthAdd(wallVerts, spr);
 }
 
 static void HWR_DrawBoundingBox(gl_vissprite_t *vis)
@@ -4468,8 +4673,9 @@ static void HWR_DrawSprite(gl_vissprite_t *spr)
 		FBITFIELD blend = 0;
 		FBITFIELD occlusion;
 		boolean use_linkdraw_hack = false;
-		boolean use_translucent_depth_hack = false;
 		const boolean linkdraw = (spr->mobj->flags2 & MF2_LINKDRAW) && spr->mobj->tracer;
+		const boolean fof_orders_linkdraw =
+			HWR_TranslucentFOFSpriteRelation(spr) != HWR_FOFSPRITE_UNRELATED;
 		const boolean layered_sign_base = spr->mobj->type == MT_SIGN
 			&& HWR_IsLayeredSignPart(spr->mobj);
 		fixed_t newalpha = HWR_GetSpriteAlpha(spr->mobj);
@@ -4529,12 +4735,6 @@ static void HWR_DrawSprite(gl_vissprite_t *spr)
 		}
 
 		use_linkdraw_hack = linkdraw && Surf.PolyColor.s.alpha != 0;
-		use_translucent_depth_hack = HWR_SpriteIsOverTranslucentFOF(spr)
-			&& !linkdraw
-			&& !(spr->mobj->flags2 & MF2_SHADOW)
-			&& !(spr->renderflags & RF_SHADOWEFFECTS)
-			&& HWR_SpriteUsesBlending(spr->mobj)
-			&& Surf.PolyColor.s.alpha != 0;
 
 		if (HWR_UseShader())
 		{
@@ -4543,12 +4743,8 @@ static void HWR_DrawSprite(gl_vissprite_t *spr)
 		}
 
 		HWR_ProcessPolygon(&Surf, wallVerts, 4, blend|PF_Modulated, shader, false);
-		HWR_PortalLinkDrawAdd(wallVerts, spr);
-
-		if (use_linkdraw_hack)
+		if (use_linkdraw_hack && !fof_orders_linkdraw)
 			HWR_LinkDrawHackAdd(wallVerts, spr);
-		if (use_translucent_depth_hack)
-			HWR_TranslucentDepthAdd(wallVerts, spr);
 	}
 }
 
@@ -4762,6 +4958,8 @@ static void HWR_SortVisSprites(void)
 		gl_vsprorder[i]->sortblended = !gl_vsprorder[i]->precip
 			&& HWR_SpriteUsesBlending(gl_vsprorder[i]->mobj);
 		gl_vsprorder[i]->sorttracerblended = false;
+		gl_vsprorder[i]->fofrelationcached = false;
+		gl_vsprorder[i]->fofrelation = HWR_FOFSPRITE_UNRELATED;
 		if (!gl_vsprorder[i]->precip && gl_vsprorder[i]->mobj
 		&& (gl_vsprorder[i]->mobj->flags2 & MF2_LINKDRAW)
 		&& gl_vsprorder[i]->mobj->tracer)
@@ -4813,21 +5011,6 @@ static void HWR_SortVisSprites(void)
 
 // A drawnode is something that points to a 3D floor, 3D side, or masked
 // middle texture. This is used for sorting with sprites.
-typedef struct
-{
-	FOutVector    wallVerts[4];
-	FSurfaceInfo  Surf;
-	INT32         texnum;
-	FBITFIELD     blend;
-	INT32         drawcount;
-	boolean fogwall;
-	INT32 lightlevel;
-	extracolormap_t *wallcolormap; // Doing the lighting in HWR_RenderWall now for correct fog after sorting
-} wallinfo_t;
-
-static wallinfo_t *wallinfo = NULL;
-static size_t numwalls = 0; // a list of transparent walls to be drawn
-
 void HWR_RenderWall(FOutVector *wallVerts, FSurfaceInfo *pSurf, FBITFIELD blend, boolean fogwall, INT32 lightlevel, extracolormap_t *wallcolormap);
 
 #define MAX_TRANSPARENTWALL 256
@@ -4885,6 +5068,21 @@ static size_t mainportal_savedwallcapacity;
 static size_t mainportal_savedplanecapacity;
 static size_t mainportal_savedpolyplanecapacity;
 static INT32 mainportal_saveddrawcount;
+
+/* The first recursive portal layer needs the same treatment as the main
+ * camera: its fog, water, translucent FOF sides and masked walls belong over
+ * the child portal.  The recursion limit is two, so one reusable parent
+ * snapshot is sufficient. */
+static wallinfo_t *nestedportal_savedwalls;
+static planeinfo_t *nestedportal_savedplanes;
+static polyplaneinfo_t *nestedportal_savedpolyplanes;
+static size_t nestedportal_savednumwalls;
+static size_t nestedportal_savednumplanes;
+static size_t nestedportal_savednumpolyplanes;
+static size_t nestedportal_savedwallcapacity;
+static size_t nestedportal_savedplanecapacity;
+static size_t nestedportal_savedpolyplanecapacity;
+static INT32 nestedportal_saveddrawcount;
 
 static void HWR_SaveMainPortalDrawNodes(void)
 {
@@ -4950,6 +5148,73 @@ static void HWR_RestoreMainPortalDrawNodes(void)
 	mainportal_savednumwalls = 0;
 	mainportal_savednumplanes = 0;
 	mainportal_savednumpolyplanes = 0;
+}
+
+static void HWR_CaptureNestedPortalDrawNodes(void)
+{
+	if (!nestedportal_savedwalls)
+		nestedportal_savedwallcapacity = 0;
+	if (!nestedportal_savedplanes)
+		nestedportal_savedplanecapacity = 0;
+	if (!nestedportal_savedpolyplanes)
+		nestedportal_savedpolyplanecapacity = 0;
+
+	if (nestedportal_savedwallcapacity < numwalls)
+	{
+		nestedportal_savedwallcapacity = numwalls;
+		Z_Realloc(nestedportal_savedwalls,
+			nestedportal_savedwallcapacity * sizeof (*nestedportal_savedwalls),
+			PU_LEVEL, &nestedportal_savedwalls);
+	}
+	if (nestedportal_savedplanecapacity < numplanes)
+	{
+		nestedportal_savedplanecapacity = numplanes;
+		Z_Realloc(nestedportal_savedplanes,
+			nestedportal_savedplanecapacity * sizeof (*nestedportal_savedplanes),
+			PU_LEVEL, &nestedportal_savedplanes);
+	}
+	if (nestedportal_savedpolyplanecapacity < numpolyplanes)
+	{
+		nestedportal_savedpolyplanecapacity = numpolyplanes;
+		Z_Realloc(nestedportal_savedpolyplanes,
+			nestedportal_savedpolyplanecapacity
+				* sizeof (*nestedportal_savedpolyplanes),
+			PU_LEVEL, &nestedportal_savedpolyplanes);
+	}
+
+	nestedportal_savednumwalls = numwalls;
+	nestedportal_savednumplanes = numplanes;
+	nestedportal_savednumpolyplanes = numpolyplanes;
+	nestedportal_saveddrawcount = drawcount;
+	if (numwalls)
+		M_Memcpy(nestedportal_savedwalls, wallinfo,
+			numwalls * sizeof (*wallinfo));
+	if (numplanes)
+		M_Memcpy(nestedportal_savedplanes, planeinfo,
+			numplanes * sizeof (*planeinfo));
+	if (numpolyplanes)
+		M_Memcpy(nestedportal_savedpolyplanes, polyplaneinfo,
+			numpolyplanes * sizeof (*polyplaneinfo));
+}
+
+static void HWR_RestoreNestedPortalDrawNodes(void)
+{
+	if (nestedportal_savednumwalls)
+		M_Memcpy(wallinfo, nestedportal_savedwalls,
+			nestedportal_savednumwalls * sizeof (*wallinfo));
+	if (nestedportal_savednumplanes)
+		M_Memcpy(planeinfo, nestedportal_savedplanes,
+			nestedportal_savednumplanes * sizeof (*planeinfo));
+	if (nestedportal_savednumpolyplanes)
+		M_Memcpy(polyplaneinfo, nestedportal_savedpolyplanes,
+			nestedportal_savednumpolyplanes * sizeof (*polyplaneinfo));
+	numwalls = nestedportal_savednumwalls;
+	numplanes = nestedportal_savednumplanes;
+	numpolyplanes = nestedportal_savednumpolyplanes;
+	drawcount = nestedportal_saveddrawcount;
+	nestedportal_savednumwalls = 0;
+	nestedportal_savednumplanes = 0;
+	nestedportal_savednumpolyplanes = 0;
 }
 
 //Hurdler: 3D water sutffs
@@ -5188,6 +5453,8 @@ static void HWR_CreateDrawNodes(void)
 	numplanes = 0;
 	numpolyplanes = 0;
 
+	HWR_DrawDeferredTranslucentSprites();
+
 }
 
 // --------------------------------------------------------------------------
@@ -5235,6 +5502,49 @@ static boolean HWR_SpriteCanBatch(const gl_vissprite_t *spr)
 	return true;
 }
 
+static void HWR_PrepareSpriteShadow(gl_vissprite_t *spr, boolean *skipshadow)
+{
+	if (spr->mobj && spr->mobj->shadowscale && cv_shadow.value && !*skipshadow)
+		HWR_DrawDropShadow(spr->mobj, spr->mobj->shadowscale);
+
+	if ((spr->mobj->flags2 & MF2_LINKDRAW) && spr->mobj->tracer)
+	{
+		/* If this linkdraw sprite is behind a sprite that has a shadow, draw
+		 * that shadow before the linked sprite. Multiple links to one tracer
+		 * still share the single skip flag used by the established path. */
+		if (cv_shadow.value && !*skipshadow && spr->dispoffset < 0
+		&& spr->mobj->tracer->shadowscale)
+		{
+			HWR_DrawDropShadow(spr->mobj->tracer,
+				spr->mobj->tracer->shadowscale);
+			*skipshadow = true;
+		}
+	}
+	else
+		*skipshadow = false;
+}
+
+static void HWR_DrawSpriteBody(gl_vissprite_t *spr)
+{
+	if (spr->mobj && spr->mobj->skin && spr->mobj->sprite == SPR_PLAY)
+	{
+		if (!cv_glmodels.value
+		|| !md2_playermodels[((skin_t*)spr->mobj->skin)->skinnum].found
+		|| md2_playermodels[((skin_t*)spr->mobj->skin)->skinnum].scale < 0.0f)
+			HWR_DrawSprite(spr);
+		else if (!HWR_DrawModel(spr))
+			HWR_DrawSprite(spr);
+	}
+	else
+	{
+		if (!cv_glmodels.value || !md2_models[spr->mobj->sprite].found
+		|| md2_models[spr->mobj->sprite].scale < 0.0f)
+			HWR_DrawSprite(spr);
+		else if (!HWR_DrawModel(spr))
+			HWR_DrawSprite(spr);
+	}
+}
+
 // added the stransform so they can be switched as drawing happenes so MD2s and sprites are sorted correctly with each other
 static void HWR_DrawSprites(void)
 {
@@ -5242,8 +5552,8 @@ static void HWR_DrawSprites(void)
 	UINT32 batchable = 0;
 	boolean batched = false;
 	boolean skipshadow = false; // skip shadow if it was drawn already for a linkdraw sprite encountered earlier in the list
-	translucentdepthcount = 0;
-	hwr_translucent_depth_pending = !hwr_depth_only_sprites
+	deferredtranslucentspritecount = 0;
+	hwr_translucent_geometry_pending = !hwr_depth_only_sprites
 		&& (numplanes || numpolyplanes || numwalls);
 	HWD.pfnSetSpecialState(HWD_SET_MODEL_LIGHTING, cv_glmodellighting.value);
 
@@ -5293,68 +5603,130 @@ static void HWR_DrawSprites(void)
 			HWR_DrawPrecipitationSprite(spr);
 		else
 		{
-			if (spr->mobj && spr->mobj->shadowscale && cv_shadow.value && !skipshadow)
+			HWR_PrepareSpriteShadow(spr, &skipshadow);
+			if (HWR_ShouldDeferTranslucentSprite(spr)
+			&& deferredtranslucentspritecount < MAXVISSPRITES)
 			{
-				HWR_DrawDropShadow(spr->mobj, spr->mobj->shadowscale);
+				deferredtranslucentsprites[deferredtranslucentspritecount++] = spr;
+				continue;
 			}
 
-			if ((spr->mobj->flags2 & MF2_LINKDRAW) && spr->mobj->tracer)
-			{
-				// If this linkdraw sprite is behind a sprite that has a shadow,
-				// then that shadow has to be drawn first, otherwise the shadow ends up on top of
-				// the linkdraw sprite because the linkdraw sprite does not modify the z-buffer.
-				// The !skipshadow check is there in case there are multiple linkdraw sprites connected
-				// to the same tracer, so the tracer's shadow only gets drawn once.
-				if (cv_shadow.value && !skipshadow && spr->dispoffset < 0 && spr->mobj->tracer->shadowscale)
-				{
-					HWR_DrawDropShadow(spr->mobj->tracer, spr->mobj->tracer->shadowscale);
-					skipshadow = true;
-					// The next sprite in this loop should be either another linkdraw sprite or the tracer.
-					// When the tracer is inevitably encountered, skipshadow will cause it's shadow
-					// to get skipped and skipshadow will get set to false by the 'else' clause below.
-				}
-			}
-			else
-			{
-				skipshadow = false;
-			}
-
-			if (spr->mobj && spr->mobj->skin && spr->mobj->sprite == SPR_PLAY)
-			{
-				if (!cv_glmodels.value || !md2_playermodels[((skin_t*)spr->mobj->skin)->skinnum].found || md2_playermodels[((skin_t*)spr->mobj->skin)->skinnum].scale < 0.0f)
-					HWR_DrawSprite(spr);
-				else
-				{
-					if (!HWR_DrawModel(spr))
-						HWR_DrawSprite(spr);
-				}
-			}
-			else
-			{
-				if (!cv_glmodels.value || !md2_models[spr->mobj->sprite].found || md2_models[spr->mobj->sprite].scale < 0.0f)
-					HWR_DrawSprite(spr);
-				else
-				{
-					if (!HWR_DrawModel(spr))
-						HWR_DrawSprite(spr);
-				}
-			}
+			HWR_DrawSpriteBody(spr);
 		}
 	}
 	HWD.pfnSetSpecialState(HWD_SET_MODEL_LIGHTING, 0);
 
-	/* At the end of sprite drawing, complete the texture-masked depth silhouettes
-	 * that delayed translucent surfaces need. Color blending has already finished,
-	 * so this cannot disturb the order between overlapping sprite effects. */
+	/* Complete ordinary linked-sprite depth work. Linkdraw that participates in
+	 * local FOF ordering is deliberately absent: a nearer translucent FOF must
+	 * still blend over it instead of being rejected by an invisible silhouette. */
 	HWR_LinkDrawHackFinish();
-	HWR_TranslucentDepthFinish();
-	hwr_translucent_depth_pending = false;
+	hwr_translucent_geometry_pending = false;
 	// Work around a r_opengl.c bug with PF_Invisible by making this SetBlend call
 	// where PF_Invisible is off and PF_Masked is on.
 	// (Other states probably don't matter. Here I left them same as in LinkDrawHackFinish)
 	// Without this workaround the rest of the draw calls in this frame (including UI, screen texture)
 	// can get drawn using an incorrect glBlendFunc, resulting in a occasional black screen.
 	HWD.pfnSetBlend(PF_Translucent|PF_Occlude|PF_Masked);
+}
+
+static void HWR_DrawDeferredTranslucentSprites(void)
+{
+	UINT32 i;
+
+	if (!deferredtranslucentspritecount)
+		return;
+
+	/* The relevant translucent FOF color is now in the framebuffer, so every
+	 * deferred sprite blend has the under-color it needs. The list preserves the
+	 * existing far-to-near sprite order. Shadows were emitted in the first pass
+	 * and are intentionally not repeated here. */
+	HWD.pfnSetSpecialState(HWD_SET_MODEL_LIGHTING, cv_glmodellighting.value);
+	for (i = 0; i < deferredtranslucentspritecount; i++)
+		HWR_DrawSpriteBody(deferredtranslucentsprites[i]);
+	/* Link-drawn effects queue a matching depth silhouette. Flush it after all
+	 * deferred colors so it cannot leak into the next frame or reorder peers. */
+	HWR_LinkDrawHackFinish();
+	HWD.pfnSetSpecialState(HWD_SET_MODEL_LIGHTING, 0);
+	deferredtranslucentspritecount = 0;
+	HWD.pfnSetBlend(PF_Translucent|PF_Occlude|PF_Masked);
+}
+
+static boolean HWR_SpriteWasDeferred(gl_vissprite_t *spr)
+{
+	UINT32 i;
+
+	for (i = 0; i < deferredtranslucentspritecount; i++)
+		if (deferredtranslucentsprites[i] == spr)
+			return true;
+
+	return false;
+}
+
+static void HWR_CapturePortalSprites(portalsavedsprite_t *saved,
+	UINT32 *savedcount, line_t *aperture)
+{
+	UINT32 i;
+
+	*savedcount = 0;
+	for (i = 0; i < gl_visspritecount && *savedcount < MAXVISSPRITES; i++)
+	{
+		gl_vissprite_t *spr = gl_vsprorder[i];
+		boolean needscomposite, aftergeometry, insideaperture;
+
+		if (!spr || spr->bbox || spr->precip || !spr->mobj)
+			continue;
+
+		/* These cases deliberately do not write an ordinary opaque depth
+		 * silhouette, so a later portal background can replace their color.
+		 * Replay only those records; opaque sprites already clipped the stencil. */
+		needscomposite = spr->sortblended || spr->sorttracerblended
+			|| (spr->mobj->flags2 & MF2_LINKDRAW)
+			|| (spr->renderflags & RF_SHADOWEFFECTS)
+			|| HWR_IsLayeredSignPart(spr->mobj);
+		if (!needscomposite)
+			continue;
+
+		/* A sprite behind the portal line must not be replayed over its aperture.
+		 * Deferred sprites still need a saved copy for the pixels outside every
+		 * aperture: their color was never emitted by the first sprite pass. */
+		aftergeometry = HWR_SpriteWasDeferred(spr);
+		insideaperture = !((aperture && HWR_PointHiddenByPortalLine(spr->mobj->x,
+			spr->mobj->y, aperture))
+		|| (!aperture && HWR_PointHiddenByMainPortal(spr->mobj->x,
+			spr->mobj->y)));
+		if (!insideaperture && !aftergeometry)
+			continue;
+
+		saved[*savedcount].spr = *spr;
+		saved[*savedcount].aftergeometry = aftergeometry;
+		saved[*savedcount].insideaperture = insideaperture;
+		(*savedcount)++;
+	}
+}
+
+static void HWR_DrawSavedPortalSprites(portalsavedsprite_t *saved,
+	UINT32 savedcount, boolean aftergeometry, boolean apertureonly)
+{
+	UINT32 i;
+	boolean drew = false;
+
+	if (!savedcount)
+		return;
+
+	HWD.pfnSetSpecialState(HWD_SET_MODEL_LIGHTING, cv_glmodellighting.value);
+	hwr_replaying_portal_translucency = true;
+	for (i = 0; i < savedcount; i++)
+	{
+		if (saved[i].aftergeometry != aftergeometry
+		|| (apertureonly && !saved[i].insideaperture))
+			continue;
+		HWR_DrawSpriteBody(&saved[i].spr);
+		drew = true;
+	}
+	hwr_replaying_portal_translucency = false;
+	HWD.pfnSetSpecialState(HWD_SET_MODEL_LIGHTING, 0);
+	if (drew)
+		HWD.pfnSetBlend(PF_Translucent|PF_Occlude|PF_Masked);
 }
 
 // --------------------------------------------------------------------------
@@ -5477,7 +5849,10 @@ static void HWR_ProjectSprite(mobj_t *thing)
 	if (!thing)
 		return;
 
-	if (HWR_PointHiddenByLinePortal(thing->x, thing->y))
+	/* Main-view opaque sprites must reach the depth buffer so a portal edge can
+	 * clip their silhouette instead of toggling the whole object from its origin.
+	 * A destination sprite behind the paired exit is still wholly invalid. */
+	if (HWR_PointHiddenByPortalDestination(thing->x, thing->y))
 		return;
 
 	INT32 blendmode;
@@ -6143,7 +6518,12 @@ static void HWR_SkyDomeVertex(gl_sky_t *sky, gl_skyvertex_t *vbo, int r, int c, 
 		vbo->a = (r == 0 ? 0 : 255);
 
 		// And the texture coordinates.
-		vbo->u = (-timesRepeat * c / (float)sky->columns);
+		/* Software negates the sky column after truncating its angle. GL samples
+		 * the negative continuous coordinate instead, which selects the previous
+		 * texel. Use the last fine-angle step within that column to retain
+		 * Software's phase without changing dome geometry or pitch. */
+		vbo->u = (-timesRepeat * c / (float)sky->columns)
+			+ (1.0f-1024.0f/FINEANGLES)/(float)sky->width;
 		/* Anchor the horizon to the texture midpoint and map vertical angle using
 		 * Software's tangent-scaled sky columns. This preserves the dome's fixed
 		 * world orientation without stretching a tall sky into concentric rings. */
@@ -6431,9 +6811,9 @@ static void HWR_SetupView(player_t *player, INT32 viewnumber, float fpov, boolea
 
 	atransform.fovxangle = fpov; // Tails
 	atransform.fovyangle = fpov; // Tails
-	if (player->viewrollangle != 0)
+	if (R_GetViewRollAngle(player) != 0)
 	{
-		fixed_t rol = AngleFixed(player->viewrollangle);
+		fixed_t rol = AngleFixed(R_GetViewRollAngle(player));
 		atransform.rollangle = FixedToFloat(rol);
 		atransform.roll = true;
 		atransform.rollx = 1.0f;
@@ -6449,6 +6829,51 @@ typedef struct
 	fixed_t x, y, z;
 	angle_t angle;
 } hwr_portalview_t;
+
+/* Portal linedefs and their tagged partners are static for the lifetime of a
+ * level. Cache the geometry terms reused by discovery, distance sorting and
+ * aperture construction; dynamic camera and sector-height values are still
+ * evaluated every frame. */
+typedef struct
+{
+	line_t *destination;
+	fixed_t startx, starty, destx, desty;
+	angle_t angle;
+	double ax, ay, dx, dy, length2;
+	double padfraction;
+	boolean geometry_valid;
+} hwr_lineportalgeometry_t;
+
+static hwr_lineportalgeometry_t *hwr_line_portal_geometry = NULL;
+
+static boolean HWR_LinePortalGeometryIsStatic(line_t *line)
+{
+	INT32 p;
+
+	/* Polyobject vertices and line deltas can move or rotate after the level
+	 * cache is built. Keep those uncommon portals on the live calculation path. */
+	for (p = 0; p < numPolyObjects; p++)
+	{
+		size_t i;
+		for (i = 0; i < PolyObjects[p].numLines; i++)
+			if (PolyObjects[p].lines[i] == line)
+				return false;
+	}
+	return true;
+}
+
+static const hwr_lineportalgeometry_t *HWR_GetLinePortalGeometry(line_t *line)
+{
+	ptrdiff_t linenum;
+
+	if (!hwr_line_portal_cache_ready || !hwr_line_portal_geometry || !line)
+		return NULL;
+	linenum = line - lines;
+	if (linenum < 0 || (size_t)linenum >= (size_t)numlines
+	|| !hwr_line_portal_geometry[linenum].geometry_valid)
+		return NULL;
+	return &hwr_line_portal_geometry[linenum];
+}
 
 typedef struct
 {
@@ -6507,16 +6932,29 @@ static boolean HWR_BuildLinePortalView(line_t *start, line_t *dest,
 {
 	fixed_t startx, starty, destx, desty, disttopoint;
 	angle_t angle, angtopoint;
+	const hwr_lineportalgeometry_t *geometry;
 
 	if (!start || !dest || !result || !start->frontsector || !dest->frontsector)
 		return false;
 
-	startx = (fixed_t)(((INT64)start->v1->x + start->v2->x) / 2);
-	starty = (fixed_t)(((INT64)start->v1->y + start->v2->y) / 2);
-	destx = (fixed_t)(((INT64)dest->v1->x + dest->v2->x) / 2);
-	desty = (fixed_t)(((INT64)dest->v1->y + dest->v2->y) / 2);
-	angle = R_PointToAngle2(0, 0, dest->dx, dest->dy)
-		- R_PointToAngle2(start->dx, start->dy, 0, 0);
+	geometry = HWR_GetLinePortalGeometry(start);
+	if (geometry && geometry->destination == dest)
+	{
+		startx = geometry->startx;
+		starty = geometry->starty;
+		destx = geometry->destx;
+		desty = geometry->desty;
+		angle = geometry->angle;
+	}
+	else
+	{
+		startx = (fixed_t)(((INT64)start->v1->x + start->v2->x) / 2);
+		starty = (fixed_t)(((INT64)start->v1->y + start->v2->y) / 2);
+		destx = (fixed_t)(((INT64)dest->v1->x + dest->v2->x) / 2);
+		desty = (fixed_t)(((INT64)dest->v1->y + dest->v2->y) / 2);
+		angle = R_PointToAngle2(0, 0, dest->dx, dest->dy)
+			- R_PointToAngle2(start->dx, start->dy, 0, 0);
+	}
 	disttopoint = R_PointToDist2(startx, starty, viewx, viewy);
 	angtopoint = R_PointToAngle2(startx, starty, viewx, viewy) + angle;
 
@@ -6533,10 +6971,18 @@ static void HWR_GetLinePortalApertureRange(line_t *line, double low,
 	fixed_t x1, y1, x2, y2;
 	fixed_t floor1, floor2, ceiling1, ceiling2;
 	const fixed_t seam_pad = FRACUNIT / 64;
-	const double linelength = hypot(HWR_FixedDelta(line->dx, 0),
-		HWR_FixedDelta(line->dy, 0));
-	const double padfraction = linelength > 0.0
-		? ((1.0 / 64.0) / linelength) : 0.0;
+	const hwr_lineportalgeometry_t *geometry = HWR_GetLinePortalGeometry(line);
+	double padfraction;
+
+	if (geometry)
+		padfraction = geometry->padfraction;
+	else
+	{
+		const double linelength = hypot(HWR_FixedDelta(line->dx, 0),
+			HWR_FixedDelta(line->dy, 0));
+		padfraction = linelength > 0.0
+			? ((1.0 / 64.0) / linelength) : 0.0;
+	}
 
 	/* Cover sub-pixel rasterization gaps at a complete portal edge.  Do not
 	 * expand an endpoint that was clipped by the eye plane or an occluder. */
@@ -6919,14 +7365,32 @@ static boolean HWR_LinePortalHasSightFromExit(line_t *line, line_t *exit,
 
 static double HWR_DistanceToPortalLine(line_t *line)
 {
-	double ax = FixedToFloat(line->v1->x);
-	double ay = FixedToFloat(line->v1->y);
-	double bx = FixedToFloat(line->v2->x);
-	double by = FixedToFloat(line->v2->y);
+	const hwr_lineportalgeometry_t *geometry = HWR_GetLinePortalGeometry(line);
+	double ax, ay, dx, dy, length2;
 	double px = FixedToFloat(viewx), py = FixedToFloat(viewy);
-	double dx = bx - ax, dy = by - ay, length2 = dx * dx + dy * dy;
-	double fraction = length2 > 0.0 ? ((px - ax) * dx + (py - ay) * dy) / length2 : 0.0;
+	double fraction;
 	double nearx, neary;
+
+	if (geometry)
+	{
+		ax = geometry->ax;
+		ay = geometry->ay;
+		dx = geometry->dx;
+		dy = geometry->dy;
+		length2 = geometry->length2;
+	}
+	else
+	{
+		const double bx = FixedToFloat(line->v2->x);
+		const double by = FixedToFloat(line->v2->y);
+		ax = FixedToFloat(line->v1->x);
+		ay = FixedToFloat(line->v1->y);
+		dx = bx - ax;
+		dy = by - ay;
+		length2 = dx * dx + dy * dy;
+	}
+	fraction = length2 > 0.0
+		? ((px - ax) * dx + (py - ay) * dy) / length2 : 0.0;
 
 	fraction = max(0.0, min(1.0, fraction));
 	nearx = ax + fraction * dx;
@@ -7251,6 +7715,211 @@ static boolean HWR_RenderPortalSkybox(INT32 viewnumber, player_t *player,
 	return true;
 }
 
+typedef struct
+{
+	extracolormap_t *colormap;
+	FUINT lightlevel;
+	FTransform transform;
+	FOutVector aperture[4];
+} hwr_portalfog_t;
+
+static boolean HWR_GetPortalFog(line_t *line, hwr_portalfog_t *fog)
+{
+	sector_t *sector;
+	ffloor_t *rover;
+	double aperture_low = 0.0, aperture_high = 1.0;
+
+	if (!line || !fog || !(sector = line->frontsector) || !sector->ffloors)
+		return false;
+
+	for (rover = sector->ffloors; rover; rover = rover->next)
+	{
+		if (!(rover->fofflags & FOF_EXISTS)
+		|| !(rover->fofflags & FOF_FOG)
+		|| !(rover->fofflags & FOF_RENDERSIDES)
+		|| !rover->master || !rover->master->frontsector
+		|| !rover->master->frontsector->extra_colormap)
+			continue;
+
+		if (!HWR_ClipLinePortalToNearPlane(line, &aperture_low,
+			&aperture_high))
+			return false;
+		memset(fog, 0, sizeof (*fog));
+		fog->colormap = rover->master->frontsector->extra_colormap;
+		fog->lightlevel = rover->master->frontsector->lightlevel;
+		if (line->sidenum[0] != NO_SIDEDEF)
+			fog->lightlevel = HWR_SideLightLevel(&sides[line->sidenum[0]],
+				rover->master->frontsector->lightlevel);
+		fog->transform = atransform;
+		HWR_GetLinePortalApertureRange(line, aperture_low, aperture_high,
+			fog->aperture);
+
+		/* Software replays the source fog side after the recursively rendered
+		 * child, so every pixel exposed through this line opening is remapped.
+		 * The active stencil supplies the exact visible shape. */
+		return true;
+	}
+	return false;
+}
+
+/* Replay the source fog side after the destination view, just as the normal
+ * OpenGL translucent pass would.  Using the native fog wall path keeps portal
+ * pixels in the configured OpenGL colour space; the former framebuffer
+ * lighttable remap quantized them to Software's palette and made OpenGL portals
+ * look conspicuously different from the surrounding scene. */
+static void HWR_ApplyPortalFog(hwr_portalfog_t *fog)
+{
+	FSurfaceInfo surf;
+
+	if (!fog || !fog->colormap)
+		return;
+
+	memset(&surf, 0, sizeof surf);
+	surf.PolyColor.rgba = 0xffffffff;
+	surf.PolyColor.s.alpha = HWR_FogBlockAlpha(fog->lightlevel,
+		fog->colormap);
+	HWR_SetCurrentTexture(NULL);
+	HWD.pfnSetTransform(&fog->transform);
+	HWR_RenderWall(fog->aperture, &surf,
+		PF_Fog|PF_NoTexture|PF_NoDepthTest, true,
+		fog->lightlevel, fog->colormap);
+}
+
+/* The portal replay above replaces these source-view fog polygons. Keep
+ * ordinary translucent FOFs and midtextures in the sorted draw-node list. */
+static void HWR_RemovePortalFogDrawNodes(void)
+{
+	size_t read, write;
+	size_t node, removed = 0;
+	const size_t nodecount = numwalls + numplanes + numpolyplanes;
+	static size_t *drawcount_remap;
+	static size_t drawcount_remap_capacity;
+
+	if (drawcount_remap_capacity < nodecount)
+	{
+		size_t *newremap = realloc(drawcount_remap,
+			nodecount * sizeof (*drawcount_remap));
+		if (!newremap)
+			I_Error("HWR_RemovePortalFogDrawNodes: out of memory");
+		drawcount_remap = newremap;
+		drawcount_remap_capacity = nodecount;
+	}
+	for (node = 0; node < nodecount; node++)
+		drawcount_remap[node] = node;
+	for (read = 0; read < numwalls; read++)
+	{
+		if (!wallinfo[read].fogwall)
+			continue;
+		if (wallinfo[read].drawcount < 0
+		|| (size_t)wallinfo[read].drawcount >= nodecount)
+			I_Error("HWR_RemovePortalFogDrawNodes: invalid wall order");
+		drawcount_remap[wallinfo[read].drawcount] = SIZE_MAX;
+	}
+	for (read = 0; read < numplanes; read++)
+	{
+		if (!planeinfo[read].fogplane)
+			continue;
+		if (planeinfo[read].drawcount < 0
+		|| (size_t)planeinfo[read].drawcount >= nodecount)
+			I_Error("HWR_RemovePortalFogDrawNodes: invalid plane order");
+		drawcount_remap[planeinfo[read].drawcount] = SIZE_MAX;
+	}
+	for (node = 0; node < nodecount; node++)
+	{
+		if (drawcount_remap[node] == SIZE_MAX)
+			removed++;
+		else
+			drawcount_remap[node] = node - removed;
+	}
+	for (read = 0; read < numwalls; read++)
+		if (!wallinfo[read].fogwall)
+			wallinfo[read].drawcount = (INT32)drawcount_remap[wallinfo[read].drawcount];
+	for (read = 0; read < numplanes; read++)
+		if (!planeinfo[read].fogplane)
+			planeinfo[read].drawcount = (INT32)drawcount_remap[planeinfo[read].drawcount];
+	for (read = 0; read < numpolyplanes; read++)
+		polyplaneinfo[read].drawcount = (INT32)drawcount_remap[polyplaneinfo[read].drawcount];
+	for (read = write = 0; read < numwalls; read++)
+	{
+		if (wallinfo[read].fogwall)
+			continue;
+		if (write != read)
+			wallinfo[write] = wallinfo[read];
+		write++;
+	}
+	numwalls = write;
+
+	for (read = write = 0; read < numplanes; read++)
+	{
+		if (planeinfo[read].fogplane)
+			continue;
+		if (write != read)
+			planeinfo[write] = planeinfo[read];
+		write++;
+	}
+	numplanes = write;
+	drawcount = (INT32)(nodecount - removed);
+}
+
+/* A recursive child replaces its parent's depth values with distances from a
+ * different camera. Restore the parent camera's opaque/sprite depth before
+ * replaying any of its translucent colors, otherwise the child's unrelated
+ * walls can reject just part (or all) of a shield/player sprite. The colour
+ * buffer and portal stencil are preserved. */
+static void HWR_RebuildPortalViewDepth(INT32 viewnumber, player_t *player,
+	const hwr_portalview_t *portal, float fpov)
+{
+	HWR_SetupView(player, viewnumber, fpov, false);
+	HWR_ApplyPortalView(portal);
+	HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 0);
+	HWR_ClearView();
+	HWD.pfnSetSpecialState(HWD_SET_COLORWRITE, 0);
+	HWR_ClearSprites();
+	drawcount = 0;
+	numwalls = numplanes = numpolyplanes = 0;
+
+	if (rendermode == render_opengl)
+	{
+		const angle_t a1 = gld_FrustumAngle(fpov, gl_aimingangle);
+		gld_clipper_Clear();
+		gld_clipper_SafeAddClipRange(viewangle + a1, viewangle - a1);
+		if (hwr_portal_destination_line)
+		{
+			angle_t end1 = R_PointToAngle2(viewx, viewy,
+				hwr_portal_destination_line->v1->x,
+				hwr_portal_destination_line->v1->y);
+			angle_t end2 = R_PointToAngle2(viewx, viewy,
+				hwr_portal_destination_line->v2->x,
+				hwr_portal_destination_line->v2->y);
+			if (end1 - end2 < ANGLE_180)
+				gld_clipper_SafeAddClipRange(end1, end2);
+			else
+				gld_clipper_SafeAddClipRange(end2, end1);
+		}
+#ifdef HAVE_SPHEREFRUSTRUM
+		gld_FrustrumSetup();
+#endif
+	}
+
+	HWD.pfnSetTransform(&atransform);
+	HWR_SetShaderState();
+	validcount++;
+	if (cv_glbatching.value)
+		HWR_StartBatching();
+	HWR_RenderBSPNode((INT32)numnodes-1);
+	if (cv_glbatching.value)
+		HWR_RenderBatches();
+	HWR_SortVisSprites();
+	hwr_depth_only_sprites = true;
+	HWR_DrawSprites();
+	hwr_depth_only_sprites = false;
+
+	/* The depth walk discovers transparent nodes again. The preserved parent
+	 * copies, not these temporary records, are replayed after the child. */
+	numwalls = numplanes = numpolyplanes = 0;
+	HWD.pfnSetSpecialState(HWD_SET_COLORWRITE, 1);
+}
+
 static void HWR_RenderPortalBackground(INT32 viewnumber, player_t *player,
 	const hwr_portalview_t *portal, INT32 depth, INT32 stencilref)
 {
@@ -7263,7 +7932,15 @@ static void HWR_RenderPortalBackground(INT32 viewnumber, player_t *player,
 	line_t *nested_destination = NULL;
 	hwr_portalview_t nestedview;
 	boolean have_nested = false;
+	boolean drew_nested = false;
 	boolean drew_skybox;
+	hwr_portalfog_t source_fog;
+	boolean have_source_fog;
+	/* Each top-level portal follows the destination camera left by the previous
+	 * one. Reconstruct the shared main camera before saving source fog depth. */
+	if (depth == 1)
+		HWR_SetupView(player, viewnumber, fpov, false);
+	have_source_fog = HWR_GetPortalFog(current_source, &source_fog);
 	hwr_portal_pass = true;
 	HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 200 + stencilref);
 
@@ -7333,6 +8010,14 @@ static void HWR_RenderPortalBackground(INT32 viewnumber, player_t *player,
 		HWR_RenderBatches();
 	HWR_SortVisSprites();
 	HWR_DrawSprites();
+	if (have_source_fog)
+		HWR_RemovePortalFogDrawNodes();
+	if (have_nested)
+	{
+		HWR_CapturePortalSprites(nestedportal_savedsprites,
+			&nestedportal_savedspritecount, nested_source);
+		HWR_CaptureNestedPortalDrawNodes();
+	}
 	if (numplanes || numpolyplanes || numwalls)
 		HWR_CreateDrawNodes();
 
@@ -7347,12 +8032,46 @@ static void HWR_RenderPortalBackground(INT32 viewnumber, player_t *player,
 		hwr_portal_source_line = nested_source;
 		hwr_portal_destination_line = nested_destination;
 		if (HWR_BeginNestedLinePortalStencil(nested_source, stencilref))
+		{
 			HWR_RenderPortalBackground(viewnumber, player, &nestedview,
 				depth + 1, stencilref + 1);
+			drew_nested = true;
+		}
+	}
+
+	if (drew_nested)
+	{
+		/* The child deliberately replaced every exposed parent pixel. Reapply
+		 * only the parent's translucent layers inside the child stencil: first
+		 * ordinary blended sprites, then fog/water/FOF nodes, then sprites whose
+		 * established FOF ordering places them last. */
+		hwr_portal_source_line = current_source;
+		hwr_portal_destination_line = current_destination;
+		hwr_nested_portal_source_line = nested_source;
+		HWR_RebuildPortalViewDepth(viewnumber, player, portal, fpov);
+		HWR_SetupView(player, viewnumber, fpov, false);
+		HWR_ApplyPortalView(portal);
+		HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL,
+			200 + stencilref + 1);
+		HWD.pfnSetTransform(&atransform);
+		HWR_SetShaderState();
+		HWR_DrawSavedPortalSprites(nestedportal_savedsprites,
+			nestedportal_savedspritecount, false, true);
+		HWR_RestoreNestedPortalDrawNodes();
+		if (numplanes || numpolyplanes || numwalls)
+			HWR_CreateDrawNodes();
+		HWR_DrawSavedPortalSprites(nestedportal_savedsprites,
+			nestedportal_savedspritecount, true, true);
+		/* A child keeps its own stencil value. Apply the parent's fog once while
+		 * that value is active so the outer tinted sector also affects the nested
+		 * portal, then replay it over the remainder of the parent aperture below. */
+		HWR_ApplyPortalFog(have_source_fog ? &source_fog : NULL);
+		HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 200 + stencilref);
 	}
 	hwr_portal_source_line = current_source;
 	hwr_portal_destination_line = current_destination;
 	hwr_nested_portal_source_line = current_nested_source;
+	HWR_ApplyPortalFog(have_source_fog ? &source_fog : NULL);
 	HWD.pfnSetTransform(NULL);
 	HWD.pfnUnSetShader();
 	HWD.pfnGClipRect(0, 0, vid.width, vid.height, NZCLIP_PLANE);
@@ -7372,6 +8091,7 @@ static void HWR_RebuildMainViewDepth(INT32 viewnumber, player_t *player,
 	float fpov)
 {
 	HWR_SetupView(player, viewnumber, fpov, false);
+	HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 0);
 	HWR_ClearView();
 	HWD.pfnSetSpecialState(HWD_SET_COLORWRITE, 0);
 	HWR_ClearSprites();
@@ -7527,7 +8247,8 @@ void HWR_RenderPlayerView(INT32 viewnumber, player_t *player)
 	hwr_main_portal_count = 0;
 	hwr_visible_main_portal_count = 0;
 	hwr_collect_main_portals = false;
-	portal_linkdrawcount = 0;
+	mainportal_savedspritecount = 0;
+	nestedportal_savedspritecount = 0;
 	ps_hw_portaltime.value.p = 0;
 	ps_hw_numportals.value.i = 0;
 	ps_hw_textureuploadtime.value.p = 0;
@@ -7662,7 +8383,8 @@ void HWR_RenderPlayerView(INT32 viewnumber, player_t *player)
 	PS_START_TIMING(ps_hw_spritedrawtime);
 	HWR_DrawSprites();
 	if (portal_background)
-		HWR_PortalLinkDrawFinish();
+		HWR_CapturePortalSprites(mainportal_savedsprites,
+			&mainportal_savedspritecount, NULL);
 	PS_STOP_TIMING(ps_hw_spritedrawtime);
 
 #ifdef NEWCORONAS
@@ -7714,16 +8436,29 @@ void HWR_RenderPlayerView(INT32 viewnumber, player_t *player)
 			HWR_RenderPortalBackground(viewnumber, player, &portal->view, 1,
 				stencilref);
 		}
-		HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 0);
+
+		/* The portal backgrounds are now final. Their last destination view left
+		 * unrelated depth values behind, so restore the main camera before either
+		 * translucent sprite group is replayed. */
+		if (mainportal_savednumplanes || mainportal_savednumpolyplanes
+		|| mainportal_savednumwalls || mainportal_savedspritecount)
+			HWR_RebuildMainViewDepth(viewnumber, player, fpov);
+
+		/* Blend main-view translucent
+		 * sprites over every nonzero portal layer in one clipped pass; opaque
+		 * sprites already excluded their pixels when the apertures were cut. */
 		hwr_portal_source_line = NULL;
 		hwr_portal_destination_line = NULL;
 		HWR_SetupView(player, viewnumber, fpov, false);
+		HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 4);
+		HWD.pfnSetTransform(&atransform);
+		HWR_SetShaderState();
+		HWR_DrawSavedPortalSprites(mainportal_savedsprites,
+			mainportal_savedspritecount, false, true);
+		HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 0);
+		HWR_SetupView(player, viewnumber, fpov, false);
 
 	}
-
-	if (mainportal_savednumplanes || mainportal_savednumpolyplanes
-	|| mainportal_savednumwalls)
-		HWR_RebuildMainViewDepth(viewnumber, player, fpov);
 
 	if (portal_background)
 		PS_STOP_TIMING(ps_hw_portaltime);
@@ -7731,8 +8466,29 @@ void HWR_RenderPlayerView(INT32 viewnumber, player_t *player)
 	if (mainportal_savednumplanes || mainportal_savednumpolyplanes
 	|| mainportal_savednumwalls)
 	{
+		deferredtranslucentspritecount = 0;
 		HWR_RestoreMainPortalDrawNodes();
 		HWR_CreateDrawNodes();
+	}
+	if (portal_background)
+	{
+		HWR_SetupView(player, viewnumber, fpov, false);
+		/* These sprites skipped the first color pass. Emit their missing color
+		 * outside every portal after the restored translucent geometry. The
+		 * aperture replay below covers the complementary pixels exactly once. */
+		HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 3);
+		HWD.pfnSetTransform(&atransform);
+		HWR_SetShaderState();
+		HWR_DrawSavedPortalSprites(mainportal_savedsprites,
+			mainportal_savedspritecount, true, false);
+		/* Clip the remaining replay to the aperture union so ordinary foreground
+		 * translucency is not blended a second time outside the portals. */
+		HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 4);
+		HWD.pfnSetTransform(&atransform);
+		HWR_SetShaderState();
+		HWR_DrawSavedPortalSprites(mainportal_savedsprites,
+			mainportal_savedspritecount, true, true);
+		HWD.pfnSetSpecialState(HWD_SET_PORTALSTENCIL, 0);
 	}
 
 	if (HWR_IsWireframeMode())
@@ -7821,6 +8577,7 @@ void HWR_LoadLevel(void)
 	 * classic portal lines once instead of rescanning every line in large maps. */
 	hwr_line_portals = NULL;
 	hwr_line_portal_destinations = NULL;
+	hwr_line_portal_geometry = NULL;
 	hwr_line_portal_sight_cache = NULL;
 	hwr_line_portal_sight_view_valid = false;
 	hwr_line_portal_count = 0;
@@ -7839,6 +8596,8 @@ void HWR_LoadLevel(void)
 			PU_LEVEL, NULL);
 		hwr_line_portal_destinations = Z_Calloc((size_t)numlines
 			* sizeof (*hwr_line_portal_destinations), PU_LEVEL, NULL);
+		hwr_line_portal_geometry = Z_Calloc((size_t)numlines
+			* sizeof (*hwr_line_portal_geometry), PU_LEVEL, NULL);
 		hwr_line_portal_sight_cache = Z_Calloc((size_t)numlines
 			* sizeof (*hwr_line_portal_sight_cache), PU_LEVEL, NULL);
 		hwr_visible_main_portals = Z_Malloc(hwr_line_portal_count
@@ -7848,10 +8607,40 @@ void HWR_LoadLevel(void)
 		for (i = 0; i < (size_t)numlines; i++)
 			if (lines[i].special == 40)
 			{
+				hwr_lineportalgeometry_t *geometry =
+					&hwr_line_portal_geometry[i];
 				line_t *destination = NULL;
+				const double linelength = hypot(HWR_FixedDelta(lines[i].dx, 0),
+					HWR_FixedDelta(lines[i].dy, 0));
 				hwr_line_portals[p++] = &lines[i];
+				geometry->ax = FixedToFloat(lines[i].v1->x);
+				geometry->ay = FixedToFloat(lines[i].v1->y);
+				geometry->dx = FixedToFloat(lines[i].v2->x) - geometry->ax;
+				geometry->dy = FixedToFloat(lines[i].v2->y) - geometry->ay;
+				geometry->length2 = geometry->dx * geometry->dx
+					+ geometry->dy * geometry->dy;
+				geometry->padfraction = linelength > 0.0
+					? ((1.0 / 64.0) / linelength) : 0.0;
+				geometry->startx = (fixed_t)(((INT64)lines[i].v1->x
+					+ lines[i].v2->x) / 2);
+				geometry->starty = (fixed_t)(((INT64)lines[i].v1->y
+					+ lines[i].v2->y) / 2);
+				geometry->geometry_valid =
+					HWR_LinePortalGeometryIsStatic(&lines[i]);
 				if (HWR_FindLinePortalDestinationUncached(&lines[i], &destination))
+				{
 					hwr_line_portal_destinations[i] = destination;
+					geometry->destination = destination;
+					if (!HWR_LinePortalGeometryIsStatic(destination))
+						geometry->geometry_valid = false;
+					geometry->destx = (fixed_t)(((INT64)destination->v1->x
+						+ destination->v2->x) / 2);
+					geometry->desty = (fixed_t)(((INT64)destination->v1->y
+						+ destination->v2->y) / 2);
+					geometry->angle = R_PointToAngle2(0, 0,
+						destination->dx, destination->dy)
+						- R_PointToAngle2(lines[i].dx, lines[i].dy, 0, 0);
+				}
 			}
 		hwr_line_portal_cache_ready = true;
 	}
@@ -7928,6 +8717,7 @@ consvar_t cv_glsolvetjoin = CVAR_INIT ("gr_solvetjoin", "On", 0, CV_OnOff, NULL)
 
 consvar_t cv_glbatching = CVAR_INIT ("gr_batching", "On", 0, CV_OnOff, NULL);
 consvar_t cv_glretaintextures = CVAR_INIT ("gr_retaintextures", "On", CV_SAVE, CV_OnOff, NULL);
+consvar_t cv_gluibatching = CVAR_INIT ("gr_uibatching", "On", CV_SAVE, CV_OnOff, NULL);
 consvar_t cv_gltruecolorpngs = CVAR_INIT ("gr_truecolorpngs", "On", CV_SAVE|CV_CALL,
 	CV_OnOff, CV_gltruecolorpngs_OnChange);
 
@@ -8034,6 +8824,7 @@ void HWR_AddCommands(void)
 
 	CV_RegisterVar(&cv_glbatching);
 	CV_RegisterVar(&cv_glretaintextures);
+	CV_RegisterVar(&cv_gluibatching);
 	CV_RegisterVar(&cv_gltruecolorpngs);
 
 	CV_RegisterVar(&cv_glpaletterendering);
@@ -8300,7 +9091,7 @@ void HWR_EndScreenWipe(void)
 
 void HWR_DrawIntermissionBG(void)
 {
-	HWD.pfnDrawScreenTexture(HWD_SCREENTEXTURE_GENERIC1, NULL, 0);
+	HWD.pfnDrawScreenTexture(HWD_SCREENTEXTURE_GENERIC1, NULL, 0, true);
 }
 
 //

@@ -70,6 +70,8 @@ extern SDLJoyInfo_t JoyInfo;
 */
 extern SDLJoyInfo_t JoyInfo2;
 
+INT32 I_JoystickButtonKey(INT32 button, boolean secondary);
+
 // So we can call this from i_video event loop
 void I_ShutdownJoystick(void);
 void I_ShutdownJoystick2(void);

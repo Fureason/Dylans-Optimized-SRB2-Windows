@@ -2,6 +2,7 @@ target_sources(SRB2SDL2 PRIVATE
 	d_clisrv.c
 	server_connection.c
 	client_connection.c
+	server_browser.c
 	tic_command.c
 	net_command.c
 	gamestate.c

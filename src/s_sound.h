@@ -48,7 +48,7 @@ extern consvar_t cv_1upsound;
 
 extern consvar_t cv_gamedigimusic;
 extern consvar_t cv_gamemidimusic;
-extern consvar_t cv_gamesounds;
+extern consvar_t cv_gamesounds, cv_soundclipping;
 extern consvar_t cv_musicpref;
 
 extern consvar_t cv_playmusicifunfocused;

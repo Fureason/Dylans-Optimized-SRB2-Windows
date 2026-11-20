@@ -123,6 +123,8 @@ extern consvar_t cv_glmsaa;
 extern consvar_t cv_translucency;
 extern consvar_t cv_drawdist, cv_drawdist_nights, cv_drawdist_precip;
 extern consvar_t cv_fov, cv_fovchange;
+extern consvar_t cv_screenshake;
+angle_t R_GetViewRollAngle(const player_t *player);
 extern consvar_t cv_skybox;
 /** Optimized client's authoritative skybox switch shared by both renderers. */
 boolean R_SkyboxEnabled(void);

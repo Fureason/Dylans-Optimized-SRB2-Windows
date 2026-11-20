@@ -1,0 +1,18 @@
+Dylan's Optimized SRB2 Build V5.150 - Windows source
+
+Use a 64-bit MinGW-w64 toolchain with GCC and GNU Make. This build has
+been checked with w64devkit 2.11.0. In PowerShell, run:
+
+    & '.\Build Windows Client.ps1'
+
+If the toolchain is installed outside PATH:
+
+    & '.\Build Windows Client.ps1' -ToolchainBin 'C:\path\to\your\toolchain\bin'
+
+The script uses the compiler on PATH when no toolchain path is supplied.
+It temporarily maps a drive letter when the source path contains spaces.
+The build produces bin\srb2win64.exe and bin\srb2win64.exe.debug.
+
+To run the game, use official SRB2 2.2.15 game data and the included
+Windows runtime libraries. The repository README contains credits for
+SRB2 and the Sparkette fork, including add-ons distributed separately.

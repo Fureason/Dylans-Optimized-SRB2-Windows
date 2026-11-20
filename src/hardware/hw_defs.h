@@ -261,6 +261,7 @@ struct FTextureInfo
 
 	struct GLMipmap_s *texture;
 	struct FTextureInfo *prev, *next;
+	struct FTextureInfo *hashnext;
 };
 typedef struct FTextureInfo FTextureInfo;
 

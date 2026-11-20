@@ -13,6 +13,7 @@
 /// \brief Uncapped framerate stuff.
 
 #include "r_fps.h"
+#include "m_hostguard.h"
 
 #include "i_system.h"
 #include "r_main.h"
@@ -56,6 +57,7 @@ void R_UpdateAdaptiveEffects(precise_t active_time, precise_t frame_budget)
 	UINT64 workload;
 	UINT64 budget;
 	UINT32 refresh;
+	HG_RecordFrame(active_time);
 
 	if (!cv_adaptiveeffects.value || dedicated || gamestate != GS_LEVEL || paused
 	|| !precision)
@@ -115,6 +117,35 @@ UINT8 R_GetAdaptiveEffectsLevel(void)
 
 ps_metric_t ps_interp_frac = {0};
 ps_metric_t ps_interp_lag = {0};
+
+// Network arrivals need not share the local 35 Hz clock's phase. Anchor visual
+// interpolation to actual simulation progress, then hold its endpoint during
+// starvation. This never advances a thinker or predicts synchronized state.
+fixed_t R_NetworkTimeFrac(precise_t now, tic_t tic, fixed_t fallback, boolean active)
+{
+	static boolean valid;
+	static tic_t previous;
+	static precise_t anchor;
+	const precise_t period = I_GetPrecisePrecision()/TICRATE;
+	if (!active || !period)
+	{
+		valid = false;
+		return fallback;
+	}
+	if (!valid)
+	{
+		valid = true; previous = tic;
+		anchor = now - min(now, (precise_t)((UINT64)period * fallback / FRACUNIT));
+	}
+	else if (tic != previous)
+	{
+		// Multiple catch-up tics have no intermediate renderable snapshots.
+		anchor = (tic_t)(tic-previous) == 1 ? now : now-min(now, period);
+		previous = tic;
+	}
+	if (now < anchor || now-anchor >= period) return FRACUNIT;
+	return (fixed_t)((UINT64)(now-anchor)*FRACUNIT/period);
+}
 
 UINT32 R_GetFramerateCap(void)
 {

@@ -161,8 +161,12 @@ void SCR_SetDrawFuncs(void)
 
 void SCR_SetMode(void)
 {
+	const rendermode_t requested_renderer = (rendermode_t)setrenderneeded;
+	const boolean changing_level_renderer = setrenderneeded
+		&& requested_renderer != rendermode;
 #if defined(_WIN32) && !defined(DEDICATED)
 	precise_t mode_started;
+	boolean renderer_transition_marked = false;
 #endif
 
 	if (dedicated)
@@ -173,6 +177,12 @@ void SCR_SetMode(void)
 
 #if defined(_WIN32) && !defined(DEDICATED)
 	mode_started = I_GetPreciseTime();
+	if (setrenderneeded && (gamestate == GS_LEVEL
+	|| (gamestate == GS_TITLESCREEN && titlemapinaction)))
+	{
+		I_MarkLevelTransitionStart(mode_started);
+		renderer_transition_marked = true;
+	}
 #endif
 
 	// Lactozilla: Renderer switching
@@ -198,6 +208,28 @@ void SCR_SetMode(void)
 
 	SCR_SetDrawFuncs();
 
+#ifdef HWRENDER
+	/* Renderer-specific level caches are separate. Rebuild the prioritized
+	 * graphics queue during either switch direction, rather than letting the
+	 * first live frames discover large walls, flats, and FOF textures. A return
+	 * to the still-current retained OpenGL level is the exception: its uploaded
+	 * cache and geometry never left the persistent SDL context, so rebuilding
+	 * and immediately prewarming the queue only recreates the switch pause. */
+	if (changing_level_renderer && rendermode == requested_renderer && precache
+	&& (rendermode == render_soft
+		|| (rendermode == render_opengl
+			&& vid.glstate == VID_GL_LIBRARY_LOADED))
+	&& !(rendermode == render_opengl
+		&& cv_glretaintextures.value && gl_maploaded)
+	&& (gamestate == GS_LEVEL
+		|| (gamestate == GS_TITLESCREEN && titlemapinaction)))
+		R_PrecacheLevel();
+#else
+	if (changing_level_renderer && rendermode == requested_renderer
+	&& rendermode == render_soft && precache && gamestate == GS_LEVEL)
+		R_PrecacheLevel();
+#endif
+
 	// set the apprpriate drawer for the sky (tall or INT16)
 	setmodeneeded = 0;
 	setrenderneeded = 0;
@@ -207,6 +239,8 @@ void SCR_SetMode(void)
 		Net_RefreshTimeouts();
 #if defined(_WIN32) && !defined(DEDICATED)
 	I_ReportHitch("video mode or renderer switch", mode_started, 100);
+	if (renderer_transition_marked)
+		I_MarkLevelTransitionEnd();
 #endif
 }
 
@@ -375,7 +409,13 @@ void SCR_ChangeRenderer(void)
 		return;
 	}
 
-	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED)) // Clear these out before switching to software
+	/* SDL keeps the same OpenGL context alive while Software uses it for the
+	 * final screen blit.  Keep the already-uploaded level cache as well when
+	 * retention is enabled; discarding it here made the return to OpenGL upload
+	 * the whole current map again and stall for up to a second. Map, palette,
+	 * WAD and true-colour changes already invalidate their affected entries. */
+	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED)
+	&& !cv_glretaintextures.value)
 		HWR_ClearAllTextures();
 
 #endif

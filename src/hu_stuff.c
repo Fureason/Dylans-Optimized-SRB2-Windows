@@ -2004,6 +2004,15 @@ void HU_drawPing(INT32 x, INT32 y, UINT32 ping, boolean notext, INT32 flags)
 		V_DrawSmallScaledPatch(x + 4 - nopingicon->width/2, y + 9 - nopingicon->height/2, 0, nopingicon);
 }
 
+static const UINT8 *HU_PendingFaceColormap(const player_t *player)
+{
+	if (player->mo && player->mo->color != SKINCOLOR_NONE)
+		return R_GetTranslationColormap(player->skin, player->mo->color, GTC_CACHE);
+	// Use the same default as R_GetTranslationForThing before the server
+	// applies the player's name, skin and color command.
+	return R_GetTranslationColormap(TC_DEFAULT, SKINCOLOR_BLUE, GTC_CACHE);
+}
+
 //
 // HU_DrawTabRankings
 //
@@ -2056,15 +2065,15 @@ void HU_DrawTabRankings(INT32 x, INT32 y, playersort_t *tab, INT32 scorelines, I
 
 		if (tab[i].color == 0)
 		{
-			colormap = colormaps;
 			if (supercheck)
 				V_DrawSmallScaledPatch(x, y-4, 0, superprefix[players[tab[i].num].skin]);
 			else
 			{
+				colormap = HU_PendingFaceColormap(&players[tab[i].num]);
 				if (greycheck)
-					V_DrawSmallTranslucentPatch(x, y-4, V_80TRANS, faceprefix[players[tab[i].num].skin]);
+					V_DrawSmallTranslucentMappedPatch(x, y-4, V_80TRANS, faceprefix[players[tab[i].num].skin], colormap);
 				else
-					V_DrawSmallScaledPatch(x, y-4, 0, faceprefix[players[tab[i].num].skin]);
+					V_DrawSmallMappedPatch(x, y-4, 0, faceprefix[players[tab[i].num].skin], colormap);
 			}
 		}
 		else
@@ -2416,15 +2425,15 @@ void HU_DrawDualTabRankings(INT32 x, INT32 y, playersort_t *tab, INT32 scoreline
 		//V_DrawSmallScaledPatch (x, y-4, 0, livesback);
 		if (tab[i].color == 0)
 		{
-			colormap = colormaps;
 			if (supercheck)
 				V_DrawSmallScaledPatch (x, y-4, 0, superprefix[players[tab[i].num].skin]);
 			else
 			{
+				colormap = HU_PendingFaceColormap(&players[tab[i].num]);
 				if (greycheck)
-					V_DrawSmallTranslucentPatch (x, y-4, V_80TRANS, faceprefix[players[tab[i].num].skin]);
+					V_DrawSmallTranslucentMappedPatch(x, y-4, V_80TRANS, faceprefix[players[tab[i].num].skin], colormap);
 				else
-					V_DrawSmallScaledPatch (x, y-4, 0, faceprefix[players[tab[i].num].skin]);
+					V_DrawSmallMappedPatch(x, y-4, 0, faceprefix[players[tab[i].num].skin], colormap);
 			}
 		}
 		else
@@ -2527,15 +2536,15 @@ static void HU_Draw32TabRankings(INT32 x, INT32 y, playersort_t *tab, INT32 scor
 		//V_DrawSmallScaledPatch (x, y-4, 0, livesback);
 		if (tab[i].color == 0)
 		{
-			colormap = colormaps;
 			if (players[tab[i].num].powers[pw_super] && !(players[tab[i].num].charflags & SF_NOSUPERSPRITES))
 				V_DrawFixedPatch(x*FRACUNIT, y*FRACUNIT, FRACUNIT/4, 0, superprefix[players[tab[i].num].skin], 0);
 			else
 			{
+				colormap = HU_PendingFaceColormap(&players[tab[i].num]);
 				if (greycheck)
-					V_DrawFixedPatch(x*FRACUNIT, (y)*FRACUNIT, FRACUNIT/4, V_HUDTRANSHALF, faceprefix[players[tab[i].num].skin], 0);
+					V_DrawFixedPatch(x*FRACUNIT, y*FRACUNIT, FRACUNIT/4, V_HUDTRANSHALF, faceprefix[players[tab[i].num].skin], colormap);
 				else
-					V_DrawFixedPatch(x*FRACUNIT, (y)*FRACUNIT, FRACUNIT/4, 0, faceprefix[players[tab[i].num].skin], 0);
+					V_DrawFixedPatch(x*FRACUNIT, y*FRACUNIT, FRACUNIT/4, 0, faceprefix[players[tab[i].num].skin], colormap);
 			}
 		}
 		else

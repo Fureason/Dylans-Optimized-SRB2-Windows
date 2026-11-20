@@ -519,6 +519,10 @@ static INT32 Impl_SDL_Scancode_To_Keycode(SDL_Scancode code)
 
 static boolean ShouldIgnoreMouse(void)
 {
+	if (chat_on || con_destlines)
+		return true;
+	if (M_MenuMouseActive())
+		return false;
 	if (cv_alwaysgrabmouse.value)
 		return false;
 	if (menuactive)
@@ -533,6 +537,11 @@ static boolean ShouldIgnoreMouse(void)
 
 static boolean ShouldGrabMouse(void)
 {
+	// Text entry releases the pointer even with Always Grab Mouse enabled.
+	if (chat_on || con_destlines)
+		return false;
+	if (M_MenuMouseActive())
+		return false;
 	if (cv_alwaysgrabmouse.value)
 		return true;
 	if (ShouldIgnoreMouse())
@@ -563,10 +572,13 @@ static void SDLreacquireMouse(void)
 
 static void SDLdoUngrabMouse(void)
 {
-	SDL_ShowCursor(SDL_ENABLE);
+	mousemovex = mousemovey = 0;
 	SDL_SetWindowGrab(window, SDL_FALSE);
 	wrapmouseok = SDL_FALSE;
 	SDL_SetRelativeMouseMode(SDL_FALSE);
+	SDL_ShowCursor(!chat_on && !con_destlines && SDL_GetKeyboardFocus() == window
+		&& SDL_GetMouseFocus() == window && M_MenuMouseActive()
+		&& !M_MenuMouseVisible() ? SDL_DISABLE : SDL_ENABLE);
 }
 
 void SDLforceUngrabMouse(void)
@@ -577,15 +589,18 @@ void SDLforceUngrabMouse(void)
 
 void I_UpdateMouseGrab(void)
 {
-	if (SDL_WasInit(SDL_INIT_VIDEO) == SDL_INIT_VIDEO && window != NULL
-	&& SDL_GetKeyboardFocus() == window
-	&& USE_MOUSEINPUT && ShouldGrabMouse())
-		SDLdoGrabMouse();
+	if (SDL_WasInit(SDL_INIT_VIDEO) == SDL_INIT_VIDEO && window != NULL)
+	{
+		if (SDL_GetKeyboardFocus() == window && USE_MOUSEINPUT && ShouldGrabMouse())
+			SDLdoGrabMouse();
+		else
+			SDLdoUngrabMouse();
+	}
 }
 
 void I_SetMouseGrab(boolean grab)
 {
-	if (grab)
+	if (grab && !chat_on && !con_destlines)
 		SDLdoGrabMouse();
 	else
 		SDLdoUngrabMouse();
@@ -717,6 +732,18 @@ static void VID_Command_Mode_f (void)
 		CONS_Printf(M_GetText("Video mode not present\n"));
 	else
 		setmodeneeded = modenum+1; // request vid mode change
+}
+
+INT32 I_JoystickButtonKey(INT32 button, boolean secondary)
+{
+ INT32 base = secondary ? KEY_2JOY1 : KEY_JOY1;
+ if (button < 0 || button >= JOYBUTTONS) return KEY_NULL;
+#ifdef __ANDROID__
+ static const UINT8 buttons[] = {0, 1, 2, 3, 6, 10, 7, 8, 9, 4, 5};
+ if (button < (INT32)(sizeof buttons/sizeof buttons[0])) return base+buttons[button];
+ if (button >= 11 && button <= 14) return (secondary ? KEY_2HAT1 : KEY_HAT1)+button-11;
+#endif
+ return base+button;
 }
 
 static inline void SDLJoyRemap(event_t *event)
@@ -883,18 +910,55 @@ static void Impl_HandleTextEvent(SDL_TextInputEvent evt)
 {
 	event_t event;
 	event.type = ev_text;
-	if (evt.text[1] != '\0')
+	// SDL may deliver several characters in one text event (for example an
+	// address pasted or entered by an IME). Keep the existing ASCII policy,
+	// but do not discard an otherwise valid whole string.
+	for (size_t i = 0; i < sizeof evt.text && evt.text[i]; i++)
 	{
-		// limit ourselves to ASCII for now, we can add UTF-8 support later
-		return;
+		if ((UINT8)evt.text[i] >= 128) return;
 	}
-	event.key = evt.text[0];
+	for (size_t i = 0; i < sizeof evt.text && evt.text[i]; i++)
+	{
+		if ((UINT8)evt.text[i] < 32 || evt.text[i] == 127) continue;
+		event.key = evt.text[i];
+		D_PostEvent(&event);
+	}
+}
+
+static void Impl_PostMenuPointer(INT32 x, INT32 y)
+{
+	int width, height;
+	event_t event;
+	SDL_GetWindowSize(window, &width, &height);
+	if (width <= 0 || height <= 0)
+		return;
+	SDL_memset(&event, 0, sizeof event);
+	event.type = ev_mouseabsolute;
+	/* SDL mouse coordinates are logical window pixels, including on high-DPI
+	 * displays. Convert to the render surface before the menu removes its margins. */
+	event.x = (INT32)((INT64)x*vid.width/width);
+	event.y = (INT32)((INT64)y*vid.height/height);
 	D_PostEvent(&event);
 }
 
 static void Impl_HandleMouseMotionEvent(SDL_MouseMotionEvent evt)
 {
 	static boolean firstmove = true;
+	if (chat_on || con_destlines)
+	{
+		SDLdoUngrabMouse();
+		firstmove = false;
+		return;
+	}
+	if (!disable_mouse && havefocus && M_MenuMouseActive())
+	{
+		if (SDL_GetRelativeMouseMode())
+			SDLdoUngrabMouse();
+		mousemovex = mousemovey = 0;
+		Impl_PostMenuPointer(evt.x, evt.y);
+		firstmove = false;
+		return;
+	}
 
 	if (USE_MOUSEINPUT)
 	{
@@ -943,6 +1007,9 @@ static void Impl_HandleMouseMotionEvent(SDL_MouseMotionEvent evt)
 static void Impl_HandleMouseButtonEvent(SDL_MouseButtonEvent evt, Uint32 type)
 {
 	event_t event;
+	const boolean menumouse = !disable_mouse && havefocus && M_MenuMouseActive();
+	if (evt.button == SDL_BUTTON_LEFT && type == SDL_MOUSEBUTTONUP)
+		SDL_CaptureMouse(SDL_FALSE);
 
 	SDL_memset(&event, 0, sizeof(event_t));
 
@@ -951,13 +1018,19 @@ static void Impl_HandleMouseButtonEvent(SDL_MouseButtonEvent evt, Uint32 type)
 	// this apparently makes a mouse button down event but not a mouse button up event,
 	// resulting in whatever key was pressed down getting "stuck" if we don't ignore it.
 	// -- Monster Iestyn (28/05/18)
-	if (SDL_GetMouseFocus() != window
+	if ((SDL_GetMouseFocus() != window && !(menumouse && type == SDL_MOUSEBUTTONUP))
 	 || (ShouldIgnoreMouse() && !chat_on && !con_destlines))
 		return;
 
 	/// \todo inputEvent.button.which
-	if (USE_MOUSEINPUT)
+	if (USE_MOUSEINPUT || menumouse)
 	{
+		if (menumouse)
+		{
+			Impl_PostMenuPointer(evt.x, evt.y);
+			if (evt.button == SDL_BUTTON_LEFT && type == SDL_MOUSEBUTTONDOWN)
+				SDL_CaptureMouse(SDL_TRUE);
+		}
 		if (type == SDL_MOUSEBUTTONUP)
 		{
 			event.type = ev_keyup;
@@ -1498,7 +1571,7 @@ void I_FinishUpdate(void)
 		{
 			HWD.pfnMakeScreenTexture(HWD_SCREENTEXTURE_GENERIC2);
 			HWD.pfnSetShader(HWR_GetShaderFromTarget(SHADER_PALETTE_POSTPROCESS));
-			HWD.pfnDrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0);
+			HWD.pfnDrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0, true);
 			HWD.pfnUnSetShader();
 		}
 		OglSdlFinishUpdate(cv_vidwait.value);

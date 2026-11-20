@@ -26,6 +26,7 @@
 #include "m_random.h"
 #include "p_local.h"
 #include "r_draw.h"
+#include "r_data.h"
 #include "r_main.h"
 #include "s_sound.h"
 #include "g_game.h"
@@ -1975,6 +1976,17 @@ void G_PreLevelTitleCard(void)
 		ST_runTitleCard();
 		ST_preLevelTitleCardDrawer();
 		I_FinishUpdate(); // page flip or blit buffer
+		/* Use the fixed pre-level presentation time to finish GPU preparation.
+		 * One ranked asset is submitted per title-card frame, so large animated
+		 * skybox and distant-room textures do not block the first live view. */
+		{
+			UINT8 warmup;
+			/* Most assets are tiny, so one item per title-card tic did not reach
+			 * later animation frames before control was returned. Eight still keeps
+			 * the work bounded while using the fixed presentation interval fully. */
+			for (warmup = 0; warmup < 8; warmup++)
+				R_ContinueLevelSpritePrecache(true);
+		}
 		NetKeepAlive(); // Prevent timeouts
 
 		if (moviemode)
