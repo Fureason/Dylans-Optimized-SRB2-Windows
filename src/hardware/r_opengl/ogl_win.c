@@ -557,7 +557,7 @@ EXPORT void HWRAPI(FinishUpdate) (INT32 waitvbl)
 EXPORT void HWRAPI(SetPalette) (RGBA_t *pal)
 {
 	size_t palsize = (sizeof(RGBA_t) * 256);
-	// Palette-derived textures must be rebuilt; true-colour sources do not.
+
 	if (memcmp(&myPaletteData, pal, palsize))
 	{
 		memcpy(&myPaletteData, pal, palsize);

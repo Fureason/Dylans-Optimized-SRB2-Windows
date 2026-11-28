@@ -26,6 +26,7 @@ Closure *luaF_newCclosure (lua_State *L, int nelems, Table *e) {
   c->c.isC = 1;
   c->c.env = e;
   c->c.nupvalues = cast_byte(nelems);
+  c->c.numberindex = NULL;
   return c;
 }
 

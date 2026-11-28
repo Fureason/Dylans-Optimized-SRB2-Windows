@@ -36,6 +36,11 @@ cv_rsaturation, cv_ysaturation, cv_gsaturation, cv_csaturation, cv_bsaturation, 
 
 // Allocates buffer screens, call before R_Init.
 void V_Init(void);
+void V_BeginSoftwareFrame(boolean allow_truecolor);
+boolean V_HasSoftwareColors(void);
+const RGBA_t *V_FinishSoftwareColors(void);
+void V_ReadSoftwareRGB(UINT8 *rgb, boolean colorprofile);
+void V_FreeSoftwareColors(void);
 
 // Recalculates the viddef (dup, fdup, etc.) according to the current screen resolution.
 void V_Recalc(void);
@@ -56,6 +61,7 @@ UINT8 GetColorLUTDirect(colorlookup_t *lut, UINT8 r, UINT8 g, UINT8 b);
 
 // Set the current RGB palette lookup to use for palettized graphics
 void V_SetPalette(INT32 palettenum);
+void V_ApplyPendingColorProfile(void);
 
 void V_SetPaletteLump(const char *pal);
 
@@ -171,6 +177,8 @@ void V_CubeApply(UINT8 *red, UINT8 *green, UINT8 *blue);
 #define V_DrawTinyTranslucentPatch(x,y,s,p) V_DrawFixedPatch((x)<<FRACBITS, (y)<<FRACBITS, FRACUNIT/4, s, p, NULL)
 #define V_DrawSciencePatch(x,y,s,p,sc) V_DrawFixedPatch(x,y,sc,s,p,NULL)
 #define V_DrawFixedPatch(x,y,sc,s,p,c) V_DrawStretchyFixedPatch(x,y,sc,sc,s,p,c)
+#define V_PATCH_SCREEN_BIAS (FRACUNIT/64)
+#define V_PATCH_SAMPLE_BIAS (FRACUNIT/1024 + FRACUNIT/16384)
 void V_DrawStretchyFixedPatch(fixed_t x, fixed_t y, fixed_t pscale, fixed_t vscale, INT32 scrn, patch_t *patch, const UINT8 *colormap);
 void V_DrawCroppedPatch(fixed_t x, fixed_t y, fixed_t pscale, fixed_t vscale, INT32 scrn, patch_t *patch, const UINT8 *colormap, fixed_t sx, fixed_t sy, fixed_t w, fixed_t h);
 
@@ -180,6 +188,8 @@ void V_DrawContinueIcon(INT32 x, INT32 y, INT32 flags, INT32 skinnum, UINT16 ski
 void V_DrawBlock(INT32 x, INT32 y, INT32 scrn, INT32 width, INT32 height, const UINT8 *src);
 
 // fill a box with a single color
+INT32 V_ScrollbarThumb(INT32 height, INT32 range, INT32 visible, INT32 value, INT32 *top);
+INT32 V_ScrollbarValue(INT32 offset, INT32 travel, INT32 range);
 void V_DrawFill(INT32 x, INT32 y, INT32 w, INT32 h, INT32 c);
 void V_DrawFillConsoleMap(INT32 x, INT32 y, INT32 w, INT32 h, INT32 c);
 // fill a box with a flat as a pattern

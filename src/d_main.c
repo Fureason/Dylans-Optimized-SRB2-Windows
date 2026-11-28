@@ -72,6 +72,7 @@
 #include "filesrch.h" // refreshdirmenu
 #include "g_input.h" // tutorial mode control scheming
 #include "m_perfstats.h"
+#include "m_inputlatency.h"
 #include "m_custombuild.h"
 #include "m_random.h"
 #include "command.h"
@@ -152,6 +153,7 @@ static char addonsdir[MAX_WADPATH];
 // referenced from i_system.c for I_GetKey()
 
 event_t events[MAXEVENTS];
+static precise_t input_event_times[MAXEVENTS];
 INT32 eventhead, eventtail;
 
 boolean dedicated = false;
@@ -163,6 +165,8 @@ boolean dedicated = false;
 void D_PostEvent(const event_t *ev)
 {
 	events[eventhead] = *ev;
+	input_event_times[eventhead] = inputlatency_recording && ev->type == ev_keydown
+		? I_GetPreciseTime() : 0;
 	eventhead = (eventhead+1) & (MAXEVENTS-1);
 }
 
@@ -240,6 +244,9 @@ void D_ProcessEvents(void)
 				continue;
 		}
 
+		if (!menuactive && !CON_Ready() && HU_ChatHistoryResponder(ev))
+			continue;
+
 		if (!CON_Ready() && !menuactive) {
 			if (G_LuaResponder(ev))
 				continue;
@@ -283,6 +290,8 @@ void D_ProcessEvents(void)
 		if (!hooked && !CON_Ready() && G_LuaResponder(ev))
 			continue;
 
+		if (inputlatency_recording && ev->type == ev_keydown)
+			M_InputLatencyKeyDown(ev->key, input_event_times[eventtail]);
 		G_Responder(ev);
 	}
 
@@ -316,8 +325,8 @@ static void D_Display(void)
 	if (nodrawers)
 		return; // for comparative timing/profiling
 
-	/* Keep frame diagnostics current even when the on-screen perf overlay is
-	 * hidden. perfreport must never return a zero/stale frame measurement. */
+
+
 	PS_UpdateFrameStats();
 
 	// Lactozilla: Switching renderers works by checking
@@ -338,6 +347,8 @@ static void D_Display(void)
 	if ((setrenderneeded || setmodeneeded) && !wipe)
 		SCR_SetMode(); // change video mode
 
+	V_ApplyPendingColorProfile();
+
 	// Recalc the screen
 	if (vid.recalc)
 		SCR_Recalc(); // NOTE! setsizeneeded is set by SCR_Recalc()
@@ -357,6 +368,7 @@ static void D_Display(void)
 	// draw buffered stuff to screen
 	// Used only by linux GGI version
 	I_UpdateNoBlit();
+	V_BeginSoftwareFrame(false);
 
 	// save the current screen if about to wipe
 	wipe = (gamestate != wipegamestate);
@@ -403,6 +415,8 @@ static void D_Display(void)
 	else
 		wipetypepre = -1;
 
+
+	V_BeginSoftwareFrame(!wipe);
 	// do buffered drawing
 	switch (gamestate)
 	{
@@ -621,6 +635,7 @@ static void D_Display(void)
 	//
 	if (wipe && wipetypepost != INT16_MAX)
 	{
+		V_BeginSoftwareFrame(false);
 		// note: moved up here because NetUpdate does input changes
 		// and input during wipe tends to mess things up
 		wipedefindex += WIPEFINALSHIFT;
@@ -704,6 +719,8 @@ static void D_Display(void)
 		PS_START_TIMING(ps_swaptime);
 		I_FinishUpdate(); // page flip or blit buffer
 		PS_STOP_TIMING(ps_swaptime);
+		if (inputlatency_recording)
+			M_InputLatencyPresented();
 	}
 }
 
@@ -713,18 +730,259 @@ static void D_Display(void)
 
 tic_t rendergametic;
 
+static tic_t oldentertics, rendertimeout = INFTICS;
+static double deltatics, deltasecs;
+static precise_t frame_deadline;
+static UINT32 frame_deadline_cap;
+
+static void D_RunFrame(boolean window_move)
+{
+	tic_t entertic, realtics;
+	boolean interp, doDisplay;
+	if (I_CompanionShutdownRequested())
+	{
+		CONS_Printf("Controlling client closed; stopping local dedicated companion.\n");
+		I_Quit();
+	}
+
+
+	const UINT64 precision = I_GetPrecisePrecision();
+	const precise_t enterprecise = I_GetPreciseTime();
+	const UINT32 display_rate = I_GetRefreshRate();
+	precise_t capbudget;
+	precise_t finishprecise = enterprecise;
+	const boolean software_vsync_pacing = cv_vidwait.value
+		&& !I_VSyncProvidesPacing();
+	UINT32 framecap = R_GetFramerateCap();
+	if (software_vsync_pacing && display_rate && (!framecap || framecap > display_rate))
+		framecap = display_rate;
+
+	capbudget = framecap ? (precise_t)((precision + framecap / 2) / framecap) : 0;
+
+	I_UpdateTime(cv_timescale.value);
+	DRPC_Update();
+
+	if (lastwipetic)
+	{
+		oldentertics = lastwipetic;
+		lastwipetic = 0;
+	}
+
+	// get real tics
+	entertic = I_GetTime();
+	realtics = entertic - oldentertics;
+	oldentertics = entertic;
+
+	if (demoplayback && gamestate == GS_LEVEL)
+	{
+		// Nicer place to put this.
+		realtics = realtics * cv_playbackspeed.value;
+	}
+
+#ifdef DEBUGFILE
+	if (!realtics)
+		if (debugload)
+			debugload--;
+#endif
+
+	interp = R_UsingFrameInterpolation() && !dedicated;
+	doDisplay = false;
+
+#ifdef HW3SOUND
+	HW3S_BeginFrameUpdate();
+#endif
+
+	refreshdirmenu = 0; // not sure where to put this, here as good as any?
+
+	const boolean pace_client_tics = interp && (!framecap || framecap > TICRATE)
+		&& cv_timescale.value == FRACUNIT && !singletics;
+	if (realtics > 0 || singletics || (pace_client_tics && D_PollDeferredNetTics(enterprecise)))
+	{
+		// don't skip more than 10 frames at a time
+		// (fadein / fadeout cause massive frame skip!)
+		if (realtics > 8)
+			realtics = 1;
+
+
+
+#if defined(_WIN32) && !defined(DEDICATED)
+		I_SetCrashPhase("game tics and network");
+#endif
+		TryRunTics(realtics, pace_client_tics ? enterprecise + I_GetPrecisePrecision() / 60 : 0);
+
+		if (lastdraw || singletics || gametic > rendergametic)
+		{
+			rendergametic = gametic;
+			rendertimeout = entertic + TICRATE/17;
+
+			doDisplay = true;
+		}
+		else if (realtics && ((client && netgame && gamestate == GS_LEVEL) || rendertimeout < entertic))
+			doDisplay = true;
+
+		renderisnewtic = realtics > 0 || singletics;
+	}
+	else
+	{
+		renderisnewtic = false;
+	}
+
+	if (interp)
+	{
+		// I looked at the possibility of putting in a float drawer for
+		// perfstats and it's very complicated, so we'll just do this instead...
+		ps_interp_frac.value.p = (precise_t)((FIXED_TO_FLOAT(g_time.timefrac)) * 1000.0f);
+		ps_interp_lag.value.p = (precise_t)((deltasecs) * 1000.0f);
+
+		renderdeltatics = FLOAT_TO_FIXED(deltatics);
+
+		if (!(paused || P_AutoPause()) && deltatics < 1.0 && !hu_stopped)
+		{
+			rendertimefrac = g_time.timefrac;
+		}
+		else
+		{
+			rendertimefrac = FRACUNIT;
+		}
+	}
+	else
+	{
+		renderdeltatics = realtics * FRACUNIT;
+		rendertimefrac = FRACUNIT;
+	}
+	const boolean network_view = interp && client && netgame && gamestate == GS_LEVEL && leveltime > 3
+		&& !demoplayback && !(paused || P_AutoPause()) && cv_timescale.value == FRACUNIT;
+	const precise_t viewtime = I_GetPreciseTime();
+	rendertimefrac = R_NetworkTimeFrac(viewtime, gametic, rendertimefrac, network_view);
+
+	if (interp || doDisplay)
+	{
+#if defined(_WIN32) && !defined(DEDICATED)
+		I_SetCrashPhase("rendering and presenting");
+#endif
+		R_BeginNetworkViewFrame(viewtime, network_view);
+		D_Display();
+		R_EndNetworkViewFrame();
+	}
+
+#if defined(_WIN32) && !defined(DEDICATED)
+	I_SetCrashPhase("screenshot and recording");
+#endif
+	// Only take screenshots after drawing.
+	M_PollAsyncScreenshots();
+	if (moviemode)
+		M_SaveFrame();
+	if (takescreenshot)
+		M_DoScreenShot();
+
+#if defined(_WIN32) && !defined(DEDICATED)
+	I_SetCrashPhase("updating sound");
+#endif
+	// consoleplayer -> displayplayers (hear sounds from viewpoint)
+	S_UpdateSounds(); // move positional sounds
+	if (realtics > 0 || singletics)
+		S_UpdateClosedCaptions();
+
+#ifdef HW3SOUND
+	HW3S_EndFrameUpdate();
+#endif
+
+#if defined(_WIN32) && !defined(DEDICATED)
+	I_SetCrashPhase("Lua garbage collection");
+#endif
+	LUA_Step();
+
+#if defined(_WIN32) && !defined(DEDICATED)
+	I_SetCrashPhase("preparing graphics and pacing frames");
+#endif
+
+
+
+
+	if (!window_move && gamestate == GS_LEVEL)
+	{
+		precise_t warmup_now = I_GetPreciseTime();
+		precise_t warmup_budget = capbudget;
+		precise_t warmup_margin = (precise_t)(I_GetPrecisePrecision() / 500);
+
+		if (!warmup_budget)
+		{
+			UINT32 refresh = I_GetRefreshRate();
+
+
+
+
+
+
+			if (!refresh || refresh > 60)
+				refresh = 60;
+			warmup_budget = (precise_t)(I_GetPrecisePrecision() / refresh);
+		}
+
+		if (warmup_now - enterprecise + warmup_margin < warmup_budget)
+			R_ContinueLevelSpritePrecache(false);
+	}
+
+	// Fully completed frame made.
+	finishprecise = I_GetPreciseTime();
+	{
+		precise_t adaptive_work = finishprecise - enterprecise;
+
+
+
+		if (cv_vidwait.value && ps_swaptime.value.p < adaptive_work)
+			adaptive_work -= ps_swaptime.value.p;
+		R_UpdateAdaptiveEffects(adaptive_work, capbudget);
+	}
+#if defined(_WIN32) && !defined(DEDICATED)
+	if (!singletics && gamestate == GS_LEVEL)
+		I_ReportFrameHitch(enterprecise, finishprecise);
+	I_RecordDiagnosticHeartbeat();
+#endif
+	if (!singletics && !window_move)
+	{
+
+
+		const boolean present_paces_frame = cv_vidwait.value && I_VSyncProvidesPacing()
+			&& display_rate && framecap >= display_rate;
+		const boolean use_deadline = cv_fpscap.value == 0
+			|| cv_smoothframepacing.value || software_vsync_pacing;
+
+		if (capbudget && !present_paces_frame)
+		{
+			precise_t deadline = enterprecise + capbudget;
+			if (use_deadline && frame_deadline && frame_deadline_cap == framecap)
+				deadline = frame_deadline;
+
+
+			const precise_t now = I_GetPreciseTime();
+			if ((INT64)(deadline - now) > 0)
+				I_SleepDuration(deadline - now);
+
+			if (use_deadline)
+			{
+
+
+				const precise_t woke = I_GetPreciseTime();
+				frame_deadline = (INT64)(woke - deadline) >= (INT64)capbudget
+					? woke + capbudget : deadline + capbudget;
+			}
+			else
+				frame_deadline = 0;
+		}
+		else
+			frame_deadline = 0;
+		frame_deadline_cap = framecap;
+	}
+	// Capture the time once more to get the real delta time.
+	finishprecise = I_GetPreciseTime();
+	deltasecs = (double)((INT64)(finishprecise - enterprecise)) / precision;
+	deltatics = deltasecs * NEWTICRATE;
+}
+
 void D_SRB2Loop(void)
 {
-	tic_t entertic = 0, oldentertics = 0, realtics = 0, rendertimeout = INFTICS;
-	double deltatics = 0.0;
-	double deltasecs = 0.0;
 	static lumpnum_t gstartuplumpnum;
-	precise_t frame_deadline = 0;
-	UINT32 frame_deadline_cap = 0;
-
-	boolean interp = false;
-	boolean doDisplay = false;
-
 	if (dedicated)
 		server = true;
 
@@ -779,279 +1037,11 @@ void D_SRB2Loop(void)
 
 	for (;;)
 	{
-		if (I_CompanionShutdownRequested())
-		{
-			CONS_Printf("Controlling client closed; stopping local dedicated companion.\n");
-			I_Quit();
-		}
-
-		// capbudget is the minimum precise_t duration of a single loop iteration
-		precise_t capbudget;
-		precise_t enterprecise = I_GetPreciseTime();
-		precise_t finishprecise = enterprecise;
-		const boolean software_vsync_pacing = cv_vidwait.value
-			&& !I_VSyncProvidesPacing();
-		UINT32 framecap = R_GetFramerateCap();
-		if (software_vsync_pacing)
-		{
-			const UINT32 refresh = I_GetRefreshRate();
-			if (refresh && (!framecap || framecap > refresh))
-				framecap = refresh;
-		}
-
-		if (framecap)
-		{
-			// Casting the return value of a function is bad practice (apparently)
-			double budget = round((1.0 / framecap) * I_GetPrecisePrecision());
-			capbudget = (precise_t) budget;
-		}
-		else
-			capbudget = 0;
-
-		I_UpdateTime(cv_timescale.value);
-		DRPC_Update();
-
-		if (lastwipetic)
-		{
-			oldentertics = lastwipetic;
-			lastwipetic = 0;
-		}
-
-		// get real tics
-		entertic = I_GetTime();
-		realtics = entertic - oldentertics;
-		oldentertics = entertic;
-
-		if (demoplayback && gamestate == GS_LEVEL)
-		{
-			// Nicer place to put this.
-			realtics = realtics * cv_playbackspeed.value;
-		}
-
-#ifdef DEBUGFILE
-		if (!realtics)
-			if (debugload)
-				debugload--;
+#if defined(_WIN32) && defined(HAVE_SDL)
+		if (!dedicated)
+			I_RunPendingWindowMove(D_RunFrame);
 #endif
-
-		interp = R_UsingFrameInterpolation() && !dedicated;
-		doDisplay = false;
-
-#ifdef HW3SOUND
-		HW3S_BeginFrameUpdate();
-#endif
-
-		refreshdirmenu = 0; // not sure where to put this, here as good as any?
-
-		const boolean pace_client_tics = interp && (!framecap || framecap > TICRATE)
-			&& cv_timescale.value == FRACUNIT && !singletics;
-		if (realtics > 0 || singletics || (pace_client_tics && D_PollLateNetTics()))
-		{
-			// don't skip more than 10 frames at a time
-			// (fadein / fadeout cause massive frame skip!)
-			if (realtics > 8)
-				realtics = 1;
-
-			// Give the client a chance to draw before starting another costly tic.
-			// Already-due tics can resume between the regular 35 Hz input polls.
-			TryRunTics(realtics, pace_client_tics ? enterprecise + I_GetPrecisePrecision() / 60 : 0);
-
-			if (lastdraw || singletics || gametic > rendergametic)
-			{
-				rendergametic = gametic;
-				rendertimeout = entertic + TICRATE/17;
-
-				doDisplay = true;
-			}
-			else if (realtics && ((client && netgame && gamestate == GS_LEVEL) || rendertimeout < entertic))
-			// Keep the local camera responsive from the first missing network tic.
-			{
-				// Lagless camera! Yay!
-				if (gamestate == GS_LEVEL && netgame)
-				{
-					// Evaluate the chase cam once for every local realtic
-					// This might actually be better suited inside G_Ticker or TryRunTics
-					for (tic_t chasecamtics = 0; chasecamtics < realtics; chasecamtics++)
-					{
-						/* This is a render-only camera update: no gameplay tic ran.  A
-						 * moving floor's pmomz belongs to one gameplay tic, so applying
-						 * it again here makes the view bob on platforms whenever the
-						 * network briefly starves.  Preserve it for the real tic while
-						 * preventing the camera-only pass from consuming it repeatedly. */
-						if (splitscreen && camera2.chase)
-						{
-							mobj_t *mo = players[secondarydisplayplayer].mo;
-							fixed_t platformmomz = mo ? mo->pmomz : 0;
-							if (mo)
-								mo->pmomz = 0;
-							P_MoveChaseCamera(&players[secondarydisplayplayer], &camera2, false);
-							if (mo)
-								mo->pmomz = platformmomz;
-						}
-						if (camera.chase)
-						{
-							mobj_t *mo = players[displayplayer].mo;
-							fixed_t platformmomz = mo ? mo->pmomz : 0;
-							if (mo)
-								mo->pmomz = 0;
-							P_MoveChaseCamera(&players[displayplayer], &camera, false);
-							if (mo)
-								mo->pmomz = platformmomz;
-						}
-					}
-					R_UpdateViewInterpolation();
-				}
-
-				doDisplay = true;
-			}
-
-			renderisnewtic = realtics > 0 || singletics;
-		}
-		else
-		{
-			renderisnewtic = false;
-		}
-
-		if (interp)
-		{
-			// I looked at the possibility of putting in a float drawer for
-			// perfstats and it's very complicated, so we'll just do this instead...
-			ps_interp_frac.value.p = (precise_t)((FIXED_TO_FLOAT(g_time.timefrac)) * 1000.0f);
-			ps_interp_lag.value.p = (precise_t)((deltasecs) * 1000.0f);
-
-			renderdeltatics = FLOAT_TO_FIXED(deltatics);
-
-			if (!(paused || P_AutoPause()) && deltatics < 1.0 && !hu_stopped)
-			{
-				rendertimefrac = g_time.timefrac;
-			}
-			else
-			{
-				rendertimefrac = FRACUNIT;
-			}
-		}
-		else
-		{
-			renderdeltatics = realtics * FRACUNIT;
-			rendertimefrac = FRACUNIT;
-		}
-		rendertimefrac = R_NetworkTimeFrac(I_GetPreciseTime(), gametic, rendertimefrac,
-			interp && client && netgame && gamestate == GS_LEVEL && leveltime > 3
-			&& !demoplayback && !(paused || P_AutoPause()) && cv_timescale.value == FRACUNIT);
-
-		if (interp || doDisplay)
-		{
-			D_Display();
-		}
-
-		// Only take screenshots after drawing.
-		M_PollAsyncScreenshots();
-		if (moviemode)
-			M_SaveFrame();
-		if (takescreenshot)
-			M_DoScreenShot();
-
-		// consoleplayer -> displayplayers (hear sounds from viewpoint)
-		S_UpdateSounds(); // move positional sounds
-		if (realtics > 0 || singletics)
-			S_UpdateClosedCaptions();
-
-#ifdef HW3SOUND
-		HW3S_EndFrameUpdate();
-#endif
-
-		LUA_Step();
-
-		/* Warm used sprites only when this frame has comfortable headroom. The
-		 * precacher limits OpenGL to one upload and lets Software use at most a
-		 * millisecond, avoiding both a long loading pause and a burst of slow
-		 * gameplay frames. */
-		if (gamestate == GS_LEVEL)
-		{
-			precise_t warmup_now = I_GetPreciseTime();
-			precise_t warmup_budget = capbudget;
-			precise_t warmup_margin = (precise_t)(I_GetPrecisePrecision() / 500); /* 2 ms */
-
-			if (!warmup_budget)
-			{
-				UINT32 refresh = I_GetRefreshRate();
-				/* Uncapped rendering used the monitor's full refresh interval as
-				 * its threshold. At 165 Hz that allowed less than four milliseconds
-				 * after the safety margin, so large-map background warming almost
-				 * never advanced. Sixty hertz is only an admission threshold here,
-				 * not a frame cap; the warmer still submits just one asset and backs
-				 * off after an expensive upload. */
-				if (!refresh || refresh > 60)
-					refresh = 60;
-				warmup_budget = (precise_t)(I_GetPrecisePrecision() / refresh);
-			}
-
-			if (warmup_now - enterprecise + warmup_margin < warmup_budget)
-				R_ContinueLevelSpritePrecache(false);
-		}
-
-		// Fully completed frame made.
-		finishprecise = I_GetPreciseTime();
-		{
-			precise_t adaptive_work = finishprecise - enterprecise;
-			/* A blocking VSync present is deliberate waiting, not render load.
-			 * Excluding it prevents a healthy 165 Hz VSync session from slowly
-			 * ramping visual reduction all the way up. */
-			if (cv_vidwait.value && ps_swaptime.value.p < adaptive_work)
-				adaptive_work -= ps_swaptime.value.p;
-			R_UpdateAdaptiveEffects(adaptive_work, capbudget);
-		}
-#if defined(_WIN32) && !defined(DEDICATED)
-		if (!singletics && gamestate == GS_LEVEL)
-			I_ReportFrameHitch(enterprecise, finishprecise);
-		I_RecordDiagnosticHeartbeat();
-#endif
-		if (!singletics)
-		{
-			INT64 elapsed = (INT64)(finishprecise - enterprecise);
-
-			/* VSync already supplies the limiter at the
-			 * display refresh rate.  Adding our software sleep in front of that swap
-			 * can miss the next vblank and turn a 165 Hz cap into roughly 120 FPS.
-			 * Keep software pacing only when the requested cap is below refresh. */
-			const UINT32 refresh = I_GetRefreshRate();
-			const boolean vsync_with_match_refresh = cv_vidwait.value
-				&& I_VSyncProvidesPacing() && framecap && refresh
-				&& framecap >= refresh;
-
-			if (framecap && !vsync_with_match_refresh
-			&& (cv_smoothframepacing.value || software_vsync_pacing))
-			{
-				/* Keep capped frames on an absolute cadence. A relative sleep starts
-				 * every new frame from the previous wake-up error, which produces
-				 * visible micro-jitter in windowed mode. */
-				if (!frame_deadline || frame_deadline_cap != framecap)
-					frame_deadline = enterprecise + capbudget;
-
-				if ((INT64)(frame_deadline - finishprecise) > 0)
-					I_SleepDuration(frame_deadline - finishprecise);
-
-				finishprecise = I_GetPreciseTime();
-				if ((INT64)(finishprecise - frame_deadline) > (INT64)capbudget * 2)
-					frame_deadline = finishprecise + capbudget;
-				else
-					frame_deadline += capbudget;
-				frame_deadline_cap = framecap;
-			}
-			else if (framecap && elapsed > 0 && (INT64)capbudget > elapsed && !vsync_with_match_refresh)
-			{
-				I_SleepDuration(capbudget - (finishprecise - enterprecise));
-			}
-			else
-			{
-				frame_deadline = 0;
-				frame_deadline_cap = framecap;
-			}
-		}
-		// Capture the time once more to get the real delta time.
-		finishprecise = I_GetPreciseTime();
-		deltasecs = (double)((INT64)(finishprecise - enterprecise)) / I_GetPrecisePrecision();
-		deltatics = deltasecs * NEWTICRATE;
+		D_RunFrame(false);
 	}
 }
 
@@ -1372,7 +1362,7 @@ void D_SRB2Main(void)
 	INT32 pstartmap = 1;
 	boolean autostart = false;
 
-	/* The previous client must finish saving before this one reads settings. */
+
 #ifdef HAVE_SDL
 	I_WaitForRestart();
 #endif
@@ -1512,8 +1502,8 @@ void D_SRB2Main(void)
 	CONS_Printf("Z_Init(): Init zone memory allocation daemon. \n");
 	Z_Init();
 
-	/* D_SetPassword allocates the hashed password list from the zone, so never
-	 * call it before Z_Init. */
+
+
 	if (M_CheckParm("-password") && M_IsNextParm())
 		D_SetPassword(M_GetNextParm());
 
@@ -1622,7 +1612,7 @@ void D_SRB2Main(void)
 
 	D_RegisterServerCommands();
 	D_RegisterClientCommands(); // be sure that this is called before D_CheckNetGame
-	M_RegisterEarlyHostingVariables(); // saved Easy Host settings must exist before config.cfg loads
+	M_RegisterEarlyMenuVariables();
 	R_RegisterEngineStuff();
 	S_RegisterSoundStuff();
 
@@ -1644,7 +1634,7 @@ void D_SRB2Main(void)
 
 	//--------------------------------------------------------- CONFIG.CFG
 	M_FirstLoadConfig(); // WARNING : this do a "COM_BufExecute()"
-	Net_ApplyIPv6Default(); // one-time migration: IPv4 is the reliable default
+	Net_ApplyIPv6Default();
 
 	if (M_CheckParm("-gamedata") && M_IsNextParm())
 	{
@@ -1895,7 +1885,7 @@ void D_SRB2Main(void)
 			}
 		}
 	}
-	else if (M_CheckParm("-skipintro"))
+	else if (M_CheckParm("-cleanjoin") || M_CheckParm("-skipintro"))
 	{
 		F_InitMenuPresValues();
 		F_StartTitleScreen();

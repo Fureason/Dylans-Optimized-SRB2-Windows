@@ -31,7 +31,7 @@
 #include "w_wad.h"
 #include "z_zone.h"
 #include "p_setup.h" // levelflats
-#include "p_spec.h" // sector portal destinations
+#include "p_spec.h"
 #include "v_video.h" // pMasterPalette
 #include "f_finale.h" // wipes
 #include "byteptr.h"
@@ -1157,8 +1157,8 @@ UINT8 NearestPaletteColor(UINT8 r, UINT8 g, UINT8 b, RGBA_t *palette)
 
 	if (palette == NULL)
 		palette = pMasterPalette;
-	/* Four exact squared RGB distances at a time. Alpha never participates;
-	 * signed 16-bit differences and their 32-bit sums cannot overflow here. */
+
+
 	for (i = 0; i < 256; i += 4)
 	{
 		const __m128i packed = _mm_loadu_si128((const __m128i *)&palette[i]);
@@ -1185,7 +1185,7 @@ UINT8 NearestPaletteColor(UINT8 r, UINT8 g, UINT8 b, RGBA_t *palette)
 	_mm_storeu_si128((__m128i *)distances, best);
 	_mm_storeu_si128((__m128i *)colors, indices);
 	for (i = 0; i < 4; i++)
-		/* Preserve the original first-palette-entry result for every tie. */
+
 		if (distances[i] < bestdistortion
 		|| (distances[i] == bestdistortion && colors[i] < bestcolor))
 		{
@@ -1286,9 +1286,9 @@ static boolean R_PrecacheSpriteLumpBounded(lumpnum_t lump, size_t maxpixels)
 {
 	INT16 width = 0, height = 0;
 
-	/* Reading a PNG's IHDR is cheap and avoids decoding/uploading a multi-
-	 * megapixel decorative sprite merely because the background warmer reached
-	 * it. Such an upload made KIMIA0 stall a measured frame for about 190 ms. */
+
+
+
 	if (!W_ReadPatchHeader(lump, &width, &height, NULL, NULL)
 	|| width <= 0 || height <= 0
 	|| (size_t)width * (size_t)height > maxpixels)
@@ -1298,12 +1298,12 @@ static boolean R_PrecacheSpriteLumpBounded(lumpnum_t lump, size_t maxpixels)
 	return true;
 }
 
-/* Large custom maps can contain hundreds of decorative sprite types. Decoding
- * all of them before the first frame made Software spend more than a second in
- * level precache, while uploading them all made OpenGL pause for several
- * seconds. Keep the used-sprite set and feed it to either renderer only while
- * completed frames have spare time. Anything immediately visible still uses
- * the normal on-demand path and remains correct. */
+
+
+
+
+
+
 static char *levelspritepresent;
 static size_t levelspriteprecache_sprite;
 static size_t levelspriteprecache_frame;
@@ -1324,37 +1324,35 @@ static boolean levelwipeprefertexture;
 static UINT8 levelprecachecooldown;
 static boolean levelprecacheprefertexture;
 
-#define LEVELTEXTURE_OPAQUE 1
-#define LEVELTEXTURE_MASKED 2
 #define LEVELGRAPHICS_LOCAL_PRIORITY_MAX 16
 #define LEVELGRAPHICS_FREQUENT_PRIORITY_MAX 12
 #define LEVELGRAPHICS_FREQUENT_SEARCH_START 64
 #define LEVELGRAPHICS_FREQUENT_INSERT_AFTER 54
 #define LEVELGRAPHICS_FREQUENT_MAX_PIXELS (512u * 1024u)
-/* Give assets that are individually expensive to decode/upload a small lane
- * immediately after the spawn neighborhood. Five directly-used materials go
- * first, followed by costly continuation frames, so a large animated backdrop
- * is resident before it advances while ordinary huge room art still wins the
- * front of the queue. */
+
+
+
+
+
 #define LEVELGRAPHICS_COSTLY_MIN_PIXELS (256u * 1024u)
 #define LEVELGRAPHICS_COSTLY_DIRECT_MAX 16
 #define LEVELGRAPHICS_COSTLY_DIRECT_FIRST 5
 #define LEVELGRAPHICS_COSTLY_ANIMATION_MAX 8
 #define LEVELGRAPHICS_COSTLY_FLAT_MAX 12
-/* Upload time is driven much more by decoded area than compressed file size.
- * Keep large custom artwork out of the live background warmer: a 9 KiB PNG can
- * still expand to a 1200x1000 texture and block the OpenGL driver for 40+ ms. */
+
+
+
 #define LEVELTEXTURE_BACKGROUND_MAX_PIXELS (160u * 1024u)
-/* Prepare the most likely current-map artwork while the loading screen is up.
- * Keep both area and wall-clock bounds: a map with hundreds of true-colour
- * photographs must not turn a doorway hitch into a minute-long level load. */
+
+
+
 #define LEVELGRAPHICS_INITIAL_MAX_PIXELS (64u * 1024u * 1024u)
 #define LEVELGRAPHICS_INITIAL_MAX_SINGLE_PIXELS (8u * 1024u * 1024u)
 #define LEVELGRAPHICS_INITIAL_MAX_MILLISECONDS 90u
 #define LEVELGRAPHICS_NETGAME_INITIAL_MAX_MILLISECONDS 220u
-/* Software can build composites lazily, just like OpenGL uploads textures
- * lazily. Prepare only the spawn neighborhood during the blocking map load;
- * the fixed title-card interval consumes the ranked remainder before play. */
+
+
+
 #define LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_PIXELS (16u * 1024u * 1024u)
 #define LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_SINGLE_PIXELS (8u * 1024u * 1024u)
 #define LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_MILLISECONDS 120u
@@ -1374,18 +1372,18 @@ static UINT32 R_LevelGraphicPriorityScore(INT32 texture, UINT32 references,
 	{
 		const size_t pixels = (size_t)textures[texture]->width
 			* (size_t)textures[texture]->height;
-		/* Decoded area predicts driver cost far better than compressed PNG size.
-		 * Composite 512x512 walls can cost more than ten milliseconds even when
-		 * referenced only once, so place them ahead of heavily repeated cheap
-		 * tiles while the title card can still hide their preparation. */
+
+
+
+
 		UINT32 sizebonus = (UINT32)(pixels / 1024u);
 		if (sizebonus > 4096u)
 			sizebonus = 4096u;
 		score += sizebonus;
-		/* Rebuilding a wall made from many patches repeats the full compositor
-		 * pass for every layer.  Give those walls an explicit rank boost so a
-		 * one-off composite (for example a detailed basement backdrop) is built
-		 * under the title card instead of on the first frame it enters view. */
+
+
+
+
 		if (textures[texture]->patchcount > 1)
 		{
 			UINT32 compositebonus = (UINT32)(textures[texture]->patchcount - 1)
@@ -1395,9 +1393,9 @@ static UINT32 R_LevelGraphicPriorityScore(INT32 texture, UINT32 references,
 			score += compositebonus;
 		}
 	}
-	/* A continuation frame can be selected within a few tics despite having no
-	 * direct sidedef reference. A moderate bonus lifts costly frames like FIREC
-	 * without putting hundreds of tiny add-on animations ahead of IRLWALL. */
+
+
+
 	if (animationframe)
 		score += 48u;
 	return score;
@@ -1517,9 +1515,9 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 		|| !levelflatpriority)))
 		goto done;
 
-	/* Always prepare the sky and a small neighborhood around the spawn first.
-	 * Limiting this walk matters on highly subdivided custom maps: the former
-	 * depth-16 walk could spend the entire loading budget on distant artwork. */
+
+
+
 	if (leveltexturepresent && skytexture >= 0 && skytexture < numtextures
 	&& leveltexturepresent[skytexture])
 	{
@@ -1529,9 +1527,9 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 	sectorseen[start - sectors] = 1;
 	queue[tail] = start;
 	depth[tail++] = 0;
-	/* A skybox is rendered as another view every frame, but its sector is not
-	 * connected to the player's sector graph. Treat the active viewpoint as a
-	 * second spawn so its walls and animation frames are ready immediately. */
+
+
+
 	if (skyboxmo[0] && skyboxmo[0]->subsector
 	&& skyboxmo[0]->subsector->sector >= sectors
 	&& skyboxmo[0]->subsector->sector < sectors + numsectors
@@ -1553,8 +1551,8 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 		ffloor_t *rover;
 		UINT8 plane;
 
-		/* Portal views can expose a room with no ordinary shared boundary. Keep
-		 * the same bounded walk and visited set, including nested portal loops. */
+
+
 		if (sectordepth < 2)
 			for (plane = 0; plane < 2; plane++)
 			{
@@ -1574,8 +1572,8 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 		for (i = 0; i < 2; i++)
 			R_QueueLocalPrecacheFlat(localflats[i], flatseen);
 
-		/* FOF artwork belongs to its control sector, often far outside this
-		 * neighborhood. Rank the materials actually projected into this room. */
+
+
 		for (rover = sector->ffloors; rover; rover = rover->next)
 		{
 			if (!(rover->fofflags & FOF_EXISTS))
@@ -1632,12 +1630,12 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 			}
 		}
 	}
-	/* Rank the rest by actual map usage. This brings shared room materials and
-	 * large, repeated walls (such as TDF's basement IRLWALL) ahead of one-off
-	 * photographs without hard-coding any add-on names. Animation frames inherit
-	 * direct wall usage and also receive a decoded-area bonus below, which keeps
-	 * costly frames such as FIREC early without letting a large animation range
-	 * bypass the usage ranking entirely. */
+
+
+
+
+
+
 	for (i = 0; i < numsides; i++)
 	{
 		const INT32 candidates[3] = {sides[i].toptexture,
@@ -1663,9 +1661,9 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 			&& (size_t)flat < numlevelflats && levelflatprecachepresent[flat])
 				flatusage[flat]++;
 		}
-		/* FOF planes are not sector floor/ceiling fields, but they can dominate a
-		 * room and use the same art as their translucent sides. Include them in
-		 * both flat and matching-wall priority calculations. */
+
+
+
 		for (rover = sectors[i].ffloors; rover; rover = rover->next)
 		{
 			INT32 roverflats[2];
@@ -1678,19 +1676,19 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 				if (levelflatprecachepresent && roverflats[candidate] >= 0
 				&& (size_t)roverflats[candidate] < numlevelflats
 				&& levelflatprecachepresent[roverflats[candidate]])
-					/* Transparent planes are drawn in a second ordered pass and often
-					 * reuse their art on the sides. Weight them like several ordinary
-					 * sector references so first-room/basement FOFs warm early. */
+
+
+
 					flatusage[roverflats[candidate]] += 8;
 		}
 	}
-	/* Copy direct wall frequency across each animation before adding flat/FOF
-	 * boosts. Otherwise one dual-use texture can accidentally give every frame
-	 * in a large custom animation the same huge priority as itself. */
+
+
+
 	P_ExpandTextureAnimationUsage(textureusage, (size_t)numtextures);
-	/* A graphic can serve as both a level flat and a wall/FOF-side texture.
-	 * Carry its flat frequency into the wall queue so both GPU variants are
-	 * prepared together; TDF's IRLWALL corridor uses exactly this layout. */
+
+
+
 	for (i = 0; leveltexturepresent && i < numlevelflats; i++)
 		if (flatusage[i])
 		{
@@ -1700,8 +1698,8 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 			if (flattexture >= 0 && flattexture < numtextures
 			&& leveltexturepresent[flattexture])
 				textureusage[flattexture] += flatusage[i] * 32u;
-			/* Flats and wall textures with the same resource name can have distinct
-			 * IDs. Boost the actual wall ID as well as the flat's backing texture. */
+
+
 			if (walltexture >= 0 && walltexture < numtextures
 			&& walltexture != flattexture && leveltexturepresent[walltexture])
 				textureusage[walltexture] += flatusage[i] * 32u;
@@ -1717,9 +1715,9 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 		}
 	qsort(texturecandidates, candidatecount, sizeof (*texturecandidates),
 		R_CompareLevelGraphicPriority);
-	/* The general score intentionally favors repeated cheap walls, but a single
-	 * 1000x1000+ upload can still freeze a live frame for 40-70 ms. Pull a tightly
-	 * bounded set of costly map textures forward without naming add-on assets. */
+
+
+
 	for (i = 0; i < candidatecount; i++)
 	{
 		const INT32 texture = texturecandidates[i].graphic;
@@ -1755,11 +1753,11 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 		textureseen[costlydirect[i]] = 1;
 		leveltexturepriority[leveltexturepriority_count++] = costlydirect[i];
 	}
-	/* Reserve a narrow lane for cheap, frequently referenced materials that the
-	 * decoded-area score placed deep in the list. Selecting from the tail avoids
-	 * duplicating work already due early, and inserting the lane after the first
-	 * room-sized batch preserves priority for spawn and other expensive nearby
-	 * artwork. The lane is capped tightly, so an animated set cannot dominate it. */
+
+
+
+
+
 	while (frequentcount < LEVELGRAPHICS_FREQUENT_PRIORITY_MAX)
 	{
 		INT32 besttexture = -1;
@@ -1825,8 +1823,8 @@ static void R_BuildLevelGraphicPriorities(const UINT8 *animationframes)
 				leveltexturepriority[leveltexturepriority_count++]
 					= frequenttextures[i];
 			}
-	/* Keep a fallback for runtime-added or unusual indirect map graphics not
-	 * covered by the local, animation, sidedef, or flat-derived rankings. */
+
+
 	for (i = 0; leveltexturepresent && i < (size_t)numtextures; i++)
 		if (leveltexturepresent[i] && !textureseen[i])
 			leveltexturepriority[leveltexturepriority_count++] = (INT32)i;
@@ -2064,9 +2062,9 @@ static void R_PrewarmInitialSoftwareLevelGraphics(void)
 	const precise_t deadline = started + (I_GetPrecisePrecision()
 		* LEVELGRAPHICS_SOFTWARE_INITIAL_MAX_MILLISECONDS) / 1000u;
 
-	/* Start with the spawn/skybox neighborhood, then use any time left on the
-	 * globally ranked list. This catches a heavily reused nearby-room material
-	 * such as TDF's basement wall without returning to the old all-map pause. */
+
+
+
 	while ((texturepriority < texturelimit || flatpriority < flatlimit)
 	&& remaining && I_GetPreciseTime() < deadline)
 	{
@@ -2092,19 +2090,16 @@ static void R_PrewarmInitialSoftwareLevelGraphics(void)
 static boolean R_PrewarmLevelTextureBounded(INT32 texture, size_t maxpixels,
 	size_t *remaining, boolean retire_oversize)
 {
-	UINT8 variants;
 	INT32 translated;
 	texture_t *definition;
 	size_t pixels;
 
-	if (!leveltexturepresent || texture < 0 || texture >= numtextures)
-		return false;
-	variants = leveltexturepresent[texture];
-	if (!variants)
+	if (!leveltexturepresent || texture < 0 || texture >= numtextures
+	|| !leveltexturepresent[texture])
 		return false;
 
-	/* Queue entries already include every used animation frame. Warm that exact
-	 * frame instead of translating all of them back to the one active at tic 0. */
+
+
 	translated = texture;
 	if (translated < 0 || translated >= numtextures
 	|| !(definition = textures[translated])
@@ -2117,24 +2112,16 @@ static boolean R_PrewarmLevelTextureBounded(INT32 texture, size_t maxpixels,
 	pixels = (size_t)definition->width * (size_t)definition->height;
 	if (pixels > maxpixels || (remaining && pixels > *remaining))
 	{
-		/* This only retires the item from the optional live warmer. The ordinary
-		 * renderer still prepares it on first use. Initial loading leaves an item
-		 * queued when it merely exhausted the total budget. */
+
+
+
 		if (retire_oversize)
 			leveltexturepresent[texture] = 0;
 		return false;
 	}
 
-	if (variants & LEVELTEXTURE_OPAQUE)
-	{
-		HWR_GetTexture(translated, false);
-		leveltexturepresent[texture] &= ~LEVELTEXTURE_OPAQUE;
-	}
-	else
-	{
-		HWR_GetTexture(translated, true);
-		leveltexturepresent[texture] &= ~LEVELTEXTURE_MASKED;
-	}
+	HWR_GetTexture(translated);
+	leveltexturepresent[texture] = 0;
 	if (remaining)
 		*remaining -= pixels;
 	return true;
@@ -2147,12 +2134,9 @@ static boolean R_PrewarmLevelFlatBounded(size_t flat, size_t maxpixels,
 	texture_t *definition;
 	INT32 translated;
 	size_t pixels;
-	UINT8 variants;
 
-	if (!levelflatprecachepresent || flat >= numlevelflats)
-		return false;
-	variants = levelflatprecachepresent[flat];
-	if (!variants)
+	if (!levelflatprecachepresent || flat >= numlevelflats
+	|| !levelflatprecachepresent[flat])
 		return false;
 
 	levelflat = &levelflats[flat];
@@ -2180,16 +2164,8 @@ static boolean R_PrewarmLevelFlatBounded(size_t flat, size_t maxpixels,
 		return false;
 	}
 
-	if (variants & LEVELTEXTURE_OPAQUE)
-	{
-		HWR_GetLevelFlat(levelflat, false);
-		levelflatprecachepresent[flat] &= ~LEVELTEXTURE_OPAQUE;
-	}
-	else
-	{
-		HWR_GetLevelFlat(levelflat, true);
-		levelflatprecachepresent[flat] &= ~LEVELTEXTURE_MASKED;
-	}
+	HWR_GetLevelFlat(levelflat);
+	levelflatprecachepresent[flat] = 0;
 	if (remaining)
 		*remaining -= pixels;
 	return true;
@@ -2286,8 +2262,8 @@ static boolean R_PrewarmNextWipeTexture(void)
 		const INT32 texture = leveltexturepriority[leveltexturewipe_index];
 		if (R_PrewarmLevelTextureBounded(texture, 512u * 1024u, NULL, false))
 			return true;
-		/* Leave oversized assets in the ordinary queues. A later blocking
-		 * title card can still prepare them; the wipe only visits this index. */
+
+
 		leveltexturewipe_index++;
 	}
 	return false;
@@ -2311,10 +2287,10 @@ static void R_PrewarmInitialLevelGraphics(void)
 	size_t remaining = LEVELGRAPHICS_INITIAL_MAX_PIXELS;
 	size_t texturepriority = 0, flatpriority = 0;
 	size_t texture = 0, flat = 0;
-	/* A listen server cannot use the fixed pre-level title-card loop, because
-	 * simulation and network traffic are already live. Give its bounded map-load
-	 * pass a little more room so important current-map art is resident before
-	 * simulation starts, without returning to an unbounded all-asset pause. */
+
+
+
+
 	const UINT32 maxmilliseconds = netgame
 		? LEVELGRAPHICS_NETGAME_INITIAL_MAX_MILLISECONDS
 		: LEVELGRAPHICS_INITIAL_MAX_MILLISECONDS;
@@ -2324,9 +2300,9 @@ static void R_PrewarmInitialLevelGraphics(void)
 
 #define INITIAL_PREWARM_TIME_LEFT() (I_GetPreciseTime() < deadline)
 
-	/* Alternate ranked walls and flats instead of exhausting the wall list first.
-	 * Both can contain multi-megapixel PNGs, and either one can become visible as
-	 * a player crosses a doorway. */
+
+
+
 	while ((texturepriority < leveltexturepriority_count
 		|| flatpriority < levelflatpriority_count)
 	&& remaining && INITIAL_PREWARM_TIME_LEFT())
@@ -2351,8 +2327,8 @@ static void R_PrewarmInitialLevelGraphics(void)
 					break;
 		}
 	}
-	/* The ranked lists contain every known map graphic, but keep a linear fallback
-	 * for assets added at runtime while setup is in progress. */
+
+
 	while ((leveltexturepresent && texture < (size_t)numtextures)
 		|| (levelflatprecachepresent && flat < numlevelflats))
 	{
@@ -2387,15 +2363,15 @@ void R_ContinueLevelWipePrecache(void)
 {
 #ifdef HWRENDER
 	const precise_t started = I_GetPreciseTime();
-	const precise_t budget = I_GetPrecisePrecision() / 250; /* 4 ms */
+	const precise_t budget = I_GetPrecisePrecision() / 250;
 	UINT8 warmed;
 
 	if (!netgame || rendermode != render_opengl
 	|| vid.glstate != VID_GL_LIBRARY_LOADED)
 		return;
-	/* Called only in spare time inside the fixed post-load wipe, never from
-	 * live gameplay. Limit individual images and the number started; do not
-	 * consume or retire the ordinary pre-level/background queue cursors. */
+
+
+
 	for (warmed = 0; warmed < 8 && I_GetPreciseTime() - started < budget; warmed++)
 	{
 		boolean prepared;
@@ -2423,19 +2399,19 @@ void R_ContinueLevelSpritePrecache(boolean blocking_warmup)
 {
 	const precise_t started = I_GetPreciseTime();
 	const precise_t budget = (precise_t)(I_GetPrecisePrecision() / 1000);
-	/* Never decode or upload large artwork from the live frame loop. A listen
-	 * server has no fixed pre-level loop, and the title card does not make a
-	 * 20--60 ms driver stall any less visible. Larger assets are either handled
-	 * by the bounded blocking preload or loaded when actually requested. */
+
+
+
+
 	const size_t backgroundmaxpixels = LEVELTEXTURE_BACKGROUND_MAX_PIXELS;
 	unsigned int warmed = 0;
 	boolean hardware = false;
 
 	if (!levelspritepresent && !leveltexturepresent && !levelflatprecachepresent)
 		return;
-	/* A large true-colour PNG can take several milliseconds even though only
-	 * one upload was requested. Leave a few completed frames between expensive
-	 * conversions so background warming cannot become a regular stutter. */
+
+
+
 	if (levelprecachecooldown && !blocking_warmup)
 	{
 		levelprecachecooldown--;
@@ -2464,11 +2440,11 @@ void R_ContinueLevelSpritePrecache(boolean blocking_warmup)
 		return;
 	}
 
-	/* A hosted game is already simulating by the time its title card appears.
-	 * Even a nominally small OpenGL conversion can consume several frames at a
-	 * high refresh rate, so do not run speculative GPU uploads during live
-	 * netgame play. The bounded map-load preload above handles the important
-	 * current-map artwork without turning background work into regular stutter. */
+
+
+
+
+
 	if (hardware && netgame && !blocking_warmup)
 		return;
 
@@ -2505,8 +2481,8 @@ void R_ContinueLevelSpritePrecache(boolean blocking_warmup)
 			: backgroundmaxpixels;
 		boolean warmedgraphic = false;
 
-		/* Alternate walls and flats across frames. Exhausting the flat queue first
-		 * could consume an entire title card while an animated skybox wall waited. */
+
+
 		if (levelprecacheprefertexture)
 		{
 			warmedgraphic = R_PrewarmNextLevelTexture(maxpixels);
@@ -2526,9 +2502,9 @@ void R_ContinueLevelSpritePrecache(boolean blocking_warmup)
 	}
 #endif
 
-	/* One upload is the smallest useful unit of work. A single large custom PNG
-	 * can still make the driver wait, so never start a second upload in the same
-	 * frame even when the first one happened to finish inside the time budget. */
+
+
+
 	while (levelspritepresent && levelspriteprecache_sprite < numsprites
 	&& warmed < 1)
 	{
@@ -2582,11 +2558,11 @@ void R_ContinueLevelSpritePrecache(boolean blocking_warmup)
 	{
 		const precise_t elapsed = I_GetPreciseTime() - started;
 		const precise_t precision = I_GetPrecisePrecision();
-		if (elapsed >= precision / 125) /* 8 ms */
+		if (elapsed >= precision / 125)
 			levelprecachecooldown = 30;
-		else if (elapsed >= precision / 250) /* 4 ms */
+		else if (elapsed >= precision / 250)
 			levelprecachecooldown = 8;
-		else if (elapsed >= precision / 500) /* 2 ms */
+		else if (elapsed >= precision / 500)
 			levelprecachecooldown = 2;
 	}
 }
@@ -2624,11 +2600,11 @@ void R_PrecacheLevel(void)
 	levelprecachecooldown = 0;
 	levelprecacheprefertexture = true;
 
-	/* A dedicated/headless server still loads sprite and texture definitions so
-	 * its game state matches clients, but it never draws their patch data. The
-	 * old path walked every level object and cached every used sprite anyway,
-	 * adding tens of milliseconds to each server map change for data that could
-	 * never be rendered. */
+
+
+
+
+
 	if (rendermode == render_none)
 		return;
 
@@ -2641,7 +2617,7 @@ void R_PrecacheLevel(void)
 #endif
 	)
 	{
-		// Both renderers can prepare level graphics from the ranked queue below.
+
 		if (rendermode == render_soft)
 			flatmemory = 0;
 
@@ -2655,30 +2631,19 @@ void R_PrecacheLevel(void)
 
 	for (j = 0; j < numsides; j++)
 	{
-		line_t *line = sides[j].line;
-
 		// huh, a potential bug here????
 		if (sides[j].toptexture >= 0 && sides[j].toptexture < numtextures)
-			texturepresent[sides[j].toptexture] |= LEVELTEXTURE_OPAQUE;
+			texturepresent[sides[j].toptexture] = true;
 		if (sides[j].midtexture >= 0 && sides[j].midtexture < numtextures)
-		{
-			/* Match the variants requested by HWR_ProcessSeg. Ordinary one-sided
-			 * middle walls use the solid texture, while two-sided middle walls use
-			 * the chromakeyed variant. Previously preloading both doubled PNG decode
-			 * and GPU upload work for many large custom-map photographs. */
-			if (line && line->backsector)
-				texturepresent[sides[j].midtexture] |= LEVELTEXTURE_MASKED;
-			else
-				texturepresent[sides[j].midtexture] |= LEVELTEXTURE_OPAQUE;
-		}
+			texturepresent[sides[j].midtexture] = true;
 		if (sides[j].bottomtexture >= 0 && sides[j].bottomtexture < numtextures)
-			texturepresent[sides[j].bottomtexture] |= LEVELTEXTURE_OPAQUE;
+			texturepresent[sides[j].bottomtexture] = true;
 	}
 
-	/* Rendered 3D-floor sides always request a chromakeyed middle texture. Resolve
-	 * the same target-line-to-control-line mapping used by the renderer. Merely
-	 * scanning the control sector missed transferred sides such as the IRLWALL
-	 * corridor, leaving a 35-60 ms upload on first basement entry. */
+
+
+
+
 	for (j = 0; j < (size_t)numsectors; j++)
 	{
 		ffloor_t *rover;
@@ -2701,14 +2666,14 @@ void R_PrecacheLevel(void)
 					continue;
 				texture = sides[sideindex].midtexture;
 				if (texture >= 0 && texture < numtextures)
-					texturepresent[texture] |= LEVELTEXTURE_MASKED;
+					texturepresent[texture] = true;
 			}
 		}
 	}
 
-	/* Remember which frames are being introduced only because a used texture is
-	 * animated. They need first-tic priority even when their texture numbers are
-	 * far from the base frame in a large combined add-on stack. */
+
+
+
 #ifdef HWRENDER
 	if (rendermode == render_opengl && vid.glstate == VID_GL_LIBRARY_LOADED)
 	{
@@ -2721,9 +2686,9 @@ void R_PrecacheLevel(void)
 	}
 #endif
 
-	/* A used animation is a set, not just whichever frame texturetranslation
-	 * happens to select at leveltime zero. Preparing the whole set here avoids
-	 * recurring first-use stalls from FIREA-style custom animations. */
+
+
+
 	P_ExpandTextureAnimationPresence(texturepresent, (size_t)numtextures);
 #ifdef HWRENDER
 	if (textureanimationframes)
@@ -2735,7 +2700,7 @@ void R_PrecacheLevel(void)
 	// Sky texture is always present.
 	// Note that F_SKY1 is the name used to indicate a sky floor/ceiling as a flat,
 	// while the sky texture is stored like a wall texture, with a skynum dependent name.
-	texturepresent[skytexture] |= LEVELTEXTURE_OPAQUE;
+	texturepresent[skytexture] = true;
 
 	if (rendermode == render_soft)
 	{
@@ -2750,7 +2715,7 @@ void R_PrecacheLevel(void)
 			I_Error("%s: Out of memory looking up level flats", "R_PrecacheLevel");
 		for (j = 0; j < numlevelflats; j++)
 			if (levelflats[j].type != LEVELFLAT_NONE)
-				levelflatprecachepresent[j] = LEVELTEXTURE_OPAQUE;
+				levelflatprecachepresent[j] = true;
 		R_BuildLevelGraphicPriorities(NULL);
 		R_PrewarmInitialSoftwareLevelGraphics();
 #if defined(_WIN32) && !defined(DEDICATED)
@@ -2763,8 +2728,6 @@ void R_PrecacheLevel(void)
 	{
 		precise_t preload_started;
 		size_t flat;
-		size_t polyobject;
-		size_t sector;
 
 		leveltexturepresent = texturepresent;
 
@@ -2774,48 +2737,8 @@ void R_PrecacheLevel(void)
 			I_Error("%s: Out of memory looking up level flats", "R_PrecacheLevel");
 		for (flat = 0; flat < numlevelflats; flat++)
 			if (levelflats[flat].type != LEVELFLAT_NONE)
-				levelflatprecachepresent[flat] |= LEVELTEXTURE_OPAQUE;
+				levelflatprecachepresent[flat] = true;
 
-		/* Splat FOFs use a separate chromakeyed GPU texture. Record that variant
-		 * now so the first translucent platform in a new room cannot create it in
-		 * the middle of a rendered frame. */
-		for (sector = 0; sector < (size_t)numsectors; sector++)
-		{
-			ffloor_t *rover;
-			for (rover = sectors[sector].ffloors; rover; rover = rover->next)
-			{
-				if (!(rover->fofflags & FOF_SPLAT))
-					continue;
-				if (rover->toppic && *rover->toppic >= 0
-				&& (size_t)*rover->toppic < numlevelflats)
-					levelflatprecachepresent[*rover->toppic] |= LEVELTEXTURE_MASKED;
-				if (rover->bottompic && *rover->bottompic >= 0
-				&& (size_t)*rover->bottompic < numlevelflats)
-					levelflatprecachepresent[*rover->bottompic] |= LEVELTEXTURE_MASKED;
-			}
-		}
-
-		/* Polyobject planes use the same separate chromakeyed flat variant as
-		 * splat FOFs, but they are not part of any sector's ffloor list. Include
-		 * their control-sector flats so the first moving/swinging platform in a
-		 * newly entered room cannot create that variant during a rendered frame. */
-		for (polyobject = 0; polyobject < (size_t)numPolyObjects; polyobject++)
-		{
-			polyobj_t *po = &PolyObjects[polyobject];
-			sector_t *polysector;
-			if (!(po->flags & POF_RENDERPLANES) || !(po->flags & POF_SPLAT)
-			|| po->isBad || !po->numLines || !po->lines || !po->lines[0]
-			|| !(polysector = po->lines[0]->backsector))
-				continue;
-			if (polysector->floorpic >= 0
-			&& (size_t)polysector->floorpic < numlevelflats)
-				levelflatprecachepresent[polysector->floorpic]
-					|= LEVELTEXTURE_MASKED;
-			if (polysector->ceilingpic >= 0
-			&& (size_t)polysector->ceilingpic < numlevelflats)
-				levelflatprecachepresent[polysector->ceilingpic]
-					|= LEVELTEXTURE_MASKED;
-		}
 		R_BuildLevelGraphicPriorities(textureanimationframes);
 		free(textureanimationframes);
 		textureanimationframes = NULL;
@@ -2844,9 +2767,9 @@ void R_PrecacheLevel(void)
 #endif
 	)
 	{
-		/* Whole-map synchronous decoding/uploading made large custom levels pause
-		 * long after geometry was ready. Keep the used-sprite set so the main loop
-		 * can warm short slices whenever a completed frame has spare time. */
+
+
+
 		levelspritepresent = spritepresent;
 		return;
 	}

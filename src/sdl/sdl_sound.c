@@ -192,8 +192,8 @@ typedef struct srb2audio_s {
 
 static srb2audio_t localdata;
 
-/* The legacy callback backend owns SDL_mixer's post-mix callback itself, so it
- * cannot safely attach the modern movie recorder without replacing game audio. */
+
+
 boolean I_StartMovieAudioCapture(const char *filename)
 {
 	(void)filename;

@@ -55,13 +55,13 @@ typedef struct
 typedef struct
 {
 	poly_t *planepoly;  // the generated convex polygon
-	poly_t *boundedpoly; // raised/island surfaces, bounded by real sector geometry
+	poly_t *boundedpoly;
 	sector_t *floorbackground, *ceilingbackground;
 	struct hwr_plane_region_s *plane_regions;
 } extrasubsector_t;
 
-/* Real neighboring sectors covering the part trimmed from a BSP leaf. These
- * own persistent plane geometry because translucent floors are drawn later. */
+
+
 typedef struct hwr_plane_region_s
 {
 	extrasubsector_t xsub;
@@ -93,12 +93,14 @@ typedef struct gl_vissprite_s
 	boolean precip; // Tails 08-25-2002
 	boolean bbox;
 	boolean rotated;
-	/* Cached by HWR_SortVisSprites. Comparing thousands of translucent sprites
-	 * should not repeatedly inspect the same mobj/frame flags. */
+	boolean maptilted;
+	FOutVector mapquad[4];
+
+
 	boolean sortblended;
 	boolean sorttracerblended;
-	/* The translucent-FOF relation scans delayed wall geometry. Cache it for
-	 * the frame so linkdraw/deferred decisions do not repeat the same scan. */
+
+
 	boolean fofrelationcached;
 	UINT8 fofrelation;
 	UINT8 translucency;       //alpha level 0-255
@@ -143,8 +145,8 @@ void HWR_GetSpritePatch(patch_t *patch);
 void HWR_GetMappedSpritePatch(patch_t *patch, const UINT8 *colormap);
 void HWR_GetFadeMask(lumpnum_t fademasklumpnum);
 
-GLMapTexture_t *HWR_GetTexture(INT32 tex, boolean chromakeyed);
-void HWR_GetLevelFlat(levelflat_t *levelflat, boolean chromakeyed);
+GLMapTexture_t *HWR_GetTexture(INT32 tex);
+void HWR_GetLevelFlat(levelflat_t *levelflat);
 void HWR_GetRawFlat(lumpnum_t flatlumpnum);
 
 void HWR_FreeTexture(patch_t *patch);

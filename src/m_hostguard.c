@@ -1,5 +1,5 @@
-// SONIC ROBO BLAST 2
-// Host overload recovery, distributed under the GNU GPL version 2.
+
+
 #include "m_hostguard.h"
 #include "command.h"
 #include "console.h"
@@ -126,8 +126,8 @@ static void HG_Check(boolean from_spawn)
 
 void HG_ResetMap(void)
 {
-	/* A manual map change starts a fresh recovery budget. An automatic reload
-	 * keeps its history, so an addon that repeats the storm cannot loop forever. */
+
+
 	if (!recovery_pending || recovery_map != gamemap)
 	{
 		recovery_attempts = 0;
@@ -153,9 +153,9 @@ void HG_RecordSpawn(void)
 	}
 	if (spawned_this_tic < UINT32_MAX)
 		spawned_this_tic++;
-	/* Queue recovery during a burst, before the next costly thinker/render
-	 * pass. Do not cancel spawns locally: other builds must simulate the same
-	 * world until the ordinary synchronized map command arrives. */
+
+
+
 	HG_Check(true);
 }
 
@@ -171,8 +171,8 @@ void HG_RecordTick(precise_t elapsed)
 	if (!server || gamestate != GS_LEVEL || levelloading)
 		return;
 	last_logic_time = elapsed;
-	/* Startup/map objects form the baseline. Allow initial map scripts to
-	 * settle without mistaking a legitimately large map for player spam. */
+
+
 	if (!baseline_set || leveltime < 2*TICRATE)
 	{
 		baseline_objects = max(baseline_objects, live_objects);

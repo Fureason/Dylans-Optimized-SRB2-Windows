@@ -654,8 +654,8 @@ static void R_BuildColorNameCache(void)
 				colornamehash[slot] = color;
 				break;
 			}
-			/* Match the old linear search's duplicate-name behaviour by keeping
-			 * the first (lowest-numbered) colour in the table. */
+
+
 			if (!stricmp(skincolors[previous].name, skincolors[color].name))
 				break;
 			slot = (slot + 1u) & (COLOR_NAME_HASH_SIZE - 1u);
@@ -802,7 +802,7 @@ static void R_CalcSlopeLight(void)
 //                   INCLUDE 8bpp DRAWING CODE HERE
 // ==========================================================================
 
-// Keep the included drawers in this translation unit so dependency tracking
-// rebuilds every software-renderer variant together.
+
+
 #include "r_draw8.c"
 #include "r_draw8_npo2.c"

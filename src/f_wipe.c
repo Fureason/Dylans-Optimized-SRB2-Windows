@@ -18,7 +18,7 @@
 
 #include "r_state.h" // fadecolormap
 #include "r_draw.h" // transtable
-#include "r_data.h" // post-load wipe texture preparation
+#include "r_data.h"
 #include "p_pspr.h" // tr_transxxx
 #include "p_local.h"
 #include "st_stuff.h"
@@ -433,6 +433,7 @@ static void F_DoColormapWipe(fademask_t *fademask, UINT8 *colormap)
 void F_WipeStartScreen(void)
 {
 #ifndef NOWIPE
+	V_BeginSoftwareFrame(false);
 #ifdef HWRENDER
 	if(rendermode != render_soft)
 	{
@@ -560,9 +561,9 @@ static void F_RunWipeInternal(UINT8 wipetype, boolean drawMenu, boolean precache
 		// wait loop
 		while (!((nowtime = I_GetTime()) - lastwipetic))
 		{
-			/* Use only the early part of a genuine wait for the next wipe tic.
-			 * Refresh the clock before admitting work; at normal speed a fraction
-			 * below 1/4 leaves over 21 ms before the next 35 Hz presentation. */
+
+
+
 			I_UpdateTime(cv_timescale.value);
 			if (precache && !warmed && gamestate == GS_LEVEL
 			&& cv_timescale.value == FRACUNIT && g_time.timefrac < FRACUNIT/4

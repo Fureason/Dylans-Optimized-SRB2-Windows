@@ -1576,7 +1576,7 @@ void R_DrawWaterSpan_NPO2_8(void)
 
 		x = (xposition >> FRACBITS);
 		y = (yposition >> FRACBITS);
-		*dest++ = colormap[*(ds_transmap + (source[((y * ds_flatwidth) + x)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest++, colormap, source[y * ds_flatwidth + x], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 	}
@@ -1642,7 +1642,10 @@ void R_DrawTiltedWaterSpan_NPO2_8(void)
 			else
 				y -= libdivide_u32_do((UINT32)y, &y_divider) * ds_flatheight;
 
-			*dest = *(ds_transmap + (colormap[source[((y * ds_flatwidth) + x)]] << 8) + *dsrc++);
+			const UINT8 texel = source[((y * ds_flatwidth) + x)];
+			if (texel != TRANSPARENTPIXEL)
+				*dest = ds_transmap[(colormap[texel] << 8) + *dsrc];
+			dsrc++;
 		}
 		dest++;
 		iz += ds_sz.x;
@@ -1692,7 +1695,10 @@ void R_DrawTiltedWaterSpan_NPO2_8(void)
 				else
 					y -= libdivide_u32_do((UINT32)y, &y_divider) * ds_flatheight;
 
-				*dest = *(ds_transmap + (colormap[source[((y * ds_flatwidth) + x)]] << 8) + *dsrc++);
+				const UINT8 texel = source[((y * ds_flatwidth) + x)];
+				if (texel != TRANSPARENTPIXEL)
+					*dest = ds_transmap[(colormap[texel] << 8) + *dsrc];
+				dsrc++;
 			}
 			dest++;
 			u += stepu;
@@ -1724,7 +1730,10 @@ void R_DrawTiltedWaterSpan_NPO2_8(void)
 				else
 					y -= libdivide_u32_do((UINT32)y, &y_divider) * ds_flatheight;
 
-				*dest = *(ds_transmap + (colormap[source[((y * ds_flatwidth) + x)]] << 8) + *dsrc++);
+				const UINT8 texel = source[((y * ds_flatwidth) + x)];
+				if (texel != TRANSPARENTPIXEL)
+					*dest = ds_transmap[(colormap[texel] << 8) + *dsrc];
+				dsrc++;
 			}
 		}
 		else
@@ -1761,7 +1770,10 @@ void R_DrawTiltedWaterSpan_NPO2_8(void)
 					else
 						y -= libdivide_u32_do((UINT32)y, &y_divider) * ds_flatheight;
 
-					*dest = *(ds_transmap + (colormap[source[((y * ds_flatwidth) + x)]] << 8) + *dsrc++);
+					const UINT8 texel = source[((y * ds_flatwidth) + x)];
+					if (texel != TRANSPARENTPIXEL)
+						*dest = ds_transmap[(colormap[texel] << 8) + *dsrc];
+					dsrc++;
 				}
 				dest++;
 				u += stepu;

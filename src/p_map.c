@@ -106,9 +106,9 @@ static boolean P_TeleportMove(mobj_t *thing, fixed_t x, fixed_t y, fixed_t z)
 
 	P_SetThingPosition(thing);
 
-	/* This large Lua trigger uses teleport movement only to invoke mobj
-	 * collision hooks. Track the narrow scan so it can skip unused line and
-	 * polyobject checks while remaining safe during recursive callbacks. */
+
+
+
 	if (xslambent_trigger)
 		xslambent_teleport_scan_depth++;
 	P_CheckPosition(thing, thing->x, thing->y);
@@ -130,6 +130,9 @@ static boolean P_TeleportMove(mobj_t *thing, fixed_t x, fixed_t y, fixed_t z)
 //
 boolean P_SetOrigin(mobj_t *thing, fixed_t x, fixed_t y, fixed_t z)
 {
+	if (thing->player && (x != thing->x || y != thing->y || z != thing->z))
+		R_ResetNetworkView(thing->player);
+
 	boolean result = P_TeleportMove(thing, x, y, z);
 
 	if (result == true)
@@ -770,7 +773,7 @@ static boolean P_FreeMobjTypeNamed(mobjtype_t type, const char *name)
 	return slotname && !strcmp(slotname, name);
 }
 
-/* Limit this large Lua trigger to collision candidates its handler can use. */
+
 static boolean P_IsXSLambentCollisionTarget(const mobj_t *thing)
 {
 	if (!thing || !thing->health)
@@ -2227,10 +2230,10 @@ boolean P_CheckPosition(mobj_t *thing, fixed_t x, fixed_t y)
 
 	BMBOUNDFIX(xl, xh, yl, yh);
 
-	/* See P_TeleportMove above. Preserve the normal sector/FOF heights and the
-	 * exact blockmap-order mobj collision callbacks, but omit results that a
-	 * teleporting, no-height-clipping trigger cannot use. Ordinary movement of
-	 * the same hitbox still takes the full line/polyobject path. */
+
+
+
+
 	if (xslambent_teleport_scan_depth
 	&& P_FreeMobjTypeNamed(thing->type, "XSLAMBENTHB"))
 	{
@@ -2763,8 +2766,8 @@ increment_move
 
 	// And we also have to prevent Big Large (tm) movements, as those can skip too far
 	// across slopes and cause us to fail step up checks on them when we otherwise shouldn't.
-	// This no-height-clipping Lua trigger already uses its radius as a
-	// conservative swept-collision step, so it does not need smaller slices.
+
+
 	if (!P_FreeMobjTypeNamed(thing->type, "XSLAMBENTHB"))
 		radius = min(radius, 16 * thing->scale);
 
@@ -5055,8 +5058,8 @@ void P_MapStart(void)
 {
 	if (tmthing)
 	{
-		/* This is temporary collision scratch state. A callback can leave it set;
-		 * recover instead of terminating every peer on the next object/map tic. */
+
+
 		CONS_Alert(CONS_WARNING, "P_MapStart: cleared stale collision state.\n");
 		P_SetTarget(&tmthing, NULL);
 	}

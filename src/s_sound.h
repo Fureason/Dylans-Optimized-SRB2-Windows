@@ -95,6 +95,7 @@ typedef struct
 
 	// handle of the sound being played
 	INT32 handle;
+	boolean player_sound;
 
 } channel_t;
 
@@ -153,6 +154,8 @@ void S_StartSound(const void *origin, sfxenum_t sound_id);
 
 // Will start a sound at a given volume.
 void S_StartSoundAtVolume(const void *origin, sfxenum_t sound_id, INT32 volume);
+void S_StartPlayerSound(const void *origin, sfxenum_t sound_id);
+void S_StartPlayerSoundAtVolume(const void *origin, sfxenum_t sound_id, INT32 volume);
 
 // Stop sound for thing at <origin>
 void S_StopSound(void *origin);

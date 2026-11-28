@@ -65,8 +65,8 @@ void I_StartupSound(void);
 */
 void I_ShutdownSound(void);
 
-/** Capture the final mixed stereo output to a 44.1 kHz, 16-bit WAV file.
- * Used by the video recorder so music and sound effects stay synchronized. */
+
+
 boolean I_StartMovieAudioCapture(const char *filename);
 void I_UpdateMovieAudioCapture(void);
 void I_StopMovieAudioCapture(void);

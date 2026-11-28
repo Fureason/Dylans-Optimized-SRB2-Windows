@@ -105,9 +105,9 @@ static void OglSdlLoadDwmFlush(void)
 boolean OglSdlCompositorProvidesPacing(void)
 {
 #if defined(_WIN32)
-	/* While DWM has recently missed several presentation deadlines the engine's
-	 * absolute-deadline limiter is a smoother fallback than blocking another
-	 * render frame in DwmFlush. */
+
+
+
 	return windowed_compositor_pacing && !windowed_dwm_cooldown;
 #else
 	return false;
@@ -124,10 +124,10 @@ void OglSdlSetVSync(INT32 mode, boolean report)
 	boolean compositorpacing = false;
 
 #if defined(_WIN32)
-	/* A composited Windows OpenGL window is already presented by DWM. Blocking
-	 * WGL VSync on top of that can miss alternating compositor deadlines and
-	 * produce 70-90 FPS on a 165 Hz display. Submit immediately and let the
-	 * engine pace frames to the monitor; fullscreen keeps normal VSync. */
+
+
+
+
 	if (mode && window
 	&& !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN))
 	{
@@ -142,9 +142,9 @@ void OglSdlSetVSync(INT32 mode, boolean report)
 	actual = SDL_GL_GetSwapInterval();
 	compositorpacing = compositorpacing && actual == 0;
 #if defined(_WIN32)
-	/* DwmFlush gives us the compositor's real cadence. Unlike sleeping after an
-	 * early swap, this keeps the completed frame queued for as little time as
-	 * possible and avoids an extra frame of windowed input latency. */
+
+
+
 	windowed_compositor_pacing = compositorpacing && windowed_dwm_flush != NULL;
 	windowed_dwm_cooldown = 0;
 	windowed_dwm_slow_score = 0;
@@ -186,6 +186,94 @@ boolean LoadGL(void)
 	}
 #endif
 	return SetupGLfunc();
+}
+
+static GLuint renderTarget;
+static GLuint renderTargetBuffers[2];
+static PFNGLGENFRAMEBUFFERSPROC genFramebuffers;
+static PFNGLDELETEFRAMEBUFFERSPROC deleteFramebuffers;
+static PFNGLBINDFRAMEBUFFERPROC bindFramebuffer;
+static PFNGLCHECKFRAMEBUFFERSTATUSPROC checkFramebuffer;
+static PFNGLGENRENDERBUFFERSPROC genRenderbuffers;
+static PFNGLDELETERENDERBUFFERSPROC deleteRenderbuffers;
+static PFNGLBINDRENDERBUFFERPROC bindRenderbuffer;
+static PFNGLRENDERBUFFERSTORAGEPROC renderbufferStorage;
+static PFNGLFRAMEBUFFERRENDERBUFFERPROC framebufferRenderbuffer;
+static PFNGLBLITFRAMEBUFFERPROC blitFramebuffer;
+static boolean renderTargetCanBlit;
+
+static boolean OglSdlLoadFramebufferFunctions(void)
+{
+	if (gl_version[0] < '3' && !isExtAvailable("GL_ARB_framebuffer_object", gl_extensions))
+		return false;
+
+	genFramebuffers = (PFNGLGENFRAMEBUFFERSPROC)GetGLFunc("glGenFramebuffers");
+	deleteFramebuffers = (PFNGLDELETEFRAMEBUFFERSPROC)GetGLFunc("glDeleteFramebuffers");
+	bindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)GetGLFunc("glBindFramebuffer");
+	checkFramebuffer = (PFNGLCHECKFRAMEBUFFERSTATUSPROC)GetGLFunc("glCheckFramebufferStatus");
+	genRenderbuffers = (PFNGLGENRENDERBUFFERSPROC)GetGLFunc("glGenRenderbuffers");
+	deleteRenderbuffers = (PFNGLDELETERENDERBUFFERSPROC)GetGLFunc("glDeleteRenderbuffers");
+	bindRenderbuffer = (PFNGLBINDRENDERBUFFERPROC)GetGLFunc("glBindRenderbuffer");
+	renderbufferStorage = (PFNGLRENDERBUFFERSTORAGEPROC)GetGLFunc("glRenderbufferStorage");
+	framebufferRenderbuffer = (PFNGLFRAMEBUFFERRENDERBUFFERPROC)GetGLFunc("glFramebufferRenderbuffer");
+	blitFramebuffer = (PFNGLBLITFRAMEBUFFERPROC)GetGLFunc("glBlitFramebuffer");
+	return genFramebuffers && deleteFramebuffers && bindFramebuffer && checkFramebuffer
+		&& genRenderbuffers && deleteRenderbuffers && bindRenderbuffer
+		&& renderbufferStorage && framebufferRenderbuffer;
+}
+
+void OglSdlReleaseRenderTarget(void)
+{
+	if (!renderTarget)
+		return;
+
+	bindFramebuffer(GL_FRAMEBUFFER, 0);
+	deleteFramebuffers(1, &renderTarget);
+	deleteRenderbuffers(2, renderTargetBuffers);
+	renderTarget = 0;
+	renderTargetBuffers[0] = renderTargetBuffers[1] = 0;
+	renderTargetCanBlit = false;
+}
+
+static boolean OglSdlPrepareRenderTarget(INT32 width, INT32 height)
+{
+	int drawablewidth, drawableheight;
+	GLint sampleBuffers = 0;
+	SDL_GL_GetDrawableSize(window, &drawablewidth, &drawableheight);
+	OglSdlReleaseRenderTarget();
+	const boolean requiresTarget = width > drawablewidth || height > drawableheight;
+	if (!OglSdlLoadFramebufferFunctions())
+		return !requiresTarget;
+
+	pglGetIntegerv(GL_SAMPLE_BUFFERS, &sampleBuffers);
+	const boolean canBlit = blitFramebuffer && !sampleBuffers;
+	if (!requiresTarget && !canBlit)
+		return true;
+
+
+
+	genFramebuffers(1, &renderTarget);
+	if (!renderTarget)
+		return !requiresTarget;
+	bindFramebuffer(GL_FRAMEBUFFER, renderTarget);
+	genRenderbuffers(2, renderTargetBuffers);
+	bindRenderbuffer(GL_RENDERBUFFER, renderTargetBuffers[0]);
+	renderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+	framebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderTargetBuffers[0]);
+
+	bindRenderbuffer(GL_RENDERBUFFER, renderTargetBuffers[1]);
+	renderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+	framebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderTargetBuffers[1]);
+	bindRenderbuffer(GL_RENDERBUFFER, 0);
+
+	if (checkFramebuffer(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+	{
+		renderTargetCanBlit = canBlit;
+		return true;
+	}
+
+	OglSdlReleaseRenderTarget();
+	return !requiresTarget;
 }
 
 /**	\brief	The OglSdlSurface function
@@ -243,16 +331,22 @@ boolean OglSdlSurface(INT32 w, INT32 h)
 
 	SetupGLFunc4();
 
-	/* Auto was added before the original Min/Max range. The hardware maximum
-	 * therefore belongs to the third entry; assigning it to entry 1 turns Min
-	 * into Max and leaves two duplicate Max values in the menu. */
+
+
+
 	glanisotropicmode_cons_t[2].value = maximumAnisotropy;
 
-	OglSdlSetVSync(cv_vidwait.value, true);
+	if (!OglSdlPrepareRenderTarget(w, h))
+		return false;
+#ifndef __ANDROID__
+	SDL_SetWindowMinimumSize(window, renderTarget ? BASEVIDWIDTH : w,
+		renderTarget ? BASEVIDHEIGHT : h);
+#endif
 
 	SetModelView(w, h);
 	SetStates();
-	pglClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	pglClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
+	OglSdlSetVSync(cv_vidwait.value, true);
 
 	HWR_Startup();
 	textureformatGL = cbpp > 16 ? GL_RGBA : GL_RGB5_A1;
@@ -270,20 +364,48 @@ void OglSdlFinishUpdate(INT32 waitvbl)
 {
 	static INT32 oldwaitvbl = -1;
 	int sdlw, sdlh;
+	SDL_Rect viewport;
 	if (oldwaitvbl != waitvbl)
 	{
-		/* Reporting uses the console, which may finish the partially drawn frame.
-		 * Commit the new value first so that re-entry cannot recurse until the
-		 * process exhausts its stack during startup or a live VSync change. */
+
+
+
 		oldwaitvbl = waitvbl;
 		OglSdlSetVSync(waitvbl, true);
 	}
 
-	SDL_GetWindowSize(window, &sdlw, &sdlh);
+	SDL_GL_GetDrawableSize(window, &sdlw, &sdlh);
+	if (sdlw <= 0 || sdlh <= 0)
+		return;
+	I_GetGameViewport(sdlw, sdlh, &viewport);
 
-	HWR_MakeScreenFinalTexture();
-	HWR_DrawScreenFinalTexture(sdlw, sdlh);
+	const boolean directBlit = renderTargetCanBlit && !HWR_ShouldUsePaletteRendering();
+	const INT32 bottom = sdlh - viewport.y - viewport.h;
+	if (directBlit)
+	{
+
+
+		bindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		if (viewport.w != sdlw || viewport.h != sdlh)
+		{
+			FRGBAFloat black = {0, 0, 0, 1};
+			ClearBuffer(true, false, &black);
+		}
+		blitFramebuffer(0, 0, realwidth, realheight,
+			viewport.x, bottom, viewport.x + viewport.w, bottom + viewport.h,
+			GL_COLOR_BUFFER_BIT, (viewport.w < realwidth || viewport.h < realheight)
+			? GL_LINEAR : GL_NEAREST);
+	}
+	else
+	{
+		HWR_MakeScreenFinalTexture();
+		if (renderTarget)
+			bindFramebuffer(GL_FRAMEBUFFER, 0);
+		HWR_DrawScreenFinalTexture(viewport.x, bottom, viewport.w, viewport.h);
+	}
 	SDL_GL_SwapWindow(window);
+	if (renderTarget)
+		bindFramebuffer(GL_FRAMEBUFFER, renderTarget);
 #if defined(_WIN32)
 	if (windowed_dwm_cooldown)
 		windowed_dwm_cooldown--;
@@ -294,14 +416,14 @@ void OglSdlFinishUpdate(INT32 waitvbl)
 		const precise_t elapsed = I_GetPreciseTime() - started;
 		const precise_t precision = I_GetPrecisePrecision();
 		const UINT32 refresh = max(30u, I_GetRefreshRate());
-		/* Allow two and a half refresh intervals. A single missed deadline is
-		 * harmless; repeated 30-40 ms waits are the visible windowed hitch. */
+
+
 		const precise_t slow = (precise_t)(((UINT64)precision * 5) / (2 * refresh));
 
 		if (FAILED(result))
 		{
-			/* Fall back to the engine's absolute-deadline limiter if composition is
-			 * unavailable or changes underneath us (for example remote desktop). */
+
+
 			windowed_compositor_pacing = false;
 			CONS_Alert(CONS_WARNING,
 				"Windows compositor pacing became unavailable; using engine pacing.\n");
@@ -311,9 +433,9 @@ void OglSdlFinishUpdate(INT32 waitvbl)
 			windowed_dwm_slow_score = min(4, windowed_dwm_slow_score + 2);
 			if (windowed_dwm_slow_score >= 4)
 			{
-				/* Retry DWM after a short quiet period. This is deliberately temporary:
-				 * moving the window or a compositor transition should not permanently
-				 * change the selected VSync mode. */
+
+
+
 				windowed_dwm_cooldown = 2 * refresh;
 				windowed_dwm_slow_score = 0;
 			}
@@ -329,20 +451,24 @@ void OglSdlFinishUpdate(INT32 waitvbl)
 	//			effects that want to take the old screen can do so after this
 	// Generic2 has the screen image without palette rendering brightness adjustments.
 	// Using that here will prevent brightness adjustments being applied twice.
-	DrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0, true);
+	if (!directBlit)
+		DrawScreenTexture(HWD_SCREENTEXTURE_GENERIC2, NULL, 0, true);
 }
 
-void OglSdlPresentSoftware(const void *pixels, INT32 width, INT32 height, INT32 waitvbl)
+void OglSdlPresentSoftware(const void *pixels, INT32 width, INT32 height, INT32 waitvbl, boolean rgba)
 {
 	static INT32 oldwaitvbl = -1;
 	int drawablewidth, drawableheight;
+	SDL_Rect viewport;
 
 	if (oldwaitvbl != waitvbl)
 		OglSdlSetVSync(waitvbl, true);
 	oldwaitvbl = waitvbl;
 
 	SDL_GL_GetDrawableSize(window, &drawablewidth, &drawableheight);
-	OglRenderSoftwareFrame(pixels, width, height, drawablewidth, drawableheight);
+	I_GetGameViewport(drawablewidth, drawableheight, &viewport);
+	OglRenderSoftwareFrame(pixels, width, height, rgba,
+		viewport.x, drawableheight - viewport.y - viewport.h, viewport.w, viewport.h);
 	SDL_GL_SwapWindow(window);
 }
 

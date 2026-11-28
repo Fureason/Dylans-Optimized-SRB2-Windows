@@ -105,6 +105,31 @@ static void callTM (lua_State *L, const TValue *f, const TValue *p1,
 }
 
 
+
+
+static int getuserdatanumber (lua_State *L, const TValue *t, const TValue *key,
+                              const TValue *tm, StkId val) {
+  const CClosure *f;
+  const TString *name;
+  lua_Number number;
+  if (!ttisuserdata(t) || !ttisstring(key) || !iscfunction(tm))
+    return 0;
+  f = &clvalue(tm)->c;
+  if (!f->numberindex || L->hookmask || L->nCcalls >= LUAI_MAXCCALLS - 1
+      || G(L)->totalbytes >= G(L)->GCthreshold)
+    return 0;
+  condhardstacktests(return 0);
+  if (f->nupvalues == 0 || !ttistable(&f->upvalue[0])
+      || uvalue(t)->metatable != hvalue(&f->upvalue[0]))
+    return 0;
+  name = rawtsvalue(key);
+  if (!f->numberindex(rawuvalue(t) + 1, getstr(name), name->tsv.len, &number))
+    return 0;
+  setnvalue(val, number);
+  return 1;
+}
+
+
 void luaV_gettable (lua_State *L, TValue *t, TValue *key, StkId val) {
   int loop;
   for (loop = 0; loop < MAXTAGLOOP; loop++) {
@@ -122,7 +147,8 @@ void luaV_gettable (lua_State *L, TValue *t, TValue *key, StkId val) {
     else if (ttisnil(tm = luaT_gettmbyobj(L, t, TM_INDEX)))
       luaG_typeerror(L, t, "index");
     if (ttisfunction(tm)) {
-      callTMres(L, val, tm, t, key);
+      if (!getuserdatanumber(L, t, key, tm, val))
+        callTMres(L, val, tm, t, key);
       return;
     }
     t = tm;  /* else repeat with `tm' */

@@ -192,8 +192,8 @@ static const char *const mobj_opt[] = {
 
 static int mobj_fields_ref = LUA_NOREF;
 
-/* Correct the known field layout used by this seven-tic fullbright ghost.
- * This is visual-only client compatibility. */
+
+
 static boolean mobj_is_adventure_hyper_flight_ghost(const mobj_t *mo)
 {
 	mobj_t *source;
@@ -214,9 +214,31 @@ static boolean mobj_is_adventure_hyper_flight_ghost(const mobj_t *mo)
 	return true;
 }
 
+static mobj_t *mobj_from_userdata(lua_State *L)
+{
+	mobj_t **object = lua_touserdatawithmetatable(L, 1, lua_upvalueindex(1));
+	if (!object)
+		object = luaL_checkudata(L, 1, META_MOBJ);
+	return *object;
+}
+
+static int mobj_get_number(const void *data, const char *key, size_t length,
+	lua_Number *value)
+{
+	if (length != 4 || memcmp(key, "type", 4) != 0)
+		return 0;
+
+	mobj_t *mo = *(mobj_t *const *)data;
+	if (P_MobjWasRemoved(mo) || !ISINLEVEL)
+		return 0;
+
+	*value = mo->type;
+	return 1;
+}
+
 static int mobj_get(lua_State *L)
 {
-	mobj_t *mo = *((mobj_t **)luaL_checkudata(L, 1, META_MOBJ));
+	mobj_t *mo = mobj_from_userdata(L);
 	enum mobj_e field = Lua_optoption(L, 2, -1, mobj_fields_ref);
 	lua_settop(L, 2);
 
@@ -530,7 +552,7 @@ static int mobj_get(lua_State *L)
 #define NOSETPOS luaL_error(L, LUA_QL("mobj_t") " field " LUA_QS " should not be set directly. Use " LUA_QL("P_Move") ", " LUA_QL("P_TryMove") ", or " LUA_QL("P_SetOrigin") ", or " LUA_QL("P_MoveOrigin") " instead.", mobj_opt[field])
 static int mobj_set(lua_State *L)
 {
-	mobj_t *mo = *((mobj_t **)luaL_checkudata(L, 1, META_MOBJ));
+	mobj_t *mo = mobj_from_userdata(L);
 	enum mobj_e field = Lua_optoption(L, 2, mobj_valid, mobj_fields_ref);
 	lua_settop(L, 3);
 
@@ -1252,7 +1274,16 @@ static int lib_nummapthings(lua_State *L)
 
 int LUA_MobjLib(lua_State *L)
 {
-	LUA_RegisterUserdataMetatable(L, META_MOBJ, mobj_get, mobj_set, NULL);
+
+	luaL_newmetatable(L, META_MOBJ);
+	lua_pushvalue(L, -1);
+	lua_pushcclosure(L, mobj_get, 1);
+	lua_setuserdatanumberindex(L, mobj_get_number);
+	lua_setfield(L, -2, "__index");
+	lua_pushvalue(L, -1);
+	lua_pushcclosure(L, mobj_set, 1);
+	lua_setfield(L, -2, "__newindex");
+	lua_pop(L, 1);
 	LUA_RegisterUserdataMetatable(L, META_THINGARGS, thingargs_get, NULL, thingargs_len);
 	LUA_RegisterUserdataMetatable(L, META_THINGSTRINGARGS, thingstringargs_get, NULL, thingstringargs_len);
 	LUA_RegisterUserdataMetatable(L, META_MAPTHING, mapthing_get, mapthing_set, mapthing_num);

@@ -34,6 +34,7 @@
 #include "m_cheat.h"
 #include "m_misc.h"
 #include "m_menu.h"
+#include "m_inputlatency.h"
 #include "m_argv.h"
 #include "hu_stuff.h"
 #include "st_stuff.h"
@@ -1854,6 +1855,8 @@ void G_DoLoadLevel(boolean resetplayer)
 {
 	INT32 i;
 
+	M_InputLatencyCancel();
+
 	// Make sure objectplace is OFF when you first start the level!
 	OP_ResetObjectplace();
 	demosynced = true;
@@ -1976,14 +1979,14 @@ void G_PreLevelTitleCard(void)
 		ST_runTitleCard();
 		ST_preLevelTitleCardDrawer();
 		I_FinishUpdate(); // page flip or blit buffer
-		/* Use the fixed pre-level presentation time to finish GPU preparation.
-		 * One ranked asset is submitted per title-card frame, so large animated
-		 * skybox and distant-room textures do not block the first live view. */
+
+
+
 		{
 			UINT8 warmup;
-			/* Most assets are tiny, so one item per title-card tic did not reach
-			 * later animation frames before control was returned. Eight still keeps
-			 * the work bounded while using the fixed presentation interval fully. */
+
+
+
 			for (warmup = 0; warmup < 8; warmup++)
 				R_ContinueLevelSpritePrecache(true);
 		}
@@ -2810,10 +2813,10 @@ void G_PlayerReborn(INT32 player, boolean betweenmaps)
 		// This is in S_Start, but this was not here previously.
 		// if (RESETMUSIC)
 		// 	S_StopMusic();
-		/* MusicChange is a synchronized Lua hook. It must run on the custom
-		 * host exactly when it runs on an unmodified 2.2.15 client, even if the
-		 * mixer is already playing this song. Skipping it locally can make Lua
-		 * gameplay state diverge after a respawn. */
+
+
+
+
 		S_ChangeMusicEx(mapmusname, mapmusflags, true, mapmusposition, 0, 0);
 	}
 
@@ -5499,6 +5502,8 @@ INT32 G_FindMapByNameOrCode(const char *mapname, char **realmapnamep)
 //
 void G_SetGamestate(gamestate_t newstate)
 {
+	if (gamestate != newstate)
+		M_InputLatencyCancel();
 	gamestate = newstate;
 }
 

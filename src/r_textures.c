@@ -79,7 +79,7 @@ static INT32 tidcachelen = 0;
 // R_DrawColumnInCache
 // Clip and draw a column from a patch into a cached post.
 //
-static void R_DrawColumnInCache(column_t *column, UINT8 *cache, texpatch_t *originPatch, INT32 cacheheight, INT32 patchheight, UINT8 *opaque_pixels)
+static void R_DrawColumnInCache(column_t *column, UINT8 *cache, texpatch_t *originPatch, INT32 cacheheight, INT32 patchheight)
 {
 	INT32 count, position;
 	UINT8 *source;
@@ -106,8 +106,15 @@ static void R_DrawColumnInCache(column_t *column, UINT8 *cache, texpatch_t *orig
 
 		if (count > 0)
 		{
-			M_Memcpy(cache + position, source, count);
-			memset(opaque_pixels + position, true, count);
+			UINT8 *dest = cache + position;
+			if (!memchr(source, TRANSPARENTPIXEL, count))
+				M_Memcpy(dest, source, count);
+			else
+			{
+				for (INT32 y = 0; y < count; y++)
+					if (source[y] != TRANSPARENTPIXEL)
+						dest[y] = source[y];
+			}
 		}
 	}
 }
@@ -116,13 +123,12 @@ static void R_DrawColumnInCache(column_t *column, UINT8 *cache, texpatch_t *orig
 // R_DrawFlippedColumnInCache
 // Similar to R_DrawColumnInCache; it draws the column inverted, however.
 //
-static void R_DrawFlippedColumnInCache(column_t *column, UINT8 *cache, texpatch_t *originPatch, INT32 cacheheight, INT32 patchheight, UINT8 *opaque_pixels)
+static void R_DrawFlippedColumnInCache(column_t *column, UINT8 *cache, texpatch_t *originPatch, INT32 cacheheight, INT32 patchheight)
 {
 	INT32 count, position;
 	UINT8 *source, *dest;
 	INT32 originy = originPatch->originy;
 	INT32 topdelta;
-	UINT8 *is_opaque;
 
 	for (unsigned i = 0; i < column->num_posts; i++)
 	{
@@ -143,14 +149,13 @@ static void R_DrawFlippedColumnInCache(column_t *column, UINT8 *cache, texpatch_
 			count = cacheheight - position;
 
 		dest = cache + position;
-		is_opaque = opaque_pixels + position;
 
 		if (count > 0)
 		{
-			for (; dest < cache + position + count; --source, dest++, is_opaque++)
+			for (; dest < cache + position + count; --source, dest++)
 			{
-				*dest = *source;
-				*is_opaque = true;
+				if (*source != TRANSPARENTPIXEL)
+					*dest = *source;
 			}
 		}
 	}
@@ -160,12 +165,11 @@ static void R_DrawFlippedColumnInCache(column_t *column, UINT8 *cache, texpatch_
 // R_DrawBlendColumnInCache
 // Draws a translucent column into the cache.
 //
-static void R_DrawBlendColumnInCache(column_t *column, UINT8 *cache, texpatch_t *originPatch, INT32 cacheheight, INT32 patchheight, UINT8 *opaque_pixels)
+static void R_DrawBlendColumnInCache(column_t *column, UINT8 *cache, texpatch_t *originPatch, INT32 cacheheight, INT32 patchheight)
 {
 	INT32 count, position;
 	UINT8 *source, *dest;
 	INT32 originy = originPatch->originy;
-	UINT8 *is_opaque;
 
 	(void)patchheight; // This parameter is unused
 
@@ -187,16 +191,16 @@ static void R_DrawBlendColumnInCache(column_t *column, UINT8 *cache, texpatch_t 
 			count = cacheheight - position;
 
 		dest = cache + position;
-		is_opaque = opaque_pixels + position;
 
 		if (count > 0)
 		{
-			for (; dest < cache + position + count; source++, dest++, is_opaque++)
+			for (; dest < cache + position + count; source++, dest++)
 			{
-				if (originPatch->alpha <= ASTTextureBlendingThreshold[1] && !(*is_opaque))
+				if (*source == TRANSPARENTPIXEL)
+					continue;
+				if (*dest == TRANSPARENTPIXEL && originPatch->alpha <= ASTTextureBlendingThreshold[1])
 					continue;
 				*dest = ASTBlendPaletteIndexes(*dest, *source, originPatch->style, originPatch->alpha);
-				*is_opaque = true;
 			}
 		}
 	}
@@ -206,13 +210,12 @@ static void R_DrawBlendColumnInCache(column_t *column, UINT8 *cache, texpatch_t 
 // R_DrawBlendFlippedColumnInCache
 // Similar to the one above except that the column is inverted.
 //
-static void R_DrawBlendFlippedColumnInCache(column_t *column, UINT8 *cache, texpatch_t *originPatch, INT32 cacheheight, INT32 patchheight, UINT8 *opaque_pixels)
+static void R_DrawBlendFlippedColumnInCache(column_t *column, UINT8 *cache, texpatch_t *originPatch, INT32 cacheheight, INT32 patchheight)
 {
 	INT32 count, position;
 	UINT8 *source, *dest;
 	INT32 originy = originPatch->originy;
 	INT32 topdelta;
-	UINT8 *is_opaque;
 
 	for (unsigned i = 0; i < column->num_posts; i++)
 	{
@@ -233,16 +236,16 @@ static void R_DrawBlendFlippedColumnInCache(column_t *column, UINT8 *cache, texp
 			count = cacheheight - position;
 
 		dest = cache + position;
-		is_opaque = opaque_pixels + position;
 
 		if (count > 0)
 		{
-			for (; dest < cache + position + count; --source, dest++, is_opaque++)
+			for (; dest < cache + position + count; --source, dest++)
 			{
-				if (originPatch->alpha <= ASTTextureBlendingThreshold[1] && !(*is_opaque))
+				if (*source == TRANSPARENTPIXEL)
+					continue;
+				if (*dest == TRANSPARENTPIXEL && originPatch->alpha <= ASTTextureBlendingThreshold[1])
 					continue;
 				*dest = ASTBlendPaletteIndexes(*dest, *source, originPatch->style, originPatch->alpha);
-				*is_opaque = true;
 			}
 		}
 	}
@@ -259,19 +262,33 @@ static void R_DrawBlendFlippedColumnInCache(column_t *column, UINT8 *cache, texp
 // This is not optimised, but it's supposed to be executed only once
 // per level, when enough memory is available.
 //
+static boolean R_PatchHasTransparentIndex(const softwarepatch_t *patch, INT32 width)
+{
+	const UINT8 *offsets = (const UINT8 *)patch->columnofs;
+
+	for (INT32 x = 0; x < width; x++)
+	{
+		UINT32 offset;
+		memcpy(&offset, offsets + x * sizeof offset, sizeof offset);
+		const UINT8 *post = (const UINT8 *)patch + LONG(offset);
+
+		for (; post[0] != 0xff; post += post[1] + 4)
+			if (memchr(post + 3, TRANSPARENTPIXEL, post[1]))
+				return true;
+	}
+	return false;
+}
+
 UINT8 *R_GenerateTexture(size_t texnum)
 {
 	UINT8 *block;
 	UINT8 *blocktex;
-	UINT8 *temp_block;
 	texture_t *texture;
 	texpatch_t *patch;
 	int x, x1, x2, i, width, height;
 	size_t blocksize;
-	unsigned *column_posts;
-	UINT8 *opaque_pixels;
-	column_t *columns, *temp_columns;
-	post_t *posts, *temp_posts = NULL;
+	column_t *columns;
+	post_t *posts;
 	size_t total_posts = 0;
 	size_t total_pixels = 0;
 
@@ -279,6 +296,7 @@ UINT8 *R_GenerateTexture(size_t texnum)
 	texture = textures[texnum];
 	I_Assert(texture != NULL);
 	texture->fullytransparent = false;
+	texture->has_holes = false;
 
 	// Just create a composite one
 	if (texture->type == TEXTURETYPE_FLAT)
@@ -316,6 +334,11 @@ UINT8 *R_GenerateTexture(size_t texnum)
 			goto multipatch;
 		}
 
+		if (patch->originx || patch->originy || patch->style != AST_COPY
+		|| texture->width != SHORT(realpatch->width)
+		|| texture->height != SHORT(realpatch->height))
+			goto multipatch;
+
 		texture->transparency = false;
 
 		// Check the patch for holes.
@@ -347,6 +370,12 @@ UINT8 *R_GenerateTexture(size_t texnum)
 		// If the patch uses transparency, we have to save it this way.
 		if (texture->transparency)
 		{
+
+
+			if (R_PatchHasTransparentIndex(realpatch, texture->width))
+				goto multipatch;
+
+			texture->has_holes = true;
 			texture->flip = patch->flip;
 
 			Patch_CalcDataSizes(realpatch, &total_pixels, &total_posts);
@@ -356,10 +385,9 @@ UINT8 *R_GenerateTexture(size_t texnum)
 			texturememory += blocksize;
 
 			block = Z_Calloc(blocksize, PU_STATIC, &texturecache[texnum]);
-			blocktex = block;
-
-			columns = (column_t *)(block + (sizeof(UINT8) * total_pixels));
-			posts = (post_t *)(block + (sizeof(UINT8) * total_pixels) + (sizeof(column_t) * texture->width));
+			columns = (column_t *)block;
+			posts = (post_t *)(columns + texture->width);
+			blocktex = (UINT8 *)(posts + total_posts);
 
 			texturecolumns[texnum] = columns;
 
@@ -380,34 +408,32 @@ UINT8 *R_GenerateTexture(size_t texnum)
 	multipatch:
 	texture->flip = 0;
 
-	// To make things easier, I just allocate WxH always
-	total_pixels = texture->width * texture->height;
 
-	opaque_pixels = Z_Calloc(total_pixels * sizeof(UINT8), PU_STATIC, NULL);
-	temp_columns = Z_Calloc(sizeof(column_t) * texture->width, PU_STATIC, NULL);
-	temp_block = Z_Calloc(total_pixels, PU_STATIC, NULL);
-
-#ifdef TEXTURE_255_IS_TRANSPARENT
 	texture->transparency = false;
-
-	// Transparency hack
-	memset(temp_block, TRANSPARENTPIXEL, total_pixels);
-#else
-	texture->transparency = true;
-#endif
+	total_pixels = (size_t)texture->width * texture->height;
+	blocksize = total_pixels + (sizeof(column_t) + sizeof(post_t)) * texture->width;
+	texturememory += blocksize;
+	block = Z_Malloc(blocksize, PU_STATIC, &texturecache[texnum]);
+	columns = (column_t *)block;
+	posts = (post_t *)(columns + texture->width);
+	blocktex = (UINT8 *)(posts + texture->width);
+	memset(blocktex, TRANSPARENTPIXEL, total_pixels);
+	texturecolumns[texnum] = columns;
 
 	for (x = 0; x < texture->width; x++)
 	{
-		column_t *column = &temp_columns[x];
-		column->num_posts = 0;
-		column->posts = NULL;
-		column->pixels = temp_block + (texture->height * x);
+		columns[x].num_posts = 1;
+		columns[x].posts = &posts[x];
+		columns[x].pixels = blocktex + (size_t)texture->height * x;
+		posts[x].topdelta = 0;
+		posts[x].length = texture->height;
+		posts[x].data_offset = 0;
 	}
 
 	// Composite the columns together.
 	for (i = 0, patch = texture->patches; i < texture->patchcount; i++, patch++)
 	{
-		static void (*columnDrawer)(column_t *, UINT8 *, texpatch_t *, INT32, INT32, UINT8 *);
+		void (*columnDrawer)(column_t *, UINT8 *, texpatch_t *, INT32, INT32);
 		if (patch->style != AST_COPY)
 			columnDrawer = (patch->flip & 2) ? R_DrawBlendFlippedColumnInCache : R_DrawBlendColumnInCache;
 		else
@@ -485,102 +511,20 @@ UINT8 *R_GenerateTexture(size_t texnum)
 			column_t *patchcol = &realpatch->columns[colx];
 
 			if (patchcol->num_posts > 0)
-				columnDrawer(patchcol, temp_columns[x].pixels, patch, texture->height, height, &opaque_pixels[x * texture->height]);
+				columnDrawer(patchcol, columns[x].pixels, patch, texture->height, height);
 		}
 
 		if (free_patch)
 			Patch_Free(realpatch);
 	}
 
-	// Now write the columns
-	texture->fullytransparent = true;
-	for (i = 0; i < (INT32)total_pixels; i++)
+	texture->has_holes = memchr(blocktex, TRANSPARENTPIXEL, total_pixels) != NULL;
+	if (texture->has_holes)
 	{
-		if (opaque_pixels[i])
-		{
-			texture->fullytransparent = false;
-			break;
-		}
-	}
-	column_posts = Z_Calloc(sizeof(unsigned) * texture->width, PU_STATIC, NULL);
-
-#ifdef TEXTURE_255_IS_TRANSPARENT
-	total_posts = texture->width;
-	temp_posts = Z_Realloc(temp_posts, sizeof(post_t) * total_posts, PU_CACHE, NULL);
-#endif
-
-	for (x = 0; x < texture->width; x++)
-	{
-		post_t *post = NULL;
-
-		column_t *column = &temp_columns[x];
-
-#ifdef TEXTURE_255_IS_TRANSPARENT
-		post = &temp_posts[x];
-		post->topdelta = 0;
-		post->length = texture->height;
-		post->data_offset = 0;
-		column_posts[x] = x;
-		column->num_posts = 1;
-#else
-		boolean was_opaque = false;
-
-		column_posts[x] = (unsigned)-1;
-
-		for (INT32 y = 0; y < texture->height; y++)
-		{
-			// End span if we have a transparent pixel
-			if (!opaque_pixels[(x * texture->height) + y])
-			{
-				was_opaque = false;
-				continue;
-			}
-
-			if (!was_opaque)
-			{
-				total_posts++;
-
-				temp_posts = Z_Realloc(temp_posts, sizeof(post_t) * total_posts, PU_CACHE, NULL);
-				post = &temp_posts[total_posts - 1];
-				post->topdelta = (size_t)y;
-				post->length = 0;
-				post->data_offset = (size_t)y;
-				if (column_posts[x] == (unsigned)-1)
-					column_posts[x] = total_posts - 1;
-				column->num_posts++;
-			}
-
-			was_opaque = true;
-
-			post->length++;
-		}
-#endif
-	}
-
-	blocksize = (sizeof(column_t) * texture->width) + (sizeof(post_t) * total_posts) + (sizeof(UINT8) * total_pixels);
-	texturememory += blocksize;
-
-	block = Z_Calloc(blocksize, PU_STATIC, &texturecache[texnum]);
-	blocktex = block;
-
-	memcpy(blocktex, temp_block, total_pixels);
-
-	Z_Free(temp_block);
-
-	columns = (column_t *)(block + (sizeof(UINT8) * total_pixels));
-	posts = (post_t *)(block + (sizeof(UINT8) * total_pixels) + (sizeof(column_t) * texture->width));
-
-	memcpy(columns, temp_columns, sizeof(column_t) * texture->width);
-	memcpy(posts, temp_posts, sizeof(post_t) * total_posts);
-
-	texturecolumns[texnum] = columns;
-
-	for (x = 0; x < texture->width; x++)
-	{
-		column_t *column = &columns[x];
-		if (column->num_posts > 0)
-			column->posts = &posts[column_posts[x]];
-		column->pixels = blocktex + (texture->height * x);
+		size_t pixel = 0;
+		while (pixel < total_pixels && blocktex[pixel] == TRANSPARENTPIXEL)
+			pixel++;
+		texture->fullytransparent = pixel == total_pixels;
 	}
 
 done:
@@ -597,6 +541,8 @@ UINT8 *R_GetFlatForTexture(size_t texnum)
 	texture_t *texture = textures[texnum];
 	if (texture->flat != NULL)
 		return texture->flat;
+
+	const size_t flatsize = (size_t)texture->width * texture->height;
 
 	// Special case: Textures that are flats don't need to be converted FROM a texture INTO a flat.
 	if (texture->type == TEXTURETYPE_FLAT)
@@ -618,8 +564,10 @@ UINT8 *R_GetFlatForTexture(size_t texnum)
 		else
 #endif
 		{
-			texture->flat = Z_Malloc(lumplength, PU_STATIC, NULL);
-			memcpy(texture->flat, pdata, lumplength);
+			const size_t bytes = min(lumplength, flatsize);
+			texture->flat = Z_Malloc(flatsize, PU_STATIC, NULL);
+			memcpy(texture->flat, pdata, bytes);
+			memset((UINT8 *)texture->flat + bytes, TRANSPARENTPIXEL, flatsize - bytes);
 		}
 
 		Z_SetUser(texture->flat, &texture->flat);
@@ -629,7 +577,8 @@ UINT8 *R_GetFlatForTexture(size_t texnum)
 	else
 		texture->flat = (UINT8 *)Picture_TextureToFlat(texnum);
 
-	flatmemory += texture->width * texture->height;
+	texture->flat_has_holes = memchr(texture->flat, TRANSPARENTPIXEL, flatsize) != NULL;
+	flatmemory += flatsize;
 
 	return texture->flat;
 }
@@ -669,6 +618,45 @@ column_t *R_GetColumn(fixed_t tex, INT32 col)
 		col &= (width - 1);
 
 	return &texturecolumns[tex][col];
+}
+
+UINT8 *R_GetSolidTextureColumn(INT32 tex, INT32 col)
+{
+	const texture_t *texture = textures[tex];
+	const column_t *column = R_GetColumn(tex, col);
+	static UINT8 *unpacked;
+	static size_t capacity;
+
+	if (!texture->transparency)
+		return column->pixels;
+
+
+
+	const size_t height = texture->height;
+	if (height > capacity)
+	{
+		unpacked = Z_Realloc(unpacked, height, PU_STATIC, NULL);
+		capacity = height;
+	}
+
+	memset(unpacked, TRANSPARENTPIXEL, height);
+	for (unsigned i = 0; i < column->num_posts; i++)
+	{
+		const post_t *post = &column->posts[i];
+		if (post->topdelta >= height)
+			continue;
+
+		const size_t count = min(post->length, height - post->topdelta);
+		const UINT8 *source = column->pixels + post->data_offset;
+		if (texture->flip & 2)
+		{
+			for (size_t y = 0; y < count; y++)
+				unpacked[height - 1 - post->topdelta - y] = source[y];
+		}
+		else
+			memcpy(unpacked + post->topdelta, source, count);
+	}
+	return unpacked;
 }
 
 INT32 R_GetTextureNumForFlat(levelflat_t *levelflat)

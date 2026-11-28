@@ -1,6 +1,6 @@
-// Clean-session server handoff for SDL clients. GPLv2.
-// Start the same executable with a small allowlist of arguments, never a shell
-// command or the old session's -file/+exec/+addfile arguments.
+
+
+
 #include <time.h>
 #ifdef __ANDROID__
 #include <jni.h>
@@ -37,8 +37,8 @@ void I_WaitForRestart(void)
 }
 
 #ifdef _WIN32
-/* Windows argv quoting: backslashes are doubled only before quotes and the
- * closing delimiter. Paths with spaces and trailing slashes round-trip. */
+
+
 static boolean I_RestartAppendArg(wchar_t *line, size_t capacity, const char *arg)
 {
 	wchar_t wide[4096];

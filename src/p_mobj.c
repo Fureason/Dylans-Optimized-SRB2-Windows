@@ -3468,28 +3468,27 @@ void P_CalcChasePostImg(player_t *player, camera_t *thiscam)
 
 	if (player->pflags & PF_FLIPCAM && !(player->powers[pw_carry] == CR_NIGHTSMODE) && player->mo->eflags & MFE_VERTICALFLIP)
 		postimg = postimg_flip;
-	else if (player->awayviewtics && player->awayviewmobj && !P_MobjWasRemoved(player->awayviewmobj)) // Camera must obviously exist
-	{
-		camera_t dummycam;
-		dummycam.subsector = player->awayviewmobj->subsector;
-		dummycam.x = player->awayviewmobj->x;
-		dummycam.y = player->awayviewmobj->y;
-		dummycam.z = player->awayviewmobj->z;
-		//dummycam.height = 40*FRACUNIT; // alt view height is 20*FRACUNIT
-		dummycam.height = 0;			 // Why? Remote viewpoint cameras have no height.
-		// Are we in water?
-		if (P_CameraCheckWater(&dummycam))
-			postimg = postimg_water;
-		else if (P_CameraCheckHeat(&dummycam))
-			postimg = postimg_heat;
-	}
 	else
 	{
-		// Are we in water?
-		if (P_CameraCheckWater(thiscam))
-			postimg = postimg_water;
-		else if (P_CameraCheckHeat(thiscam))
-			postimg = postimg_heat;
+		camera_t awaycam;
+		mobj_t *away = player->awayviewmobj;
+		if (player->awayviewtics && away && !P_MobjWasRemoved(away))
+		{
+			awaycam.subsector = away->subsector;
+			awaycam.x = away->x;
+			awaycam.y = away->y;
+			awaycam.z = away->z;
+			awaycam.height = 0;
+			thiscam = &awaycam;
+		}
+
+		if (thiscam->subsector && thiscam->subsector->sector)
+		{
+			if (P_CameraCheckWater(thiscam))
+				postimg = postimg_water;
+			else if (P_CameraCheckHeat(thiscam))
+				postimg = postimg_heat;
+		}
 	}
 
 	if (postimg == postimg_none)
@@ -3551,10 +3550,10 @@ boolean P_CameraThinker(player_t *player, camera_t *thiscam, boolean resetcalled
 	thiscam->floorz = tmfloorz;
 	thiscam->ceilingz = tmceilingz;
 
-	if (thiscam->momz || player->mo->pmomz)
+	const fixed_t platform_move = resetcalled ? 0 : player->mo->pmomz;
+	if (thiscam->momz || platform_move)
 	{
-		// adjust height
-		thiscam->z += thiscam->momz + player->mo->pmomz;
+		thiscam->z += thiscam->momz + platform_move;
 
 		if (!itsatwodlevel && !(player->pflags & PF_NOCLIP || player->powers[pw_carry] == CR_NIGHTSMODE))
 		{

@@ -134,6 +134,9 @@ int LUA_HookCharacterHUD
 int  LUA_HookMobj(mobj_t *, int hook);
 boolean LUA_HookMobjAvailable(mobjtype_t type, int hook);
 int  LUA_Hook2Mobj(mobj_t *, mobj_t *, int hook);
+#if defined(_WIN32) && !defined(DEDICATED)
+void LUA_FormatCrashHook(char *buffer, size_t size);
+#endif
 void LUA_HookInt(INT32 integer, int hook);
 void LUA_HookBool(boolean value, int hook);
 int  LUA_HookPlayer(player_t *, int hook);

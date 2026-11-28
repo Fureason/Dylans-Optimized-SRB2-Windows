@@ -245,10 +245,10 @@ void P_InitPicAnims(void)
 	animdefs = NULL;
 }
 
-/* If one frame of an animated texture is used by the current map, every frame
- * can become visible a few tics later. Expand the renderer's presence flags so
- * those frames can be prepared during the loading screen instead of blocking
- * the first gameplay frame on which the animation reaches them. */
+
+
+
+
 void P_ExpandTextureAnimationPresence(UINT8 *present, size_t count)
 {
 	anim_t *anim;
@@ -275,9 +275,9 @@ void P_ExpandTextureAnimationPresence(UINT8 *present, size_t count)
 	}
 }
 
-/* Give every frame the reference priority of the most-used frame in its set.
- * Presence expansion alone left later frames behind all directly referenced
- * textures, even though an animation can select them within a few tics. */
+
+
+
 void P_ExpandTextureAnimationUsage(UINT32 *usage, size_t count)
 {
 	anim_t *anim;

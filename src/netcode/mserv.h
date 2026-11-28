@@ -87,6 +87,10 @@ void RegisterServer(void);
 void UnregisterServer(void);
 
 void MasterClient_Ticker(void);
+#ifdef MASTERSERVER
+void MS_ResetHostProbe(void);
+void MS_RecordHostProbe(INT32 node);
+#endif
 
 msg_server_t *GetShortServersList(INT32 room, int id);
 INT32 GetRoomsList(boolean hosting, int id);
@@ -101,9 +105,9 @@ void AddMServCommands(void);
 /* HTTP */
 void HMS_set_api (char *api);
 int  HMS_fetch_rooms (int joining, int id);
-int  HMS_register (void);
+int  HMS_register (INT32 *response);
 int  HMS_unlist (void);
-int  HMS_update (void);
+int  HMS_update (INT32 *response);
 void HMS_list_servers (void);
 msg_server_t * HMS_fetch_servers (msg_server_t *list, int room, int id);
 int  HMS_compare_mod_version (char *buffer, size_t size_of_buffer, int query_id);

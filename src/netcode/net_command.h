@@ -53,7 +53,7 @@ UINT8* D_GetTextcmd(tic_t tic, INT32 playernum);
 
 void ExtraDataTicker(void);
 
-// Shows a local, delayed notice after a synchronized add-on has finished loading.
+
 void D_QueueAddonNotice(const char *actor, const char *filename);
 void D_ClearAddonNotices(void);
 

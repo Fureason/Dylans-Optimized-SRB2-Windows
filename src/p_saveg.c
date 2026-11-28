@@ -3615,6 +3615,14 @@ static thinker_t* LoadNoEnemiesThinker(save_t *save_p, actionf_p1 thinker)
 	return &ht->thinker;
 }
 
+
+
+static void RestoreMovingSectorPlanes(thinker_t *thinker, sector_t *sector)
+{
+	R_CreateInterpolator_SectorPlane(thinker, sector, false);
+	R_CreateInterpolator_SectorPlane(thinker, sector, true);
+}
+
 static thinker_t* LoadBounceCheeseThinker(save_t *save_p, actionf_p1 thinker)
 {
 	bouncecheese_t *ht = Z_Malloc(sizeof (*ht), PU_LEVSPEC, NULL);
@@ -3628,7 +3636,10 @@ static thinker_t* LoadBounceCheeseThinker(save_t *save_p, actionf_p1 thinker)
 	ht->low = P_ReadChar(save_p);
 
 	if (ht->sector)
+	{
 		ht->sector->ceilingdata = ht;
+		RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
+	}
 
 	return &ht->thinker;
 }
@@ -3648,6 +3659,7 @@ static thinker_t* LoadContinuousFallThinker(save_t *save_p, actionf_p1 thinker)
 	{
 		ht->sector->ceilingdata = ht;
 		ht->sector->floordata = ht;
+		RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
 	}
 
 	return &ht->thinker;
@@ -3668,6 +3680,7 @@ static thinker_t* LoadMarioBlockThinker(save_t *save_p, actionf_p1 thinker)
 	{
 		ht->sector->ceilingdata = ht;
 		ht->sector->floordata = ht;
+		RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
 	}
 
 	return &ht->thinker;
@@ -3701,6 +3714,7 @@ static thinker_t* LoadThwompThinker(save_t *save_p, actionf_p1 thinker)
 	{
 		ht->sector->ceilingdata = ht;
 		ht->sector->floordata = ht;
+		RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
 	}
 
 	return &ht->thinker;
@@ -3713,6 +3727,8 @@ static thinker_t* LoadFloatThinker(save_t *save_p, actionf_p1 thinker)
 	ht->sourceline = LoadLine(P_ReadUINT32(save_p));
 	ht->sector = LoadSector(P_ReadUINT32(save_p));
 	ht->tag = P_ReadINT16(save_p);
+	if (ht->sector)
+		RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
 	return &ht->thinker;
 }
 
@@ -3742,6 +3758,8 @@ static thinker_t* LoadRaiseThinker(save_t *save_p, actionf_p1 thinker)
 	ht->extraspeed = P_ReadFixed(save_p);
 	ht->shaketimer = P_ReadUINT8(save_p);
 	ht->flags = P_ReadUINT8(save_p);
+	if (ht->sector)
+		RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
 	return &ht->thinker;
 }
 
@@ -3763,7 +3781,13 @@ static thinker_t* LoadCeilingThinker(save_t *save_p, actionf_p1 thinker)
 	ht->origspeed = P_ReadFixed(save_p);
 	ht->sourceline = P_ReadFixed(save_p);
 	if (ht->sector)
+	{
 		ht->sector->ceilingdata = ht;
+		if (thinker == (actionf_p1)T_CrushCeiling)
+			RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
+		else
+			R_CreateInterpolator_SectorPlane(&ht->thinker, ht->sector, true);
+	}
 	return &ht->thinker;
 }
 
@@ -3784,7 +3808,10 @@ static thinker_t* LoadFloormoveThinker(save_t *save_p, actionf_p1 thinker)
 	ht->tag = P_ReadINT16(save_p);
 	ht->sourceline = P_ReadFixed(save_p);
 	if (ht->sector)
+	{
 		ht->sector->floordata = ht;
+		R_CreateInterpolator_SectorPlane(&ht->thinker, ht->sector, false);
+	}
 	return &ht->thinker;
 }
 
@@ -3868,6 +3895,7 @@ static thinker_t* LoadElevatorThinker(save_t *save_p, actionf_p1 thinker, boolea
 	{
 		ht->sector->ceilingdata = ht;
 		ht->sector->floordata = ht;
+		RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
 	}
 
 	return &ht->thinker;
@@ -3890,7 +3918,10 @@ static thinker_t* LoadCrumbleThinker(save_t *save_p, actionf_p1 thinker)
 	ht->flags = P_ReadUINT8(save_p);
 
 	if (ht->sector)
+	{
 		ht->sector->floordata = ht;
+		RestoreMovingSectorPlanes(&ht->thinker, ht->sector);
+	}
 
 	return &ht->thinker;
 }
@@ -4088,6 +4119,17 @@ static inline thinker_t* LoadDynamicVertexSlopeThinker(save_t *save_p, actionf_p
 	return &ht->thinker;
 }
 
+static void RestoreMovingPolyobject(thinker_t *thinker, INT32 id, boolean moves_vertically)
+{
+	polyobj_t *poly = Polyobj_GetForNum(id);
+	if (!poly || poly->isBad)
+		return;
+
+	R_CreateInterpolator_Polyobj(thinker, poly);
+	if (moves_vertically && poly->numLines && poly->lines[0]->backsector)
+		RestoreMovingSectorPlanes(thinker, poly->lines[0]->backsector);
+}
+
 static inline thinker_t* LoadPolyrotatetThinker(save_t *save_p, actionf_p1 thinker)
 {
 	polyrotate_t *ht = Z_Malloc(sizeof (*ht), PU_LEVSPEC, NULL);
@@ -4096,6 +4138,7 @@ static inline thinker_t* LoadPolyrotatetThinker(save_t *save_p, actionf_p1 think
 	ht->speed = P_ReadINT32(save_p);
 	ht->distance = P_ReadINT32(save_p);
 	ht->turnobjs = P_ReadUINT8(save_p);
+	RestoreMovingPolyobject(&ht->thinker, ht->polyObjNum, false);
 	return &ht->thinker;
 }
 
@@ -4109,6 +4152,7 @@ static thinker_t* LoadPolymoveThinker(save_t *save_p, actionf_p1 thinker)
 	ht->momy = P_ReadFixed(save_p);
 	ht->distance = P_ReadINT32(save_p);
 	ht->angle = P_ReadAngle(save_p);
+	RestoreMovingPolyobject(&ht->thinker, ht->polyObjNum, false);
 	return &ht->thinker;
 }
 
@@ -4124,6 +4168,7 @@ static inline thinker_t* LoadPolywaypointThinker(save_t *save_p, actionf_p1 thin
 	ht->returnbehavior = P_ReadUINT8(save_p);
 	ht->continuous = P_ReadUINT8(save_p);
 	ht->stophere = P_ReadUINT8(save_p);
+	RestoreMovingPolyobject(&ht->thinker, ht->polyObjNum, true);
 	return &ht->thinker;
 }
 
@@ -4144,6 +4189,7 @@ static inline thinker_t* LoadPolyslidedoorThinker(save_t *save_p, actionf_p1 thi
 	ht->momx = P_ReadFixed(save_p);
 	ht->momy = P_ReadFixed(save_p);
 	ht->closing = P_ReadUINT8(save_p);
+	RestoreMovingPolyobject(&ht->thinker, ht->polyObjNum, false);
 	return &ht->thinker;
 }
 
@@ -4159,6 +4205,7 @@ static inline thinker_t* LoadPolyswingdoorThinker(save_t *save_p, actionf_p1 thi
 	ht->initDistance = P_ReadINT32(save_p);
 	ht->distance = P_ReadINT32(save_p);
 	ht->closing = P_ReadUINT8(save_p);
+	RestoreMovingPolyobject(&ht->thinker, ht->polyObjNum, false);
 	return &ht->thinker;
 }
 
@@ -4171,6 +4218,7 @@ static inline thinker_t* LoadPolydisplaceThinker(save_t *save_p, actionf_p1 thin
 	ht->dx = P_ReadFixed(save_p);
 	ht->dy = P_ReadFixed(save_p);
 	ht->oldHeights = P_ReadFixed(save_p);
+	RestoreMovingPolyobject(&ht->thinker, ht->polyObjNum, false);
 	return &ht->thinker;
 }
 
@@ -4183,6 +4231,7 @@ static inline thinker_t* LoadPolyrotdisplaceThinker(save_t *save_p, actionf_p1 t
 	ht->rotscale = P_ReadFixed(save_p);
 	ht->turnobjs = P_ReadUINT8(save_p);
 	ht->oldHeights = P_ReadFixed(save_p);
+	RestoreMovingPolyobject(&ht->thinker, ht->polyObjNum, false);
 	return &ht->thinker;
 }
 

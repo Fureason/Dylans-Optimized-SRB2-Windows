@@ -42,39 +42,60 @@ extern UINT8 keyboard_started;
 */
 size_t I_GetFreeMem(size_t *total);
 
-/** Report a slow operation when platform diagnostics support it. */
+
 void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms);
 
 #if defined(_WIN32) && !defined(DEDICATED)
-/** Store the last high-level operation for the Windows crash-context report. */
+
 void I_SetCrashContext(const char *context);
-/** Remember the most recently loaded add-on for the crash-context report. */
+
+void I_SetCrashPhase(const char *phase);
+
 void I_SetCrashAddonContext(const char *filename);
-/** Keep a small in-memory timeline for the next crash report. */
+
 void I_RecordDiagnosticHeartbeat(void);
-/** Mark the start of a deliberate blocking level transition. */
+
 void I_MarkLevelTransitionStart(precise_t started);
-/** Mark the point at which normal active-frame diagnostics resume. */
+
 void I_MarkLevelTransitionEnd(void);
-/** Rate-limited report for a slow active frame (excluding deliberate cap sleep). */
+
 void I_ReportFrameHitch(precise_t started, precise_t finished);
-/** Record what can and cannot be inferred when a remote player leaves. */
+
 void I_ReportRemoteExit(const char *playername, INT32 node, boolean timedout,
 	UINT32 ping_tics);
 #endif
 
 #ifdef HAVE_SDL
-/** Hand off a selected server to a fresh client after saving this session. */
+
 boolean I_RestartForServer(const char *address);
 void I_WaitForRestart(void);
 #endif
 
-/** Launch and manage a hidden local dedicated-server companion process. */
-boolean I_StartCompanionServer(const char *responsefile, const char *workingdir);
+
+boolean I_StartCompanionServer(const char *responsefile, const char *workingdir, const char *logfile);
 void I_StopCompanionServer(void);
 boolean I_CompanionServerRunning(void);
-/** True in a companion child after its controlling client exits or requests shutdown. */
+
 boolean I_CompanionShutdownRequested(void);
+
+typedef struct
+{
+	UINT16 port;
+	INT32 room;
+	INT32 router_status;
+	char router_method[28];
+	INT32 public_players;
+	INT64 public_query_time;
+	INT32 master_response;
+	boolean master_registered;
+	boolean master_pending;
+	INT64 master_reply_time;
+} i_host_status_t;
+
+#if defined(_WIN32) && defined(HAVE_SDL)
+void I_PublishCompanionHostStatus(const i_host_status_t *status);
+boolean I_ReadCompanionHostStatus(i_host_status_t *status);
+#endif
 
 /**	\brief	Returns precise time value for performance measurement. The precise
             time should be a monotonically increasing counter, and will wrap.

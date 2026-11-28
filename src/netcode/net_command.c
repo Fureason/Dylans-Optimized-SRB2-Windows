@@ -64,7 +64,7 @@ void D_QueueAddonNotice(const char *actor, const char *filename)
 	const char *name = actor && actor[0] ? actor : "SERVER";
 	const char *base = filename ? filename : "add-on";
 
-	// Keep the message useful without filling the console with a full local path.
+
 	for (const char *scan = base; *scan; scan++)
 		if (*scan == '/' || *scan == '\\' || *scan == ':')
 			base = scan + 1;
@@ -88,11 +88,11 @@ static void D_TickAddonNotices(void)
 	}
 }
 
-/* Lua commands are audited with their decoded name in lua_consolelib.c.
- * Original engine commands use typed NetXCmd packets instead of replaying
- * their console text on every peer, so audit the meaningful built-in actions
- * at the common packet dispatch point. Routine movement/config/chat traffic is
- * intentionally excluded to keep this useful and inexpensive. */
+
+
+
+
+
 static boolean CommandWatchNetXCmd(netxcmd_t id)
 {
 	switch (id)

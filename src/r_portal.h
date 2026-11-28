@@ -43,7 +43,7 @@ typedef struct portal_s
 
 	// Clipping information.
 	INT32 start;		/**< First horizontal pixel coordinate to draw at. */
-	INT32 end;			/**< One past the last horizontal pixel coordinate to draw at. */
+	INT32 end;
 	INT16 *ceilingclip; /**< Temporary screen top clipping array. */
 	INT16 *floorclip;	/**< Temporary screen bottom clipping array. */
 	fixed_t *frontscale;/**< Temporary screen bottom clipping array. */

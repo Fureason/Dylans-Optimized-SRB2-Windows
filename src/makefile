@@ -327,7 +327,7 @@ ifdef UPX
 endif
 
 # original executable with debugging symbols
-$(dbg) : $(objects) | $$(@D)/
+$(dbg) : $(objects) $(win_runtime_resource) | $$(@D)/
 	$(call Echo,Linking $(@F)...)
 	$(.)$(LD) -o $@ $^ $(libs)
 

@@ -93,9 +93,9 @@ typedef struct
 	size_t len;
 } lumpchecklist_t;
 
-// Four-way cache: substantially more names than the old 64-entry linear
-// list, while every lookup compares at most four entries. The set count must
-// remain a power of two for the mask below.
+
+
+
 #define LUMPNUMCACHEWAYS 4
 #define LUMPNUMCACHESETS 256
 #define LUMPNUMCACHESIZE (LUMPNUMCACHEWAYS * LUMPNUMCACHESETS)
@@ -130,8 +130,8 @@ static UINT8 mapnumcachenext[MAPNUMCACHESETS];
 UINT16 numwadfiles; // number of active wadfiles
 wadfile_t **wadfiles; // 0 to numwadfiles-1 are valid
 
-// Temporary sequential copy used while startup indexes thousands of tiny
-// texture headers. This avoids a seek through the archive for every image.
+
+
 static UINT8 *lumpheaderbatch;
 static size_t lumpheaderbatchsize;
 static UINT16 lumpheaderbatchwad = UINT16_MAX;
@@ -597,8 +597,8 @@ static boolean ResFindSignature (FILE* handle, char endPat[], UINT32 startpos)
 				s++;
 				if (*s == '\0')
 				{
-					/* Callers expect the stream immediately after the signature,
-					 * including when a match crosses the read boundary. */
+
+
 					return fseek(handle, -(long)(count - i - 1), SEEK_CUR) == 0;
 				}
 			}
@@ -694,9 +694,12 @@ static lumpinfo_t* ResGetLumpsZip (FILE* handle, UINT16* nlmp)
 	}
 	numlumps = zend.entries;
 
+	if (fseek(handle, zend.cdiroffset, SEEK_SET) != 0)
+	{
+		CONS_Alert(CONS_ERROR, "Cannot seek to central directory (%s)\n", M_FileError(handle));
+		return NULL;
+	}
 	lump_p = lumpinfo = Z_Malloc(numlumps * sizeof (*lumpinfo), PU_STATIC, NULL);
-
-	fseek(handle, zend.cdiroffset, SEEK_SET);
 	for (i = 0; i < numlumps; i++, lump_p++)
 	{
 		char* fullname;
@@ -706,14 +709,12 @@ static lumpinfo_t* ResGetLumpsZip (FILE* handle, UINT16* nlmp)
 		if (fread(&zentry, 1, sizeof(zentry_t), handle) < sizeof(zentry_t))
 		{
 			CONS_Alert(CONS_ERROR, "Failed to read central directory (%s)\n", M_FileError(handle));
-			Z_Free(lumpinfo);
-			return NULL;
+			goto bad_directory;
 		}
 		if (memcmp(zentry.signature, pat_central, 4))
 		{
 			CONS_Alert(CONS_ERROR, "Central directory is corrupt\n");
-			Z_Free(lumpinfo);
-			return NULL;
+			goto bad_directory;
 		}
 
 		lump_p->position = zentry.offset; // NOT ACCURATE YET: we still need to read the local entry to find our true position
@@ -721,13 +722,21 @@ static lumpinfo_t* ResGetLumpsZip (FILE* handle, UINT16* nlmp)
 		lump_p->diskpath = NULL;
 		lump_p->size = zentry.size;
 
-		fullname = malloc(zentry.namelen + 1);
-		if (fgets(fullname, zentry.namelen + 1, handle) != fullname)
+		fullname = Z_Malloc(zentry.namelen + 1, PU_STATIC, NULL);
+		if (fread(fullname, 1, zentry.namelen, handle) != zentry.namelen)
 		{
 			CONS_Alert(CONS_ERROR, "Unable to read lumpname (%s)\n", M_FileError(handle));
-			Z_Free(lumpinfo);
-			free(fullname);
-			return NULL;
+			Z_Free(fullname);
+			goto bad_directory;
+		}
+		fullname[zentry.namelen] = '\0';
+
+		if ((zentry.xtralen || zentry.commlen)
+			&& fseek(handle, zentry.xtralen + zentry.commlen, SEEK_CUR) != 0)
+		{
+			CONS_Alert(CONS_ERROR, "Central directory is corrupt\n");
+			Z_Free(fullname);
+			goto bad_directory;
 		}
 
 		// Strip away file address and extension for the 8char name.
@@ -746,8 +755,7 @@ static lumpinfo_t* ResGetLumpsZip (FILE* handle, UINT16* nlmp)
 		lump_p->longname = Z_Calloc(dotpos - trimname + 1, PU_STATIC, NULL);
 		strlcpy(lump_p->longname, trimname, dotpos - trimname + 1);
 
-		lump_p->fullname = Z_Calloc(zentry.namelen + 1, PU_STATIC, NULL);
-		strncpy(lump_p->fullname, fullname, zentry.namelen);
+		lump_p->fullname = fullname;
 
 		switch(zentry.compression)
 		{
@@ -768,26 +776,16 @@ static lumpinfo_t* ResGetLumpsZip (FILE* handle, UINT16* nlmp)
 			break;
 		}
 
-		free(fullname);
-
-		// skip and ignore comments/extra fields
-		if (fseek(handle, zentry.xtralen + zentry.commlen, SEEK_CUR) != 0)
-		{
-			CONS_Alert(CONS_ERROR, "Central directory is corrupt\n");
-			Z_Free(lumpinfo);
-			return NULL;
-		}
 	}
 
-	// Adjust lump position values properly
-	for (i = 0, lump_p = lumpinfo; i < numlumps; i++, lump_p++)
+
+	for (lump_p = lumpinfo; lump_p < lumpinfo + numlumps; lump_p++)
 	{
-		// skip and ignore comments/extra fields
-		if ((fseek(handle, lump_p->position, SEEK_SET) != 0) || (fread(&zlentry, 1, sizeof(zlentry_t), handle) < sizeof(zlentry_t)))
+		if (fseek(handle, lump_p->position, SEEK_SET) != 0
+			|| fread(&zlentry, 1, sizeof(zlentry_t), handle) < sizeof(zlentry_t))
 		{
 			CONS_Alert(CONS_ERROR, "Local headers for lump %s are corrupt\n", lump_p->fullname);
-			Z_Free(lumpinfo);
-			return NULL;
+			goto bad_directory;
 		}
 
 		lump_p->position += sizeof(zlentry_t) + zlentry.namelen + zlentry.xtralen;
@@ -795,6 +793,16 @@ static lumpinfo_t* ResGetLumpsZip (FILE* handle, UINT16* nlmp)
 
 	*nlmp = numlumps;
 	return lumpinfo;
+
+bad_directory:
+	while (i > 0)
+	{
+		i--;
+		Z_Free(lumpinfo[i].longname);
+		Z_Free(lumpinfo[i].fullname);
+	}
+	Z_Free(lumpinfo);
+	return NULL;
 }
 
 static INT32 CheckPathsNotEqual(const char *path1, const char *path2)
@@ -995,10 +1003,10 @@ UINT16 W_InitFileVerified(const char *filename, boolean mainfile, boolean startu
 
 	I_SetCrashContext(va("verifying archive contents: %.200s", filename));
 	phase_started = I_GetPreciseTime();
-	// The release's core archives are authenticated against exact MD5s after
-	// loading. Avoid scanning their ZIP directories and local headers once here
-	// and then doing the same work again in ResGetLumpsZip(). Add-ons (including
-	// music.pk3) still receive the normal content/ZIP-integrity verification.
+
+
+
+
 	if (mainfile)
 		important = false;
 	else
@@ -1106,6 +1114,7 @@ UINT16 W_InitFileVerified(const char *filename, boolean mainfile, boolean startu
 	//
 	Z_Calloc(numlumps * sizeof (*wadfile->lumpcache), PU_STATIC, &wadfile->lumpcache);
 	Z_Calloc(numlumps * sizeof (*wadfile->patchcache), PU_STATIC, &wadfile->patchcache);
+	wadfile->spritepatchcache = NULL;
 
 	//
 	// add the wadfile
@@ -1304,6 +1313,7 @@ UINT16 W_InitFolder(const char *path, boolean mainfile, boolean startup)
 
 	Z_Calloc(numlumps * sizeof (*wadfile->lumpcache), PU_STATIC, &wadfile->lumpcache);
 	Z_Calloc(numlumps * sizeof (*wadfile->patchcache), PU_STATIC, &wadfile->patchcache);
+	wadfile->spritepatchcache = NULL;
 
 	CONS_Printf(M_GetText("Added folder %s (%u files, %u folders)\n"), fn, numlumps, foldercount);
 	wadfiles = Z_Realloc(wadfiles, sizeof(wadfile_t *) * (numwadfiles + 1), PU_STATIC, NULL);
@@ -1642,7 +1652,7 @@ UINT16 W_CheckNumForFullNamePK3(const char *name, UINT16 wad, UINT16 startlump)
 			|| (result < wadfiles[wad]->numlumps
 			&& !strnicmp(name, wadfiles[wad]->lumpinfo[result].fullname, name_length)))
 				return result;
-			/* A hash collision simply falls back to the original exact scan. */
+
 		}
 	}
 	for (i = startlump; i < wadfiles[wad]->numlumps; i++, lump_p++)
@@ -1912,9 +1922,9 @@ lumpnum_t W_GetNumForLongName(const char *name)
 	return i;
 }
 
-// Checks whether a lump can plausibly be decoded as a graphic patch without
-// loading the entire lump. This prevents same-named Lua/SOC/text lumps from
-// being handed to the patch decoder.
+
+
+
 static boolean W_IsProbablyValidPatch(UINT16 wadnum, UINT16 lumpnum)
 {
 	UINT8 header[MIN_PATCH_LUMP_HEADER_SIZE] = {0};
@@ -2394,7 +2404,7 @@ static size_t W_ReadLumpHeaderPwadUnlocked(UINT16 wad, UINT16 lump, void *dest, 
 			int zErr = Z_OK;
 			z_stream strm;
 			unsigned long rawSize = l->disksize;
-			// Only inflate the requested bytes.
+
 			unsigned long decSize = size + offset;
 
 			if (!source)
@@ -2533,7 +2543,7 @@ void *W_CacheLumpNumPwad(UINT16 wad, UINT16 lump, INT32 tag)
 		void *ptr = Z_Malloc(expected, tag, &lumpcache[lump]);
 		if (W_ReadLumpHeaderPwad(wad, lump, ptr, 0, 0) != expected)
 		{
-			Z_Free(ptr); // also clears lumpcache[lump]
+			Z_Free(ptr);
 			I_Error("W_CacheLumpNumPwad: could not read lump %u:%u (%s) from %s",
 				wad, lump, W_CheckNameForNumPwad(wad, lump), wadfiles[wad]->filename);
 		}
@@ -2549,10 +2559,10 @@ void *W_CacheLumpNum(lumpnum_t lumpnum, INT32 tag)
 	return W_CacheLumpNumPwad(WADFILENUM(lumpnum),LUMPNUM(lumpnum),tag);
 }
 
-/* Sound effects are optional content. If an archive is replaced while the
- * game is running, its previously indexed compressed offsets may no longer
- * describe the file on disk. Let the sound backend reject that one effect
- * instead of turning a recoverable read failure into a fatal game error. */
+
+
+
+
 void *W_TryCacheLumpNumPwad(UINT16 wad, UINT16 lump, INT32 tag)
 {
 	lumpcache_t *lumpcache;
@@ -2567,7 +2577,7 @@ void *W_TryCacheLumpNumPwad(UINT16 wad, UINT16 lump, INT32 tag)
 		void *ptr = Z_Malloc(expected, tag, &lumpcache[lump]);
 		if (W_ReadLumpHeaderPwad(wad, lump, ptr, 0, 0) != expected)
 		{
-			Z_Free(ptr); /* also clears lumpcache[lump] */
+			Z_Free(ptr);
 			return NULL;
 		}
 	}
@@ -2658,6 +2668,13 @@ boolean W_IsPatchCachedPwad(UINT16 wad, UINT16 lump, void *ptr)
 		return false;
 
 	lcache = wadfiles[wad]->patchcache[lump];
+	if (wadfiles[wad]->spritepatchcache)
+	{
+		void *spritecache = wadfiles[wad]->spritepatchcache[lump];
+
+		if (spritecache && (!ptr || ptr == spritecache))
+			return true;
+	}
 
 	if (ptr)
 	{
@@ -2687,10 +2704,10 @@ void *W_CacheLumpName(const char *name, INT32 tag)
 //                                         CACHING OF GRAPHIC PATCH RESOURCES
 // ==========================================================================
 
-/* Keep a bad add-on graphic from turning into a NULL patch that later drawing
- * code may dereference.  Each failed lump receives its own cached transparent
- * 1x1 patch, so libpng is not asked to decode the same invalid data every
- * frame. */
+
+
+
+
 static patch_t *W_CreateInvalidGraphicPlaceholder(void)
 {
 	UINT8 pixel = TRANSPARENTPIXEL;
@@ -2703,12 +2720,24 @@ static patch_t *W_CreateInvalidGraphicPlaceholder(void)
 //
 static void *W_GetPatchPwad(UINT16 wad, UINT16 lump, INT32 tag)
 {
-	lumpcache_t *lumpcache = NULL;
+	lumpcache_t *lumpcache;
+	const boolean sprite = (tag == PU_SPRITE);
 
 	if (!TestValidLump(wad, lump))
 		return NULL;
 
-	lumpcache = wadfiles[wad]->patchcache;
+
+
+
+	if (sprite)
+	{
+		if (!wadfiles[wad]->spritepatchcache)
+			Z_Calloc(wadfiles[wad]->numlumps * sizeof (*lumpcache), PU_STATIC,
+				&wadfiles[wad]->spritepatchcache);
+		lumpcache = wadfiles[wad]->spritepatchcache;
+	}
+	else
+		lumpcache = wadfiles[wad]->patchcache;
 
 	if (!lumpcache[lump])
 	{
@@ -2735,13 +2764,14 @@ static void *W_GetPatchPwad(UINT16 wad, UINT16 lump, INT32 tag)
 		{
 #ifndef NO_PNG_LUMPS
 			const size_t pnglen = len;
+			const pictureflags_t flags = sprite ? PICFLAGS_USE_TRANSPARENTPIXEL : 0;
 #ifdef HWRENDER
 			{
 				RGBA_t *hardware_pixels = NULL;
 				patch_t *pngpatch;
 
 				ptr = Picture_PNGConvertWithRGBA((UINT8 *)lumpdata,
-					PICFMT_PATCH, NULL, NULL, NULL, NULL, pnglen, &len, 0,
+					PICFMT_PATCH, NULL, NULL, NULL, NULL, pnglen, &len, flags,
 					&hardware_pixels);
 				if (!ptr)
 				{
@@ -2757,16 +2787,16 @@ static void *W_GetPatchPwad(UINT16 wad, UINT16 lump, INT32 tag)
 				pngpatch->hardware_pixels = hardware_pixels;
 				Z_ChangeTag(pngpatch->hardware_pixels, PU_PATCH_DATA);
 
-				/* The paletted translation companion used to decompress and
-				 * quantize the PNG a third time here.  Most true-colour PNGs are
-				 * walls or gallery art and never use a skin translation.  Build
-				 * that companion lazily from the already-created software patch
-				 * only if a translated hardware draw actually asks for it. */
+
+
+
+
+
 				pngpatch->hardware_palette_pixels = NULL;
 			}
 #else
 			ptr = Picture_PNGConvert((UINT8 *)lumpdata, PICFMT_PATCH,
-				NULL, NULL, NULL, NULL, pnglen, &len, 0);
+				NULL, NULL, NULL, NULL, pnglen, &len, flags);
 			if (!ptr)
 			{
 				Z_Free(lumpdata);
@@ -2800,6 +2830,8 @@ static void *W_GetPatchPwad(UINT16 wad, UINT16 lump, INT32 tag)
 				return NULL;
 		}
 
+		if (sprite)
+			Patch_RemoveSpriteKey(dest);
 		Z_ChangeTag(dest, tag);
 		Z_SetUser(dest, &lumpcache[lump]);
 	}
@@ -2857,8 +2889,8 @@ boolean W_ReadPatchHeaderPwad(UINT16 wadnum, UINT16 lumpnum, INT16 *width, INT16
 		INT32 pwidth = 0, pheight = 0;
 		UINT8 *png;
 
-		// Texture startup only needs dimensions, which live in PNG's fixed
-		// IHDR header. Offset-aware sprite calls still use libpng below.
+
+
 		if (!topoffset && !leftoffset
 			&& Picture_PNGDimensionsFromHeader(header, len, &pwidth, &pheight))
 		{
@@ -3199,9 +3231,9 @@ W_VerifyPK3 (FILE *fp, lumpchecklist_t *checklist, boolean status)
 
 	}
 
-	/* Keep the central directory scan sequential. Seeking to every local
-	 * header and back discarded the stdio buffer twice per archive entry.
-	 * This temporary offset list is freed before verification returns. */
+
+
+
 	for (i = 0; i < numlumps; i++)
 	{
 		if (fseek(fp, localoffsets[i], SEEK_SET) != 0)
@@ -3388,27 +3420,48 @@ virtres_t* vres_GetMap(lumpnum_t lumpnum)
 	virtres_t* vres = NULL;
 	virtlump_t* vlumps = NULL;
 	size_t numlumps = 0;
+	UINT8 *mapdata = NULL;
 
 	if (W_IsLumpWad(lumpnum))
 	{
-		// Remember that we're assuming that the WAD will have a specific set of lumps in a specific order.
-		UINT8 *wadData = W_CacheLumpNum(lumpnum, PU_LEVEL);
-		filelump_t *fileinfo = (filelump_t *)(wadData + ((wadinfo_t *)wadData)->infotableofs);
-		numlumps = ((wadinfo_t *)wadData)->numlumps;
-		vlumps = Z_Calloc(sizeof(virtlump_t)*numlumps, PU_LEVEL, NULL);
+		const size_t length = W_LumpLength(lumpnum);
+		wadinfo_t header;
 
-		// Build the lumps.
+		if (length < sizeof header)
+			I_Error("Embedded map %.8s has an incomplete WAD header", W_CheckNameForNum(lumpnum));
+		mapdata = W_CacheLumpNum(lumpnum, PU_LEVEL);
+		memcpy(&header, mapdata, sizeof header);
+
+		numlumps = (UINT32)LONG(header.numlumps);
+		const size_t directory = (UINT32)LONG(header.infotableofs);
+		if (directory > length || numlumps > (length - directory) / sizeof(filelump_t)
+			|| numlumps > SIZE_MAX / sizeof(*vlumps))
+			I_Error("Embedded map %.8s has an invalid WAD directory", W_CheckNameForNum(lumpnum));
+
+		vlumps = Z_Calloc(sizeof(*vlumps) * numlumps, PU_LEVEL, NULL);
+
 		for (i = 0; i < numlumps; i++)
 		{
-			vlumps[i].size = (size_t)(((filelump_t *)(fileinfo + i))->size);
-			// Play it safe with the name in this case.
-			memcpy(vlumps[i].name, (fileinfo + i)->name, 8);
-			vlumps[i].name[8] = '\0';
-			vlumps[i].data = Z_Malloc(vlumps[i].size, PU_LEVEL, NULL); // This is memory inefficient, sorry about that.
-			memcpy(vlumps[i].data, wadData + (fileinfo + i)->filepos, vlumps[i].size);
-		}
+			filelump_t entry;
+			memcpy(&entry, mapdata + directory + i * sizeof entry, sizeof entry);
+			const size_t size = (UINT32)LONG(entry.size);
 
-		Z_Free(wadData);
+			const size_t position = size ? (UINT32)LONG(entry.filepos) : 0;
+			memcpy(vlumps[i].name, entry.name, 8);
+			vlumps[i].size = size;
+			if (position > length || size > length - position)
+				I_Error("Embedded map %.8s has an invalid %.8s lump", W_CheckNameForNum(lumpnum), entry.name);
+
+
+			if (position % sizeof(UINT32) && strcmp(vlumps[i].name, "TEXTMAP"))
+			{
+				vlumps[i].data = Z_Malloc(size, PU_LEVEL, NULL);
+				memcpy(vlumps[i].data, mapdata + position, size);
+				vlumps[i].ownsdata = true;
+			}
+			else
+				vlumps[i].data = mapdata + position;
+		}
 	}
 	else
 	{
@@ -3426,11 +3479,13 @@ virtres_t* vres_GetMap(lumpnum_t lumpnum)
 			memcpy(vlumps[i].name, W_CheckNameForNum(lumpnum), 8);
 			vlumps[i].name[8] = '\0';
 			vlumps[i].data = W_CacheLumpNum(lumpnum, PU_LEVEL);
+			vlumps[i].ownsdata = true;
 		}
 	}
 	vres = Z_Malloc(sizeof(virtres_t), PU_LEVEL, NULL);
 	vres->vlumps = vlumps;
 	vres->numlumps = numlumps;
+	vres->mapdata = mapdata;
 
 	return vres;
 }
@@ -3441,8 +3496,11 @@ virtres_t* vres_GetMap(lumpnum_t lumpnum)
  */
 void vres_Free(virtres_t* vres)
 {
-	while (vres->numlumps--)
-		Z_Free(vres->vlumps[vres->numlumps].data);
+	for (size_t i = 0; i < vres->numlumps; i++)
+		if (vres->vlumps[i].ownsdata)
+			Z_Free(vres->vlumps[i].data);
+	if (vres->mapdata)
+		Z_Free(vres->mapdata);
 	Z_Free(vres->vlumps);
 	Z_Free(vres);
 }

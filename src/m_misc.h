@@ -89,6 +89,9 @@ void strcatbf(char *s1, const char *s2, const char *s3);
 
 void M_SetupMemcpy(void);
 
+#ifdef LOGMESSAGES
+void FIL_WriteLog(const char *text, size_t length);
+#endif
 const char *M_FileError(FILE *handle);
 
 int     M_PathParts      (const char *path);

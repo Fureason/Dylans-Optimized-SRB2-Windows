@@ -75,6 +75,7 @@ typedef struct
 
 // some functions
 void HU_AddChatText(const char *text, boolean playsound);
+void HU_ForgetChatPlayer(INT32 player);
 
 // set true when entering a chat message
 extern boolean chat_on;
@@ -104,6 +105,7 @@ void HU_SetFontProperties(fontdef_t *font, INT32 kerning, UINT32 spacewidth, UIN
 void HU_Start(void);
 
 boolean HU_Responder(event_t *ev);
+boolean HU_ChatHistoryResponder(const event_t *ev);
 void HU_Ticker(void);
 void HU_Drawer(void);
 char HU_dequeueChatChar(void);

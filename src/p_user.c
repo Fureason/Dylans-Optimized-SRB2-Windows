@@ -9906,19 +9906,6 @@ void P_ResetCamera(player_t *player, camera_t *thiscam)
 		return;
 
 	thiscam->chase = true;
-	x = player->mo->x - P_ReturnThrustX(player->mo, thiscam->angle, player->mo->radius);
-	y = player->mo->y - P_ReturnThrustY(player->mo, thiscam->angle, player->mo->radius);
-	if (player->mo->eflags & MFE_VERTICALFLIP)
-		z = player->mo->z + player->mo->height - (41*player->height/48) - 16*FRACUNIT;
-	else
-		z = player->mo->z + (41*player->height/48);
-
-	// set bits for the camera
-	thiscam->x = x;
-	thiscam->y = y;
-	thiscam->z = z;
-	thiscam->reset = true;
-
 	if ((thiscam == &camera && G_ControlStyle(1) == CS_SIMPLE)
 	|| (thiscam == &camera2 && G_ControlStyle(2) == CS_SIMPLE))
 	{
@@ -9928,10 +9915,29 @@ void P_ResetCamera(player_t *player, camera_t *thiscam)
 	else if (!(thiscam == &camera && (cv_cam_still.value || cv_analog[0].value))
 	&& !(thiscam == &camera2 && (cv_cam2_still.value || cv_analog[1].value)))
 	{
-		thiscam->angle = player->mo->angle;
+		if (client && netgame && !demoplayback && P_IsLocalPlayer(player))
+		{
+			const INT32 rotate = thiscam == &camera2 ? cv_cam2_rotate.value : cv_cam_rotate.value;
+			thiscam->angle = P_GetLocalAngle(player) + FixedAngle(rotate*FRACUNIT);
+		}
+		else
+			thiscam->angle = player->mo->angle;
 		thiscam->aiming = 0;
 	}
+
+	x = player->mo->x - P_ReturnThrustX(player->mo, thiscam->angle, player->mo->radius);
+	y = player->mo->y - P_ReturnThrustY(player->mo, thiscam->angle, player->mo->radius);
+	if (player->mo->eflags & MFE_VERTICALFLIP)
+		z = player->mo->z + player->mo->height - (41*player->height/48) - 16*FRACUNIT;
+	else
+		z = player->mo->z + (41*player->height/48);
+
+	thiscam->x = x;
+	thiscam->y = y;
+	thiscam->z = z;
+	thiscam->momx = thiscam->momy = thiscam->momz = 0;
 	thiscam->relativex = 0;
+	thiscam->reset = true;
 
 	thiscam->subsector = R_PointInSubsector(thiscam->x,thiscam->y);
 
@@ -10070,11 +10076,11 @@ boolean P_MoveChaseCamera(player_t *player, camera_t *thiscam, boolean resetcall
 		camheight = FixedMul(cv_cam2_height.value, mo->scale);
 	}
 
-	/* A camera reset is an instantaneous relocation, not ordinary eased camera
-	 * movement.  Using the saved camera speed here made P_ResetCamera repeat the
-	 * complete collision/FOF/polyobject search up to 70 times while converging
-	 * on the same destination.  Complex maps could therefore stall for hundreds
-	 * of milliseconds whenever the local player respawned. */
+
+
+
+
+
 	if (resetcalled)
 		camspeed = FRACUNIT;
 
@@ -10542,13 +10548,13 @@ boolean P_MoveChaseCamera(player_t *player, camera_t *thiscam, boolean resetcall
 		}
 	}*/
 
-	/* Lua characters are allowed to slow cam_speed for a dramatic wind-up, but
-	 * a very small value can leave the camera hundreds of map units behind a
-	 * fast launch.  At that point the player fills or leaves the screen and the
-	 * chase camera starts orbiting the stale position.  Preserve the requested
-	 * slow movement while it is nearby, then progressively tighten only the
-	 * positional leash.  This is local presentation state and cannot affect
-	 * gameplay or network consistency. */
+
+
+
+
+
+
+
 	if (!resetcalled && !sign && camspeed > 0 && camspeed < FRACUNIT/5)
 	{
 		fixed_t chaseerror = P_AproxDistance(x - thiscam->x, y - thiscam->y);
@@ -10652,8 +10658,8 @@ boolean P_MoveChaseCamera(player_t *player, camera_t *thiscam, boolean resetcall
 			thiscam->aiming = ANGLE_22h;
 	}
 
-	/* Side-facing camera shift is part of the destination.  Omitting it from
-	 * the completion test forced every reset to run to its hard iteration cap. */
+
+
 	return (x + shiftx == thiscam->x && y + shifty == thiscam->y
 		&& z == thiscam->z && angle == thiscam->aiming);
 

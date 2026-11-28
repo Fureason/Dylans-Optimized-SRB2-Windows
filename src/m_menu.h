@@ -135,6 +135,7 @@ typedef enum
 	// MN_HELP,
 
 	MN_SPECIAL,
+	MN_OP_CACHE,
 	NUMMENUTYPES,
 } menutype_t; // up to 63; MN_SPECIAL = 53
 #define MTREE2(a,b) (a | (b<<MENUBITS))
@@ -199,9 +200,9 @@ void M_Drawer(void);
 
 // Called by D_SRB2Main, loads the config file.
 void M_Init(void);
-/** Register saved hosting CVars before config.cfg is executed. */
-void M_RegisterEarlyHostingVariables(void);
-/** UDP port used by the local dedicated companion, or zero when inactive. */
+
+void M_RegisterEarlyMenuVariables(void);
+
 UINT16 M_CompanionServerPort(void);
 
 // Called by deh_soc.c, sets up the playermenu and description tables.
@@ -357,6 +358,8 @@ void M_ClearMenus(boolean callexitmenufunc);
 boolean M_MouseNeeded(void);
 boolean M_MenuMouseActive(void);
 boolean M_MenuMouseVisible(void);
+void M_DrawConnectionBack(void);
+boolean M_ConnectionMouseAbort(const event_t *ev);
 
 #ifdef HAVE_THREADS
 extern I_mutex m_menu_mutex;
@@ -419,6 +422,7 @@ typedef struct
 {
 	INT32 modenum; // video mode number in the vidmodes list
 	const char *desc;  // XXXxYYY
+	UINT32 width, height;
 	UINT8 goodratio; // aspect correct if 1
 } modedesc_t;
 

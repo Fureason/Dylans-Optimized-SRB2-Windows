@@ -21,6 +21,7 @@
 #include "../m_argv.h"
 #include "../i_threads.h"
 #include "../i_system.h"
+#include "../i_time.h"
 #include "mserv.h"
 #include "i_tcp.h"
 #include "client_connection.h"
@@ -44,6 +45,14 @@ static UINT8   MSNoticeFlags;
 #define MSNOTICE_UNLISTED   0x02
 
 static time_t  MSLastPing;
+static time_t  MSLastReply;
+static INT32   MSResponseCode = -1;
+
+static time_t host_public_query_time;
+static tic_t host_status_due;
+#ifdef HAVE_THREADS
+static UINT32 host_status_session;
+#endif
 
 #ifdef HAVE_THREADS
 static I_mutex MSMutex;
@@ -76,14 +85,14 @@ static CV_PossibleValue_t masterserver_update_rate_cons_t[] = {
 
 #define DEFAULT_IPV6_SETTING "Off"
 
-// Saved replacement for the -noipv6 startup workaround. IPv4 is the default
-// because broken/partial IPv6 routes commonly make master-server requests time
-// out. The command-line switch remains an unconditional compatibility override.
+
+
+
 consvar_t cv_ipv6 = CVAR_INIT ("ipv6", DEFAULT_IPV6_SETTING, CV_SAVE, CV_OnOff, NULL);
 
-// Apply the new default once to profiles made by older builds, whose saved
-// "ipv6 On" value would otherwise override DEFAULT_IPV6_SETTING forever.
-// After this marker is saved, the player's own On/Off choice is preserved.
+
+
+
 static consvar_t cv_ipv6_default_off_applied = CVAR_INIT (
 	"ipv6_default_off_applied", "Off", CV_SAVE, CV_OnOff, NULL);
 
@@ -191,8 +200,8 @@ INT32 GetRoomsList(boolean hosting, int id)
 	{
 		boolean current = true;
 #ifdef HAVE_THREADS
-		/* A failed HTTPS request must not open an error dialog after the player
-		 * already backed out of the room menu. */
+
+
 		I_lock_mutex(&ms_QueryId_mutex);
 		current = (id == ms_QueryId);
 		I_unlock_mutex(ms_QueryId_mutex);
@@ -211,9 +220,9 @@ char *GetMODVersion(int id)
 	int c;
 	boolean current_version;
 
-	/* A successful current-version response is valid for the rest of this
-	 * process. Rechecking every time the room menu opens needlessly doubles the
-	 * requests and makes a temporary master-server stall much more visible. */
+
+
+
 	if (checked_current_version)
 		return NULL;
 
@@ -267,127 +276,183 @@ static void Command_Listserv_f(void)
 	}
 }
 
-typedef struct
+void MS_ResetHostProbe(void)
 {
-	char name[MAXSERVERNAME];
-	INT32 room;
-	UINT16 port;
-	boolean require_port;
-} host_status_query_t;
+	host_public_query_time = 0;
+	host_status_due = dedicated ? 0 : I_GetTime() + 12 * TICRATE;
+#ifdef HAVE_THREADS
+	host_status_session++;
+#endif
+}
 
-static boolean Host_address_is_public(const char *address)
+void MS_RecordHostProbe(INT32 node)
 {
-	unsigned int a, b, c, d;
-	const char *ipv6 = address;
-
-	if (!address || !address[0])
-		return false;
-	if (sscanf(address, "%u.%u.%u.%u", &a, &b, &c, &d) == 4
-	&& a <= 255 && b <= 255 && c <= 255 && d <= 255)
-	{
-		if (a == 0 || a == 10 || a == 127 || a >= 224)
-			return false;
-		if (a == 169 && b == 254)
-			return false;
-		if (a == 172 && b >= 16 && b <= 31)
-			return false;
-		if (a == 192 && b == 168)
-			return false;
-		return true;
-	}
-	if (*ipv6 == '[')
-		ipv6++;
-	if (!strnicmp(ipv6, "::1", 3) || !strnicmp(ipv6, "fe80:", 5)
-	|| !strnicmp(ipv6, "fc", 2) || !strnicmp(ipv6, "fd", 2))
-		return false;
-	return strchr(ipv6, ':') != NULL;
+	if (I_IsPublicNodeAddress(node))
+		host_public_query_time = time(NULL);
 }
 
 static INT32 Host_public_connection_count(void)
 {
-	boolean seen[MAXNETNODES];
+	boolean seen[MAXNETNODES] = {false};
 	INT32 count = 0;
-	INT32 i;
 
-	memset(seen, 0, sizeof seen);
-	if (!I_GetNodeAddress)
-		return 0;
-	for (i = 0; i < MAXPLAYERS; i++)
+	for (INT32 i = 0; i < MAXPLAYERS; i++)
 	{
 		const UINT8 node = playernode[i];
-		const char *address;
-		if (!playeringame[i] || node == UINT8_MAX || node == 0
-		|| node >= MAXNETNODES || seen[node])
+		if (!playeringame[i] || node == 0 || node >= MAXNETNODES || seen[node])
 			continue;
+
 		seen[node] = true;
-		address = I_GetNodeAddress(node);
-		if (Host_address_is_public(address))
+		if (I_IsPublicNodeAddress(node))
 			count++;
 	}
 	return count;
 }
 
+static void Host_collect_status(i_host_status_t *status)
+{
+	status->port = I_GetListeningServerPort();
+	status->room = cv_masterserver_room_id.value;
+	status->router_status = I_GetUPnPStatus();
+	strlcpy(status->router_method, I_GetPortMappingMethod(), sizeof status->router_method);
+	status->public_players = Host_public_connection_count();
+	status->public_query_time = (INT64)host_public_query_time;
+
+	Lock_state();
+	status->master_pending = MSRegisteredId != MSId || MSInProgress;
+	status->master_registered = MSRegisteredId == MSId && MSRegistered;
+	status->master_response = MSRegisteredId == MSId ? MSResponseCode : -1;
+	status->master_reply_time = (INT64)MSLastReply;
+	Unlock_state();
+}
+
 #ifdef HAVE_THREADS
+typedef struct
+{
+	char name[MAXSERVERNAME];
+	INT32 room;
+	UINT16 port;
+	UINT32 session;
+	boolean companion;
+	boolean replied;
+	msg_server_t listings[MAXSERVERLIST + 1];
+} host_status_query_t;
+
+static boolean host_status_check_running;
+static host_status_query_t *host_status_completed;
+
 static void Host_status_thread(host_status_query_t *query)
 {
-	msg_server_t *list;
-	INT32 i;
+
+	query->replied = HMS_fetch_servers(query->listings, query->room, -1) != NULL;
+
+	Lock_state();
+	host_status_completed = query;
+	Unlock_state();
+}
+
+static void Flush_host_status_check(void)
+{
+	host_status_query_t *query;
+	UINT16 port;
 	INT32 matches = 0;
 
-	list = calloc(MAXSERVERLIST + 1, sizeof *list);
-	if (!list)
-	{
-		CONS_Alert(CONS_ERROR, "HOST STATUS: Not enough memory to check the public list.\n");
-		free(query);
+	Lock_state();
+	query = host_status_completed;
+	host_status_completed = NULL;
+	Unlock_state();
+	if (!query)
 		return;
-	}
 
-	/* This console diagnostic is not owned by a menu, so menu navigation must
-	 * not cancel it through ms_QueryId. */
-	if (!HMS_fetch_servers(list, query->room, -1))
+	host_status_check_running = false;
+	port = query->companion ? M_CompanionServerPort() : I_GetListeningServerPort();
+	if (port == query->port && query->session == host_status_session
+	&& stricmp(query->name, cv_servername.string) == 0)
 	{
-		CONS_Alert(CONS_WARNING,
-			"HOST STATUS: The master-server list could not be checked. Try again in a few seconds.\n");
-		free(list);
-		free(query);
-		return;
+		if (query->replied)
+		{
+			CONS_Printf("The master directory replied.\n");
+			for (INT32 i = 0; i < MAXSERVERLIST && query->listings[i].header.buffer[0]; i++)
+			{
+				const msg_server_t *entry = &query->listings[i];
+				if (entry->room != query->room || atoi(entry->port) != query->port
+				|| stricmp(entry->name, query->name) != 0)
+					continue;
+
+				if (strchr(entry->ip, ':'))
+					CONS_Printf("Directory match for this name and port [%s]:%s\n", entry->ip, entry->port);
+				else
+					CONS_Printf("Directory match for this name and port %s:%s\n", entry->ip, entry->port);
+				matches++;
+			}
+			if (!matches)
+				CONS_Printf("The directory has no entry with this name and port yet.\n");
+		}
+		else
+			CONS_Printf("Could not get a server list from the master directory. Run hoststatus to retry.\n");
 	}
 
-	for (i = 0; i < MAXSERVERLIST && list[i].header.buffer[0]; i++)
-	{
-		if (stricmp(list[i].name, query->name) != 0)
-			continue;
-		if (query->require_port && atoi(list[i].port) != query->port)
-			continue;
-
-		CONS_Printf("\x83HOST STATUS: REGISTERED in the master directory as \"%s\" at %s:%s (room %d).\n",
-			list[i].name, list[i].ip, list[i].port, list[i].room);
-		matches++;
-	}
-
-	if (!matches)
-	{
-		CONS_Alert(CONS_WARNING,
-			"HOST STATUS: NOT LISTED as \"%s\" on UDP %u in room %d. Registration may still be starting; wait a few seconds and run hoststatus again.\n",
-			query->name, (unsigned)query->port, query->room);
-	}
-	else
-	{
-		CONS_Printf("HOST STATUS: Master-directory registration is confirmed. This is not proof that unsolicited UDP reaches the PC; an outside player provides that proof. The website may take about two minutes to publish the server.\n");
-	}
-
-	free(list);
 	free(query);
 }
 #endif
 
+static void Host_print_status(const i_host_status_t *status)
+{
+	const INT64 now = (INT64)time(NULL);
+	const boolean unlisted = status->room <= 0;
+
+	CONS_Printf("UDP %u is listening locally.\n", (unsigned)status->port);
+	switch (status->router_status)
+	{
+		case I_UPNP_MAPPED:
+			CONS_Printf("The router reports a UDP mapping via %s.\n", status->router_method);
+			break;
+		case I_UPNP_FAILED:
+			CONS_Printf("Automatic router mapping failed. A manual forwarding rule can still work.\n");
+			break;
+		case I_UPNP_UNAVAILABLE:
+		case I_UPNP_DISABLED:
+			CONS_Printf("Automatic router mapping is off or unavailable.\n");
+			break;
+		default:
+			CONS_Printf("Automatic router mapping is still checking.\n");
+			break;
+	}
+
+	if (status->public_players > 0)
+		CONS_Printf("Internet reachability verified by %d connected public connection%s.\n",
+			status->public_players, status->public_players == 1 ? "" : "s");
+	else if (status->public_query_time > 0 && now >= status->public_query_time
+		&& now - status->public_query_time <= 120)
+		CONS_Printf("A public SRB2 browser query reached UDP %u %lld seconds ago.\n",
+			(unsigned)status->port, (long long)(now - status->public_query_time));
+	else if (unlisted)
+		CONS_Printf("Internet reachability is unverified. Test a direct join from another network.\n");
+	else
+		CONS_Printf("Internet reachability is unverified. Have someone on a different network look up or join the server, then run hoststatus again.\n");
+
+	if (unlisted)
+		CONS_Printf("This server is unlisted and hidden from the public server list.\n"
+			"Players can join directly using your public IP address and port.\n");
+	else if (status->master_registered)
+	{
+		const INT64 age = max(now - status->master_reply_time, 0);
+		CONS_Printf("The master server accepted the host's registration or update (HTTP %d, %lld seconds ago).\n",
+			status->master_response, (long long)age);
+	}
+	else if (status->master_pending || status->master_response < 0)
+		CONS_Printf("Waiting for the master server's registration reply.\n");
+	else if (status->master_response > 0)
+		CONS_Printf("The master server replied with HTTP %d. Registration was unsuccessful.\n",
+			status->master_response);
+	else
+		CONS_Printf("The registration request received no HTTP reply from the master server.\n");
+}
+
 static void Command_HostStatus_f(void)
 {
-	boolean registered;
-	boolean registering;
+	i_host_status_t status;
 	const boolean companion = I_CompanionServerRunning();
-	const UINT16 hostport = companion ? M_CompanionServerPort() : current_port;
-	host_status_query_t *query;
 
 	if (COM_Argc() > 1)
 	{
@@ -395,75 +460,76 @@ static void Command_HostStatus_f(void)
 		return;
 	}
 
-	Lock_state();
-	registered = MSRegistered;
-	registering = MSInProgress;
-	Unlock_state();
-
 	CONS_Printf("\n\x82--- Hosting status ---\n");
-	CONS_Printf("Windows Network Discovery/file sharing: NOT REQUIRED for SRB2 internet hosting.\n");
-	if (serverrunning || companion)
+	if (companion)
 	{
-		const INT32 publicconnections = Host_public_connection_count();
-		CONS_Printf("Host process: ACTIVE (%s server)\n",
-			companion ? "local dedicated companion" :
-			(dedicated ? "dedicated" : "listen"));
-		CONS_Printf("UDP socket: listening on port %u\n", (unsigned)hostport);
-		if (publicconnections > 0)
-			CONS_Printf("Internet reachability: PROVEN by %d active public-Internet connection%s.\n",
-				publicconnections, publicconnections == 1 ? "" : "s");
-		else
-			CONS_Printf("Internet reachability: UNVERIFIED. No outside player is connected right now; a master listing or router mapping alone is not a port test.\n");
+#if defined(_WIN32) && defined(HAVE_SDL)
+		if (!I_ReadCompanionHostStatus(&status))
+#endif
+		{
+			CONS_Printf("Waiting for the local dedicated server to report its status.\n");
+			return;
+		}
 	}
 	else
 	{
-		CONS_Printf("Host process: NOT ACTIVE. This client is not currently hosting.\n");
-		return;
+		if (!serverrunning || !server || !netgame)
+		{
+			CONS_Printf("This client is not currently hosting a network game.\n");
+			return;
+		}
+		Host_collect_status(&status);
+		I_ValidateUPnPMapping();
 	}
 
-	if (cv_masterserver_room_id.value < 0)
+	if (!status.port)
 	{
-		CONS_Printf("Public listing: OFF (Unlisted/LAN mode). Players need a direct address or LAN discovery.\n");
+		CONS_Printf("The host has no listening UDP socket.\n");
 		return;
 	}
 
-	CONS_Printf("Master registration: %s\n",
-		registered ? "accepted" : (registering ? "in progress" : "not accepted yet"));
+	Host_print_status(&status);
+	if (status.room <= 0)
+		return;
 
 #ifdef HAVE_THREADS
-	query = calloc(1, sizeof *query);
-	if (!query)
+	if (host_status_check_running)
+		CONS_Printf("The directory check is already running.\n");
+	else
 	{
-		CONS_Alert(CONS_ERROR, "HOST STATUS: Not enough memory to start the visibility check.\n");
-		return;
+		host_status_query_t *query = calloc(1, sizeof *query);
+		if (!query)
+			return;
+
+		strlcpy(query->name, cv_servername.string, sizeof query->name);
+		query->room = status.room;
+		query->port = status.port;
+		query->session = host_status_session;
+		query->companion = companion;
+		host_status_check_running = true;
+		CONS_Printf("Checking the master directory for the server name and UDP port...\n");
+		I_spawn_thread("host-status", (I_thread_fn)Host_status_thread, query);
 	}
-	strlcpy(query->name, cv_servername.string, sizeof query->name);
-	query->room = cv_masterserver_room_id.value;
-	query->port = hostport;
-	query->require_port = query->port != 0;
-	CONS_Printf("Master directory: checking registration for \"%s\" on UDP %u...\n",
-		query->name, (unsigned)query->port);
-	I_spawn_thread("host-status", (I_thread_fn)Host_status_thread, query);
-#else
-	CONS_Printf("Public listing: live verification needs thread support in this build.\n");
 #endif
 }
 
 static void
 Finish_registration (void)
 {
-	int registered;
-
-	registered = HMS_register();
+	INT32 response;
+	const int registered = HMS_register(&response);
 
 	Lock_state();
 	{
 		MSRegistered = registered;
 		MSRegisteredId = MSId;
-		if (registered)
-			MSNoticeFlags |= MSNOTICE_REGISTERED;
-
+		MSResponseCode = response;
 		time(&MSLastPing);
+		if (registered)
+		{
+			MSNoticeFlags |= MSNOTICE_REGISTERED;
+			MSLastReply = MSLastPing;
+		}
 	}
 	Unlock_state();
 }
@@ -483,11 +549,14 @@ Finish_update (void)
 
 	if (registered)
 	{
-		if (HMS_update())
+		INT32 response;
+		if (HMS_update(&response))
 		{
 			Lock_state();
 			{
 				time(&MSLastPing);
+				MSLastReply = MSLastPing;
+				MSResponseCode = response;
 				MSRegistered = true;
 			}
 			Unlock_state();
@@ -697,7 +766,7 @@ void UnregisterServer(void)
 static boolean
 Online (void)
 {
-	return ( serverrunning && cv_masterserver_room_id.value > 0 );
+	return I_GetListeningServerPort() && cv_masterserver_room_id.value > 0;
 }
 
 static inline void SendPingToMasterServer(void)
@@ -738,10 +807,10 @@ static void Flush_masterserver_notices(void)
 	}
 	Unlock_state();
 
-	/* Worker threads only update state. Printing here keeps the shared console,
-	 * renderer and flushed log file on the main thread. */
+
+
 	if (notices & MSNOTICE_REGISTERED)
-		CONS_Printf("Master server registration successful. Run hoststatus to verify public reachability.\n");
+		CONS_Printf("Master server registration successful. Run hoststatus for the port and reachability checks.\n");
 	if (notices & MSNOTICE_UNLISTED)
 		CONS_Printf("Server deregistration request successfully sent.\n");
 }
@@ -751,6 +820,31 @@ void MasterClient_Ticker(void)
 #ifdef MASTERSERVER
 	Flush_masterserver_notices();
 	SendPingToMasterServer();
+#ifdef HAVE_THREADS
+	Flush_host_status_check();
+#endif
+
+	if (host_status_due && I_GetTime() >= host_status_due)
+	{
+		host_status_due = 0;
+		if (I_GetListeningServerPort())
+			COM_BufAddText("hoststatus\n");
+	}
+
+#if defined(_WIN32) && defined(HAVE_SDL)
+	if (dedicated && serverrunning)
+	{
+		static tic_t next_report;
+		const tic_t now = I_GetTime();
+		if (now >= next_report)
+		{
+			i_host_status_t status;
+			next_report = now + TICRATE;
+			Host_collect_status(&status);
+			I_PublishCompanionHostStatus(&status);
+		}
+	}
+#endif
 #endif
 }
 

@@ -1,4 +1,4 @@
-// Shared Windows, Linux and Android controller setup, GPLv2.
+
 #include "m_gamepadcapture.h"
 static void M_ResetMenuMouse(void);
 static void M_MenuMouseButton(INT32 item, INT32 key, INT32 x, INT32 y, INT32 width, const char *label);
@@ -69,8 +69,8 @@ static void M_GPRefresh(SDL_Joystick *device)
 		SDL_GameControllerClose(controller);
 	}
 #ifdef __ANDROID__
-	/* Android's SDL driver sorts X/Y/Z/RZ before trigger axes. This also
-	 * names sticks on older SDL builds lacking a mapping for new controllers. */
+
+
 	if (count >= 4 && !gp_info.roles[0] && !gp_info.roles[1]
 		&& !gp_info.roles[2] && !gp_info.roles[3])
 		for (i = 0; i < 4; i++) gp_info.roles[i] = i + 1;

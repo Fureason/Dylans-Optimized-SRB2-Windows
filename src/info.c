@@ -714,8 +714,8 @@ playersprite_t spr2defaults[NUMPLAYERSPRITES] = {
 
 // Doesn't work with g++, needs actionf_p1 (don't modify this comment)
 #if defined(__GNUC__)
-// GCC 14+ treats the historical actionf_t state-table initializer as an
-// error. Non-NULL actions intentionally use the union's acp1 signature.
+
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
 #endif

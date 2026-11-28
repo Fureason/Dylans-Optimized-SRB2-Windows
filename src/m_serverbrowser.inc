@@ -1,10 +1,16 @@
-// The native browser shares m_menu's pointer targets and controller responder.
-// Coordinates use SRB2's 320x200 canvas in both renderers.
+
+
 #define BROWSER_ROWS 9
 #define BROWSER_DETAIL_ROWS 17
-#define BROWSER_STANDARD_ROOM 33
+enum
+{
+	BROWSER_TOOL_Y = 32, BROWSER_BUTTON_HEIGHT = 11,
+	BROWSER_FILTER_X = 148, BROWSER_FILTER_WIDTH = 79,
+	BROWSER_SORT_X = 230, BROWSER_SORT_WIDTH = 84
+};
 static boolean browser_room_initialized;
 static INT32 browser_selected = -1, browser_scroll, browser_detailscroll;
+static boolean browser_selection_cleared;
 static INT32 *browser_rows;
 static size_t browser_count;
 static size_t browser_capacity;
@@ -14,9 +20,8 @@ static boolean browser_favorites, browser_searching;
 static char browser_search[SB_ADDRESSLEN];
 static boolean browser_addressediting;
 static char browser_address[SB_ADDRESSLEN];
-static boolean browser_dragbar;
-static INT32 browser_bargrab;
-static INT32 browser_filter;
+static consvar_t *browser_dropdown;
+static INT32 browser_dropdown_choice;
 static INT32 browser_lastclick = -1, browser_clickx, browser_clicky;
 static tic_t browser_clicktime;
 
@@ -30,8 +35,6 @@ static browser_focus_t browser_focus = BFOCUS_LIST;
 static const char *browser_focus_names[] = {"servers", "Internet / LAN", "Favorites", "room / address",
 	"Refresh", "Search", "Filter", "Sort", "Players", "Add-ons", "Favorite server", "Join server",
 	"Scroll up", "Scroll down", "Back to list"};
-
-static const char *browser_filters[] = {"All servers", "Has players", "Has room", "Unmodified", "No cheats"};
 
 static boolean M_BrowserContains(const char *text, const char *query)
 {
@@ -76,18 +79,18 @@ static void M_BrowserBuildRows(void)
 	const tic_t second = I_GetTime()/TICRATE;
 	const INT32 lookup = SB_LookupIndex();
 	size_t count = SB_Count();
-	// Data arrives at network/tic speed. A high render cap must not turn
-	// filtering and qsort into thousands of identical operations per second.
-	// The one-second key also advances timeout ordering for unreachable rows.
+
+
+
 	if (lastrevision == revision && lastsecond == second
-	&& lastsort == cv_serversort.value && lastfilter == browser_filter
+	&& lastsort == cv_serversort.value && lastfilter == cv_serverfilter.value
 	&& lastfavorites == browser_favorites && !strcmp(lastsearch, browser_search))
 	{
 		SB_Select(browser_selected);
 		return;
 	}
 	lastrevision = revision; lastsecond = second;
-	lastsort = cv_serversort.value; lastfilter = browser_filter;
+	lastsort = cv_serversort.value; lastfilter = cv_serverfilter.value;
 	lastfavorites = browser_favorites;
 	strlcpy(lastsearch, browser_search, sizeof lastsearch);
 	if (count > browser_capacity || !browser_rows)
@@ -109,35 +112,37 @@ static void M_BrowserBuildRows(void)
 		&& !M_BrowserContains(entry->address, browser_search)
 		&& (!SB_Online(entry) || (!M_BrowserContains(entry->info.maptitle, browser_search)
 		&& !M_BrowserContains(entry->info.gametypename, browser_search)))) continue;
-		if (browser_filter && !SB_Online(entry)) continue;
-		if (browser_filter == 1 && !entry->info.numberofplayer) continue;
-		if (browser_filter == 2 && (entry->info.numberofplayer >= entry->info.maxplayer || entry->info.refusereason)) continue;
-		if (browser_filter == 3 && entry->info.modifiedgame) continue;
-		if (browser_filter == 4 && entry->info.cheatsenabled) continue;
+		if (lastfilter != BFILTER_ALL && !SB_Online(entry)) continue;
+		if (lastfilter == BFILTER_PLAYERS && !entry->info.numberofplayer) continue;
+		if (lastfilter == BFILTER_SPACE && (entry->info.numberofplayer >= entry->info.maxplayer || entry->info.refusereason)) continue;
+		if (lastfilter == BFILTER_UNMODIFIED && entry->info.modifiedgame) continue;
+		if (lastfilter == BFILTER_NO_CHEATS && entry->info.cheatsenabled) continue;
 		browser_rows[browser_count++] = (INT32)i;
 	}
 	qsort(browser_rows, browser_count, sizeof(*browser_rows), M_BrowserCompare);
-	// The selected identity is an endpoint, not a row number or sorted net node.
-	// Refreshing player counts cannot silently change the Join target.
+
+
 	if (browser_selected >= 0)
 	{
 		boolean found = false;
 		for (size_t i = 0; i < browser_count; i++) if (browser_rows[i] == browser_selected) { found = true; break; }
 		if (!found) browser_selected = -1;
 	}
-	if (browser_selected < 0 && browser_count) browser_selected = browser_rows[0];
+	if (browser_selected < 0 && browser_count && !browser_selection_cleared)
+		browser_selected = browser_rows[0];
 	browser_scroll = max(0, min(browser_scroll, (INT32)browser_count - BROWSER_ROWS));
 	SB_Select(browser_selected);
 }
 
 static void M_BrowserMove(INT32 delta)
 {
-	INT32 row = 0;
+	INT32 row = browser_selected < 0 && delta > 0 ? -1 : 0;
 	M_BrowserBuildRows();
 	if (!browser_count) return;
 	for (size_t i = 0; i < browser_count; i++) if (browser_rows[i] == browser_selected) { row = (INT32)i; break; }
 	row = max(0, min((INT32)browser_count - 1, row + delta));
 	browser_selected = browser_rows[row];
+	browser_selection_cleared = false;
 	if (row < browser_scroll) browser_scroll = row;
 	if (row >= browser_scroll + BROWSER_ROWS) browser_scroll = row - BROWSER_ROWS + 1;
 	browser_detailscroll = 0;
@@ -147,7 +152,7 @@ static void M_BrowserMove(INT32 delta)
 static void M_BrowserWheel(INT32 direction)
 {
 	browser_lastclick = -1;
-	if (browser_addressediting) return;
+	if (browser_addressediting || browser_dropdown) return;
 	if (menumouse_navigation) browser_focus = BFOCUS_LIST;
 	if (browser_detail)
 	{
@@ -155,29 +160,6 @@ static void M_BrowserWheel(INT32 direction)
 		browser_detailscroll = max(0, min(browser_detailscroll + direction * 3, (INT32)count - BROWSER_DETAIL_ROWS));
 	}
 	else browser_scroll = max(0, min(browser_scroll + direction * 3, (INT32)browser_count - BROWSER_ROWS));
-}
-
-static boolean M_BrowserPointer(event_t *ev)
-{
-	if (ev->type == ev_keyup && ev->key == KEY_MOUSE1) { browser_dragbar = false; return false; }
-	if (ev->type == ev_keydown && ev->key == KEY_MOUSE1 && !browser_detail && !browser_addressediting
-	&& menumouse_position && menumouse_x >= 198 && menumouse_x < 203
-	&& menumouse_y >= 55 && menumouse_y < 163 && browser_count > BROWSER_ROWS)
-	{
-		INT32 height = max(7, 108 * BROWSER_ROWS / (INT32)browser_count);
-		INT32 top = 55 + (108-height)*browser_scroll/((INT32)browser_count-BROWSER_ROWS);
-		browser_bargrab = menumouse_y >= top && menumouse_y < top+height ? menumouse_y-top : height/2;
-		browser_dragbar = true;
-	}
-	if (browser_dragbar && (ev->type == ev_mouseabsolute || (ev->type == ev_keydown && ev->key == KEY_MOUSE1)))
-	{
-		INT32 range = max(0, (INT32)browser_count-BROWSER_ROWS);
-		INT32 height = max(7, 108 * BROWSER_ROWS / max(BROWSER_ROWS+1, (INT32)browser_count));
-		INT32 travel = 108-height;
-		browser_scroll = (min(travel, max(0, menumouse_y-55-browser_bargrab)) * range + travel/2) / travel;
-		return true;
-	}
-	return false;
 }
 
 static void M_Connect(INT32 choice)
@@ -213,7 +195,7 @@ static void M_Connect(INT32 choice)
 	char address[SB_ADDRESSLEN];
 	strlcpy(address, entry->address, sizeof address);
 	SB_Close();
-	M_ClearMenus(false); // retain the selected transport node for stock joining
+	M_ClearMenus(false);
 	if (node >= 0) COM_BufAddText(va("connect node %d\n", node));
 	else COM_BufAddText(va("connect \"%s\"\n", address));
 }
@@ -224,12 +206,13 @@ static void M_Refresh(INT32 choice)
 	if (m_waiting_mode == M_WAITING_SERVERS) return;
 	if (!SB_Active()) SB_Open();
 	SB_Refresh();
-	CL_UpdateServerList(cv_masterserver_room_id.value >= 0, cv_masterserver_room_id.value);
+	CL_UpdateServerList(cv_serverbrowserroom.value >= 0, cv_serverbrowserroom.value);
 }
 
 enum { SBUI_SELECT, SBUI_FAVORITE, SBUI_TAB, SBUI_ROOM, SBUI_REFRESH, SBUI_SEARCH,
 	SBUI_SORT, SBUI_FILTER, SBUI_JOIN, SBUI_ADDONS, SBUI_BACK, SBUI_SCROLL,
-	SBUI_ADDRESS, SBUI_ADDRESSSAVE, SBUI_ADDRESSCANCEL, SBUI_CLEARSEARCH, SBUI_PLAYERS };
+	SBUI_ADDRESS, SBUI_ADDRESSSAVE, SBUI_ADDRESSCANCEL, SBUI_CLEARSEARCH, SBUI_PLAYERS,
+	SBUI_PICK_DROPDOWN };
 
 static void M_BrowserShowDetail(browser_detail_t detail)
 {
@@ -244,6 +227,7 @@ static void M_BrowserApplyLookup(void)
 	{
 		browser_favorites = false;
 		browser_selected = SB_LookupIndex();
+		browser_selection_cleared = false;
 	}
 	browser_scroll = 0;
 }
@@ -287,16 +271,61 @@ static void M_BrowserSetFocus(browser_focus_t focus)
 
 static void M_BrowserFocusBorder(INT32 x, INT32 y, INT32 width, INT32 height, browser_focus_t focus)
 {
-	if (menumouse_navigation || browser_addressediting || browser_focus != focus) return;
+	if (menumouse_navigation || browser_addressediting || browser_dropdown || browser_focus != focus) return;
 	V_DrawFill(x, y, width, 1, yellowmap[3]);
 	V_DrawFill(x, y+height-1, width, 1, yellowmap[3]);
 	V_DrawFill(x, y, 1, height, yellowmap[3]);
 	V_DrawFill(x+width-1, y, 1, height, yellowmap[3]);
 }
 
+static INT32 M_BrowserDropdownCount(void)
+{
+	INT32 count = 0;
+	while (browser_dropdown->PossibleValue[count].strvalue)
+		count++;
+	return count;
+}
+
+static void M_BrowserCloseDropdown(INT32 choice)
+{
+	if (!browser_dropdown) return;
+	if (choice >= 0 && choice < M_BrowserDropdownCount())
+	{
+		const INT32 value = browser_dropdown->PossibleValue[choice].value;
+		if (value != browser_dropdown->value)
+		{
+			CV_SetValue(browser_dropdown, value);
+			browser_scroll = 0;
+		}
+	}
+	browser_dropdown = NULL;
+	menumouse_count = 0;
+}
+
+static void M_BrowserClickOutside(void)
+{
+	if (browser_dropdown)
+	{
+		M_BrowserCloseDropdown(-1);
+		return;
+	}
+	if (browser_addressediting || browser_detail) return;
+	browser_searching = false;
+	browser_selection_cleared = true;
+	browser_selected = browser_lastclick = -1;
+	browser_focus = BFOCUS_LIST;
+	SB_Select(-1);
+}
+
 static void M_BrowserClick(INT32 action, INT32 value)
 {
 	boolean doubleclick = false;
+	if (action == SBUI_PICK_DROPDOWN)
+	{
+		M_BrowserCloseDropdown(value);
+		return;
+	}
+	browser_searching = action == SBUI_SEARCH;
 	if (action == SBUI_SELECT && menumouse_navigation)
 	{
 		doubleclick = browser_lastclick == value && I_GetTime() - browser_clicktime <= TICRATE/2
@@ -315,7 +344,8 @@ static void M_BrowserClick(INT32 action, INT32 value)
 	{
 		case SBUI_SELECT:
 			browser_focus = BFOCUS_LIST;
-			browser_selected = value; browser_detailscroll = 0; browser_searching = false;
+			browser_selected = value; browser_detailscroll = 0;
+			browser_selection_cleared = false;
 			SB_Select(value);
 			if (doubleclick && SB_Online(SB_Server(value))) M_Connect(0);
 			break;
@@ -323,22 +353,29 @@ static void M_BrowserClick(INT32 action, INT32 value)
 			if (value >= 0) SB_Favorite((size_t)value);
 			break;
 		case SBUI_TAB:
-			browser_favorites = value != 0; browser_scroll = 0; browser_searching = false;
+			browser_favorites = value != 0; browser_scroll = 0;
 			M_BrowserShowDetail(BDETAIL_NONE);
 			break;
 		case SBUI_ROOM: M_BrowserShowDetail(BDETAIL_NONE); M_RoomMenu(0); break;
 		case SBUI_REFRESH: M_Refresh(0); break;
-		case SBUI_SEARCH: browser_focus = BFOCUS_SEARCH; browser_searching = true; break;
+		case SBUI_SEARCH: browser_focus = BFOCUS_SEARCH; break;
 		case SBUI_CLEARSEARCH:
-			browser_search[0] = '\0'; browser_searching = false; browser_scroll = 0;
+			browser_search[0] = '\0'; browser_scroll = 0;
 			SB_Lookup(NULL);
 			break;
-		case SBUI_SORT: CV_AddValue(&cv_serversort, 1); break;
-		case SBUI_FILTER: browser_filter = (browser_filter + 1) % 5; browser_scroll = 0; break;
+		case SBUI_FILTER: case SBUI_SORT:
+		{
+			consvar_t *setting = action == SBUI_FILTER ? &cv_serverfilter : &cv_serversort;
+			browser_dropdown = browser_dropdown == setting ? NULL : setting;
+			browser_dropdown_choice = setting->value;
+			menumouse_count = 0;
+			menumouse_scrollbar.value = NULL;
+			break;
+		}
 		case SBUI_JOIN: M_Connect(0); break;
 		case SBUI_ADDONS: case SBUI_PLAYERS:
 			M_BrowserShowDetail(action == SBUI_PLAYERS ? BDETAIL_PLAYERS : BDETAIL_ADDONS);
-			browser_searching = false; browser_focus = BFOCUS_LIST;
+			browser_focus = BFOCUS_LIST;
 			break;
 		case SBUI_BACK:
 		{
@@ -350,7 +387,7 @@ static void M_BrowserClick(INT32 action, INT32 value)
 		case SBUI_SCROLL: M_BrowserWheel(value); break;
 		case SBUI_ADDRESS:
 			M_BrowserShowDetail(BDETAIL_NONE);
-			browser_addressediting = true; browser_address[0] = '\0'; browser_searching = false; break;
+			browser_addressediting = true; browser_address[0] = '\0'; break;
 		case SBUI_ADDRESSSAVE:
 			if (SB_ValidAddress(browser_address))
 			{
@@ -358,9 +395,10 @@ static void M_BrowserClick(INT32 action, INT32 value)
 				if (index >= 0)
 				{
 					browser_addressediting = false; browser_favorites = true;
-					browser_search[0] = '\0'; browser_filter = browser_scroll = 0;
+					browser_search[0] = '\0'; browser_scroll = 0;
 					SB_Lookup(NULL);
 					browser_selected = index; SB_Select(index);
+					browser_selection_cleared = false;
 					browser_focus = BFOCUS_LIST;
 				}
 			}
@@ -371,8 +409,8 @@ static void M_BrowserClick(INT32 action, INT32 value)
 
 static void M_BrowserTarget(INT32 action, INT32 value, INT32 x, INT32 y, INT32 width, INT32 height)
 {
-	M_MenuMouseAdd(0, 0, x, y, width, height, M_BrowserClick, action, value, NULL);
-	if (menumouse_count) menumouse_hits[menumouse_count - 1].hoverselect = false;
+	menumouse_hit_t *hit = M_MenuMouseAdd(0, 0, x, y, width, height, M_BrowserClick, action, value, NULL);
+	if (hit) hit->hoverselect = false;
 }
 
 static void M_BrowserText(INT32 x, INT32 y, INT32 width, INT32 color, const char *text)
@@ -385,16 +423,56 @@ static void M_BrowserText(INT32 x, INT32 y, INT32 width, INT32 color, const char
 	V_DrawSmallString(x, y, V_ALLOWLOWERCASE | color, clipped);
 }
 
-static void M_BrowserButton(INT32 x, INT32 y, INT32 width, const char *text, INT32 action, INT32 value, boolean selectedbutton)
+static boolean M_BrowserHover(INT32 x, INT32 y, INT32 width, INT32 height)
 {
-	boolean focused = !menumouse_navigation && !browser_addressediting
+	return M_MenuMouseVisible() && menumouse_position && menumouse_x >= x
+		&& menumouse_x < x + width && menumouse_y >= y && menumouse_y < y + height;
+}
+
+static void M_BrowserButton(INT32 x, INT32 y, INT32 width, const char *text, INT32 action, INT32 value, INT32 textflags)
+{
+	const boolean dropdown = action == SBUI_FILTER || action == SBUI_SORT;
+	const boolean addressbutton = action == SBUI_ADDRESSCANCEL || action == SBUI_ADDRESSSAVE;
+	const boolean expanded = (action == SBUI_FILTER && browser_dropdown == &cv_serverfilter)
+		|| (action == SBUI_SORT && browser_dropdown == &cv_serversort);
+	const boolean focused = !menumouse_navigation && !browser_addressediting && !browser_dropdown
 		&& browser_focus == M_BrowserActionFocus(action, value);
-	boolean hovered = menumouse_navigation && menumouse_position && menumouse_x >= x
-		&& menumouse_x < x+width && menumouse_y >= y && menumouse_y < y+11;
-	V_DrawFill(x, y, width, 11, focused || hovered ? 148 : 159);
-	M_BrowserText(x+3, y+3, width-6, selectedbutton ? V_YELLOWMAP : 0, text);
-	M_BrowserTarget(action, value, x, y, width, 11);
-	M_BrowserFocusBorder(x, y, width, 11, M_BrowserActionFocus(action, value));
+	const boolean hovered = (!browser_dropdown || dropdown) && M_BrowserHover(x, y, width, BROWSER_BUTTON_HEIGHT);
+	V_DrawFill(x, y, width, BROWSER_BUTTON_HEIGHT,
+		expanded ? 154 : focused || hovered ? 148 : addressbutton ? 156 : 159);
+	M_BrowserText(x+3, y+3, width-(dropdown ? 14 : 6), textflags, text);
+	if (dropdown)
+		V_DrawString(x+width-10, y+2, V_YELLOWMAP, expanded ? "\x1A" : "\x1B");
+	M_BrowserTarget(action, value, x, y, width, BROWSER_BUTTON_HEIGHT);
+	M_BrowserFocusBorder(x, y, width, BROWSER_BUTTON_HEIGHT, M_BrowserActionFocus(action, value));
+}
+
+static void M_DrawBrowserDropdown(void)
+{
+	const boolean filter = browser_dropdown == &cv_serverfilter;
+	const INT32 x = filter ? BROWSER_FILTER_X : BROWSER_SORT_X;
+	const INT32 width = filter ? BROWSER_FILTER_WIDTH : BROWSER_SORT_WIDTH;
+	const INT32 y = BROWSER_TOOL_Y + BROWSER_BUTTON_HEIGHT;
+	const INT32 count = M_BrowserDropdownCount();
+
+	menumouse_count = 0;
+	menumouse_scrollbar.value = NULL;
+	M_BrowserTarget(SBUI_FILTER, 0, BROWSER_FILTER_X, BROWSER_TOOL_Y, BROWSER_FILTER_WIDTH, BROWSER_BUTTON_HEIGHT);
+	M_BrowserTarget(SBUI_SORT, 0, BROWSER_SORT_X, BROWSER_TOOL_Y, BROWSER_SORT_WIDTH, BROWSER_BUTTON_HEIGHT);
+	V_DrawFill(x, y, width, count * BROWSER_BUTTON_HEIGHT + 2, 159);
+	V_DrawFill(x, y, width, 1, 148);
+	for (INT32 i = 0; i < count; i++)
+	{
+		const INT32 row = y + 1 + i * BROWSER_BUTTON_HEIGHT;
+		const CV_PossibleValue_t *option = &browser_dropdown->PossibleValue[i];
+		const boolean selected = option->value == browser_dropdown->value;
+		const boolean focused = (!menumouse_navigation && i == browser_dropdown_choice)
+			|| M_BrowserHover(x+1, row, width-2, BROWSER_BUTTON_HEIGHT);
+		if (focused || selected)
+			V_DrawFill(x+1, row, width-2, BROWSER_BUTTON_HEIGHT, focused ? 154 : 156);
+		M_BrowserText(x+3, row+3, width-6, selected ? V_YELLOWMAP : 0, option->strvalue);
+		M_BrowserTarget(SBUI_PICK_DROPDOWN, i, x+1, row, width-2, BROWSER_BUTTON_HEIGHT);
+	}
 }
 
 static void M_DrawBrowserDetail(const sb_server_t *entry)
@@ -439,9 +517,9 @@ static void M_DrawBrowserDetail(const sb_server_t *entry)
 		M_BrowserText(10, 180, 220, 0, va("%u file%s%s", (UINT32)count, count == 1 ? "" : "s",
 			SB_AddonsFailed() ? " - incomplete; refresh to retry" : SB_AddonsComplete() ? " - complete" : " - receiving..."));
 	}
-	M_BrowserButton(248, 179, 66, "Back to list", SBUI_BACK, 0, false);
-	M_BrowserButton(301, 65, 12, "+", SBUI_SCROLL, -1, false);
-	M_BrowserButton(301, 155, 12, "-", SBUI_SCROLL, 1, false);
+	M_BrowserButton(248, 179, 66, "Back to list", SBUI_BACK, 0, 0);
+	M_DrawMenuScrollbar(305, 64, 5, BROWSER_DETAIL_ROWS * 6,
+		(INT32)count - BROWSER_DETAIL_ROWS, BROWSER_DETAIL_ROWS, &browser_detailscroll, true);
 	M_BrowserFocusBorder(9, 53, 290, 118, BFOCUS_LIST);
 }
 
@@ -454,17 +532,21 @@ static void M_DrawConnectMenu(void)
 	V_DrawFill(0, 0, 320, 200, 31);
 	V_DrawFill(0, 0, 320, 15, 159);
 	V_DrawCenteredString(164, 4, V_YELLOWMAP, "SERVER BROWSER");
-	M_BrowserButton(6, 18, 76, "Internet / LAN", SBUI_TAB, 0, !browser_favorites);
-	M_BrowserButton(85, 18, 64, "Favorites", SBUI_TAB, 1, browser_favorites);
+	M_BrowserButton(6, 18, 76, "Internet / LAN", SBUI_TAB, 0, browser_favorites ? 0 : V_YELLOWMAP);
+	M_BrowserButton(85, 18, 64, "Favorites", SBUI_TAB, 1, browser_favorites ? V_YELLOWMAP : 0);
+	const INT32 room = cv_serverbrowserroom.value;
 	M_BrowserButton(152, 18, 92, browser_favorites ? "+ Add address" :
-		cv_masterserver_room_id.value < 0 ? "Room: LAN / unlisted" :
-		cv_masterserver_room_id.value == BROWSER_STANDARD_ROOM ? "Room: Standard" : "Change room",
-		browser_favorites ? SBUI_ADDRESS : SBUI_ROOM, 0, false);
-	M_BrowserButton(247, 18, 67, "Refresh", SBUI_REFRESH, 0, false);
+		room < 0 ? "Room: LAN / unlisted" : room == BROWSER_STANDARD_ROOM ? "Room: Standard" :
+		room == 0 ? "Room: All" : va("Room: #%d", room),
+		browser_favorites ? SBUI_ADDRESS : SBUI_ROOM, 0, 0);
+	M_BrowserButton(247, 18, 67, "Refresh", SBUI_REFRESH, 0, 0);
 	if (browser_detail) { M_DrawBrowserDetail(entry); return; }
 	V_DrawFill(6, 32, 139, 10, browser_searching ? 148 : 30);
-	M_BrowserText(9, 35, 120, 0, va("%s%s%s", *browser_search ? "" : "Search name or IP", browser_search,
-		browser_searching && (I_GetTime() / 8 & 1) ? "_" : ""));
+	if (browser_searching || *browser_search)
+		M_BrowserText(9, 35, 120, 0, va("%s%s", browser_search,
+			browser_searching && (I_GetTime() / 8 & 1) ? "_" : ""));
+	else
+		M_BrowserText(9, 35, 120, V_GRAYMAP, "Search name or IP");
 	M_BrowserTarget(SBUI_SEARCH, 0, 6, 32, 139, 10);
 	M_BrowserFocusBorder(6, 32, 139, 10, BFOCUS_SEARCH);
 	if (*browser_search || browser_searching)
@@ -472,8 +554,10 @@ static void M_DrawConnectMenu(void)
 		M_BrowserText(135, 35, 8, V_YELLOWMAP, "x");
 		M_BrowserTarget(SBUI_CLEARSEARCH, 0, 131, 32, 14, 10);
 	}
-	M_BrowserButton(148, 32, 79, browser_filters[browser_filter], SBUI_FILTER, 0, browser_filter != 0);
-	M_BrowserButton(230, 32, 84, va("Sort: %s", cv_serversort.string), SBUI_SORT, 0, false);
+	M_BrowserButton(BROWSER_FILTER_X, BROWSER_TOOL_Y, BROWSER_FILTER_WIDTH, cv_serverfilter.string,
+		SBUI_FILTER, 0, 0);
+	M_BrowserButton(BROWSER_SORT_X, BROWSER_TOOL_Y, BROWSER_SORT_WIDTH, va("Sort: %s", cv_serversort.string),
+		SBUI_SORT, 0, 0);
 	V_DrawFill(6, 45, 197, 126, 30);
 	V_DrawFill(208, 45, 106, 126, 30);
 	M_BrowserText(18, 47, 108, V_YELLOWMAP, "SERVER / MAP");
@@ -485,12 +569,11 @@ static void M_DrawConnectMenu(void)
 		INT32 index = browser_rows[row+browser_scroll], y = 55 + row * 12;
 		const sb_server_t *serverentry = SB_Server((size_t)index);
 		boolean online = SB_Online(serverentry), chosen = index == browser_selected;
-		boolean focused = chosen && browser_focus == BFOCUS_LIST && !browser_searching
-			&& (!menumouse_navigation || (menumouse_position && menumouse_x >= 7 && menumouse_x < 197
-				&& menumouse_y >= y && menumouse_y < y+12));
-		V_DrawFill(7, y, 190, 12, focused ? 148 : (row & 1) ? 29 : 30);
+		const boolean hovered = !browser_dropdown && !browser_addressediting && M_BrowserHover(7, y, 190, 12);
+		V_DrawFill(7, y, 190, 12, hovered ? 154 : chosen ? 156 : (row & 1) ? 29 : 30);
+		if (chosen) V_DrawFill(7, y, 2, 12, 148);
 		M_BrowserText(19, y+1, 110, 0, SB_DisplayName(serverentry));
-		M_BrowserText(19, y+7, 110, online ? V_AQUAMAP : V_GRAYMAP,
+		M_BrowserText(19, y+7, 110, online ? V_PURPLEMAP : V_GRAYMAP,
 			online ? va("%s  %s", serverentry->info.mapname, serverentry->info.gametypename) : SB_Status(serverentry));
 		M_BrowserText(135, y+2, 30, 0, online ? va("%u/%u", serverentry->info.numberofplayer, serverentry->info.maxplayer) : "--");
 		M_BrowserText(170, y+2, 25, 0, online ? va("%u", (UINT32)LONG(serverentry->info.time)) : "--");
@@ -506,14 +589,9 @@ static void M_DrawConnectMenu(void)
 		M_BrowserText(12, 79, 182, 0, browser_favorites ? "Click + beside a server to save it." : "Choose a room, or refresh LAN.");
 		M_BrowserFocusBorder(7, 55, 190, 108, BFOCUS_LIST);
 	}
-	// A scrollbar reflects the continuous list, rather than discrete pages.
-	V_DrawFill(198, 55, 4, 108, 159);
-	if (browser_count > BROWSER_ROWS)
-	{
-		INT32 height = max(7, 108 * BROWSER_ROWS / (INT32)browser_count);
-		V_DrawFill(198, 55 + (108-height)*browser_scroll/((INT32)browser_count-BROWSER_ROWS), 4, height, 148);
-		for (INT32 y = 55; y < 163; y += 12) M_BrowserTarget(SBUI_SCROLL, y < 109 ? -1 : 1, 198, y, 4, min(12,163-y));
-	}
+	if (!browser_addressediting)
+		M_DrawMenuScrollbar(198, 55, 4, 108, (INT32)browser_count - BROWSER_ROWS,
+			BROWSER_ROWS, &browser_scroll, true);
 	M_BrowserText(212, 49, 98, 0, entry ? SB_DisplayName(entry) : "SERVER DETAILS");
 	if (entry)
 	{
@@ -522,14 +600,14 @@ static void M_DrawConnectMenu(void)
 		M_BrowserText(212, 67, 98, 0, entry->address);
 		if (online)
 		{
-			M_BrowserText(212, 77, 98, V_AQUAMAP, entry->info.maptitle);
-			M_BrowserText(212, 85, 98, 0, va("%s  %s", entry->info.mapname, entry->info.gametypename));
-			M_BrowserButton(211, 93, 100, va("Players: %u/%u - view", entry->info.numberofplayer, entry->info.maxplayer), SBUI_PLAYERS, 0, false);
+			M_BrowserText(212, 77, 98, V_PURPLEMAP, entry->info.maptitle);
+			M_BrowserText(212, 85, 98, V_PURPLEMAP, va("%s  %s", entry->info.mapname, entry->info.gametypename));
+			M_BrowserButton(211, 93, 100, va("Players: %u/%u - view", entry->info.numberofplayer, entry->info.maxplayer), SBUI_PLAYERS, 0, 0);
 			M_BrowserText(212, 107, 98, 0, va("Ping: %u ms", (UINT32)LONG(entry->info.time)));
 			M_BrowserText(212, 115, 98, entry->info.modifiedgame ? V_YELLOWMAP : 0, va("Modified: %s", entry->info.modifiedgame ? "Yes" : "No"));
 			M_BrowserText(212, 123, 98, entry->info.cheatsenabled ? V_REDMAP : 0, va("Cheats: %s", entry->info.cheatsenabled ? "On" : "Off"));
 			M_BrowserText(212, 131, 98, 0, entry->info.flags & SV_DEDICATED ? "Dedicated server" : "Listen server");
-			M_BrowserButton(211, 139, 100, va("Add-ons: %u%s", (UINT32)SB_AddonCount(), SB_AddonsComplete() ? " - view" : SB_AddonsFailed() ? " - partial" : "+ - reading"), SBUI_ADDONS, 0, false);
+			M_BrowserButton(211, 139, 100, va("Add-ons: %u%s", (UINT32)SB_AddonCount(), SB_AddonsComplete() ? " - view" : SB_AddonsFailed() ? " - partial" : "+ - reading"), SBUI_ADDONS, 0, 0);
 		}
 		else
 		{
@@ -538,23 +616,27 @@ static void M_DrawConnectMenu(void)
 			M_BrowserText(212, 99, 98, 0, "blocked by a firewall.");
 			if (entry->favorite) M_BrowserText(212, 113, 98, 0, "Saved to favorites.");
 		}
-		M_BrowserButton(211, 154, 100, entry->favorite ? "Remove favorite" : "Favorite server", SBUI_FAVORITE, browser_selected, entry->favorite);
+		M_BrowserButton(211, 154, 100, entry->favorite ? "Remove favorite" : "Favorite server", SBUI_FAVORITE, browser_selected,
+			entry->favorite ? V_REDMAP : V_YELLOWMAP);
 	}
 	M_BrowserText(7, 176, 192, 0, va("%u server%s%s", (UINT32)browser_count, browser_count == 1 ? "" : "s",
 		m_waiting_mode ? " - searching..." : " - live updates"));
 	M_BrowserText(7, 185, 194, V_GRAYMAP, "Double-click: join  F: favorite  /: search");
-	if (entry && SB_Online(entry)) M_BrowserButton(208, 175, 106, "Join server", SBUI_JOIN, 0, true);
-	M_BrowserText(7, 194, 306, V_GRAYMAP, browser_searching ? "Ctrl+V: paste  Enter: results  Esc: stop editing" : "Arrows: move focus  Enter: select  Tab: favorites");
+	if (entry && SB_Online(entry)) M_BrowserButton(208, 175, 106, "Join server", SBUI_JOIN, 0, V_GREENMAP);
+	M_BrowserText(7, 194, 306, V_GRAYMAP, browser_dropdown ? "Up/Down: choose  Enter: apply  Esc: close"
+		: browser_searching ? "Ctrl+V: paste  Enter: results  Esc: stop editing" : "Arrows: move focus  Enter: select  Tab: favorites");
+	if (browser_dropdown)
+		M_DrawBrowserDropdown();
 	if (browser_addressediting)
 	{
-		menumouse_count = 0; // modal: rows and Join behind it cannot receive clicks
+		menumouse_count = 0;
 		V_DrawFill(16, 69, 288, 67, 159);
 		V_DrawString(24, 75, V_YELLOWMAP, "FAVORITE SERVER ADDRESS");
 		M_BrowserText(24, 88, 272, 0, "Enter address:port, e.g. 127.0.0.1:5029");
 		V_DrawFill(24, 98, 272, 11, 30);
 		M_BrowserText(27, 101, 266, 0, va("%s%s", browser_address, I_GetTime()/8 & 1 ? "_" : ""));
-		M_BrowserButton(174, 118, 58, "Cancel", SBUI_ADDRESSCANCEL, 0, false);
-		M_BrowserButton(238, 118, 58, "Save", SBUI_ADDRESSSAVE, 0, true);
+		M_BrowserButton(174, 118, 58, "Cancel", SBUI_ADDRESSCANCEL, 0, 0);
+		M_BrowserButton(238, 118, 58, "Save", SBUI_ADDRESSSAVE, 0, V_YELLOWMAP);
 	}
 }
 
@@ -584,8 +666,8 @@ static void M_BrowserPaste(char *text, size_t capacity, boolean address)
 	}
 }
 
-// Focus is separate from the selected endpoint, so live sorting cannot move
-// the keyboard out of a toolbar control or change which server Enter joins.
+
+
 static boolean M_BrowserNavigate(INT32 key)
 {
 	INT32 row = 0;
@@ -605,7 +687,7 @@ static boolean M_BrowserNavigate(INT32 key)
 		if (key == KEY_LEFTARROW) M_BrowserSetFocus(BFOCUS_SEARCH);
 		else if (key == KEY_RIGHTARROW) M_BrowserSetFocus(M_BrowserFocusAvailable(BFOCUS_PLAYERS) ? BFOCUS_PLAYERS : M_BrowserFocusAvailable(BFOCUS_FAVORITE) ? BFOCUS_FAVORITE : BFOCUS_SORT);
 		else if (key == KEY_UPARROW && (!browser_count || !row)) M_BrowserSetFocus(BFOCUS_SEARCH);
-		else if (key == KEY_DOWNARROW && (size_t)(row+1) >= browser_count)
+		else if (key == KEY_DOWNARROW && browser_selected >= 0 && (size_t)(row+1) >= browser_count)
 			M_BrowserSetFocus(M_BrowserFocusAvailable(BFOCUS_JOIN) ? BFOCUS_JOIN : M_BrowserFocusAvailable(BFOCUS_FAVORITE) ? BFOCUS_FAVORITE : BFOCUS_INTERNET);
 		else M_BrowserMove(key == KEY_UPARROW ? -1 : 1);
 	}
@@ -649,7 +731,8 @@ static void M_BrowserActivate(void)
 	switch (browser_focus)
 	{
 		case BFOCUS_LIST:
-			if (!browser_detail && browser_count) M_Connect(0);
+			if (!browser_detail && browser_selected >= 0) M_Connect(0);
+			else if (!browser_detail && browser_count) M_BrowserMove(0);
 			else if (!browser_detail) M_BrowserSetFocus(BFOCUS_SEARCH);
 			break;
 		case BFOCUS_INTERNET: M_BrowserClick(SBUI_TAB, 0); break;
@@ -672,6 +755,19 @@ static void M_BrowserActivate(void)
 static void M_HandleServerPage(INT32 choice)
 {
 	browser_lastclick = -1;
+	if (browser_dropdown)
+	{
+		const INT32 count = M_BrowserDropdownCount();
+		if (choice == KEY_UPARROW)
+			browser_dropdown_choice = (browser_dropdown_choice + count - 1) % count;
+		else if (choice == KEY_DOWNARROW)
+			browser_dropdown_choice = (browser_dropdown_choice + 1) % count;
+		else if (choice == KEY_ENTER)
+			M_BrowserCloseDropdown(browser_dropdown_choice);
+		else if (choice == KEY_ESCAPE || choice == KEY_BACKSPACE)
+			M_BrowserCloseDropdown(-1);
+		return;
+	}
 	if (ctrldown && (browser_searching || browser_addressediting))
 	{
 		char *text = browser_addressediting ? browser_address : browser_search;

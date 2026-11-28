@@ -79,14 +79,15 @@ ps_metric_t ps_lua_thinkframe_time = {0};
 ps_metric_t ps_lua_postthinkframe_time = {0};
 
 ps_metric_t ps_lua_mobjhooks = {0};
+ps_metric_t ps_lua_collision_hooks = {0};
 ps_metric_t ps_lua_mobjiterates = {0};
 
 ps_metric_t ps_otherlogictime = {0};
 
-/* Automatic deep profiling is deliberately burst-based. Querying the precise
- * timer around every thinker forever costs measurable time in object-heavy
- * add-ons; doing it for a few seconds after a real hitch gives useful blame
- * without taxing normal play. */
+
+
+
+
 static UINT16 ps_deep_profile_tics;
 static precise_t ps_mobjtype_times[NUMMOBJTYPES];
 static UINT32 ps_mobjtype_calls[NUMMOBJTYPES];
@@ -150,15 +151,15 @@ void PS_ArmHitchProfile(void)
 	const precise_t now = I_GetPreciseTime();
 	const precise_t precision = I_GetPrecisePrecision();
 
-	/* Automatic hitch attribution only needs a short sample after the event.
-	 * Do not extend an active sample on every subsequent hitch: on maps with
-	 * thousands of thinkers that feedback kept precise timer calls enabled
-	 * permanently and the profiler itself became part of the slowdown. */
+
+
+
+
 	if (!ps_deep_profile_tics && (!next_allowed || now >= next_allowed))
 	{
 		ps_deep_profile_tics = max(1, TICRATE / 4);
-		/* Sample at most once per ten seconds automatically. The console's
-		 * perfprofile command still supplies the deliberate full five seconds. */
+
+
 		next_allowed = now + precision * 10;
 	}
 }
@@ -174,8 +175,8 @@ void PS_BeginTickProfile(void)
 	precise_t hottest_time = 0;
 	const boolean was_active = (ps_deep_profile_tics != 0);
 
-	/* Preserve the previous tick's result until this tick produces a better
-	 * snapshot. This is useful when a slow frame is reported between tics. */
+
+
 	if (ps_deep_profile_tics)
 	{
 		if (ps_current_mobj_instance.time)
@@ -193,9 +194,9 @@ void PS_BeginTickProfile(void)
 		ps_deep_profile_tics--;
 	}
 
-	/* These arrays are sizeable in add-on-heavy builds. Clearing and updating
-	 * all of them every 35 Hz tic made the diagnostics system permanent work.
-	 * Keep it completely dormant until a hitch or perfprofile arms it. */
+
+
+
 	if (was_active || ps_deep_profile_tics)
 	{
 		memset(ps_mobjtype_times, 0, sizeof ps_mobjtype_times);
@@ -204,6 +205,7 @@ void PS_BeginTickProfile(void)
 		memset(&ps_current_mobj_instance, 0, sizeof ps_current_mobj_instance);
 	}
 	ps_spawn_total = 0;
+	ps_lua_collision_hooks.value.i = 0;
 	ps_slowest_lua[0] = '\0';
 	ps_slowest_lua_time = 0;
 }
@@ -243,8 +245,8 @@ void PS_RecordLuaHook(const char *description, precise_t time_taken)
 	UINT32 i;
 	if (!description)
 		return;
-	/* The per-tic slowest hook and the multi-second total answer different
-	 * questions. Keep accumulating even when this is not a new maximum. */
+
+
 	if (time_taken > ps_slowest_lua_time)
 	{
 		ps_slowest_lua_time = time_taken;
@@ -403,10 +405,10 @@ void PS_FormatHitchContext(char *buffer, size_t buffer_size)
 
 	for (type = MT_NULL; type < NUMMOBJTYPES; type++)
 	{
-		/* Never walk the live thinker list from a hitch report. Reports may be
-		 * emitted while map cleanup is unlinking/freeing that list. The call
-		 * counters come from P_RunThinkers itself, so they provide the same
-		 * useful per-type population clue without touching transitional state. */
+
+
+
+
 		if (ps_mobjtype_calls[type] > hottest_object_count)
 		{
 			hottest_object = type;
@@ -438,7 +440,7 @@ void PS_FormatHitchContext(char *buffer, size_t buffer_size)
 		"spawns_this_tic=%u hot_spawn=%s hot_spawn_count=%u "
 		"hot_instance=%s#%u state=%d pos=(%d,%d,%d) flags=0x%08x instance_ms=%.3f "
 		"slow_lua=\"%s\" slow_lua_ms=%.3f checkpositions=%d "
-		"lua_mobj_hooks=%d lua_mobj_visits=%d adaptive_effects=%u",
+		"lua_mobj_hooks=%d lua_collision_hooks=%d lua_mobj_visits=%d adaptive_effects=%u",
 		hottest_phase,
 		(precision && hottest_phase_time <= precision * 10)
 			? (double)hottest_phase_time * 1000.0 / (double)precision : 0.0,
@@ -453,7 +455,7 @@ void PS_FormatHitchContext(char *buffer, size_t buffer_size)
 		ps_slowest_lua[0] ? ps_slowest_lua : "none",
 		precision ? (double)ps_slowest_lua_time * 1000.0 / (double)precision : 0.0,
 		ps_checkposition_calls.value.i, ps_lua_mobjhooks.value.i,
-		ps_lua_mobjiterates.value.i,
+		ps_lua_collision_hooks.value.i, ps_lua_mobjiterates.value.i,
 		(unsigned)R_GetAdaptiveEffectsLevel());
 	buffer[buffer_size - 1] = '\0';
 }
@@ -470,8 +472,8 @@ void PS_DeepProfile_f(void)
 static double PS_Milliseconds(precise_t value)
 {
 	const UINT64 precision = I_GetPrecisePrecision();
-	/* A timing slot can retain a pre-map timestamp while the map is torn down.
-	 * Do not turn that unsigned subtraction into a multi-hour "measurement". */
+
+
 	if (!precision || value > precision * 10)
 		return 0.0;
 	return (double)value * 1000.0 / (double)precision;
@@ -523,6 +525,9 @@ void PS_PerformanceReport_f(void)
 	if (ps_checkposition_calls.value.i >= 500)
 		PS_ADD_CAUSE("- Collision broad-phase ran %d position queries this frame. The deep object sample below can identify which object types are driving them.\r\n",
 			ps_checkposition_calls.value.i);
+	if (ps_lua_collision_hooks.value.i >= 5000)
+		PS_ADD_CAUSE("- Movement dispatched %d Lua collision callbacks in one tic. Check for dense groups of overlapping objects and compare the object thinker sample below.\r\n",
+			ps_lua_collision_hooks.value.i);
 	if (ps_numsprites.value.i >= 750)
 		PS_ADD_CAUSE("- The scene contains %d visible sprites; %d safe opaque sprite submissions were state-batched across all render passes. Remaining models, shadows, particles, and transparent sprites still require ordered work.\r\n",
 			ps_numsprites.value.i, ps_hw_batchedsprites.value.i);
@@ -1085,9 +1090,9 @@ void PS_UpdateFrameStats(void)
 				ps_sw_maskedtime.value.p;
 		}
 
-		/* Some renderer timers can overlap by a few ticks. precise_t is unsigned,
-		 * so subtracting a slightly larger attributed total used to wrap the
-		 * "Other" row into a multi-billion value and pollute its average. */
+
+
+
 		ps_otherrendertime.value.p = ps_rendercalltime.value.p > attributedrendertime
 			? ps_rendercalltime.value.p - attributedrendertime : 0;
 	}
@@ -1175,9 +1180,9 @@ void PS_UpdateTickStats(void)
 		const precise_t attributed = ps_playerthink_time.value.p
 			+ ps_thinkertime.value.p + ps_lua_prethinkframe_time.value.p
 			+ ps_lua_thinkframe_time.value.p + ps_lua_postthinkframe_time.value.p;
-		/* Hitch and perfreport diagnostics need this even when the visual
-		 * perfstats page is hidden. The old conditional left every normal user's
-		 * report saying other_logic_ms=0, concealing first-tic/map-script stalls. */
+
+
+
 		ps_otherlogictime.value.p = ps_tictime.value.p > attributed
 			? ps_tictime.value.p - attributed : 0;
 	}

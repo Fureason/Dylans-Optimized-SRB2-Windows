@@ -389,6 +389,15 @@ LUA_API void *lua_touserdata (lua_State *L, int idx) {
 }
 
 
+LUA_API void *lua_touserdatawithmetatable (lua_State *L, int idx, int metaidx) {
+  const TValue *o = index2adr(L, idx);
+  const TValue *mt = index2adr(L, metaidx);
+  if (!ttisuserdata(o) || !ttistable(mt) || uvalue(o)->metatable != hvalue(mt))
+    return NULL;
+  return rawuvalue(o) + 1;
+}
+
+
 LUA_API lua_State *lua_tothread (lua_State *L, int idx) {
   StkId o = index2adr(L, idx);
   return (!ttisthread(o)) ? NULL : thvalue(o);
@@ -489,6 +498,17 @@ LUA_API void lua_pushcclosure (lua_State *L, lua_CFunction fn, int n) {
 }
 
 
+LUA_API void lua_setuserdatanumberindex (lua_State *L, lua_UserdataNumberReader reader) {
+  StkId f;
+  lua_lock(L);
+  api_checknelems(L, 1);
+  f = L->top - 1;
+  api_check(L, iscfunction(f) && clvalue(f)->c.nupvalues > 0);
+  clvalue(f)->c.numberindex = reader;
+  lua_unlock(L);
+}
+
+
 LUA_API void lua_pushboolean (lua_State *L, int b) {
   lua_lock(L);
   setbvalue(L->top, (b != 0));  /* ensure that true is 1 */
@@ -561,6 +581,52 @@ LUA_API void lua_rawgeti (lua_State *L, int idx, int n) {
   setobj2s(L, L->top, luaH_getnum(hvalue(o), n));
   api_incr_top(L);
   lua_unlock(L);
+}
+
+
+
+LUA_API void lua_rawgetkey (lua_State *L, int idx, int keyidx) {
+  StkId t;
+  const TValue *key;
+  lua_lock(L);
+  t = index2adr(L, idx);
+  key = index2adr(L, keyidx);
+  api_check(L, ttistable(t));
+  setobj2s(L, L->top, luaH_get(hvalue(t), key));
+  api_incr_top(L);
+  lua_unlock(L);
+}
+
+
+LUA_API void lua_rawgetp (lua_State *L, int idx, void *p) {
+  StkId t;
+  lua_lock(L);
+  t = index2adr(L, idx);
+  api_check(L, ttistable(t));
+  setobj2s(L, L->top, luaH_getptr(hvalue(t), p));
+  api_incr_top(L);
+  lua_unlock(L);
+}
+
+
+
+LUA_API int lua_pushcacheduserdatapair (lua_State *L, int ref, void *a, void *b) {
+  const TValue *cache, *first, *second;
+  lua_lock(L);
+  cache = luaH_getnum(hvalue(registry(L)), ref);
+  api_check(L, ttistable(cache));
+  first = luaH_getptr(hvalue(cache), a);
+  second = luaH_getptr(hvalue(cache), b);
+  if (!ttisuserdata(first) || !ttisuserdata(second)) {
+    lua_unlock(L);
+    return 0;
+  }
+  setobj2s(L, L->top, first);
+  api_incr_top(L);
+  setobj2s(L, L->top, second);
+  api_incr_top(L);
+  lua_unlock(L);
+  return 1;
 }
 
 

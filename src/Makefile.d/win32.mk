@@ -17,6 +17,16 @@ sources+=win32/Srb2win.rc
 opts+=-DSTDC_HEADERS
 libs+=-ladvapi32 -lkernel32 -lmsvcrt -luser32 -lole32 -lmfuuid
 
+ifdef WIN_RUNTIME_DIR
+ifndef MINGW64
+$(error WIN_RUNTIME_DIR requires the 64-bit MinGW build)
+endif
+sources+=win32/runtime_repair.c
+opts+=-I$(WIN_RUNTIME_DIR)
+libs+=-L$(WIN_RUNTIME_DIR)
+win_runtime_resource:=$(WIN_RUNTIME_DIR)/windows-runtime.res
+endif
+
 ifndef DEDICATED
 ifndef DUMMY
 SDL?=1

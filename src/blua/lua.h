@@ -103,6 +103,11 @@ typedef void * (*lua_Alloc) (void *ud, void *ptr, size_t osize, size_t nsize);
 typedef LUA_NUMBER lua_Number;
 
 
+
+typedef int (*lua_UserdataNumberReader) (const void *data, const char *key,
+                                         size_t length, lua_Number *value);
+
+
 /* type for integer functions */
 #define lua_Integer lua_Number
 
@@ -154,6 +159,7 @@ LUA_API const char     *(lua_tolstring) (lua_State *L, int idx, size_t *len);
 LUA_API size_t          (lua_objlen) (lua_State *L, int idx);
 LUA_API lua_CFunction   (lua_tocfunction) (lua_State *L, int idx);
 LUA_API void	       *(lua_touserdata) (lua_State *L, int idx);
+LUA_API void           *(lua_touserdatawithmetatable) (lua_State *L, int idx, int metaidx);
 LUA_API lua_State      *(lua_tothread) (lua_State *L, int idx);
 LUA_API const void     *(lua_topointer) (lua_State *L, int idx);
 
@@ -170,6 +176,8 @@ LUA_API const char *(lua_pushvfstring) (lua_State *L, const char *fmt,
                                                       va_list argp);
 LUA_API const char *(lua_pushfstring) (lua_State *L, const char *fmt, ...);
 LUA_API void  (lua_pushcclosure) (lua_State *L, lua_CFunction fn, int n);
+
+LUA_API void  (lua_setuserdatanumberindex) (lua_State *L, lua_UserdataNumberReader reader);
 LUA_API void  (lua_pushboolean) (lua_State *L, int b);
 LUA_API void  (lua_pushlightuserdata) (lua_State *L, void *p);
 LUA_API void  (lua_pushuserdata) (lua_State *L, void *p);
@@ -183,6 +191,9 @@ LUA_API void  (lua_gettable) (lua_State *L, int idx);
 LUA_API void  (lua_getfield) (lua_State *L, int idx, const char *k);
 LUA_API void  (lua_rawget) (lua_State *L, int idx);
 LUA_API void  (lua_rawgeti) (lua_State *L, int idx, int n);
+LUA_API void  (lua_rawgetkey) (lua_State *L, int idx, int keyidx);
+LUA_API void  (lua_rawgetp) (lua_State *L, int idx, void *p);
+LUA_API int   (lua_pushcacheduserdatapair) (lua_State *L, int ref, void *a, void *b);
 LUA_API void  (lua_createtable) (lua_State *L, int narr, int nrec);
 LUA_API void *(lua_newuserdata) (lua_State *L, size_t sz);
 LUA_API int   (lua_getmetatable) (lua_State *L, int objindex);

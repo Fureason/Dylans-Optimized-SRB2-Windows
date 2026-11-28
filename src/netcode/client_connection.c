@@ -38,8 +38,11 @@
 #include <unistd.h>
 #endif
 
+#define JOIN_QUERY_TIMEOUT (12*TICRATE)
+
 cl_mode_t cl_mode = CL_SEARCHING;
-static UINT16 cl_lastcheckedfilecount = 0;	// used for full file list
+static UINT16 cl_lastcheckedfilecount;
+static tic_t cl_filelist_progress;
 boolean serverisfull = false; // lets us be aware if the server was full after we check files, but before downloading, so we can ask if the user still wants to download or not
 tic_t firstconnectattempttime = 0;
 UINT8 mynode;
@@ -135,8 +138,10 @@ static void CL_DrawConnectionStatus(void)
 					cltext = M_GetText("Waiting to download game state...");
 				break;
 			case CL_ASKFULLFILELIST:
+				cltext = M_GetText("Getting server add-on list...");
+				break;
 			case CL_CHECKFILES:
-				cltext = M_GetText("Checking server addon list...");
+				cltext = M_GetText("Checking local add-ons...");
 				break;
 			case CL_CONFIRMCONNECT:
 				cltext = "";
@@ -293,9 +298,9 @@ boolean CL_SendJoin(void)
 {
 	UINT8 localplayers = 1;
 	char const *player2name;
-	/* A connected client can reuse this vanilla packet to request recovery of
-	 * a missed player assignment. Keep the ordinary connection message from
-	 * misleadingly appearing during that background repair. */
+
+
+
 	if (netgame && cl_mode != CL_CONNECTED)
 		CONS_Printf(M_GetText("Sending join request...\n"));
 	netbuffer->packettype = PT_CLIENTJOIN;
@@ -322,10 +327,10 @@ boolean CL_SendJoin(void)
 	strncpy(netbuffer->u.clientcfg.names[0], cv_playername.zstring, sizeof(netbuffer->u.clientcfg.names[0])-1);
 	strncpy(netbuffer->u.clientcfg.names[1], player2name, MAXPLAYERNAME);
 
-	/* This stage already retries once per second, so it must not consume the
-	 * reliable-packet window. A lost reliable join packet used to sit ahead of
-	 * PT_SERVERCFG and could leave both sides alive while the client remained on
-	 * the join screen. Application-level retry is the reliable mechanism here. */
+
+
+
+
 	return HSendPacket(servernode, false, 0, sizeof (clientconfig_pak));
 }
 
@@ -379,8 +384,8 @@ static void SL_InsertServer(serverinfo_pak* info, SINT8 node)
   if (strcmp(info->application, SRB2APPLICATION))
   { SB_Unavailable(node, "Different game build"); return; }
  }
- /* Browser advertisements remain visible even when the stock node list is
-  * full. A selected endpoint can still be queried/joined by address. */
+
+
  SB_Info(node, info, min((size_t)MAXFILENEEDED,
   (size_t)doomcom->datalength - BASEPACKETSIZE - offsetof(serverinfo_pak, fileneeded)));
  i = SL_SearchServer(node);
@@ -415,7 +420,7 @@ Fetch_servers_thread (struct Fetch_servers_ctx *ctx)
 		I_unlock_mutex(ms_QueryId_mutex);
 		I_lock_mutex(&m_menu_mutex);
 		if (current && m_waiting_mode == M_WAITING_SERVERS)
-			m_waiting_mode = M_NOT_WAITING; // permit a retry after an HTTP failure
+			m_waiting_mode = M_NOT_WAITING;
 		I_unlock_mutex(m_menu_mutex);
 	}
 
@@ -454,10 +459,10 @@ Fetch_servers_thread (struct Fetch_servers_ctx *ctx)
 
 void CL_QueryServerList (msg_server_t *server_list)
 {
-	/* The master-server request finishes on a worker thread. Cancelling an
-	 * add-on load can shut the network driver down before M_Ticker consumes the
-	 * completed list, leaving its make-node callback NULL. Discard that stale
-	 * result instead of executing a null function pointer. */
+
+
+
+
 	if (!server_list || !I_NetMakeNodewPort)
 		return;
 
@@ -471,7 +476,7 @@ void CL_QueryServerList (msg_server_t *server_list)
 		{
 			INT32 node = I_NetMakeNodewPort(server_list[i].ip, server_list[i].port);
 			if (node == -1)
-				continue; // unusable address family, lookup failure, or no free node
+				continue;
 			SendAskInfo(node);
 			// Force close the connection so that servers can't eat
 			// up nodes forever if we never get a reply back from them
@@ -843,7 +848,7 @@ static boolean CL_FinishedFileList(void)
 			}
 			else
 			{
-				// Preserve the stock confirmation prompt when automatic downloads are disabled.
+
 				ShowDownloadConsentMessage();
 			}
 		}
@@ -931,23 +936,15 @@ static const char * InvalidServerReason (serverinfo_pak *info)
   */
 static boolean CL_ServerConnectionSearchTicker(tic_t *asksent)
 {
-	INT32 i;
+	const boolean broadcast = servernode < 0 || servernode >= MAXNETNODES;
+	const UINT32 i = broadcast && serverlistcount ? 0 : SL_SearchServer(servernode);
 
-	// serverlist is updated by GetPackets
-	if (serverlistcount > 0)
+	if (i != UINT32_MAX)
 	{
-		// This can be a response to our broadcast request
-		if (servernode == -1 || servernode >= MAXNETNODES)
+		if (broadcast)
 		{
-			i = 0;
 			servernode = serverlist[i].node;
 			CONS_Printf(M_GetText("Found, "));
-		}
-		else
-		{
-			i = SL_SearchServer(servernode);
-			if (i < 0)
-				return true;
 		}
 
 		if (client)
@@ -982,7 +979,8 @@ static boolean CL_ServerConnectionSearchTicker(tic_t *asksent)
 			if (info->flags & SV_LOTSOFADDONS)
 			{
 				cl_mode = CL_ASKFULLFILELIST;
-				cl_lastcheckedfilecount = 0;
+				cl_lastcheckedfilecount = fileneedednum;
+				cl_filelist_progress = *asksent = I_GetTime();
 				return true;
 			}
 
@@ -998,7 +996,7 @@ static boolean CL_ServerConnectionSearchTicker(tic_t *asksent)
 	}
 
 	// Ask the info to the server (askinfo packet)
-	if (*asksent + NEWTICRATE < I_GetTime())
+	if ((tic_t)(I_GetTime() - *asksent) >= NEWTICRATE)
 	{
 		SendAskInfo(servernode);
 		*asksent = I_GetTime();
@@ -1056,29 +1054,39 @@ static void HandleHTTPDownloadFail(void)
 static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic_t *asksent)
 {
 	boolean waitmore;
+	const boolean remote = client && netgame;
+	const tic_t now = I_GetTime();
 
 	switch (cl_mode)
 	{
 		case CL_SEARCHING:
-   if ((tic_t)(I_GetTime()-firstconnectattempttime) > 12*TICRATE)
-   {
-    AbortConnection();
-    M_StartMessage("The server did not answer.\nIt may be offline, unreachable, or\nusing a different game version.\n\nPlease check the address and try again.\n", NULL, MM_NOTHING);
-    return false;
-   }
+			if ((tic_t)(now - firstconnectattempttime) >= JOIN_QUERY_TIMEOUT)
+			{
+				CONS_Alert(CONS_WARNING, M_GetText("Server join timed out waiting for server information.\n"));
+				AbortConnection();
+				M_StartMessage(M_GetText("The server did not answer.\nIt may be offline, unreachable, or\nusing a different game version.\n\nPlease check the address and try again.\n"), NULL, MM_NOTHING);
+				return false;
+			}
 			if (!CL_ServerConnectionSearchTicker(asksent))
 				return false;
 			break;
 
 		case CL_ASKFULLFILELIST:
-			if (cl_lastcheckedfilecount == UINT16_MAX) // All files retrieved
+			if (cl_lastcheckedfilecount == UINT16_MAX)
 				cl_mode = CL_CHECKFILES;
-			else if (fileneedednum != cl_lastcheckedfilecount || I_GetTime() >= *asksent)
+			else if ((tic_t)(now - cl_filelist_progress) >= JOIN_QUERY_TIMEOUT)
+			{
+				CONS_Alert(CONS_WARNING, M_GetText("Server join timed out receiving the add-on list after %d entries.\n"), fileneedednum);
+				AbortConnection();
+				M_StartMessage(M_GetText("The server stopped sending its add-on list.\n\nPlease try connecting again.\n"), NULL, MM_NOTHING);
+				return false;
+			}
+			else if (fileneedednum != cl_lastcheckedfilecount || now >= *asksent)
 			{
 				if (CL_AskFileList(fileneedednum))
 				{
 					cl_lastcheckedfilecount = fileneedednum;
-					*asksent = I_GetTime() + max(1, NEWTICRATE/4);
+					*asksent = now + max(1, NEWTICRATE/4);
 				}
 			}
 			break;
@@ -1148,8 +1156,8 @@ static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic
 
 			if (I_GetTime() >= *asksent && CL_SendJoin())
 			{
-				// Retry normal joins quickly. A full server keeps the longer delay so
-				// clients waiting for a slot do not spam the host.
+
+
 				*asksent = I_GetTime() + NEWTICRATE*(serverisfull ? 3 : 1);
 				cl_mode = CL_WAITJOINRESPONSE;
 			}
@@ -1188,6 +1196,8 @@ static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic
 
 	GetPackets();
 	Net_AckTicker();
+	if (remote && !netgame)
+		return false;
 
 	// Call it only once by tic
 	if (*oldtic != I_GetTime())
@@ -1201,7 +1211,9 @@ static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic
 			// my hand has been forced and I am dearly sorry for this awful hack :vomit:
 			for (; eventtail != eventhead; eventtail = (eventtail+1) & (MAXEVENTS-1))
 			{
-				if (!Snake_JoyGrabber(snake, &events[eventtail]))
+				if (M_ConnectionMouseAbort(&events[eventtail]))
+					cl_mode = CL_ABORTED;
+				else if (!Snake_JoyGrabber(snake, &events[eventtail]))
 					G_MapEventsToControls(&events[eventtail]);
 			}
 		}
@@ -1209,9 +1221,8 @@ static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic
 		if (gamekeydown[KEY_ESCAPE] || gamekeydown[KEY_JOY1+1] || cl_mode == CL_ABORTED)
 		{
 			CONS_Printf(M_GetText("Network game synchronization aborted.\n"));
-			M_StartMessage(M_GetText("Network game synchronization aborted.\n\nPress ESC\n"), NULL, MM_NOTHING);
-
 			AbortConnection();
+			M_StartMessage(M_GetText("Network game synchronization aborted.\n\nPress ESC\n"), NULL, MM_NOTHING);
 
 			memset(gamekeydown, 0, NUMKEYS);
 			return false;
@@ -1233,6 +1244,7 @@ static boolean CL_ServerConnectionTicker(const char *tmpsave, tic_t *oldtic, tic
 				F_TitleScreenDrawer();
 			}
 			CL_DrawConnectionStatus();
+			M_DrawConnectionBack();
 #ifdef HAVE_THREADS
 			I_lock_mutex(&m_menu_mutex);
 #endif
@@ -1294,6 +1306,13 @@ void CL_ConnectToServer(void)
 	G_SetGamestate(GS_WAITINGPLAYERS);
 	wipegamestate = GS_WAITINGPLAYERS;
 
+	if (client && netgame)
+	{
+		SB_Close();
+		M_ClearMenus(false);
+	}
+	I_UpdateMouseGrab();
+
 	ClearAdminPlayers();
 	pnumnodes = 1;
 	oldtic = I_GetTime() - 1;
@@ -1339,7 +1358,6 @@ void CL_ConnectToServer(void)
 
 	DEBFILE(va("Synchronisation Finished\n"));
 
-	if (M_CheckParm("-cleanjoin")) M_ClearMenus(true);
 	displayplayer = consoleplayer;
 }
 
@@ -1390,12 +1408,16 @@ void PT_MoreFilesNeeded(SINT8 node)
 	}
 	if (ServerOnly(node))
 		return;
-	if (cl_mode == CL_ASKFULLFILELIST && netbuffer->u.filesneededcfg.first == fileneedednum)
-	{
-		D_ParseFileneeded(netbuffer->u.filesneededcfg.num, netbuffer->u.filesneededcfg.files, netbuffer->u.filesneededcfg.first);
-		if (!netbuffer->u.filesneededcfg.more)
-			cl_lastcheckedfilecount = UINT16_MAX; // Got the whole file list
-	}
+	if (cl_mode != CL_ASKFULLFILELIST
+	|| doomcom->datalength < (INT32)(BASEPACKETSIZE + offsetof(filesneededconfig_pak, files))
+	|| netbuffer->u.filesneededcfg.first != fileneedednum
+	|| (!netbuffer->u.filesneededcfg.num && netbuffer->u.filesneededcfg.more))
+		return;
+
+	D_ParseFileneeded(netbuffer->u.filesneededcfg.num, netbuffer->u.filesneededcfg.files, netbuffer->u.filesneededcfg.first);
+	cl_filelist_progress = I_GetTime();
+	if (!netbuffer->u.filesneededcfg.more)
+		cl_lastcheckedfilecount = UINT16_MAX;
 }
 
 // Negative response of client join request
@@ -1408,9 +1430,9 @@ void PT_ServerRefuse(SINT8 node)
 	}
 	if (ServerOnly(node))
 		return;
-	/* A refusal may arrive just after the retry timer moved us back to
-	 * CL_ASKJOIN. Accept it in either state instead of silently discarding it
-	 * and leaving the user on the join screen. */
+
+
+
 	if (cl_mode == CL_WAITJOINRESPONSE || cl_mode == CL_ASKJOIN)
 	{
 		// Save the reason so it can be displayed after quitting the netgame
@@ -1448,7 +1470,7 @@ void PT_ServerCFG(SINT8 node)
 	}
 	if (ServerOnly(node))
 		return;
-	/* The same retry race applies to a successful configuration packet. */
+
 	if (cl_mode != CL_WAITJOINRESPONSE && cl_mode != CL_ASKJOIN)
 		return;
 

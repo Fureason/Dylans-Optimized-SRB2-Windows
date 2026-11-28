@@ -61,13 +61,13 @@ extern netnode_t netnodes[MAXNETNODES];
 extern boolean serverrunning;
 
 void Net_AckTicker(void);
-/** Give active connections a fresh local timeout window after a blocking load. */
+
 void Net_RefreshTimeouts(void);
-/** Return the queued reliable packets and highest retry count for one node. */
+
 UINT16 Net_GetReliableBacklog(INT32 node, UINT16 *max_retries);
-/** True when this packet type is already waiting for acknowledgement. */
+
 boolean Net_HasPendingReliablePacket(INT32 node, UINT8 packettype);
-/** Return the busiest node's reliable queue for diagnostics. */
+
 UINT16 Net_GetWorstReliableBacklog(INT32 *node, UINT16 *max_retries);
 
 // If reliable return true if packet sent, 0 else

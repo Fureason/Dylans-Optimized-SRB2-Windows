@@ -74,6 +74,7 @@ typedef struct
 
 	// Used only for download
 	FILE *file;
+	UINT32 writeposition;
 	boolean *receivedfragments;
 	UINT32 fragmentsize;
 	UINT8 iteration;
@@ -95,7 +96,7 @@ typedef struct
 	INT32 current;
 	INT32 remaining;
 	INT32 completednum;
-	INT32 requirednum, localnum, totalnum; // fixed add-on totals; game state excluded
+	INT32 requirednum, localnum, totalnum;
 	UINT32 completedsize;
 
 	boolean http_failed;
@@ -118,17 +119,17 @@ extern struct HTTP_login
 
 extern consvar_t cv_maxsend, cv_autosendaddons, cv_noticedownload, cv_downloadspeed, cv_autodownloadspeed, cv_persistentmd5;
 
-/** Return the approximate direct file-transfer payload limit represented by
- *  downloadspeed, in decimal megabytes per second.  Actual throughput can be lower
- *  because of acknowledgements, congestion control, or the listen-server
- *  frame-time budget. */
+
+
+
+
 double D_FileTransferMBPerSecond(INT32 packetspertic);
-/** Convert a user-facing decimal MB/s limit back to downloadspeed packets/tic. */
+
 INT32 D_FileTransferPacketsForMBPerSecond(double megabytespersecond);
 
 void D_MD5CacheStats_f(void);
 void D_ClearMD5Cache_f(void);
-/** Persist checksum results once after a group of add-ons has finished. */
+
 void D_FlushPersistentMD5Cache(void);
 
 void AllocFileNeeded(INT32 size);
@@ -210,8 +211,8 @@ boolean fileexist(char *filename, time_t ptime);
 filestatus_t findfile(char *filename, const UINT8 *wantedmd5sum,
 	boolean completepath);
 filestatus_t checkfilemd5(char *filename, const UINT8 *wantedmd5sum);
-/* Return a stable MD5 for an add-on, reusing the persistent checksum cache
- * when its metadata and sampled contents still match. */
+
+
 boolean D_GetCachedFileMD5(const char *filename, UINT8 md5sum[16]);
 
 // Searches for a folder

@@ -424,7 +424,7 @@ LONG WINAPI RecordExceptionInfo(PEXCEPTION_POINTERS data/*, LPCSTR Message, LPST
 	}
 
 	// Create a filename to record the error information to.
-	// Keep legacy exception logs beside the newer RPT and minidump files.
+
 	if (GetModuleFileName(NULL, ModuleName, sizeof(ModuleName)) <= 0)
 		ModuleName[0] = 0;
 	FilePart = GetFilePart(ModuleName);

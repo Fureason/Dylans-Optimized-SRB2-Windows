@@ -30,6 +30,18 @@ extern fixed_t centerxfrac, centeryfrac;
 extern fixed_t projection, projectiony;
 extern fixed_t fovtan;
 
+static inline fixed_t R_InterpolatedFineSine(angle_t angle)
+{
+	const UINT32 index = angle >> ANGLETOFINESHIFT;
+	const UINT32 nextindex = (index + 1U) & FINEMASK;
+	const UINT32 fraction = angle & ((1U << ANGLETOFINESHIFT) - 1U);
+	const fixed_t first = FINESINE(index);
+	const fixed_t second = FINESINE(nextindex);
+
+	return first + (fixed_t)(((INT64)second - first) * fraction
+		>> ANGLETOFINESHIFT);
+}
+
 // WARNING: a should be unsigned but to add with 2048, it isn't!
 #define AIMINGTODY(a) FixedDiv((FINETANGENT((2048+(((INT32)a)>>ANGLETOFINESHIFT)) & FINEMASK)*160), fovtan)
 
@@ -76,9 +88,11 @@ INT32 R_PointOnSide(fixed_t x, fixed_t y, node_t *node);
 INT32 R_PointOnSegSide(fixed_t x, fixed_t y, seg_t *line);
 angle_t R_PointToAngle(fixed_t x, fixed_t y);
 angle_t R_PointToAngle64(INT64 x, INT64 y);
+fixed_t R_SlopeViewHeight(const pslope_t *slope, fixed_t flatheight);
 angle_t R_PointToAngle2(fixed_t px2, fixed_t py2, fixed_t px1, fixed_t py1);
 fixed_t R_PointToDist(fixed_t x, fixed_t y);
 fixed_t R_PointToDist2(fixed_t px2, fixed_t py2, fixed_t px1, fixed_t py1);
+void R_GetSkyboxPosition(const mobj_t *viewpoint, fixed_t x, fixed_t y, fixed_t z, vector3_t *position);
 
 boolean R_IsPointInSector(sector_t *sector, fixed_t x, fixed_t y);
 subsector_t *R_PointInSubsector(fixed_t x, fixed_t y);
@@ -126,7 +140,7 @@ extern consvar_t cv_fov, cv_fovchange;
 extern consvar_t cv_screenshake;
 angle_t R_GetViewRollAngle(const player_t *player);
 extern consvar_t cv_skybox;
-/** Optimized client's authoritative skybox switch shared by both renderers. */
+
 boolean R_SkyboxEnabled(void);
 extern consvar_t cv_renderview;
 extern consvar_t cv_renderhitbox, cv_renderhitboxinterpolation, cv_renderhitboxgldepth;
@@ -155,11 +169,13 @@ fixed_t R_GetPlayerFov(player_t *player);
 void R_SetupFrame(player_t *player);
 void R_SkyboxFrame(player_t *player);
 
-boolean R_ViewpointHasChasecam(player_t *player);
+
+boolean R_ViewpointHasChasecam(const player_t *player);
 boolean R_IsViewpointThirdPerson(player_t *player, boolean skybox);
 
 // Called by D_Display.
 void R_RenderPlayerView(player_t *player);
+void R_MarkViewCutout(void);
 
 // add commands related to engine, at game startup
 void R_RegisterEngineStuff(void);

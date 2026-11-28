@@ -246,11 +246,11 @@ enum ETextureFlags
 	TF_WRAPX       = 0x00000001,        // wrap around X
 	TF_WRAPY       = 0x00000002,        // wrap around Y
 	TF_WRAPXY      = TF_WRAPY|TF_WRAPX, // very common so use alias is more easy
-	TF_CHROMAKEYED = 0x00000010,        // Used only for flats with pixels that have palette index 255
-	TF_OPAQUE      = 0x00000020,        // RGBA alpha was checked and contains no zero-alpha pixels
+	TF_CHROMAKEYED = 0x00000010,
+	TF_OPAQUE      = 0x00000020,
 	TF_TRANSPARENT = 0x00000040,        // texture with some alpha == 0
-	TF_SPRITE      = 0x00000080,        // in-world sprite; uses the independent sprite filter
-	TF_PALETTE_INDEPENDENT = 0x00000100, // source is true-colour and survives palette flashes
+	TF_SPRITE      = 0x00000080,
+	TF_PALETTE_INDEPENDENT = 0x00000100,
 };
 
 struct FTextureInfo

@@ -82,9 +82,9 @@ void P_ReadStringL(save_t *p, char *s, size_t n);
 void P_ReadString(save_t *p, char *s);
 void P_ReadMem(save_t *p, void *s, size_t n);
 
-// Network savegames can be supplied by an incompatible or malformed peer.
-// Keep a sticky read-failure state so their decoders can stop rather than
-// repeatedly treating the end of the buffer as zero-valued data.
+
+
+
 boolean P_SaveBufferCanRead(const save_t *p, size_t n);
 boolean P_SaveBufferReadError(const save_t *p);
 void P_SaveBufferSetError(save_t *p);

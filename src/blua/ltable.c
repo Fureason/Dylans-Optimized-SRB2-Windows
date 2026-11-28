@@ -463,6 +463,17 @@ static TValue *newkey (lua_State *L, Table *t, const TValue *key) {
 }
 
 
+/*const*/ TValue *luaH_getptr (Table *t, void *key) {
+  Node *n = hashpointer(t, key);
+  do {
+    if (ttislightuserdata(gkey(n)) && pvalue(gkey(n)) == key)
+      return gval(n);
+    n = gnext(n);
+  } while (n);
+  return luaO_nilobject;
+}
+
+
 /*
 ** main search function
 */

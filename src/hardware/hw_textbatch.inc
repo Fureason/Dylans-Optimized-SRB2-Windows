@@ -1,5 +1,5 @@
-// Cache the engine's existing graphic glyphs in a small texture atlas. Only
-// text drawing opts in; world geometry and sprites retain their normal path.
+
+
 #define TEXT_ATLAS_SIZE 512
 #define TEXT_ATLAS_PAGES 8
 #define TEXT_GLYPHS 4096
@@ -177,8 +177,8 @@ static text_glyph_t *HWR_TextGlyph(patch_t *patch, const UINT8 *colormap)
 	HWR_MakePatch(patch, &hardware, &temporary, true);
 	bpp = temporary.format == GL_TEXFMT_RGBA ? 4 : temporary.format == GL_TEXFMT_AP_88 ? 2 : 0;
 	if (!bpp) { Z_Free(temporary.data); return NULL; }
-	// Fully opaque patches may use a different user-selected filter. Keep them
-	// on the original path rather than changing their sampling in an atlas.
+
+
 	for (size_t i = bpp-1; i < (size_t)temporary.width*temporary.height*bpp; i += bpp)
 		if (!((UINT8 *)temporary.data)[i]) { transparent = true; break; }
 	if (!transparent) { Z_Free(temporary.data); return NULL; }

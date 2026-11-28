@@ -89,7 +89,7 @@ void GetPackets(void);
 void ResetNode(INT32 node);
 INT16 Consistancy(void);
 void D_WriteConsistencyReport(const char *trigger, tic_t tic, SINT8 node,
-	INT16 expected, INT16 received);
+	INT16 expected, INT16 received, const char *detail);
 void D_WriteJoinStateReport(const char *event, INT32 playernum, SINT8 node,
 	UINT8 attempt);
 
@@ -110,8 +110,7 @@ boolean Playing(void);
 //  to notify of game exit
 void D_QuitNetGame(void);
 
-boolean D_HasDeferredNetTics(void);
-boolean D_PollLateNetTics(void);
+boolean D_PollDeferredNetTics(precise_t now);
 boolean TryRunTics(tic_t realtics, precise_t frame_deadline);
 void D_FormatNetTicHitch(char *buffer, size_t size, precise_t frame_start);
 

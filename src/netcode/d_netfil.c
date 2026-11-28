@@ -87,6 +87,7 @@ typedef struct filetran_s
 	boolean *ackedfragments;
 	UINT32 ackedsize;
 	FILE *currentfile; // The file currently being sent/received
+	UINT32 readposition;
 	tic_t dontsenduntil;
 } filetran_t;
 static filetran_t transfer[MAXNETNODES];
@@ -145,10 +146,10 @@ consvar_t cv_persistentmd5 = CVAR_INIT ("persistent_addon_cache", "On", CV_SAVE,
 
 static UINT32 MaxSendBytes(void)
 {
-	// The stock 4 MiB default rejects many modern addons before a client can
-	// request them. Keep maxsend available as the conservative/manual limit,
-	// while autosendaddons opts the host into the protocol's existing 200 MiB
-	// maximum without adding a new network field.
+
+
+
+
 	const UINT32 maxsendkb = cv_autosendaddons.value ? 204800 : (UINT32)cv_maxsend.value;
 	return maxsendkb * 1024;
 }
@@ -490,8 +491,8 @@ INT32 CL_CheckFiles(void)
  const precise_t started = I_GetPreciseTime();
  const precise_t budget = max((precise_t)1, I_GetPrecisePrecision()/250);
 
- /* The loaded, important prefix must match exactly. Checking the unloaded
-  * tail uses the same bounded search in both clean and modified sessions. */
+
+
  if (modifiedgame)
  {
   i = 0;
@@ -523,8 +524,8 @@ INT32 CL_CheckFiles(void)
   }
   fileschecked++;
  }
- /* Account after searching, including the last file. The previous code
-  * could report success before counting a file it had just found missing. */
+
+
  for (i = 0; i < fileneedednum; i++)
  {
   if (fileneeded[i].status != FS_OPEN) filestoload++;
@@ -540,7 +541,7 @@ boolean CL_LoadServerFiles(void)
 {
 	UINT8 filesloaded = 0;
 	const precise_t loadstarted = I_GetPreciseTime();
-	precise_t loadbudget = (precise_t)(I_GetPrecisePrecision() / 125); // 8 ms
+	precise_t loadbudget = (precise_t)(I_GetPrecisePrecision() / 125);
 
 	if (M_CheckParm("-nofiles"))
 		return true;
@@ -568,9 +569,9 @@ boolean CL_LoadServerFiles(void)
 			G_SetGameModified(true);
 			fileneeded[i].status = FS_OPEN;
 			filesloaded++;
-			/* Preserve the exact server order, but do not spend a whole
-			 * 35 Hz tic on every tiny add-on.  Large files still yield after
-			 * one load so the connection screen remains responsive. */
+
+
+
 			if (filesloaded >= 8 || I_GetPreciseTime() - loadstarted >= loadbudget)
 				return false;
 		}
@@ -719,9 +720,9 @@ void SV_PrepareSendLuaFile(void)
 void SV_HandleLuaFileSent(UINT8 node)
 {
 	luafiletransfers->nodestatus[node] = LFTNS_SENT;
-	/* Do not compare a client's old consistency sample with the host's first
-	 * post-transfer state.  Both sides will execute the ordered XD_LUAFILE
-	 * command, but packets already in flight can still describe the prior tic. */
+
+
+
 	if (node < MAXNETNODES)
 		netnodes[node].savegameresendcooldown = I_GetTime() + 3*TICRATE;
 	SV_PrepareSendLuaFileToNextNode();
@@ -859,7 +860,7 @@ static boolean AddFileToSendQueue(INT32 node, UINT8 fileid)
 	// Set the file name and get rid of the path
 	strlcpy(p->id.filename, wadfiles[wadnum]->filename, MAX_WADPATH);
 
-	// Handle file requests larger than the host is willing to send.
+
 	if (wadfiles[wadnum]->filesize > MaxSendBytes())
 	{
 		// Too big
@@ -1014,10 +1015,10 @@ static void SV_EndFileSend(INT32 node)
 static size_t D_FileTransferPayloadSize(void)
 {
 	const size_t headersize = FILETXHEADER + BASEPACKETSIZE;
-	/* Keep menu conversions independent of network initialization. The live
-	 * packet length starts at the conservative Internet default and later
-	 * changes to MAXPACKETLENGTH, which used to make a saved 5.0 MB/s setting
-	 * appear as a different number without the user changing it. */
+
+
+
+
 	const size_t packetlength = MAXPACKETLENGTH;
 
 	return packetlength > headersize ? packetlength - headersize : 0;
@@ -1049,9 +1050,9 @@ INT32 D_FileTransferPacketsForMBPerSecond(double megabytespersecond)
 		min(downloadspeed_cons_t[1].value, packetspertic));
 }
 
-/* Automatic transfers begin conservatively, then use the connection's live
- * loss and reliable-queue pressure as feedback. The user's download speed is
- * always the ceiling, so Auto cannot silently exceed the configured limit. */
+
+
+
 static INT32 D_AutomaticFileTransferPackets(INT32 limit, boolean transferactive)
 {
 	static boolean active;
@@ -1108,7 +1109,7 @@ void FileSendTicker(void)
 {
 	static INT32 currentnode = 0;
 	const precise_t sendstarted = I_GetPreciseTime();
-	const precise_t listenbudget = I_GetPrecisePrecision() / 1000; /* 1 ms */
+	const precise_t listenbudget = I_GetPrecisePrecision() / 1000;
 	filetx_pak *p;
 	size_t fragmentsize;
 	filetx_t *f;
@@ -1142,10 +1143,10 @@ void FileSendTicker(void)
 
 	while (packetsent-- && filestosend != 0)
 	{
-		/* A playable listen server shares this thread with rendering, input and
-		 * audio. Keep bulk add-on/save transfers from consuming an unbounded part
-		 * of a frame; a dedicated companion has no renderer and keeps the original
-		 * full-throughput behavior. */
+
+
+
+
 		if (server && !dedicated && gamestate == GS_LEVEL && listenbudget
 		&& I_GetPreciseTime() - sendstarted >= listenbudget)
 			break;
@@ -1164,11 +1165,11 @@ void FileSendTicker(void)
 		f = transfer[i].txlist;
 		ram = f->ram;
 
-		/* File fragments are deliberately best-effort traffic. When gameplay's
-		 * reliable queue is already backing up for this client, spending more of
-		 * the socket budget on an add-on/save download makes resyncs and join
-		 * stalls worse. Defer only this client briefly; round-robin service for
-		 * healthy clients continues. */
+
+
+
+
+
 		{
 			UINT16 retries;
 			UINT16 queued = Net_GetReliableBacklog(i, &retries);
@@ -1213,6 +1214,7 @@ void FileSendTicker(void)
 			transfer[i].iteration = 1;
 			transfer[i].ackediteration = 0;
 			transfer[i].position = 0;
+			transfer[i].readposition = 0;
 			transfer[i].ackedsize = 0;
 
 			transfer[i].ackedfragments = calloc(f->size / FILEFRAGMENTSIZE + 1, sizeof(*transfer[i].ackedfragments));
@@ -1251,10 +1253,14 @@ void FileSendTicker(void)
 			M_Memcpy(p->data, &f->id.ram[transfer[i].position], fragmentsize);
 		else
 		{
-			fseek(transfer[i].currentfile, transfer[i].position, SEEK_SET);
+			if (transfer[i].readposition != transfer[i].position
+				&& fseek(transfer[i].currentfile, transfer[i].position, SEEK_SET) != 0)
+				I_Error("FileSendTicker: can't seek in %s to %u: %s",
+					f->id.filename, transfer[i].position, strerror(errno));
 
 			if (fread(p->data, 1, fragmentsize, transfer[i].currentfile) != fragmentsize)
 				I_Error("FileSendTicker: can't read %s byte on %s at %d because %s", sizeu1(fragmentsize), f->id.filename, transfer[i].position, M_FileError(transfer[i].currentfile));
+			transfer[i].readposition = transfer[i].position + (UINT32)fragmentsize;
 		}
 		p->iteration = transfer[i].iteration;
 		p->position = LONG(transfer[i].position);
@@ -1401,7 +1407,7 @@ void FileReceiveTicker(void)
 
 		if (file->status == FS_DOWNLOADING)
 		{
-			// Batch acknowledgements for two tics; never emit empty packets.
+
 			if ((tic_t)(I_GetTime() - file->lastacksent) >= 2)
 				SendAckPacket(file->ackpacket, i);
 
@@ -1497,6 +1503,7 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 			I_Error("PT_FileFragment: already open file\n");
 
 		file->status = FS_DOWNLOADING;
+		file->writeposition = 0;
 		file->fragmentsize = fragmentsize;
 		file->iteration = 0;
 
@@ -1575,10 +1582,13 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 		{
 			file->receivedfragments[fragmentpos / fragmentsize] = true;
 
-			// We can receive packets in the wrong order, anyway all OSes support gaped files
-			fseek(file->file, fragmentpos, SEEK_SET);
+
+
+			if (file->writeposition != fragmentpos && fseek(file->file, fragmentpos, SEEK_SET) != 0)
+				I_Error("Can't seek in %s to %u: %s\n", file->filename, fragmentpos, strerror(errno));
 			if (fragmentsize && fwrite(netbuffer->u.filetxpak.data, boundedfragmentsize, 1, file->file) != 1)
 				I_Error("Can't write to %s: %s\n",file->filename, M_FileError(file->file));
+			file->writeposition = fragmentpos + boundedfragmentsize;
 			file->currentsize += boundedfragmentsize;
 
 			AddFragmentToAckPacket(file->ackpacket, file->iteration, fragmentpos / fragmentsize, filenum);
@@ -1586,8 +1596,10 @@ void PT_FileFragment(SINT8 node, INT32 netconsole)
 			// Finished?
 			if (file->currentsize == file->totalsize)
 			{
-				fclose(file->file);
+				const int close_result = fclose(file->file);
 				file->file = NULL;
+				if (close_result != 0)
+					I_Error("Can't finish writing %s: %s\n", file->filename, strerror(errno));
 				free(file->receivedfragments);
 				free(file->ackpacket);
 				file->status = FS_FOUND;
@@ -1836,9 +1848,9 @@ boolean CURLPrepareFile(const char* url, int dfilenum)
 		curl_easy_setopt(http_handle, CURLOPT_MAXREDIRS, 5L);
 
 		curl_easy_setopt(http_handle, CURLOPT_FAILONERROR, 1L);
-		/* The downloader runs on its own thread.  Avoid signal-based timeouts,
-		 * keep the connection warm between files, and give fast mirrors enough
-		 * receive space to fill modern broadband links. */
+
+
+
 		curl_easy_setopt(http_handle, CURLOPT_NOSIGNAL, 1L);
 		curl_easy_setopt(http_handle, CURLOPT_TCP_KEEPALIVE, 1L);
 		curl_easy_setopt(http_handle, CURLOPT_BUFFERSIZE, 256L * 1024L);
@@ -2086,9 +2098,9 @@ static boolean MD5CachePathEqual(const char *left, const char *right)
 #endif
 }
 
-/* Store one spelling for each file. In particular, Windows add-on commands
- * commonly alternate between "addons\\file.pk3" and its absolute path; keeping
- * both wastes cache slots and leaves duplicate lines in the on-disk index. */
+
+
+
 static void MD5CacheCanonicalPath(const char *source, char *destination,
 	size_t destinationsize)
 {
@@ -2147,10 +2159,16 @@ static void MD5CacheGetPaths(char *directory, size_t directorysize,
 {
 	snprintf(directory, directorysize, "%s" PATHSEP "cache", srb2home);
 	directory[directorysize - 1] = '\0';
-	snprintf(path, pathsize, "%s" PATHSEP "addon-md5-v5.txt", directory);
+	snprintf(path, pathsize, "%s" PATHSEP "addon-md5.txt", directory);
 	path[pathsize - 1] = '\0';
 	snprintf(temporary, temporarysize, "%s.tmp", path);
 	temporary[temporarysize - 1] = '\0';
+}
+
+static void MD5CacheLegacyPath(const char *directory, char *path, size_t size)
+{
+	snprintf(path, size, "%s" PATHSEP "addon-md5-v5.txt", directory);
+	path[size - 1] = '\0';
 }
 
 static void LoadPersistentMD5Cache(void)
@@ -2165,9 +2183,9 @@ static void LoadPersistentMD5Cache(void)
 	if (md5cache_loaded || !cv_persistentmd5.value)
 		return;
 	md5cache_loaded = true;
-	/* Core files can be checksummed before the saved configuration has enabled
-	 * the persistent cache. Remember those freshly computed records so an older
-	 * disk entry never replaces them when configuration loading catches up. */
+
+
+
 	for (i = 0; i < MD5_CACHE_SLOTS; i++)
 		preexisting[i] = md5cache[i].valid;
 	if (!md5cache_exitregistered)
@@ -2176,9 +2194,12 @@ static void LoadPersistentMD5Cache(void)
 		md5cache_exitregistered = true;
 	}
 	MD5CacheGetPaths(directory, sizeof directory, path, sizeof path, temporary, sizeof temporary);
-	(void)directory;
-	(void)temporary;
 	file = fopen(path, "rb");
+	if (!file && errno == ENOENT)
+	{
+		MD5CacheLegacyPath(directory, temporary, sizeof temporary);
+		file = fopen(temporary, "rb");
+	}
 	if (!file)
 		return;
 	if (!fgets(line, sizeof line, file) || strcmp(line, "SRB2MD5CACHE 1\n"))
@@ -2224,9 +2245,9 @@ static void LoadPersistentMD5Cache(void)
 		MD5CacheCanonicalPath(field, canonical, sizeof canonical);
 		strcpy(entry->filename, canonical);
 		entry->valid = true;
-		/* A metadata check is inexpensive and keeps moved, deleted, or edited
-		 * add-ons from accumulating forever. Content is still sampled before a
-		 * cached checksum is trusted. */
+
+
+
 		if (stat(entry->filename, &filestat) != 0
 		|| entry->size != (UINT64)filestat.st_size
 		|| entry->mtime != filestat.st_mtime
@@ -2243,8 +2264,8 @@ static void LoadPersistentMD5Cache(void)
 				continue;
 			if (preexisting[i])
 			{
-				/* This is the normal early-startup merge, not a duplicate
-				 * cache record. Keep the checksum just computed from the file. */
+
+
 				if (diskseen[i])
 				{
 					md5cache_duplicates++;
@@ -2253,8 +2274,8 @@ static void LoadPersistentMD5Cache(void)
 				diskseen[i] = true;
 				goto loaded_cache_line;
 			}
-			/* Later records are the newest ones in files produced by older
-			 * builds, so retain the last duplicate. */
+
+
 			md5cache[i] = parsed;
 			diskseen[i] = true;
 			md5cache_duplicates++;
@@ -2357,8 +2378,8 @@ static boolean FileQuickSignature(FILE *file, const struct stat *filestat, UINT6
 			hash ^= buffer[j];
 			hash *= 1099511628211ULL;
 		}
-		// A small file was sampled in full; hashing it five times adds no
-		// protection and only makes the fast path needlessly slower.
+
+
 		if (filesize <= sizeof buffer)
 			break;
 	}
@@ -2401,9 +2422,9 @@ static boolean CachedFileMD5(const char *filename, const struct stat *filestat,
 	return found;
 }
 
-/* Resolve an add-on from the persistent checksum cache before recursively
- * walking the home and install trees again.  Metadata plus the quick content
- * signature keeps stale cache entries from being trusted. */
+
+
+
 static boolean FindCachedFileByMD5(const char *requested, const UINT8 *wantedmd5sum,
 	char *resolved, size_t resolvedsize)
 {
@@ -2465,8 +2486,8 @@ static void CacheFileMD5(const char *filename, const struct stat *filestat,
 
 	MD5_CACHE_LOCK();
 	LoadPersistentMD5Cache();
-	/* Updating an edited add-on should replace its old record rather than
-	 * consuming another slot every time the mapper saves a new revision. */
+
+
 	for (i = 0; i < MD5_CACHE_SLOTS; i++)
 		if (md5cache[i].valid
 		&& MD5CachePathEqual(md5cache[i].filename, filename))
@@ -2486,10 +2507,10 @@ static void CacheFileMD5(const char *filename, const struct stat *filestat,
 	M_Memcpy(entry->md5sum, md5sum, 16);
 	md5cache_dirty = true;
 	md5cache_pendingwrites++;
-	/* Add-on batches can discover many checksums back-to-back. Rewriting the
-	 * complete index for the first result and then every eight results stalls
-	 * the same loading screen this cache is meant to accelerate. Persist in
-	 * larger batches and flush the remainder through the registered exit hook. */
+
+
+
+
 	if (md5cache_pendingwrites >= 32)
 		SavePersistentMD5Cache();
 	MD5_CACHE_UNLOCK();
@@ -2524,6 +2545,8 @@ void D_ClearMD5Cache_f(void)
 	md5cache_duplicates = md5cache_stale = md5cache_pendingwrites = 0;
 	md5cache_dirty = false;
 	remove(temporary);
+	remove(path);
+	MD5CacheLegacyPath(directory, path, sizeof path);
 	remove(path);
 #ifdef _WIN32
 	_rmdir(directory);
@@ -2561,7 +2584,7 @@ boolean D_GetCachedFileMD5(const char *filename, UINT8 md5sum[16])
 		fclose(fhandle);
 		return false;
 	}
-	/* Do not cache a digest if the file changed while it was being read. */
+
 	have_quicksig = have_quicksig
 		&& FileQuickSignature(fhandle, &before, &afterquicksig)
 		&& quicksig == afterquicksig;
@@ -2610,10 +2633,10 @@ filestatus_t checkfilemd5(char *filename, const UINT8 *wantedmd5sum)
 	return FS_FOUND; // will never happen, but makes the compiler shut up
 }
 
-/* Most files received from servers live directly in DOWNLOAD.  Looking up
- * that exact path first avoids recursively walking the entire home/install
- * tree for every item in a server's add-on list.  The normal recursive search
- * remains the fallback for manually organised add-on folders. */
+
+
+
+
 static filestatus_t CheckExactAddonPath(char *filename, const char *directory,
 	const UINT8 *wantedmd5sum, boolean completepath)
 {
@@ -2633,7 +2656,7 @@ static filestatus_t CheckExactAddonPath(char *filename, const char *directory,
 		directory[directorylen - 1] != '\\') ? PATHSEP : "", basename)
 		>= (INT32)sizeof candidate)
 		return FS_NOTFOUND;
-	/* checkfilemd5 expects an existing regular file. */
+
 	probe = fopen(candidate, "rb");
 	if (!probe)
 		return FS_NOTFOUND;
@@ -2686,9 +2709,9 @@ filestatus_t findfile(char *filename, const UINT8 *wantedmd5sum, boolean complet
 	if (homecheck == FS_FOUND)
 		return FS_FOUND;
 
-	/* Server downloads always use a basename and are saved here.  This is the
-	 * common reconnect path, so do it before consulting or building an index
-	 * of recursively discovered add-ons. */
+
+
+
 	homecheck = CheckExactAddonPath(filename, downloaddir, wantedmd5sum, completepath);
 	if (homecheck == FS_FOUND)
 		return FS_FOUND;

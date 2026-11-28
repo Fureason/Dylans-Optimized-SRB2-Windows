@@ -20,11 +20,12 @@
 #include "../v_video.h"
 
 boolean OglSdlSurface(INT32 w, INT32 h);
+void OglSdlReleaseRenderTarget(void);
 
 void OglSdlSetVSync(INT32 mode, boolean report);
 boolean OglSdlCompositorProvidesPacing(void);
 void OglSdlFinishUpdate(INT32 vidwait);
-void OglSdlPresentSoftware(const void *pixels, INT32 width, INT32 height, INT32 vidwait);
+void OglSdlPresentSoftware(const void *pixels, INT32 width, INT32 height, INT32 vidwait, boolean rgba);
 void OglSdlDestroySoftwarePresenter(void);
 
 extern SDL_Renderer *renderer;

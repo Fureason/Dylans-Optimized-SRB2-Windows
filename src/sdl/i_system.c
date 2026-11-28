@@ -24,6 +24,7 @@
 /// \brief SRB2 system stuff for SDL
 
 #include <signal.h>
+#include "../console.h"
 
 #ifdef _WIN32
 #define RPC_NO_WINDOWS_H
@@ -219,6 +220,8 @@ static char returnWadPath[256];
 #include "../r_main.h" // Frame interpolation/uncapped
 #include "../r_fps.h"
 #include "../m_perfstats.h"
+#include "../lua_hook.h"
+#include "../dehacked.h"
 #include "../m_custombuild.h"
 
 #ifdef MAC_ALERT
@@ -230,20 +233,22 @@ static char returnWadPath[256];
 #include "sdl_restart.inc"
 
 #ifdef _WIN32
-#define COMPANION_CONTROL_MAGIC 0x32425253UL
+#define COMPANION_CONTROL_MAGIC 0x33425253UL
 
 typedef struct
 {
 	DWORD magic;
 	DWORD parentpid;
 	volatile LONG stop_requested;
+	volatile LONG status_sequence;
+	volatile i_host_status_t host_status;
 } companion_control_t;
 
 static HANDLE companion_process;
 static HANDLE companion_control_mapping;
 static companion_control_t *companion_control;
 static HANDLE companion_child_mapping;
-static const companion_control_t *companion_child_control;
+static companion_control_t *companion_child_control;
 static HANDLE companion_parent_process;
 static boolean companion_child_checked;
 static boolean companion_parent_missing;
@@ -306,17 +311,33 @@ void I_StopCompanionServer(void)
 	I_CloseCompanionControl();
 }
 
-boolean I_StartCompanionServer(const char *responsefile, const char *workingdir)
+boolean I_StartCompanionServer(const char *responsefile, const char *workingdir, const char *logfile)
 {
 	SECURITY_ATTRIBUTES security;
 	STARTUPINFOA startup;
 	PROCESS_INFORMATION process;
 	char executable[MAX_PATH];
+	char absolute_log[MAX_WADPATH];
+	char homearg[MAX_WADPATH + 16] = "";
 	char commandline[2048];
-	DWORD parentpid = GetCurrentProcessId();
+	const DWORD parentpid = GetCurrentProcessId();
+	DWORD log_length;
+	INT32 command_length;
 
-	if (!responsefile || !workingdir)
+	if (!responsefile || !workingdir || !logfile)
 		return false;
+
+	log_length = GetFullPathNameA(logfile, sizeof absolute_log, absolute_log, NULL);
+	if (!log_length || log_length >= sizeof absolute_log)
+	{
+		I_OutputMsg("Could not resolve the local dedicated server's log path.\n");
+		return false;
+	}
+
+
+
+	if (M_CheckParm("-home") && M_IsNextParm())
+		snprintf(homearg, sizeof homearg, "-home \"%s\" ", M_GetNextParm());
 
 	if (I_CompanionServerRunning())
 		I_StopCompanionServer();
@@ -345,6 +366,7 @@ boolean I_StartCompanionServer(const char *responsefile, const char *workingdir)
 	companion_control->magic = COMPANION_CONTROL_MAGIC;
 	companion_control->parentpid = parentpid;
 	companion_control->stop_requested = 0;
+	companion_control->status_sequence = 0;
 
 	if (!GetModuleFileNameA(NULL, executable, sizeof executable))
 	{
@@ -353,10 +375,16 @@ boolean I_StartCompanionServer(const char *responsefile, const char *workingdir)
 		return false;
 	}
 
-	snprintf(commandline, sizeof commandline,
-		"\"%s\" \"@%s\" -companioncontrol %p -companionparent %lu",
-		executable, responsefile, (void *)companion_control_mapping,
+	command_length = snprintf(commandline, sizeof commandline,
+		"\"%s\" -logfile \"%s\" %s\"@%s\" -companioncontrol %p -companionparent %lu",
+		executable, absolute_log, homearg, responsefile, (void *)companion_control_mapping,
 		(unsigned long)parentpid);
+	if (command_length < 0 || (size_t)command_length >= sizeof commandline)
+	{
+		I_OutputMsg("The local dedicated server's launch path is too long.\n");
+		I_CloseCompanionControl();
+		return false;
+	}
 
 	memset(&startup, 0, sizeof startup);
 	startup.cb = sizeof startup;
@@ -385,6 +413,33 @@ boolean I_StartCompanionServer(const char *responsefile, const char *workingdir)
 	return true;
 }
 
+
+
+void I_PublishCompanionHostStatus(const i_host_status_t *status)
+{
+	if (!companion_child_control || companion_child_control->magic != COMPANION_CONTROL_MAGIC)
+		return;
+
+	InterlockedIncrement(&companion_child_control->status_sequence);
+	companion_child_control->host_status = *status;
+	InterlockedIncrement(&companion_child_control->status_sequence);
+}
+
+boolean I_ReadCompanionHostStatus(i_host_status_t *status)
+{
+	LONG sequence;
+
+	if (!companion_control)
+		return false;
+
+	sequence = InterlockedCompareExchange(&companion_control->status_sequence, 0, 0);
+	if (!sequence || (sequence & 1))
+		return false;
+
+	*status = companion_control->host_status;
+	return sequence == InterlockedCompareExchange(&companion_control->status_sequence, 0, 0);
+}
+
 boolean I_CompanionShutdownRequested(void)
 {
 	if (!companion_child_checked)
@@ -398,8 +453,8 @@ boolean I_CompanionShutdownRequested(void)
 		{
 			const unsigned long long handlevalue = _strtoui64(M_GetNextParm(), NULL, 16);
 			companion_child_mapping = (HANDLE)(ULONG_PTR)handlevalue;
-			companion_child_control = (const companion_control_t *)MapViewOfFile(
-				companion_child_mapping, FILE_MAP_READ, 0, 0,
+			companion_child_control = (companion_control_t *)MapViewOfFile(
+				companion_child_mapping, FILE_MAP_WRITE, 0, 0,
 				sizeof (*companion_child_control));
 		}
 
@@ -441,10 +496,11 @@ boolean I_CompanionShutdownRequested(void)
 	return false;
 }
 #else
-boolean I_StartCompanionServer(const char *responsefile, const char *workingdir)
+boolean I_StartCompanionServer(const char *responsefile, const char *workingdir, const char *logfile)
 {
 	(void)responsefile;
 	(void)workingdir;
+	(void)logfile;
 	I_OutputMsg("Local dedicated companion hosting is not available on this platform yet.\n");
 	return false;
 }
@@ -456,6 +512,7 @@ boolean I_CompanionShutdownRequested(void) { return false; }
 
 #if defined(_WIN32) && !defined(DEDICATED)
 static char crash_context[256] = "starting SRB2";
+static const char *crash_phase = "initializing";
 static char crash_last_addon[256] = "none loaded this session";
 static volatile sig_atomic_t crash_context_writing;
 #define CRASH_TIMELINE_SLOTS 8
@@ -484,8 +541,8 @@ static void I_GetCrashDirectory(char *directory, size_t directory_size)
 		|| attributes == INVALID_FILE_ATTRIBUTES
 		|| !(attributes & FILE_ATTRIBUTE_DIRECTORY))
 		{
-			/* A crash report in the old location is better than no report if the
-			 * folder cannot be created because of permissions or filesystem damage. */
+
+
 			strncpy(directory, home, directory_size - 1);
 			directory[directory_size - 1] = '\0';
 		}
@@ -565,6 +622,23 @@ void I_SetCrashContext(const char *context)
 	crash_context[sizeof crash_context - 1] = '\0';
 }
 
+void I_SetCrashPhase(const char *phase)
+{
+	crash_phase = phase;
+}
+
+static void I_FormatCrashActivity(char *buffer, size_t size)
+{
+	char hook[128];
+	const char *action = luaactionstack && luaactionstack <= MAX_ACTION_RECURSION
+		? luaactions[luaactionstack - 1] : NULL;
+
+	LUA_FormatCrashHook(hook, sizeof hook);
+	snprintf(buffer, size,
+		"main_loop_phase=%s\r\nactive_lua_hook=%s\r\nactive_lua_action=%s\r\n",
+		crash_phase, hook, action ? action : "none");
+}
+
 void I_SetCrashAddonContext(const char *filename)
 {
 	if (!filename)
@@ -573,45 +647,53 @@ void I_SetCrashAddonContext(const char *filename)
 	crash_last_addon[sizeof crash_last_addon - 1] = '\0';
 }
 
-static void I_WriteCrashContext(INT32 signalnum)
+static void I_WriteFailureContext(INT32 signalnum, const char *fatal_error)
 {
 	char directory[512];
 	char path[768];
 	char text[4096];
 	char timeline[1800];
+	char activity[384];
 	int length;
 	DWORD written;
 	HANDLE file;
 	SYSTEMTIME now;
 
-	if (crash_context_writing)
-		return;
-	crash_context_writing = 1;
+	if (!fatal_error)
+	{
+		if (crash_context_writing)
+			return;
+		crash_context_writing = 1;
+	}
 	GetLocalTime(&now);
 	I_FormatCrashTimeline(timeline, sizeof timeline);
+	I_FormatCrashActivity(activity, sizeof activity);
 
 	I_GetCrashDirectory(directory, sizeof directory);
-	snprintf(path, sizeof path, "%s" PATHSEP "crash-context.txt", directory);
+	snprintf(path, sizeof path, "%s" PATHSEP "%s", directory,
+		fatal_error ? "fatal-error-context.txt" : "crash-context.txt");
 	path[sizeof path - 1] = '\0';
 	length = snprintf(text, sizeof text,
-		"SRB2 V5.52 crash context\r\n"
+		"SRB2 failure context\r\n"
 		"timestamp=%04u-%02u-%02u %02u:%02u:%02u.%03u\r\n"
 		"build=%s custom_build=%s branch=%s revision=%s compiled=%s %s\r\n"
-		"signal=%d\r\nsigsegv_confirmed=%s\r\nlast_operation=%s\r\nlast_addon=%s\r\n"
+		"signal=%d\r\nsigsegv_confirmed=%s\r\nfatal_error=%.360s\r\n"
+		"last_operation=%s\r\nlast_addon=%s\r\n%s"
 		"map=%d\r\ngametic=%u\r\nleveltime=%u\r\ngamestate=%d\r\n"
 		"renderer=%d\r\nresolution=%dx%d\r\n"
 		"mode=%s\r\nmodifiedgame=%d\r\nnetgame=%d\r\nmultiplayer=%d\r\n"
 		"server=%d\r\nplayers=%d\r\nnodes=%d\r\nprocess_bits=%u\r\n"
 		"\r\nRecent one-second timeline (oldest to newest):\r\n%s"
-		"\r\nKeep this file together with the matching .RPT, .dmp, and executable.\r\n"
-		"A SIGSEGV/access violation cannot safely be ignored; prevention requires the failing stack and state.\r\n",
+		"%s",
 		now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
 		VERSIONSTRING, CUSTOM_BUILD_ID, compbranch, comprevision, compdate, comptime,
-		signalnum, signalnum == SIGSEGV ? "yes" : "no", crash_context, crash_last_addon,
+		signalnum, signalnum == SIGSEGV ? "yes" : "no", fatal_error ? fatal_error : "",
+		crash_context, crash_last_addon, activity,
 		gamemap, (unsigned)gametic,
 		(unsigned)leveltime, gamestate, rendermode, vid.width, vid.height,
 		I_CrashProcessMode(), modifiedgame, netgame, multiplayer, server,
-		D_NumPlayers(), D_NumNodes(false), (unsigned)(sizeof(void *) * 8), timeline);
+		D_NumPlayers(), D_NumNodes(false), (unsigned)(sizeof(void *) * 8), timeline,
+		fatal_error ? "" : "\r\nKeep this file with the matching .RPT, .dmp, and executable.\r\n");
 	if (length < 0)
 		return;
 	if ((size_t)length >= sizeof text)
@@ -705,9 +787,9 @@ static const char *I_Win32LikelyCause(const EXCEPTION_RECORD *record,
 	return "invalid read, commonly a stale pointer, freed object, or out-of-bounds source";
 }
 
-// MinGW64 cannot load the 32-bit exchndl.dll distributed with SRB2. Capture
-// the original Windows exception before the CRT reduces it to SIGSEGV, then
-// leave normal exception processing intact so the existing shutdown path runs.
+
+
+
 static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 {
 	EXCEPTION_RECORD *record;
@@ -727,6 +809,7 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 	char report[8192];
 	char history[1024];
 	char timeline[1800];
+	char activity[384];
 	const char *access = "n/a";
 	ULONG_PTR access_address = 0;
 	ULONG_PTR modulebase = 0;
@@ -743,8 +826,8 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 	record = exception->ExceptionRecord;
 	context = exception->ContextRecord;
 
-	// Ignore debugger/control-flow exceptions and record only faults that map
-	// to SRB2's fatal signal handlers.
+
+
 	switch (record->ExceptionCode)
 	{
 		case EXCEPTION_ACCESS_VIOLATION:
@@ -764,13 +847,14 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 	if (InterlockedCompareExchange(&crash_exception_writing, 1, 0) != 0)
 		return EXCEPTION_CONTINUE_SEARCH;
 
-	I_WriteCrashContext(record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION ? SIGSEGV : SIGABRT);
+	I_WriteFailureContext(record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION ? SIGSEGV : SIGABRT, NULL);
 	GetLocalTime(&now);
 	I_FormatCrashTimeline(timeline, sizeof timeline);
+	I_FormatCrashActivity(activity, sizeof activity);
 	I_GetCrashDirectory(directory, sizeof directory);
-	// Keep only the newest native crash artifacts. The timestamp remains inside
-	// the report, while stable filenames prevent repeated crashes from cluttering
-	// the crashes folder with a new report/dump pair every time.
+
+
+
 	snprintf(reportpath, sizeof reportpath,
 		"%s" PATHSEP "srb2win-crash.RPT", directory);
 	snprintf(dumppath, sizeof dumppath,
@@ -844,7 +928,7 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 		"rip=0x%llX\r\nrsp=0x%llX\r\nrbp=0x%llX\r\n"
 		"rax=0x%llX\r\nrbx=0x%llX\r\nrcx=0x%llX\r\nrdx=0x%llX\r\n"
 		"rsi=0x%llX\r\nrdi=0x%llX\r\nr8=0x%llX\r\nr9=0x%llX\r\n"
-		"last_operation=%s\r\nlast_addon=%s\r\n"
+		"last_operation=%s\r\nlast_addon=%s\r\n%s"
 		"map=%d\r\ngametic=%u\r\nleveltime=%u\r\nrenderer=%d\r\nresolution=%dx%d\r\n"
 		"netgame=%d\r\nserver=%d\r\nplayers=%d\r\nnodes=%d\r\n"
 		"packet_loss_percent=%.3f\r\ngame_tic_loss_percent=%.3f\r\n"
@@ -868,7 +952,7 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 		(unsigned long long)context->Rbx, (unsigned long long)context->Rcx,
 		(unsigned long long)context->Rdx, (unsigned long long)context->Rsi,
 		(unsigned long long)context->Rdi, (unsigned long long)context->R8,
-		(unsigned long long)context->R9, crash_context, crash_last_addon,
+		(unsigned long long)context->R9, crash_context, crash_last_addon, activity,
 		gamemap, (unsigned)gametic, (unsigned)leveltime, rendermode,
 		vid.width, vid.height, netgame, server, D_NumPlayers(), D_NumNodes(false),
 		lostpercent, gamelostpercent, dumppath, dump_written ? "yes" : "no",
@@ -886,9 +970,9 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 		}
 	}
 
-	/* Append a compact, stable signature as well as preserving the newest full
-	 * report. Repeated exception/module/offset triples are the same crash family,
-	 * so this makes recurrence visible without accumulating large dump files. */
+
+
+
 	length = snprintf(history, sizeof history,
 		"%04u-%02u-%02u %02u:%02u:%02u build=%s exception=0x%08lX module=%s "
 		"offset=0x%llX map=%d gametic=%u operation=%s\r\n",
@@ -897,7 +981,7 @@ static LONG WINAPI I_Win32CrashException(PEXCEPTION_POINTERS exception)
 		(unsigned long long)(modulebase ? (ULONG_PTR)record->ExceptionAddress - modulebase : 0),
 		gamemap, (unsigned)gametic, crash_context);
 	if (length > 0)
-		I_AppendDiagnostic("crash-history-v5.52.txt", history,
+		I_AppendDiagnostic("crash-history.txt", history,
 			(DWORD)min((size_t)length, sizeof history - 1));
 
 	if (dbghelp)
@@ -927,9 +1011,9 @@ static void I_AppendDiagnostic(const char *filename, const char *text, DWORD len
 	if (file == INVALID_HANDLE_VALUE)
 		return;
 
-	/* Keep always-on diagnostics useful without allowing a long, troubled
-	 * hosting session to grow one file forever. Rotation happens only once per
-	 * 8 MiB, so the size check is negligible compared with the existing write. */
+
+
+
 	if (GetFileSizeEx(file, &filesize)
 		&& (ULONGLONG)filesize.QuadPart >= DIAGNOSTIC_MAX_BYTES)
 	{
@@ -974,9 +1058,9 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 	size_t freebytes;
 
 	finished = I_GetPreciseTime();
-	/* Callers that begin profiling part-way through an operation do not have a
-	 * valid start timestamp. Reject that sample instead of interpreting zero or
-	 * a wrapped counter as a multi-hour hitch and arming more expensive tracing. */
+
+
+
 	if (!precision || !started || finished < started)
 		return;
 	elapsed = finished - started;
@@ -984,12 +1068,12 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 	if (elapsed_us < (UINT64)threshold_ms * 1000ULL)
 		return;
 
-	/* Level prewarming can upload hundreds of textures back-to-back. Recording
-	 * every individual prepare/upload opens and closes the diagnostics file in
-	 * the middle of the timed load and can noticeably extend large custom-map
-	 * transitions. The enclosing initial-preload and level-precache timers still
-	 * report the complete cost; retain the named texture reports during live
-	 * play, where they are useful for identifying a real first-use hitch. */
+
+
+
+
+
+
 	if (diagnostic_level_transition_active && operation
 	&& (!strncmp(operation, "OpenGL texture prepare ", 23)
 		|| !strncmp(operation, "OpenGL texture upload ", 22)
@@ -997,9 +1081,9 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 		|| !strncmp(operation, "OpenGL flat upload ", 19)))
 		return;
 
-	/* P_LoadLevel deliberately runs a timed screen wipe on the game thread.
-	 * Its detailed phases are reported below, but the enclosing game-tic and
-	 * frame timers must not report that same transition as additional freezes. */
+
+
+
 	if (diagnostic_level_transition_start
 	&& started <= diagnostic_level_transition_start
 	&& finished >= diagnostic_level_transition_start
@@ -1008,9 +1092,10 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 		|| !strcmp(operation, "active frame (ticks/render/input/audio)")))
 		return;
 
-	expected_transition = diagnostic_level_transition_active
+	expected_transition = con_startup || diagnostic_level_transition_active
 		|| (operation && (!strncmp(operation, "map ", 4)
 			|| !strncmp(operation, "add-on ", 7)
+			|| !strcmp(operation, "batched add-on final resource refresh")
 			|| !strncmp(operation, "complete level transition", 25)
 			|| !strcmp(operation, "initial map tics")
 			|| !strcmp(operation, "Lua MapLoad hooks")
@@ -1019,9 +1104,9 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 		&& !strcmp(operation, "active frame (ticks/render/input/audio)")
 		&& I_WindowManagerBlockedDuring(started, finished);
 
-	/* Diagnostics must not become a stutter source themselves. Dynamic sound
-	 * names and Lua source paths previously occupied a separate limiter slot,
-	 * allowing bursts of synchronous file opens while a map was already slow. */
+
+
+
 	if (operation && !strncmp(operation, "sound decode ", 13))
 		rate_operation = "sound decode";
 	else if (operation && !strncmp(operation, "Lua ", 4))
@@ -1053,6 +1138,13 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 		sizeof rate[slot].operation - 1);
 	rate[slot].operation[sizeof rate[slot].operation - 1] = '\0';
 	rate[slot].last_report = finished;
+
+	if (expected_transition)
+	{
+		I_OutputMsg("Load timing: %s took %llu ms\n", operation ? operation : "startup",
+			(unsigned long long)(elapsed_us / 1000ULL));
+		return;
+	}
 
 	PS_ArmHitchProfile();
 	PS_FormatHitchContext(profile, sizeof profile);
@@ -1090,22 +1182,20 @@ void I_ReportHitch(const char *operation, precise_t started, UINT32 threshold_ms
 		ps_lua_postthinkframe_time.value.p <= precision*10 ? ((double)ps_lua_postthinkframe_time.value.p * 1000.0 / (double)precision) : 0.0,
 		(unsigned)(sizeof(void *) * 8), (unsigned long long)(freebytes >> 20),
 		(unsigned long long)(total >> 20),
-		expected_transition ? "expected-transition"
-			: (window_manager_blocked ? "windows-move-resize" : "live-hitch"),
+		window_manager_blocked ? "windows-move-resize" : "live-hitch",
 		profile, movie, net_tics);
 	if (length > 0)
 	{
 		DWORD bytes = (DWORD)min((size_t)length, sizeof text - 1);
-	I_AppendDiagnostic("hitches-v5.52.txt", text, bytes);
-		/* A half-second pause is more than an ordinary missed frame. Keep a
-		 * separate, easy-to-find incident trail so server owners do not have to
-		 * search thousands of smaller timing spikes for actual freezes. */
-		if (elapsed_us >= 500000ULL && !expected_transition
-			&& !window_manager_blocked)
+		I_AppendDiagnostic("hitches.txt", text, bytes);
+
+
+
+		if (elapsed_us >= 500000ULL && !window_manager_blocked)
 		{
-			I_AppendDiagnostic("freeze-incidents-v5.52.txt", text, bytes);
+			I_AppendDiagnostic("freeze-incidents.txt", text, bytes);
 			CONS_Alert(CONS_WARNING,
-				"Freeze detected (%llu ms during %s). Details were saved in diagnostics/freeze-incidents-v5.52.txt\n",
+				"Freeze detected (%llu ms during %s). Details were saved in diagnostics/freeze-incidents.txt\n",
 				(unsigned long long)(elapsed_us / 1000ULL),
 				operation ? operation : "unknown operation");
 		}
@@ -1126,8 +1216,8 @@ void I_ReportFrameHitch(precise_t started, precise_t finished)
 		threshold_us = 2000000ULL / cap;
 	if (elapsed_us < threshold_us)
 		return;
-	// Keep a pathological frame or add-on from turning the diagnostic itself
-	// into a new performance problem.
+
+
 	if (last_report && finished - last_report < (precise_t)(precision * 2))
 		return;
 	last_report = finished;
@@ -1177,7 +1267,7 @@ void I_ReportRemoteExit(const char *playername, INT32 node, boolean timedout,
 	if (length > 0)
 	{
 		DWORD bytes = (DWORD)min((size_t)length, sizeof text - 1);
-	I_AppendDiagnostic("network-exits-v5.52.txt", text, bytes);
+	I_AppendDiagnostic("network-exits.txt", text, bytes);
 		if (timedout)
 		{
 			snprintf(incident, sizeof incident,
@@ -1430,7 +1520,7 @@ static void I_ReportSignal(int num, int coredumped)
 FUNCNORETURN static ATTRNORETURN void signal_handler(INT32 num)
 {
 #if defined(_WIN32) && !defined(DEDICATED)
-	I_WriteCrashContext(num);
+	I_WriteFailureContext(num, NULL);
 #endif
 	D_QuitNetGame(); // Fix server freezes
 	CL_AbortDownloadResume();
@@ -1868,12 +1958,7 @@ void I_OutputMsg(const char *fmt, ...)
 	len = strlen(txt);
 
 #ifdef LOGMESSAGES
-	if (logstream)
-	{
-		size_t d = fwrite(txt, len, 1, logstream);
-		fflush(logstream);
-		(void)d;
-	}
+	FIL_WriteLog(txt, len);
 #endif
 
 #if defined (_WIN32)
@@ -3309,7 +3394,7 @@ void I_SleepDuration(precise_t duration)
 #elif defined(_WIN32)
 	UINT64 precision = I_GetPrecisePrecision();
 	precise_t dest = I_GetPreciseTime() + duration;
-	precise_t slack = precision / 5000; // leave only the final 0.2 ms to spin
+	precise_t slack = precision / 5000;
 	static HANDLE frame_timer = NULL;
 
 	if (!frame_timer)
@@ -3333,8 +3418,8 @@ void I_SleepDuration(precise_t duration)
 	{
 		const UINT64 coarse = duration - slack;
 		LARGE_INTEGER due;
-		/* Relative waitable-timer deadlines use negative 100 ns units. Round up
-		 * so the kernel wait never becomes an accidental zero-duration poll. */
+
+
 		due.QuadPart = -(LONGLONG)max((UINT64)1,
 			(coarse * 10000000ULL + precision - 1) / precision);
 
@@ -3355,9 +3440,9 @@ void I_SleepDuration(precise_t duration)
 	precise_t cur;
 	precise_t dest;
 
-	/* Leave the final millisecond to the precise timer. Sleeping once for most
-	 * of a frame is steadier than a chain of 1 ms scheduler wakeups, especially
-	 * in a composited/windowed desktop. */
+
+
+
 	spin_slack = precision / 1000;
 
 	cur = I_GetPreciseTime();
@@ -3509,7 +3594,10 @@ void I_Quit(void)
 	if (quiting) goto death;
 	SDLforceUngrabMouse();
 	quiting = SDL_TRUE;
-	// Finish frames/audio before closing the mixer, renderer and workers.
+
+	if (client && netgame)
+		D_QuitNetGame();
+
 	if (moviemode != MM_OFF)
 		M_StopMovie();
 	M_SaveConfig(NULL); //save game config, cvars..
@@ -3630,6 +3718,10 @@ void I_Error(const char *error, ...)
 	vsnprintf(buffer, sizeof buffer, error, argptr);
 	va_end(argptr);
 	I_OutputMsg("\nI_Error(): %s\n", buffer);
+#if defined(_WIN32) && !defined(DEDICATED)
+	if (!errorcount)
+		I_WriteFailureContext(0, buffer);
+#endif
 	// ---
 
 	M_SaveConfig(NULL); // save game config, cvars..
@@ -3789,8 +3881,8 @@ void I_ShutdownSystem(void)
 	{
 		I_OutputMsg("I_ShutdownSystem(): end of logstream.\n");
 #if !(defined (__unix__) || defined(__APPLE__) || defined (UNIXCOMMON))
-		/* A custom -logfile is already the destination. Copying that stream
-		 * back onto the same pathname truncates it before it can be read. */
+
+
 		if (!M_CheckParm("-logfile"))
 			Shittylogcopy();
 #endif
@@ -3943,15 +4035,17 @@ size_t I_GetRandomBytes(char *destination, size_t count)
 
 INT32 I_ClipboardCopy(const char *data, size_t size)
 {
-	char storage[256];
-	if (size > 255)
-		size = 255;
+	if (size == SIZE_MAX)
+		return 0;
+	char *storage = malloc(size + 1);
+	if (!storage)
+		return 0;
 	memcpy(storage, data, size);
 	storage[size] = 0;
 
-	if (SDL_SetClipboardText(storage))
-		return 0;
-	return -1;
+	const INT32 result = SDL_SetClipboardText(storage);
+	free(storage);
+	return result == 0 ? -1 : 0;
 }
 
 const char *I_ClipboardPaste(void)
@@ -4120,6 +4214,10 @@ static const char *locateWad(void)
 	return NULL;
 }
 
+#if defined(_WIN32) && defined(HAVE_CURL) && defined(HAVE_ZLIB) && !defined(USE_PATCH_DTA)
+#include "../win32/repair_assets.inc"
+#endif
+
 const char *I_LocateWad(void)
 {
 	const char *waddir;
@@ -4127,6 +4225,15 @@ const char *I_LocateWad(void)
 	I_OutputMsg("Looking for WADs in: ");
 	waddir = locateWad();
 	I_OutputMsg("\n");
+
+#if defined(_WIN32) && defined(HAVE_CURL) && defined(HAVE_ZLIB) && !defined(USE_PATCH_DTA)
+	if (!I_RequiredGameDataPresent(waddir ? waddir : "."))
+	{
+		const char *repaired = I_RepairGameDirectory();
+		if (repaired)
+			waddir = repaired;
+	}
+#endif
 
 	if (waddir)
 	{

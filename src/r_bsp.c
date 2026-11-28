@@ -41,10 +41,10 @@ boolean bothfloorssky = false; // likewise, but for floors
 
 boolean horizonline = false;
 
-/* A line-portal camera is placed just behind the paired exit.  Keep the
- * boundary itself drawable, but reject geometry on the camera/back side of
- * that exit for the entire portal pass.  P_PointOnLineSide assigns points on
- * the boundary to a side, so use a strict wide cross product instead. */
+
+
+
+
 static boolean R_PointBehindPortalClipLine(fixed_t x, fixed_t y)
 {
 	const double dx = (double)((INT64)portalclipline->v2->x
@@ -460,7 +460,7 @@ static void R_AddLine(seg_t *line)
 		const boolean firstbehind = R_PointBehindPortalClipLine(render_v1x, render_v1y);
 		const boolean secondbehind = R_PointBehindPortalClipLine(render_v2x, render_v2y);
 
-		/* The paired exit is an aperture, not a wall in its own view. */
+
 		if (line->linedef == portalclipline)
 			return;
 		if (firstbehind && secondbehind)
@@ -541,10 +541,19 @@ static void R_AddLine(seg_t *line)
 	}
 
 	// The seg is in the view range, but not necessarily visible.
-	angle1 = (angle1+ANGLE_90)>>ANGLETOFINESHIFT;
-	angle2 = (angle2+ANGLE_90)>>ANGLETOFINESHIFT;
-	x1 = viewangletox[angle1];
-	x2 = viewangletox[angle2];
+	if (line->polyseg)
+	{
+		const double radians = M_PI / (double)ANGLE_180;
+		x1 = (INT32)max(0.0, min((double)viewwidth,
+			ceil(centerx - focallengthf * tan((INT32)angle1 * radians))));
+		x2 = (INT32)max(0.0, min((double)viewwidth,
+			ceil(centerx - focallengthf * tan((INT32)angle2 * radians))));
+	}
+	else
+	{
+		x1 = viewangletox[(angle1+ANGLE_90)>>ANGLETOFINESHIFT];
+		x2 = viewangletox[(angle2+ANGLE_90)>>ANGLETOFINESHIFT];
+	}
 
 	// Does not cross a pixel?
 	if (x1 >= x2)       // killough 1/31/98 -- change == to >= for robustness
@@ -594,6 +603,10 @@ static void R_AddLine(seg_t *line)
 	backsector = R_FakeFlat(backsector, &tempsec, NULL, NULL, true);
 
 	doorclosed = 0;
+
+	// A polyobject's control sector does not close the surrounding subsector.
+	if (line->polyseg)
+		goto clippass;
 
 	// hack to allow height changes in outdoor areas
 	// This is what gets rid of the upper textures if there should be sky
@@ -986,7 +999,7 @@ static void R_Subsector(size_t num)
 
 	sub->sector->extra_colormap = frontsector->extra_colormap;
 
-	if (P_GetSectorFloorZAt(frontsector, viewx, viewy) < viewz
+	if (R_SlopeViewHeight(frontsector->f_slope, frontsector->floorheight) < viewz
 		|| frontsector->floorpic == skyflatnum
 		|| P_SectorHasFloorPortal(frontsector)
 		|| (frontsector->heightsec != -1 && sectors[frontsector->heightsec].ceilingpic == skyflatnum))
@@ -999,7 +1012,7 @@ static void R_Subsector(size_t num)
 	else
 		floorplane = NULL;
 
-	if (P_GetSectorCeilingZAt(frontsector, viewx, viewy) > viewz
+	if (R_SlopeViewHeight(frontsector->c_slope, frontsector->ceilingheight) > viewz
 		|| frontsector->ceilingpic == skyflatnum
 		|| P_SectorHasCeilingPortal(frontsector)
 		|| (frontsector->heightsec != -1 && sectors[frontsector->heightsec].floorpic == skyflatnum))
@@ -1037,7 +1050,7 @@ static void R_Subsector(size_t num)
 			ffloor[numffloors].plane = NULL;
 			ffloor[numffloors].polyobj = NULL;
 
-			heightcheck = P_GetFFloorBottomZAt(rover, viewx, viewy);
+			heightcheck = R_SlopeViewHeight(*rover->b_slope, *rover->bottomheight);
 
 			planecenterz = P_GetFFloorBottomZAt(rover, frontsector->soundorg.x, frontsector->soundorg.y);
 			if (planecenterz <= ceilingcenterz
@@ -1067,7 +1080,7 @@ static void R_Subsector(size_t num)
 			ffloor[numffloors].plane = NULL;
 			ffloor[numffloors].polyobj = NULL;
 
-			heightcheck = P_GetFFloorTopZAt(rover, viewx, viewy);
+			heightcheck = R_SlopeViewHeight(*rover->t_slope, *rover->topheight);
 
 			planecenterz = P_GetFFloorTopZAt(rover, frontsector->soundorg.x, frontsector->soundorg.y);
 			if (planecenterz >= floorcenterz
@@ -1406,12 +1419,12 @@ void R_RenderBSPNode(INT32 bspnum)
 		R_RenderBSPNode(bsp->children[side]);
 
 		// Possibly divide back space.
-		/* A line portal starts this pass outside the ordinary viewpoint and asks
-		 * us to find its destination sector before drawing anything.  The normal
-		 * solid-segment bbox test can reject the subtree containing that sector,
-		 * which made the portal suddenly disappear or split at particular
-		 * distances and angles.  Search both branches until the destination is
-		 * found; after portalcullsector is cleared, normal occlusion resumes. */
+
+
+
+
+
+
 		if (!portalcullsector && !R_CheckBBox(bsp->bbox[side^1]))
 			return;
 
@@ -1420,10 +1433,10 @@ void R_RenderBSPNode(INT32 bspnum)
 
 	bspnum = (bspnum == -1 ? 0 : bspnum & ~NF_SUBSECTOR);
 
-	/* Finding the destination sector is only the start of a line-portal pass.
-	 * Keep rejecting subsectors wholly behind the exit afterwards, otherwise
-	 * the traversal eventually circles behind the linedef and leaks its back
-	 * room through the entrance. */
+
+
+
+
 	if (portalrender && portalclipline)
 	{
 		subsector_t *sub = &subsectors[bspnum];
@@ -1474,7 +1487,7 @@ void R_RenderPortalHorizonLine(sector_t *sector)
 
 	sector->extra_colormap = frontsector->extra_colormap;
 
-	if (P_GetSectorFloorZAt(frontsector, viewx, viewy) < viewz
+	if (R_SlopeViewHeight(frontsector->f_slope, frontsector->floorheight) < viewz
 		|| frontsector->floorpic == skyflatnum
 		|| (frontsector->heightsec != -1 && sectors[frontsector->heightsec].ceilingpic == skyflatnum))
 	{
@@ -1485,7 +1498,7 @@ void R_RenderPortalHorizonLine(sector_t *sector)
 	else
 		floorplane = NULL;
 
-	if (P_GetSectorCeilingZAt(frontsector, viewx, viewy) > viewz
+	if (R_SlopeViewHeight(frontsector->c_slope, frontsector->ceilingheight) > viewz
 		|| frontsector->ceilingpic == skyflatnum
 		|| (frontsector->heightsec != -1 && sectors[frontsector->heightsec].floorpic == skyflatnum))
 	{

@@ -75,8 +75,8 @@ consvar_t stereoreverse = CVAR_INIT ("stereoreverse", "Off", CV_SAVE, CV_OnOff, 
 // if true, all sounds are loaded at game startup
 static consvar_t precachesound = CVAR_INIT ("precachesound", "Off", CV_SAVE, CV_OnOff, NULL);
 
-// Move first-use decoding for sounds referenced by objects in this map into
-// the loading screen, without retaining every sound in every loaded add-on.
+
+
 consvar_t cv_precachelevelsounds = CVAR_INIT ("precachelevelsounds", "On", CV_SAVE, CV_OnOff, NULL);
 
 #define SFX_BACKGROUND_QUEUE_SIZE 512
@@ -206,7 +206,7 @@ static void S_StopChannel(INT32 cnum);
 //
 // If none available, return -1. Otherwise channel #.
 //
-static INT32 S_getChannel(const void *origin, sfxinfo_t *sfxinfo)
+static INT32 S_getChannel(const void *origin, sfxinfo_t *sfxinfo, boolean player_sound)
 {
 	// channel number to use
 	INT32 cnum;
@@ -248,24 +248,23 @@ static INT32 S_getChannel(const void *origin, sfxinfo_t *sfxinfo)
 		}
 	}
 
-	// None available
 	if (cnum == numofchannels)
 	{
-		// Look for lower priority
-		for (cnum = 0; cnum < numofchannels; cnum++)
-			if (channels[cnum].sfxinfo->priority <= sfxinfo->priority)
-				break;
+
+		if (player_sound)
+			for (cnum = 0; cnum < numofchannels; cnum++)
+				if (!channels[cnum].player_sound)
+					break;
 
 		if (cnum == numofchannels)
-		{
-			// No lower priority. Sorry, Charlie.
+			for (cnum = 0; cnum < numofchannels; cnum++)
+				if ((player_sound || !channels[cnum].player_sound)
+					&& channels[cnum].sfxinfo->priority <= sfxinfo->priority)
+					break;
+
+		if (cnum == numofchannels)
 			return -1;
-		}
-		else
-		{
-			// Otherwise, kick out lower priority.
-			S_StopChannel(cnum);
-		}
+		S_StopChannel(cnum);
 	}
 
 	c = &channels[cnum];
@@ -273,8 +272,21 @@ static INT32 S_getChannel(const void *origin, sfxinfo_t *sfxinfo)
 	// channel is decided to be cnum.
 	c->sfxinfo = sfxinfo;
 	c->origin = origin;
-
+	c->player_sound = player_sound;
 	return cnum;
+}
+
+static void S_PlayChannel(INT32 cnum, sfxenum_t id, INT32 volume, INT32 sep,
+	INT32 pitch, INT32 priority)
+{
+	channel_t *c = &channels[cnum];
+	c->handle = I_StartSound(id, volume, sep, pitch, priority, cnum);
+	if (c->handle < 0)
+	{
+		c->sfxinfo->usefulness--;
+		c->sfxinfo = NULL;
+		c->origin = NULL;
+	}
 }
 
 void S_RegisterSoundStuff(void)
@@ -342,13 +354,13 @@ static void SetChannelsNum(void)
 		channels = (channel_t *)Z_Malloc(cv_numChannels.value * sizeof (channel_t), PU_STATIC, NULL);
 	numofchannels = cv_numChannels.value;
 
-	/* S_getChannel reserves a channel before a sound is decoded. Initialize the
-	 * entire record, including its mixer handle, so a failed decode can never
-	 * pass an indeterminate handle into SDL_mixer. */
+
+
+
 	if (channels)
 		memset(channels, 0, numofchannels * sizeof (*channels));
 
-	// Free all channels for use and give each one its matching mixer handle.
+
 	for (i = 0; i < numofchannels; i++)
 	{
 		channels[i].sfxinfo = 0;
@@ -546,7 +558,8 @@ void S_StartCaption(sfxenum_t sfx_id, INT32 cnum, UINT16 lifespan)
 	closedcaptions[set].b = 3; // bob
 }
 
-void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
+static void S_StartSoundAtVolumeInternal(const void *origin_p, sfxenum_t sfx_id,
+	INT32 volume, boolean player_sound)
 {
 	const INT32 initial_volume = volume;
 	INT32 sep, pitch, priority, cnum;
@@ -661,7 +674,7 @@ void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
 			sep = NORM_SEP;
 
 		// try to find a channel
-		cnum = S_getChannel(origin, sfx);
+		cnum = S_getChannel(origin, sfx, player_sound);
 
 		if (cnum < 0)
 			return; // If there's no free channels, it's not gonna be free for player 1, either.
@@ -676,8 +689,8 @@ void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
 			S_CacheSfxDataProfiled(sfx, sfx_id);
 		if (!sfx->data)
 		{
-			/* No mixer channel was started, so release only the engine-side
-			 * reservation. S_StopChannel would query an as-yet-unused handle. */
+
+
 			channels[cnum].sfxinfo = NULL;
 			channels[cnum].origin = NULL;
 			channels[cnum].handle = cnum;
@@ -702,7 +715,7 @@ void S_StartSoundAtVolume(const void *origin_p, sfxenum_t sfx_id, INT32 volume)
 
 		// Assigns the handle to one of the channels in the
 		// mix/output buffer.
-		channels[cnum].handle = I_StartSound(sfx_id, volume, sep, pitch, priority, cnum);
+		S_PlayChannel(cnum, sfx_id, volume, sep, pitch, priority);
 	}
 
 dontplay:
@@ -723,7 +736,7 @@ dontplay:
 		sep = NORM_SEP;
 
 	// try to find a channel
-	cnum = S_getChannel(origin, sfx);
+	cnum = S_getChannel(origin, sfx, player_sound);
 
 	if (cnum < 0)
 		return;
@@ -738,8 +751,8 @@ dontplay:
 		S_CacheSfxDataProfiled(sfx, sfx_id);
 	if (!sfx->data)
 	{
-		/* No mixer channel was started, so release only the engine-side
-		 * reservation. S_StopChannel would query an as-yet-unused handle. */
+
+
 		channels[cnum].sfxinfo = NULL;
 		channels[cnum].origin = NULL;
 		channels[cnum].handle = cnum;
@@ -765,10 +778,20 @@ dontplay:
 	// Assigns the handle to one of the channels in the
 	// mix/output buffer.
 	channels[cnum].volume = initial_volume;
-	channels[cnum].handle = I_StartSound(sfx_id, volume, sep, pitch, priority, cnum);
+	S_PlayChannel(cnum, sfx_id, volume, sep, pitch, priority);
 }
 
-void S_StartSound(const void *origin, sfxenum_t sfx_id)
+void S_StartSoundAtVolume(const void *origin, sfxenum_t sfx_id, INT32 volume)
+{
+	S_StartSoundAtVolumeInternal(origin, sfx_id, volume, false);
+}
+
+void S_StartPlayerSoundAtVolume(const void *origin, sfxenum_t sfx_id, INT32 volume)
+{
+	S_StartSoundAtVolumeInternal(origin, sfx_id, volume, true);
+}
+
+static void S_StartSoundInternal(const void *origin, sfxenum_t sfx_id, boolean player_sound)
 {
 	if (S_SoundDisabled())
 		return;
@@ -840,7 +863,17 @@ void S_StartSound(const void *origin, sfxenum_t sfx_id)
 		HW3S_StartSound(origin, sfx_id);
 	else
 #endif
-		S_StartSoundAtVolume(origin, sfx_id, 255);
+		S_StartSoundAtVolumeInternal(origin, sfx_id, 255, player_sound);
+}
+
+void S_StartSound(const void *origin, sfxenum_t sfx_id)
+{
+	S_StartSoundInternal(origin, sfx_id, false);
+}
+
+void S_StartPlayerSound(const void *origin, sfxenum_t sfx_id)
+{
+	S_StartSoundInternal(origin, sfx_id, true);
 }
 
 void S_StopSound(void *origin)
@@ -911,8 +944,8 @@ void S_UpdateSounds(void)
 
 	if (dedicated)
 		return;
-	// Music fades and queued track changes still need the backend ticker when
-	// sound effects are switched off. Only skip positional SFX work here.
+
+
 	if (sound_disabled)
 		goto updateaudio;
 
@@ -1038,9 +1071,9 @@ void S_UpdateSounds(void)
 	}
 
 notinlevel:
-	/* Add-on sounds can be queued while the title screen or join UI is active.
-	 * Use those otherwise-idle frames too, so their first in-level use does not
-	 * synchronously decode a large sample in the middle of play. */
+
+
+
 	if (cv_precachelevelsounds.value
 	&& R_GetAdaptiveEffectsLevel() == 0)
 		S_ProcessBackgroundSoundPrecache();
@@ -1186,9 +1219,9 @@ static void S_ProcessBackgroundSoundPrecache(void)
 {
 	UINT8 checked = 0;
 
-	/* Decode no more than one new sound per frame. Already-cached queue entries
-	 * are cheap to discard in small batches. Work pauses whenever frame time is
-	 * under pressure, so preparation cannot pile onto an existing slowdown. */
+
+
+
 	while (sfx_background_count && checked++ < 8)
 	{
 		const sfxenum_t sfx_id = sfx_background_queue[sfx_background_head];
@@ -1224,8 +1257,8 @@ void S_PrecacheLevelSounds(void)
 		if (mobj->type < 0 || mobj->type >= NUMMOBJTYPES)
 			continue;
 
-		// A skin can redirect a base sound to different data, so inspect each
-		// skinned object. Other object types only need one pass.
+
+
 		if (!mobj->skin && seen[mobj->type])
 			continue;
 		seen[mobj->type] = true;
@@ -1233,9 +1266,9 @@ void S_PrecacheLevelSounds(void)
 		if (!info)
 			continue;
 
-		/* Queue rather than decoding every referenced sample while the screen is
-		 * black. The audio update consumes one uncached sound per spare frame; a
-		 * sound needed earlier still follows the ordinary on-demand path. */
+
+
+
 		S_QueueBackgroundSound(mobj, info->seesound);
 		S_QueueBackgroundSound(mobj, info->attacksound);
 		S_QueueBackgroundSound(mobj, info->painsound);
@@ -2754,7 +2787,7 @@ void GameSounds_OnChange(void)
 	if (M_CheckParm("-nosound") || M_CheckParm("-noaudio"))
 		return;
 
-	// Reapplying a setting must not invert the live audio state.
+
 	if (sound_disabled == (cv_gamesounds.value == 0))
 		return;
 	if (cv_gamesounds.value)

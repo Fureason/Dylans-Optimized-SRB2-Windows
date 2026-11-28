@@ -1,6 +1,6 @@
-// SONIC ROBO BLAST 2 -- local server browser, GPLv2
-// Browsing only reads advertisements. It never loads files or changes the
-// joining client's fileneeded array, Lua state, or gameplay variables.
+
+
+
 #include "server_browser.h"
 #include "i_net.h"
 #include "../command.h"
@@ -59,7 +59,7 @@ static void SB_PlainText(char *to, size_t capacity, const char *from)
 	to[n] = '\0';
 }
 
-// Native colour codes are safe; line breaks and other controls are excluded.
+
 static void SB_ColoredName(char *to, size_t capacity, const char *from)
 {
 	size_t n = 0;
@@ -71,8 +71,8 @@ static void SB_ColoredName(char *to, size_t capacity, const char *from)
 	to[n] = '\0';
 }
 
-// Only a complete numeric endpoint can start a lookup. Ordinary text and
-// partial addresses continue to filter the existing list.
+
+
 static boolean SB_LookupAddress(const char *text, char *address)
 {
 	char host[SB_ADDRESSLEN];
@@ -91,7 +91,7 @@ static boolean SB_LookupAddress(const char *text, char *address)
 		if (close[1]) port = close + 2;
 	}
 	else if (first != last)
-		length = strlen(text); // An IPv6 port requires brackets.
+		length = strlen(text);
 	else
 	{
 		length = first ? (size_t)(first - text) : strlen(text);
@@ -136,7 +136,7 @@ static INT32 SB_Ensure(const char *address)
 {
 	INT32 index = SB_Find(address);
 	if (index >= 0) return index;
-	// A corrupt local file or unsolicited packets cannot grow this forever.
+
 	if (entrycount >= 4096 || !SB_ValidAddress(address)) return -1;
 	entries = Z_Realloc(entries, (entrycount + 1) * sizeof(*entries), PU_STATIC, NULL);
 	index = (INT32)entrycount++;
@@ -382,8 +382,8 @@ INT32 SB_AddFavorite(const char *address)
 	return index;
 }
 
-// A bounded parser for the stock file-list wire format. Reject a malformed
-// page as a whole; do not publish partial filenames or corrupt join state.
+
+
 static boolean SB_ParseFiles(const UINT8 *data, size_t length, UINT8 count)
 {
 	const UINT8 *p = data, *end = data + length;
@@ -544,13 +544,13 @@ boolean SB_MoreFiles(SINT8 node)
 	size_t header = BASEPACKETSIZE + offsetof(filesneededconfig_pak, files);
 	const char *address;
 	if (!active) return false;
-	// All file pages arriving in a browser belong to preview, never joining.
+
 	if (selected < 0 || (size_t)selected >= entrycount || !I_GetNodeAddress) return true;
 	address = I_GetNodeAddress(node);
 	if (!address || strcasecmp(address, entries[selected].address) || complete || failed) return true;
 	if ((size_t)doomcom->datalength < header) { failed = true; return true; }
 	first = netbuffer->u.filesneededcfg.first;
-	if (first < 0 || (size_t)first != addoncount) return true; // delayed/duplicate page
+	if (first < 0 || (size_t)first != addoncount) return true;
 	if (!netbuffer->u.filesneededcfg.num && netbuffer->u.filesneededcfg.more) { failed = true; return true; }
 	failed = !SB_ParseFiles(netbuffer->u.filesneededcfg.files,
 		min((size_t)doomcom->datalength - header, (size_t)MAXFILENEEDED), netbuffer->u.filesneededcfg.num);
@@ -564,7 +564,7 @@ void SB_Ticker(void)
 {
 	tic_t now = I_GetTime();
 	if (!active || Playing() || !netgame || !I_NetMakeNodewPort) return;
-	// One advertisement per tic, each server at most once per ten seconds.
+
 	if (querytick != now)
 	{
 		querytick = now;
@@ -623,5 +623,5 @@ boolean SB_NeedsCleanSession(void)
 		if (i >= addoncount || memcmp(wadfiles[j]->md5sum, addons[i].md5, 16)) return true;
 		i++;
 	}
-	return false; // identical prefix: stock joining can load a missing tail
+	return false;
 }

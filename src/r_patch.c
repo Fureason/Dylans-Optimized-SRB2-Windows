@@ -13,6 +13,7 @@
 #include "r_patch.h"
 #include "r_picformats.h"
 #include "r_defs.h"
+#include "r_draw.h"
 #include "z_zone.h"
 
 #ifdef ROTSPRITE
@@ -121,6 +122,74 @@ void Patch_MakeColumns(softwarepatch_t *source, size_t num_columns, INT16 width,
 	}
 }
 
+
+
+static size_t Patch_SplitSpritePosts(patch_t *patch, post_t *posts, boolean *has_key)
+{
+	size_t count = 0;
+	UINT8 *output = patch->pixels;
+
+	for (INT32 x = 0; x < patch->width; x++)
+	{
+		column_t *column = &patch->columns[x];
+		UINT8 *column_output = output;
+		const size_t first_post = count;
+
+		for (unsigned i = 0; i < column->num_posts; i++)
+		{
+			const post_t *post = &column->posts[i];
+			const UINT8 *pixels = column->pixels + post->data_offset;
+
+			for (size_t start = 0; start < post->length;)
+			{
+				const UINT8 *key = memchr(pixels + start, TRANSPARENTPIXEL,
+					post->length - start);
+				const size_t length = key ? (size_t)(key - (pixels + start))
+					: post->length - start;
+
+				if (key)
+					*has_key = true;
+				if (length)
+				{
+					if (posts)
+					{
+						posts[count].topdelta = post->topdelta + (unsigned)start;
+						posts[count].length = (unsigned)length;
+						posts[count].data_offset = (size_t)(output - column_output);
+						memmove(output, pixels + start, length);
+						output += length;
+					}
+					count++;
+				}
+				start += length + 1;
+			}
+		}
+
+		if (posts)
+		{
+			column->pixels = column_output;
+			column->num_posts = (unsigned)(count - first_post);
+			column->posts = column->num_posts ? &posts[first_post] : NULL;
+		}
+	}
+	return count;
+}
+
+void Patch_RemoveSpriteKey(patch_t *patch)
+{
+	boolean has_key = false;
+	const size_t count = Patch_SplitSpritePosts(patch, NULL, &has_key);
+	post_t *posts;
+
+	if (!has_key)
+		return;
+
+	posts = Z_Malloc(max(count, 1) * sizeof (*posts), PU_PATCH_DATA, NULL);
+	Patch_SplitSpritePosts(patch, posts, &has_key);
+	Z_Free(patch->posts);
+	patch->posts = posts;
+}
+
 //
 // Frees a patch from memory.
 //
@@ -158,7 +227,7 @@ static void Patch_FreeData(patch_t *patch)
 	{
 		rotsprite_t *rotsprite = patch->rotated;
 
-		// The second half of this array contains the flipped rotations.
+
 		for (i = 0; i < rotsprite->angles * 2; i++)
 		{
 			if (rotsprite->patches[i])
@@ -221,9 +290,9 @@ void *Patch_AllocateHardwarePatch(patch_t *patch)
 	}
 	else
 	{
-		/* The zone allocator may purge the mipmap independently while the
-		 * containing hardware patch is still resident. Repair that partial
-		 * cache state before callers dereference grPatch->mipmap. */
+
+
+
 		GLPatch_t *grPatch = (GLPatch_t *)patch->hardware;
 		if (!grPatch->mipmap)
 			grPatch->mipmap = Z_Calloc(sizeof(GLMipmap_t), PU_HWRPATCHINFO, &grPatch->mipmap);

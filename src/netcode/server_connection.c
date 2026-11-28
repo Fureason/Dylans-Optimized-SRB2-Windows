@@ -51,12 +51,12 @@ consvar_t cv_joindelay = CVAR_INIT ("joindelay", "10", CV_SAVE|CV_NETVAR, joinde
 static CV_PossibleValue_t rejointimeout_cons_t[] = {{1, "MIN"}, {60 * FRACUNIT, "MAX"}, {0, "Off"}, {0, NULL}};
 consvar_t cv_rejointimeout = CVAR_INIT ("rejointimeout", "2", CV_SAVE|CV_NETVAR|CV_FLOAT, rejointimeout_cons_t, NULL);
 
-/* A joining client normally receives XD_ADDPLAYER through the regular tic
- * stream and immediately answers with XD_NAMEANDCOLOR.  If that one mapping is
- * missed, the connection can otherwise look alive while the client has no
- * usable local player (the classic blue body/green icon/no-chat symptom).
- * These counters let the stock 2.2.15 messages repair that state without
- * changing the network protocol. */
+
+
+
+
+
+
 static tic_t assignmentreplaytime[MAXNETNODES];
 static tic_t playerconfigrepairnext[MAXPLAYERS];
 static UINT8 playerconfigrepairattempts[MAXPLAYERS];
@@ -192,9 +192,9 @@ static void SV_SendServerInfo(INT32 node, tic_t servertime)
 		netbuffer->u.serverinfo.actnum = mapheaderinfo[gamemap-1]->actnum;
 
 	const char *httpurl = cv_httpsource.string;
-	/* The packet field includes its terminator.  strlcpy both documents that
-	 * limit and avoids the old MAX_MIRROR_LENGTH + 1 snprintf size at the
-	 * exact boundary. */
+
+
+
 	strlcpy(netbuffer->u.serverinfo.httpsource, httpurl,
 		sizeof netbuffer->u.serverinfo.httpsource);
 
@@ -344,9 +344,9 @@ static void SV_QueuePlayerAssignment(SINT8 node, INT32 playernum,
 	SendNetXCmd(XD_ADDPLAYER, &buf, p - buf);
 }
 
-/* Replay an existing assignment at most once every two seconds.  XD_ADDPLAYER
- * already exists in vanilla 2.2.15, so both stock and optimized clients can
- * consume this recovery. */
+
+
+
 static boolean SV_ReplayPlayerAssignments(SINT8 node)
 {
 	tic_t now;
@@ -451,9 +451,9 @@ void SV_JoinStateTicker(void)
 			continue;
 		}
 
-		/* Color zero is deliberately inaccessible to network players.  It is
-		 * therefore a reliable sign that the player's initial configuration
-		 * never completed, rather than a cosmetic choice made by an add-on. */
+
+
+
 		if (players[i].skincolor != SKINCOLOR_NONE
 		&& players[i].skincolor < numskincolors)
 		{
@@ -470,7 +470,7 @@ void SV_JoinStateTicker(void)
 			continue;
 		}
 
-		/* Give slow downloads and the normal config round trip plenty of time. */
+
 		if (players[i].jointime < 5*TICRATE)
 			continue;
 		if (playerconfigrepairnext[i] && now < playerconfigrepairnext[i])
@@ -485,11 +485,11 @@ void SV_JoinStateTicker(void)
 				D_WriteJoinStateReport("server-missing-player-config", i,
 					(SINT8)node, 0);
 
-			/* Replaying XD_ADDPLAYER repairs a missing local mapping, but it travels
-			 * through the shared tic-command stream. A connected optimized client
-			 * treats a duplicate reliable PT_SERVERCFG as an idempotent request to
-			 * resend its own skin/color command. Stock clients safely ignore it and
-			 * retain the assignment-replay fallback below. */
+
+
+
+
+
 			if (!Net_HasPendingReliablePacket(node, PT_SERVERCFG))
 				requested = SV_SendServerConfig(node);
 			replayed = SV_ReplayPlayerAssignments((SINT8)node);
@@ -616,21 +616,21 @@ void PT_ClientJoin(SINT8 node)
 	if (client)
 		return;
 
-	// A client keeps sending PT_CLIENTJOIN until PT_SERVERCFG reaches it.  The
-	// stock server used to silently discard those retries after marking the
-	// node in-game, which could leave the client on "Requesting to join..."
-	// indefinitely when the first configuration packet was delayed or missed.
-	// PT_ServerCFG is only acted on while the client is waiting for it, so
-	// resending it is idempotent for clients that already completed the join.
+
+
+
+
+
+
 	if (netnodes[node].ingame)
 	{
 		const boolean hasplayerslot = (netnodes[node].player >= 0
 			|| netnodes[node].player2 >= 0);
 
-		/* A previous attempt that marked the node in-game but never assigned a
-		 * player cannot be repaired by resending PT_SERVERCFG: there is no player
-		 * for the client to become. Fully discard that half-join so the next
-		 * one-second client retry starts cleanly. */
+
+
+
+
 		if (!hasplayerslot)
 		{
 			DEBFILE(va("discarding half-connected joining node %d\n", node));
@@ -639,10 +639,10 @@ void PT_ClientJoin(SINT8 node)
 			return;
 		}
 
-		/* The first reliable config retransmits itself until acknowledged. Do not
-		 * queue another copy for every application-level join retry; duplicate
-		 * configs could fill the sender window and delay the very handshake they
-		 * were intended to rescue. */
+
+
+
+
 		if (Net_HasPendingReliablePacket(node, PT_SERVERCFG))
 		{
 			DEBFILE(va("server config still pending for joining node %d\n", node));
@@ -650,8 +650,8 @@ void PT_ClientJoin(SINT8 node)
 		else if (SV_SendServerConfig(node))
 		{
 			DEBFILE(va("resent server config to joining node %d\n", node));
-			/* A connected optimized client uses the same join request as a
-			 * protocol-compatible request to replay a missing player mapping. */
+
+
 			if (SV_ReplayPlayerAssignments(node))
 				DEBFILE(va("replayed player assignment for joining node %d\n", node));
 		}
@@ -668,9 +668,9 @@ void PT_ClientJoin(SINT8 node)
 		strlcpy(names[i], netbuffer->u.clientcfg.names[i], MAXPLAYERNAME + 1);
 
 	rejoinernum = FindRejoinerNum(node);
-	/* A reconnect can return through a differently formatted address (most
-	 * often after IPv4/IPv6 fallback). Reclaim an exact-name timed-out body
-	 * instead of creating Boba/Bob/Bo duplicate players and default Sonics. */
+
+
+
 	if (rejoinernum == -1 && numplayers == 1)
 		rejoinernum = FindRejoinerNumByName(names[0]);
 
@@ -694,10 +694,10 @@ void PT_ClientJoin(SINT8 node)
 
 	if (!SV_SendServerConfig(node))
 	{
-		// Running out of reliable-packet slots is temporary.  Leave the network
-		// address open and roll back only the game-node state; the client's next
-		// join request will retry cleanly.  Sending a refusal after ResetNode used
-		// to produce the misleading "SOCK_Send ... (No address)" error.
+
+
+
+
 		ResetNode(node);
 		DEBFILE(va("server config busy for node %d; waiting for join retry\n", node));
 		return;
@@ -746,6 +746,9 @@ void PT_AskInfo(SINT8 node)
 	if (server && serverrunning)
 	{
 		SV_SendServerInfo(node, (tic_t)LONG(netbuffer->u.askinfo.time));
+#ifdef MASTERSERVER
+		MS_RecordHostProbe(node);
+#endif
 		SV_SendPlayerInfo(node); // Send extra info
 	}
 	Net_CloseConnection(node);

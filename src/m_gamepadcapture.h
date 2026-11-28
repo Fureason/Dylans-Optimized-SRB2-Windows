@@ -1,4 +1,4 @@
-// SONIC ROBO BLAST 2 -- shared controller setup capture, GPLv2.
+
 #ifndef __M_GAMEPADCAPTURE_H__
 #define __M_GAMEPADCAPTURE_H__
 
@@ -36,8 +36,8 @@ static void M_GPCaptureInit(gp_capture_t *capture, boolean paired, UINT32 mask,
 	}
 }
 
-/* Poll actual device values, rather than letting menu arrow-key translation
- * turn a stick into an unrelated button binding. Save only after release. */
+
+
 static void M_GPCaptureSample(gp_capture_t *capture, const INT32 *values)
 {
 	INT32 i, best = -1, peak = 0, second = 0;
@@ -72,7 +72,7 @@ static void M_GPCaptureSample(gp_capture_t *capture, const INT32 *values)
 		if (strength > peak) { second = peak; peak = strength; best = i; }
 		else if (strength > second) second = strength;
 	}
-	/* Ignore drift and ambiguous diagonal motion. */
+
 	if (best < 0 || peak < GP_CAPTURE_THRESHOLD || peak * 4 < second * 5) return;
 	i = values[best] > capture->center[best] ? best + 1 : -best - 1;
 	if (!capture->paired)

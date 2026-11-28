@@ -20,6 +20,7 @@
 #include "r_portal.h"
 #include "r_defs.h"
 #include "r_skins.h"
+#include "m_vector.h"
 
 // --------------
 // SPRITE LOADING
@@ -116,6 +117,15 @@ typedef struct
 
 void R_DrawMasked(maskcount_t* masks, INT32 nummasks);
 
+
+typedef struct
+{
+	double rollcos, rollsin, pitchcos, pitchsin;
+} mapspritetilt_t;
+
+boolean R_GetMapSpriteTilt(mobj_t *thing, mapspritetilt_t *tilt);
+void R_OrientMapSpritePoint(const mapspritetilt_t *tilt, double right, double up, dvector3_t *point);
+
 // ----------
 // VISSPRITES
 // ----------
@@ -148,6 +158,7 @@ typedef enum
 	SC_SHEAR      = 1<<12,
 	SC_SPLAT      = 1<<13,
 	SC_BBOX       = 1<<14,
+	SC_MAPTILT    = 1<<15,
 	// masks
 	SC_CUTMASK    = SC_TOP|SC_BOTTOM|SC_NOTVISIBLE,
 	SC_FLAGMASK   = ~SC_CUTMASK
@@ -167,6 +178,10 @@ typedef struct vissprite_s
 	mobj_t *mobj; // for easy access
 
 	INT32 x1, x2;
+
+
+	dvector3_t mapquad[3];
+	double mapnear;
 
 	fixed_t gx, gy; // for line side calculation
 	fixed_t gz, gzt; // global bottom/top for silhouette clipping

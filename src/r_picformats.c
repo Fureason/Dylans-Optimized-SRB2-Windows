@@ -12,9 +12,9 @@
 /// \file  r_picformats.c
 /// \brief Picture generation.
 
-/* r_defs.h makes the optional rotated-sprite fields part of patch_t only when
- * ROTSPRITE is already defined.  Load the build feature definitions first so
- * this translation unit sees the same patch layout as r_patch.c. */
+
+
+
 #include "doomdef.h"
 
 #include "byteptr.h"
@@ -57,43 +57,44 @@
 #endif
 
 #ifdef PICTURE_PNG_USELOOKUP
-static colorlookup_t png_colorlookup;
+static colorlookup_t png_colorlookup[2];
 #elif defined(HAVE_PNG)
-/* Exact RGB memoization for PNG-to-software conversion. Large decorative
- * sprites repeat many colours; scanning all 256 palette entries per repeated
- * pixel made their first appearance expensive even in OpenGL. */
-static struct
+
+
+
+typedef struct
 {
 	RGBA_t palette[256];
 	UINT32 keys[65536];
 	UINT8 values[65536];
 	boolean initialized;
-} png_exactlookup;
+} png_exactlookup_t;
 
-static void Picture_InitPNGExactLookup(void)
+static png_exactlookup_t png_colorlookup[2];
+
+static void Picture_InitPNGExactLookup(png_exactlookup_t *lookup, RGBA_t *palette)
 {
-	if (!png_exactlookup.initialized
-	|| memcmp(png_exactlookup.palette, pMasterPalette, sizeof png_exactlookup.palette))
+	if (!lookup->initialized || memcmp(lookup->palette, palette, sizeof lookup->palette))
 	{
-		memcpy(png_exactlookup.palette, pMasterPalette, sizeof png_exactlookup.palette);
-		memset(png_exactlookup.keys, 0, sizeof png_exactlookup.keys);
-		png_exactlookup.initialized = true;
+		memcpy(lookup->palette, palette, sizeof lookup->palette);
+		memset(lookup->keys, 0, sizeof lookup->keys);
+		lookup->initialized = true;
 	}
 }
 
-static UINT8 Picture_PNGNearestColor(UINT8 r, UINT8 g, UINT8 b)
+static UINT8 Picture_PNGNearestColor(png_exactlookup_t *lookup, UINT8 r, UINT8 g, UINT8 b)
 {
-	/* Zero is the empty key, including for pure black. Hash collisions only
-	 * evict a cached result; the complete RGB key is always compared. */
+
+
 	const UINT32 key = 1u + ((UINT32)r | ((UINT32)g << 8) | ((UINT32)b << 16));
 	const UINT32 slot = (key * 2654435761u) >> 16;
-	if (png_exactlookup.keys[slot] != key)
+	if (lookup->keys[slot] != key)
 	{
-		png_exactlookup.values[slot] = NearestPaletteColor(r, g, b,
-			png_exactlookup.palette);
-		png_exactlookup.keys[slot] = key;
+		lookup->values[slot] = NearestPaletteColor(r, g, b,
+			lookup->palette);
+		lookup->keys[slot] = key;
 	}
-	return png_exactlookup.values[slot];
+	return lookup->values[slot];
 }
 #endif
 
@@ -400,10 +401,10 @@ void *Picture_PatchConvert(
 		}
 	}
 
-	/* Keep construction and destruction in agreement even if patch_t gains more
-	 * optional trailing fields later.  The old local allocation was compiled as
-	 * 0x58 bytes while Patch_Free expected 0x68, so texture data beyond the short
-	 * allocation was mistaken for a rotated-sprite pointer. */
+
+
+
+
 	patch_t *out = Patch_Create((INT16)inwidth, (INT16)inheight);
 
 	out->width = inwidth;
@@ -847,12 +848,12 @@ boolean Picture_IsFlatFormat(pictureformat_t format)
 	return (format == PICFMT_FLAT || format == PICFMT_FLAT16 || format == PICFMT_FLAT32);
 }
 
-/** Returns true if the lump is a valid Doom patch.
-  *
-  * \param patch Input patch.
-  * \param picture Input patch size.
-  * \return True if the input patch is valid.
-  */
+
+
+
+
+
+
 boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size)
 {
 	const UINT8 *data;
@@ -874,7 +875,7 @@ boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size)
 	if (!VALID_PATCH_LUMP_SIZE(size, width))
 		return false;
 
-	// All columns must begin after the column directory and remain in the lump.
+
 	for (INT16 x = 0; x < width; x++)
 	{
 		UINT32 ofs = LONG(patch->columnofs[x]);
@@ -883,10 +884,10 @@ boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size)
 		if (ofs < FIRST_PATCH_LUMP_COLUMN(width) || (size_t)ofs >= size)
 			return false;
 
-		/* A column is a sequence of four-byte-overhead posts followed by a
-		 * 0xff terminator. Validate the complete sequence here, not merely its
-		 * first offset, so malformed add-on graphics never reach the unchecked
-		 * post walkers used by the hot renderer paths. */
+
+
+
+
 		post = data + ofs;
 		for (;;)
 		{
@@ -920,48 +921,22 @@ boolean Picture_CheckIfDoomPatch(softwarepatch_t *patch, size_t size)
   */
 void *Picture_TextureToFlat(size_t texnum)
 {
-	texture_t *texture;
-
-	UINT8 *converted;
-	size_t flatsize;
-	UINT8 *desttop, *dest, *deststop;
-	UINT8 *source;
-
 	if (texnum >= (unsigned)numtextures)
 		I_Error("Picture_TextureToFlat: invalid texture number!");
 
-	// Check the texture cache
-	// If the texture's not there, it'll be generated right now
-	texture = textures[texnum];
+	const texture_t *texture = textures[texnum];
+	const size_t width = texture->width;
+	const size_t height = texture->height;
+	UINT8 *flat = Z_Malloc(width * height, PU_STATIC, NULL);
 	R_CheckTextureCache(texnum);
 
-	// Allocate the flat
-	flatsize = texture->width * texture->height;
-	converted = Z_Malloc(flatsize, PU_STATIC, NULL);
-	memset(converted, TRANSPARENTPIXEL, flatsize);
-
-	// Now we're gonna write to it
-	desttop = converted;
-	deststop = desttop + flatsize;
-
-	for (size_t col = 0; col < (size_t)texture->width; col++, desttop++)
+	for (size_t x = 0; x < width; x++)
 	{
-		column_t *column = (column_t *)R_GetColumn(texnum, col);
-		for (unsigned i = 0; i < column->num_posts; i++)
-		{
-			post_t *post = &column->posts[i];
-			dest = desttop + (post->topdelta * texture->width);
-			source = column->pixels + post->data_offset;
-			for (size_t ofs = 0; dest < deststop && ofs < post->length; ofs++)
-			{
-				if (source[ofs] != TRANSPARENTPIXEL)
-					*dest = source[ofs];
-				dest += texture->width;
-			}
-		}
+		const UINT8 *column = R_GetSolidTextureColumn(texnum, x);
+		for (size_t y = 0; y < height; y++)
+			flat[y * width + x] = column[y];
 	}
-
-	return converted;
+	return flat;
 }
 
 /** Returns true if the lump is a valid PNG.
@@ -988,10 +963,10 @@ static boolean Picture_PNGDimensionsAreSafe(UINT32 width, UINT32 height)
 		&& (UINT64)width * (UINT64)height <= (UINT64)MAX_PNG_PIXELS;
 }
 
-/** Reads PNG dimensions directly from its fixed IHDR header.
-  * This avoids initializing libpng and inflating the entire image when only
-  * its width and height are needed while building startup texture tables.
-  */
+
+
+
+
 boolean Picture_PNGDimensionsFromHeader(const UINT8 *png, size_t size, INT32 *width, INT32 *height)
 {
 	UINT32 w, h;
@@ -1053,8 +1028,8 @@ static int PNG_ChunkReader(png_structp png_ptr, png_unknown_chunkp chonk)
 	(void)png_ptr;
 	if (!memcmp(chonk->name, chunkname, 4))
 	{
-		/* The SRB2 grAb offset chunk is exactly two big-endian INT32s.  Do
-		 * not allocate an attacker-controlled unknown chunk just to read it. */
+
+
 		if (chonk->size != 8)
 			return 1;
 		memcpy(chunk.name, chonk->name, 4);
@@ -1230,12 +1205,12 @@ static png_bytep *PNG_Read(
 			}
 		}
 
-		/* An exact SRB2 palette can stay indexed even when it has a tRNS
-		 * table. Older code expanded those images to RGBA and then performed
-		 * an expensive nearest-colour lookup for every pixel to recover the
-		 * indices it already had. Keep the alpha table beside the indices so
-		 * both the software patch and hardware RGBA copy preserve the same
-		 * transparency without that round trip. */
+
+
+
+
+
+
 		if (usepal)
 		{
 			png_uint_32 result = png_get_tRNS(png_ptr, png_info_ptr, &trans, &num_trans, NULL);
@@ -1333,6 +1308,7 @@ static void *Picture_PNGConvertInternal(
 	png_uint_32 x, y;
 	png_bytep row;
 	boolean palette = false;
+	const boolean use_key = (flags & PICFLAGS_USE_TRANSPARENTPIXEL) != 0;
 	UINT8 palette_alpha[256];
 	png_bytep *row_pointers = NULL;
 	png_uint_32 width, height;
@@ -1363,10 +1339,33 @@ static void *Picture_PNGConvertInternal(
 	if (row_pointers == NULL)
 		return NULL;
 
-	/* A hardware patch needs the original RGBA image as well as SRB2's
-	 * paletted software columns.  Produce both from this one libpng inflate;
-	 * decoding the same multi-megapixel image again was the largest first-view
-	 * hitch in PNG-heavy maps. */
+	if (use_key)
+	{
+		if (palette)
+			palette_alpha[TRANSPARENTPIXEL] = 0;
+		else
+		{
+			const RGBA_t key = pMasterPalette[TRANSPARENTPIXEL];
+
+
+
+			for (y = 0; y < height; y++)
+			{
+				row = row_pointers[y];
+				for (x = 0; x < width; x++)
+				{
+					png_bytep px = &row[x * 4];
+					if (px[0] == key.s.red && px[1] == key.s.green && px[2] == key.s.blue)
+						px[3] = 0;
+				}
+			}
+		}
+	}
+
+
+
+
+
 	if (rgbaout)
 	{
 		RGBA_t *rgba = Z_Calloc((size_t)width * (size_t)height
@@ -1432,12 +1431,29 @@ static void *Picture_PNGConvertInternal(
 		memset(flat, TRANSPARENTPIXEL, (width * height));
 
 #ifdef PICTURE_PNG_USELOOKUP
-	if (outbpp != PICDEPTH_32BPP)
-		InitColorLUT(&png_colorlookup, pMasterPalette, false);
+	colorlookup_t *lookup = &png_colorlookup[use_key];
 #else
-	if (outbpp != PICDEPTH_32BPP)
-		Picture_InitPNGExactLookup();
+	png_exactlookup_t *lookup = &png_colorlookup[use_key];
 #endif
+	if (outbpp != PICDEPTH_32BPP && !palette)
+	{
+		RGBA_t opaque_palette[256];
+		RGBA_t *colors = pMasterPalette;
+
+		if (use_key)
+		{
+
+
+			memcpy(opaque_palette, colors, sizeof opaque_palette);
+			opaque_palette[TRANSPARENTPIXEL] = opaque_palette[0];
+			colors = opaque_palette;
+		}
+#ifdef PICTURE_PNG_USELOOKUP
+		InitColorLUT(lookup, colors, false);
+#else
+		Picture_InitPNGExactLookup(lookup, colors);
+#endif
+	}
 
 	if (outbpp == PICDEPTH_32BPP)
 	{
@@ -1513,9 +1529,9 @@ static void *Picture_PNGConvertInternal(
 					if (alpha)
 					{
 #ifdef PICTURE_PNG_USELOOKUP
-						UINT8 palidx = GetColorLUT(&png_colorlookup, red, green, blue);
+						UINT8 palidx = GetColorLUT(lookup, red, green, blue);
 #else
-						UINT8 palidx = Picture_PNGNearestColor(red, green, blue);
+						UINT8 palidx = Picture_PNGNearestColor(lookup, red, green, blue);
 #endif
 						outflat[((y * width) + x)] = (0xFF << 8) | palidx;
 					}
@@ -1558,9 +1574,9 @@ static void *Picture_PNGConvertInternal(
 					if (alpha)
 					{
 #ifdef PICTURE_PNG_USELOOKUP
-						UINT8 palidx = GetColorLUT(&png_colorlookup, red, green, blue);
+						UINT8 palidx = GetColorLUT(lookup, red, green, blue);
 #else
-						UINT8 palidx = Picture_PNGNearestColor(red, green, blue);
+						UINT8 palidx = Picture_PNGNearestColor(lookup, red, green, blue);
 #endif
 						outflat[((y * width) + x)] = palidx;
 					}

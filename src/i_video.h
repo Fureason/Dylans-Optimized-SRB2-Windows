@@ -69,6 +69,12 @@ INT32 VID_NumModes(void);
 */
 INT32 VID_GetModeForSize(INT32 w, INT32 h);
 
+#if defined(HAVE_SDL) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+
+boolean VID_GetFixedOutputSize(INT32 *width, INT32 *height);
+boolean VID_ModeHasFitBars(INT32 outputwidth, INT32 outputheight, INT32 renderwidth, INT32 renderheight);
+#endif
+
 
 /**	\brief	The VID_SetMode function
 
@@ -151,8 +157,11 @@ UINT32 I_GetRefreshRate(void);
 boolean I_VSyncProvidesPacing(void);
 boolean I_CompositorProvidesPacing(void);
 
-/** True when a frame interval overlapped Windows' modal title-bar move/resize
- * loop. This lets diagnostics distinguish an OS-managed drag from engine work. */
+
+
 boolean I_WindowManagerBlockedDuring(precise_t started, precise_t finished);
+#if defined(_WIN32) && defined(HAVE_SDL)
+void I_RunPendingWindowMove(void (*frame)(boolean));
+#endif
 
 #endif

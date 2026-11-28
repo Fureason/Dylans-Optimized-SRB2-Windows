@@ -3301,7 +3301,10 @@ static int lib_sStartSound(lua_State *L)
 		if (hud_running || hook_cmd_running)
 			origin = NULL;	// HUD rendering and CMD building startsound shouldn't have an origin, just remove it instead of having a retarded error.
 
-		S_StartSound(origin, sound_id);
+		if (player && (!origin || origin == player->mo))
+			S_StartPlayerSound(origin, sound_id);
+		else
+			S_StartSound(origin, sound_id);
 	}
 	return 0;
 }
@@ -3327,7 +3330,12 @@ static int lib_sStartSoundAtVolume(lua_State *L)
 			return LUA_ErrInvalid(L, "mobj_t/sector_t");
 
 	if (!player || P_IsLocalPlayer(player))
-		S_StartSoundAtVolume(origin, sound_id, volume);
+	{
+		if (player && (!origin || origin == player->mo))
+			S_StartPlayerSoundAtVolume(origin, sound_id, volume);
+		else
+			S_StartSoundAtVolume(origin, sound_id, volume);
+	}
 	return 0;
 }
 

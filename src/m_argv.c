@@ -132,7 +132,7 @@ void M_PushSpecialParameters(void)
 }
 
 /// \brief max args
-/* Leave ample room for large response-file and add-on sessions. */
+
 #define MAXARGVS 8192
 
 /**	\brief the M_FindResponseFile function

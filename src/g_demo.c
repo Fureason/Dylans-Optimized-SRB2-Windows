@@ -2001,7 +2001,7 @@ void G_DeferedPlayDemo(const char *name)
 void G_DoPlayDemo(char *defdemoname)
 {
 	UINT8 i;
-	lumpnum_t l;
+	lumpnum_t l = LUMPERROR;
 	char skin[17],color[MAXCOLORNAME+1],*n,*pdemoname;
 	UINT8 version,subversion,charability,charability2,thrustfactor,accelstart,acceleration;
 	pflags_t pflags;
@@ -2274,7 +2274,10 @@ void G_DoPlayDemo(char *defdemoname)
 	memset(&oldcmd,0,sizeof(oldcmd));
 	memset(&oldghost,0,sizeof(oldghost));
 
-	if (VERSION != version || SUBVERSION != subversion)
+
+
+	if ((VERSION != version || SUBVERSION != subversion)
+		&& !(titledemo && l != LUMPERROR && WADFILENUM(l) < mainwads))
 		CONS_Alert(CONS_WARNING, M_GetText("Demo version does not match game version. Desyncs may occur.\n"));
 
 	// didn't start recording right away.

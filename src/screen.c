@@ -86,6 +86,11 @@ static void SCR_ChangeFullscreen(void);
 
 consvar_t cv_fullscreen = CVAR_INIT ("fullscreen", "Yes", CV_SAVE|CV_CALL, CV_YesNo, SCR_ChangeFullscreen);
 
+#if defined(HAVE_SDL) && !defined(__ANDROID__)
+static CV_PossibleValue_t fullscreen_scale_cons_t[] = {{0, "Fit"}, {1, "Fill"}, {0, NULL}};
+consvar_t cv_fullscreenscale = CVAR_INIT ("fullscreenscale", "Fill", CV_SAVE, fullscreen_scale_cons_t, NULL);
+#endif
+
 // =========================================================================
 //                           SCREEN VARIABLES
 // =========================================================================
@@ -209,12 +214,12 @@ void SCR_SetMode(void)
 	SCR_SetDrawFuncs();
 
 #ifdef HWRENDER
-	/* Renderer-specific level caches are separate. Rebuild the prioritized
-	 * graphics queue during either switch direction, rather than letting the
-	 * first live frames discover large walls, flats, and FOF textures. A return
-	 * to the still-current retained OpenGL level is the exception: its uploaded
-	 * cache and geometry never left the persistent SDL context, so rebuilding
-	 * and immediately prewarming the queue only recreates the switch pause. */
+
+
+
+
+
+
 	if (changing_level_renderer && rendermode == requested_renderer && precache
 	&& (rendermode == render_soft
 		|| (rendermode == render_opengl
@@ -234,7 +239,7 @@ void SCR_SetMode(void)
 	setmodeneeded = 0;
 	setrenderneeded = 0;
 
-	// A display-driver pause must not immediately look like a dead connection.
+
 	if (netgame)
 		Net_RefreshTimeouts();
 #if defined(_WIN32) && !defined(DEDICATED)
@@ -345,6 +350,12 @@ void SCR_CheckDefaultMode(void)
 			CONS_Alert(CONS_WARNING, "Invalid resolution given, defaulting to base resolution\n");
 	}
 
+#if defined(HAVE_SDL) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+
+	if (!setmodeneeded)
+		setmodeneeded = VID_GetModeForSize(BASEVIDWIDTH, BASEVIDHEIGHT) + 1;
+#endif
+
 	if (cv_renderer.value != (signed)rendermode)
 	{
 		if (chosenrendermode == render_none) // nothing set at command line
@@ -409,11 +420,11 @@ void SCR_ChangeRenderer(void)
 		return;
 	}
 
-	/* SDL keeps the same OpenGL context alive while Software uses it for the
-	 * final screen blit.  Keep the already-uploaded level cache as well when
-	 * retention is enabled; discarding it here made the return to OpenGL upload
-	 * the whole current map again and stall for up to a second. Map, palette,
-	 * WAD and true-colour changes already invalidate their affected entries. */
+
+
+
+
+
 	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED)
 	&& !cv_glretaintextures.value)
 		HWR_ClearAllTextures();
@@ -485,7 +496,7 @@ void SCR_DisplayTicRate(void)
 	UINT32 cap = R_GetFramerateCap();
 	double fps = round(averageFPS);
 
-	if (gamestate == GS_NULL)
+	if (gamestate == GS_NULL || !cv_translucenthud.value)
 		return;
 
 	if (cap > 0)

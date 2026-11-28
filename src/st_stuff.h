@@ -40,6 +40,7 @@ void ST_changeDemoView(void);
 
 void ST_UnloadGraphics(void);
 void ST_LoadGraphics(void);
+void ST_RefreshAddonGraphics(void);
 
 // face load graphics, called when skin changes
 void ST_LoadFaceGraphics(INT32 skinnum);

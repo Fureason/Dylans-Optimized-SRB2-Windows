@@ -56,7 +56,7 @@ EXPORT void HWRAPI(FlushScreenTextures) (void);
 EXPORT void HWRAPI(DoScreenWipe) (int wipeStart, int wipeEnd, FSurfaceInfo *surf, FBITFIELD polyFlags);
 EXPORT void HWRAPI(DrawScreenTexture) (int tex, FSurfaceInfo *surf, FBITFIELD polyflags, FBOOLEAN clear);
 EXPORT void HWRAPI(MakeScreenTexture) (int tex);
-EXPORT void HWRAPI(DrawScreenFinalTexture) (int tex, int width, int height);
+EXPORT void HWRAPI(DrawScreenFinalTexture)(int tex, int x, int y, int width, int height);
 
 #define SCREENVERTS 10
 EXPORT void HWRAPI(PostImgRedraw) (float points[SCREENVERTS][SCREENVERTS][2]);

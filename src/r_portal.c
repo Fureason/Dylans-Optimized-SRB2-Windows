@@ -144,10 +144,10 @@ static void Portal_GetViewpointForLine(portal_t *portal, line_t *start, line_t *
 	} dest_c, start_c;
 
 	// looking glass center
-	/* Fixed-point map coordinates can exceed +/-16384 map units. Adding two
-	 * endpoints in 32 bits overflowed before the division, sending the virtual
-	 * camera to the wrong side of large maps and producing the dramatic portal
-	 * cutoff/split seen in software mode. */
+
+
+
+
 	start_c.x = (fixed_t)(((INT64)start->v1->x + start->v2->x) / 2);
 	start_c.y = (fixed_t)(((INT64)start->v1->y + start->v2->y) / 2);
 
@@ -248,10 +248,10 @@ static boolean TrimVisplaneBounds (const visplane_t* plane, INT16* start, INT16*
 	}
 
 
-	/* The original right-edge test mixed bottom[end-1] with top[start]. That
-	 * could retain empty garbage columns or collapse an angled portal based on
-	 * an unrelated pixel at the opposite edge. Test one column consistently,
-	 * with the bounds check first just like the corrected left-edge loop. */
+
+
+
+
 	while (*start < *end && plane->bottom[*end - 1] == 0
 	&& plane->top[*end - 1] == 65535)
 	{
@@ -266,38 +266,12 @@ static boolean TrimVisplaneBounds (const visplane_t* plane, INT16* start, INT16*
 
 static void Portal_GetViewpointForSkybox(portal_t *portal)
 {
-	portal->viewx = skyboxmo[0]->x;
-	portal->viewy = skyboxmo[0]->y;
-	portal->viewz = skyboxmo[0]->z;
+	vector3_t skypos;
+	R_GetSkyboxPosition(skyboxmo[0], viewx, viewy, viewz, &skypos);
+	portal->viewx = skypos.x;
+	portal->viewy = skypos.y;
+	portal->viewz = skypos.z;
 	portal->viewangle = viewangle + skyboxmo[0]->angle;
-
-	mapheader_t *mh = mapheaderinfo[gamemap-1];
-
-	// If a relative viewpoint exists, offset the viewpoint.
-	if (skyboxmo[1])
-	{
-		fixed_t x = 0, y = 0;
-		angle_t ang = skyboxmo[0]->angle>>ANGLETOFINESHIFT;
-
-		if (mh->skybox_scalex > 0)
-			x = (viewx - skyboxmo[1]->x) / mh->skybox_scalex;
-		else if (mh->skybox_scalex < 0)
-			x = (viewx - skyboxmo[1]->x) * -mh->skybox_scalex;
-
-		if (mh->skybox_scaley > 0)
-			y = (viewy - skyboxmo[1]->y) / mh->skybox_scaley;
-		else if (mh->skybox_scaley < 0)
-			y = (viewy - skyboxmo[1]->y) * -mh->skybox_scaley;
-
-		// Apply transform to account for the skybox viewport angle.
-		portal->viewx += FixedMul(x,FINECOSINE(ang)) - FixedMul(y,  FINESINE(ang));
-		portal->viewy += FixedMul(x,  FINESINE(ang)) + FixedMul(y,FINECOSINE(ang));
-	}
-
-	if (mh->skybox_scalez > 0)
-		portal->viewz += viewz / mh->skybox_scalez;
-	else if (mh->skybox_scalez < 0)
-		portal->viewz += viewz * -mh->skybox_scalez;
 }
 
 /** Creates a skybox portal out of a visplane.
@@ -413,7 +387,7 @@ static boolean Portal_AddSectorPortal (const visplane_t* plane)
 	// Shortcut
 	if (secportal->type == SECPORTAL_SKYBOX)
 	{
-		if (R_SkyboxEnabled() && skyboxmo[0])
+		if (R_SkyboxEnabled() && !P_MobjWasRemoved(skyboxmo[0]))
 			return Portal_AddSkybox(plane);
 		return false;
 	}
@@ -469,7 +443,7 @@ void Portal_AddPlanePortals (boolean add_skyboxes)
 	{
 		for (pl = visplanes[i]; pl; pl = pl->next)
 		{
-			/* Keep the stock 2.2.15 minimum portal width. */
+
 			if (pl->minx >= pl->maxx)
 				continue;
 
@@ -480,7 +454,7 @@ void Portal_AddPlanePortals (boolean add_skyboxes)
 				added_portal = Portal_AddSectorPortal(pl);
 
 			// Render skybox portal
-			if (!added_portal && pl->picnum == skyflatnum && add_skyboxes && skyboxmo[0])
+			if (!added_portal && pl->picnum == skyflatnum && add_skyboxes && !P_MobjWasRemoved(skyboxmo[0]))
 				added_portal = Portal_AddSkybox(pl);
 
 			// don't render this visplane anymore

@@ -57,7 +57,8 @@ static GLuint NOTEXTURE_NUM = 0;
 #define      N_PI_DEMI               (M_PIl/2.0f) //(1.5707963268f)
 
 #define      ASPECT_RATIO            (1.0f)  //(320.0f/200.0f)
-#define      FAR_CLIPPING_PLANE      32768.0f // Draw further! Tails 01-21-2001
+
+#define      FAR_CLIPPING_PLANE      131072.0f
 static float NEAR_CLIPPING_PLANE =   NZCLIP_PLANE;
 
 // **************************************************************************
@@ -74,8 +75,8 @@ static  FBITFIELD   CurrentPolyFlags;
 static FTextureInfo *TexCacheTail = NULL;
 static FTextureInfo *TexCacheHead = NULL;
 
-/* Keep lookup independent of upload order. Retained sprite/colour variants can
- * make the list large; searching it again for every map teardown was quadratic. */
+
+
 #define TEXTURE_CACHE_BUCKET_COUNT 4096u
 static FTextureInfo *TexCacheBuckets[TEXTURE_CACHE_BUCKET_COUNT];
 
@@ -165,11 +166,12 @@ static INT32 portal_scissor_active_ref = 0;
 //			These need to start at 0 and be set to their number, and be reset to 0 when deleted so that intel GPUs
 //			can know when the textures aren't there, as textures are always considered resident in their virtual memory
 static GLuint screenTextures[NUMSCREENTEXTURES] = {0};
-// Software rendering can reuse the already-valid SRB2 OpenGL context for
-// presentation. This avoids attaching an SDL software renderer to an OpenGL
-// window, which stops presenting in fullscreen on some Windows drivers.
+
+
+
 static GLuint softwareFrameTexture = 0;
 static GLint softwareFrameTextureSize = 0;
+static boolean softwareFrameRGBA;
 
 // shortcut for ((float)1/i)
 static const GLfloat byte2float[256] = {
@@ -517,8 +519,8 @@ static PFNglDeleteBuffers pglDeleteBuffers;
 typedef void (APIENTRY * PFNglBlendEquation) (GLenum mode);
 static PFNglBlendEquation pglBlendEquation;
 
-/* Core/ARB and EXT entry points have the same signature. Keep this optional
- * so older compatibility contexts can retain automatic mipmap generation. */
+
+
 typedef void (APIENTRY * PFNglGenerateMipmap) (GLenum target);
 static PFNglGenerateMipmap pglGenerateMipmap;
 
@@ -748,8 +750,8 @@ static void SetupMipmapGeneration(void)
 	const char *version = (const char *)pglGetString(GL_VERSION);
 	INT32 major = 0;
 
-	/* Resolve again for each context: an earlier context's function pointer
-	 * must not survive a renderer/video-mode switch. */
+
+
 	pglGenerateMipmap = NULL;
 	if ((version && sscanf(version, "%d", &major) == 1 && major >= 3)
 	|| (gl_extensions && isExtAvailable("GL_ARB_framebuffer_object", gl_extensions)))
@@ -1079,10 +1081,10 @@ static void StorePortalScissor(INT32 ref, FOutVector *verts, FUINT count)
 	for (i = 0; i < count; i++)
 		GLTransformToClip(verts[i].x, verts[i].y, verts[i].z, &input[i]);
 
-	/* Clip the aperture polygon at the real pitched near plane before deriving
-	 * its screen bounds. Projecting a behind-camera vertex mirrors it across
-	 * the display and makes a close, edge-on portal clear a huge unrelated
-	 * rectangle of the main view. */
+
+
+
+
 	for (i = 0; i < count; i++)
 	{
 		const portal_clipvert_t *a = &input[i];
@@ -1132,8 +1134,8 @@ static void StorePortalScissor(INT32 ref, FOutVector *verts, FUINT count)
 	if (!projected)
 		return;
 
-	/* Two guard pixels cover rasterization and MSAA samples at the aperture
-	 * boundary while still avoiding full-screen clears and fragment work. */
+
+
 	x0 = (GLint)minx;
 	y0 = (GLint)miny;
 	x1 = (GLint)maxx;
@@ -1151,7 +1153,7 @@ static void StorePortalScissor(INT32 ref, FOutVector *verts, FUINT count)
 	if (x1 > viewport[0] + viewport[2]) x1 = viewport[0] + viewport[2];
 	if (y1 > viewport[1] + viewport[3]) y1 = viewport[1] + viewport[3];
 
-	/* A recursive aperture can never affect pixels outside its parent. */
+
 	if (portal_scissor_active_ref > 0
 	&& portal_scissors[portal_scissor_active_ref].valid)
 	{
@@ -1348,9 +1350,9 @@ void Flush(void)
 	textureBufferSize = 0;
 }
 
-/* Palette flashes used to discard every uploaded texture, including large
- * true-colour PNG walls whose RGB values do not depend on SRB2's palette.
- * Preserve those uploads and invalidate only palette-derived entries. */
+
+
+
 void FlushPaletteDependentTextures(void)
 {
 	FTextureInfo *entry = TexCacheHead;
@@ -1773,9 +1775,9 @@ static void PadTransparentTextureEdges(RGBA_t *tex, INT32 w, INT32 h)
 {
 	INT32 x, y;
 
-	/* Preserve zero alpha, but borrow RGB from an adjacent solid texel. This
-	 * prevents black color from bleeding around masked midtextures when the
-	 * driver samples close to their edge. */
+
+
+
 	for (y = 0; y < h; y++)
 	{
 		for (x = 0; x < w; x++)
@@ -1864,18 +1866,18 @@ EXPORT void HWRAPI(UpdateTexture) (GLMipmap_t *pTexInfo)
 				}
 			}
 		}
-		/* Transparent world textures are forced to nearest filtering below, so
-		 * their invisible RGB neighbours can never bleed into a sample. Sprites
-		 * can still use linear filtering and retain edge padding. */
+
+
+
 		if ((pTexInfo->flags & (TF_TRANSPARENT|TF_SPRITE))
 			== (TF_TRANSPARENT|TF_SPRITE))
 			PadTransparentTextureEdges(tex, w, h);
 	}
 	else if (pTexInfo->format == GL_TEXFMT_RGBA)
 	{
-		/* Find transparent RGBA patches too. Palette rendering produces this
-		 * format directly, so it used to skip the edge padding applied by the
-		 * conversion path and could grow dark fringes with linear sampling. */
+
+
+
 		if (!(pTexInfo->flags & (TF_OPAQUE|TF_TRANSPARENT)))
 		{
 			for (i = 3; i < w*h*4; i += 4)
@@ -1954,9 +1956,9 @@ EXPORT void HWRAPI(UpdateTexture) (GLMipmap_t *pTexInfo)
 		active_mag_filter = mag_filter;
 	}
 
-	/* Masked world textures stay nearest to avoid sampling beyond their edges.
-	 * Sprites use their own requested filter; their transparent RGB has been
-	 * edge-padded above to prevent the old black outline. */
+
+
+
 	if ((pTexInfo->flags & TF_TRANSPARENT) && !(pTexInfo->flags & TF_SPRITE))
 	{
 		pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -1969,11 +1971,11 @@ EXPORT void HWRAPI(UpdateTexture) (GLMipmap_t *pTexInfo)
 		pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, active_min_filter);
 	}
 
-	/* GL_GENERATE_MIPMAP can take tens of milliseconds for an ordinary NPOT
-	 * gallery image on current drivers. Upload level zero, then explicitly
-	 * generate its mip chain when available, preserving filters and LODs. The
-	 * legacy path remains available on older OpenGL implementations. Reset
-	 * automatic generation even for an update that no longer needs mipmaps. */
+
+
+
+
+
 	if (supportMipMap)
 		pglTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP,
 			(activeMipMap && !pglGenerateMipmap) ? GL_TRUE : GL_FALSE);
@@ -2454,9 +2456,9 @@ EXPORT void HWRAPI(DrawPolygon) (FSurfaceInfo *pSurf, FOutVector *pOutVerts, FUI
 	if (portal_stencil_write_ref)
 		StorePortalScissor(portal_stencil_write_ref, pOutVerts, iNumPts);
 
-	/* Wrap overrides are temporary per polygon. SetBlend caches PolyFlags, but
-	 * DrawPolygon restores these sampler states after drawing; therefore apply
-	 * them every time even when two consecutive polygons use the same flags. */
+
+
+
 	if (PolyFlags & PF_RemoveYWrap)
 		Clamp2D(GL_TEXTURE_WRAP_T);
 	if (PolyFlags & PF_ForceWrapX)
@@ -2482,9 +2484,9 @@ EXPORT void HWRAPI(DrawIndexedTriangles) (FSurfaceInfo *pSurf, FOutVector *pOutV
 {
 	PreparePolygon(pSurf, pOutVerts, PolyFlags);
 
-	/* Match DrawPolygon's temporary sampler overrides. Indexed geometry is also
-	 * used for the cylindrical sky, whose horizontal samples wrap but whose
-	 * first/last rows must extend instead of repeating vertically. */
+
+
+
 	if (PolyFlags & PF_RemoveYWrap)
 		Clamp2D(GL_TEXTURE_WRAP_T);
 	if (PolyFlags & PF_ForceWrapX)
@@ -2555,11 +2557,11 @@ EXPORT void HWRAPI(RenderSkyDome) (gl_sky_t *sky)
 	pglEnableClientState(GL_COLOR_ARRAY);
 
 	// set transforms
-	/* The dome geometry represents view angles, so its shape must not depend on
-	 * the source texture's pixel height.  Scaling Y by height/200 turned tall
-	 * custom skies into an elongated ellipsoid: OpenGL then consumed too few
-	 * texture rows per degree and the panorama looked vertically stretched.
-	 * Texture height is already accounted for by the dome's V coordinates. */
+
+
+
+
+
 	pglRotatef(270.0f, 0.0f, 1.0f, 0.0f);
 
 	for (j = 0; j < 2; j++)
@@ -2632,9 +2634,9 @@ static void ConfigureFilterMode(INT32 value, GLint *minfilter, GLint *magfilter,
 			*mipmap = GL_TRUE;
 			break;
 		case HWD_SET_TEXTUREFILTER_SHARP:
-			/* Nearest texels within each mip level, blended between levels.
-			 * This is intentionally crisper than Nearest_Mipmap, which uses
-			 * linear texels within each level. */
+
+
+
 			*minfilter = GL_NEAREST_MIPMAP_LINEAR;
 			*magfilter = GL_NEAREST;
 			*mipmap = GL_TRUE;
@@ -2683,12 +2685,12 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 
 		case HWD_SET_TEXTUREFILTERMODE:
 			ConfigureFilterMode(Value, &min_filter, &mag_filter, &MipMap);
-			/* Filtering also changes whether an upload owns a mip chain. Flush all
-			 * GPU names so true-colour bases and their chromakey variants are
-			 * recreated together; keeping only part of that pair could leave a wall
-			 * bound to an incomplete texture and render it solid white. Decoded
-			 * system-memory pixels remain cached, so this only costs work when the
-			 * user actually changes the option. */
+
+
+
+
+
+
 			Flush();
 			break;
 
@@ -2698,7 +2700,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 			break;
 
 		case HWD_SET_TEXTUREANISOTROPICMODE:
-			/* One is the OpenGL baseline and therefore disables anisotropy. */
+
 			anisotropic_filter = Value ? min(Value,maximumAnisotropy) : 1;
 			ApplyCachedAnisotropy();
 			break;
@@ -2723,17 +2725,17 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 
 		case HWD_SET_PORTALSTENCIL:
 			portal_stencil_write_ref = 0;
-			/* Portal selection always restores ordinary world depth testing. Keep
-			 * the cached polygon flags synchronized with that direct GL change so
-			 * the next PF_NoDepthTest polygon (notably a full-aperture fog tint)
-			 * actually switches back to GL_ALWAYS instead of being rejected by the
-			 * destination view's unrelated depth values. */
+
+
+
+
+
 			pglDepthFunc(GL_LEQUAL);
 			CurrentPolyFlags &= ~PF_NoDepthTest;
 			if (Value >= 2000)
 			{
 				portal_stencil_write_ref = Value - 2000 + 1;
-				/* Add one recursive layer, but only inside its parent aperture. */
+
 				pglEnable(GL_STENCIL_TEST);
 				pglStencilMask(0xff);
 				pglStencilFunc(GL_EQUAL, Value - 2000, 0xff);
@@ -2746,8 +2748,8 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 			{
 				portal_stencil_write_ref = Value - 1000;
 				ApplyPortalScissor(0);
-				/* Add an independent top-level aperture without clearing the
-				 * other portals that were depth-clipped from the main scene. */
+
+
 				pglEnable(GL_STENCIL_TEST);
 				pglStencilMask(0xff);
 				pglStencilFunc(GL_ALWAYS, Value - 1000, 0xff);
@@ -2759,7 +2761,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 			if (Value >= 200)
 			{
 				ApplyPortalScissor(Value - 200);
-				/* Select one recursive portal layer without changing it. */
+
 				pglEnable(GL_STENCIL_TEST);
 				pglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 				pglStencilMask(0x00);
@@ -2771,7 +2773,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 			if (Value >= 100)
 			{
 				portal_stencil_write_ref = Value - 100 + 1;
-				/* Increment only where the child intersects its parent aperture. */
+
 				pglEnable(GL_STENCIL_TEST);
 				pglStencilMask(0xff);
 				pglStencilFunc(GL_EQUAL, Value - 100, 0xff);
@@ -2782,7 +2784,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 			}
 			switch (Value)
 			{
-				case 1: // Write the portal aperture into stencil value 1.
+				case 1:
 					portal_stencil_write_ref = 1;
 					ApplyPortalScissor(0);
 					pglEnable(GL_STENCIL_TEST);
@@ -2795,7 +2797,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 					pglColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 					break;
 
-				case 2: // Draw only through the marked portal aperture.
+				case 2:
 					ApplyPortalScissor(1);
 					pglEnable(GL_STENCIL_TEST);
 					pglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -2805,7 +2807,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 					pglDepthFunc(GL_LEQUAL);
 					break;
 
-				case 3: // Draw only outside every recursive portal layer.
+				case 3:
 					ApplyPortalScissor(0);
 					pglEnable(GL_STENCIL_TEST);
 					pglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -2814,7 +2816,7 @@ EXPORT void HWRAPI(SetSpecialState) (hwdspecialstate_t IdState, INT32 Value)
 					pglStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 					break;
 
-				case 4: // Draw through the union of all portal recursion layers.
+				case 4:
 					ApplyPortalScissor(0);
 					pglEnable(GL_STENCIL_TEST);
 					pglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -3417,12 +3419,12 @@ EXPORT void HWRAPI(SetTransform) (FTransform *stransform)
 	pglMatrixMode(GL_PROJECTION);
 	pglLoadIdentity();
 
-	/* Software projects wall spans at integer screen coordinates. OpenGL samples
-	 * their centres; align that origin without rounding the camera or vertices. */
+
+
 	if (stransform && viewport[2] > 0 && viewport[3] > 0)
 		pglTranslatef(1.0f / viewport[2], -1.0f / viewport[3], 0.0f);
 
-	// Simulate Software's y-shearing: https://zdoom.org/wiki/Y-shearing
+
 	if (shearing)
 	{
 		float fdy = stransform->viewaiming * 2;
@@ -3468,8 +3470,8 @@ EXPORT UINT32 HWRAPI(GetTextureUsed) (void)
 		tmp = tmp->next;
 	}
 
-	// The renderer API exposes a 32-bit byte count. Saturating is preferable
-	// to wrapping around and reporting a negative or deceptively small value.
+
+
 	return (res > UINT32_MAX) ? UINT32_MAX : (UINT32)res;
 }
 
@@ -3608,9 +3610,9 @@ EXPORT void HWRAPI(DrawScreenTexture)(int tex, FSurfaceInfo *surf, FBITFIELD pol
 		pglClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 	else
 	{
-		/* Portal postprocessing draws directly in clip space while the world
-		 * camera projection is still active. Preserve both matrices so the
-		 * screen quad covers the selected stencil exactly. */
+
+
+
 		pglMatrixMode(GL_PROJECTION);
 		pglPushMatrix();
 		pglLoadIdentity();
@@ -3769,23 +3771,20 @@ EXPORT void HWRAPI(MakeScreenTexture) (int tex)
 		pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		Clamp2D(GL_TEXTURE_WRAP_S);
 		Clamp2D(GL_TEXTURE_WRAP_T);
-		pglCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, texsize, texsize, 0);
+		pglTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texsize, texsize, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	}
-	else
-		pglCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, texsize, texsize);
+	pglCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, screen_width, screen_height);
 
 	tex_downloaded = screenTextures[tex];
 }
 
-EXPORT void HWRAPI(DrawScreenFinalTexture)(int tex, int width, int height)
+EXPORT void HWRAPI(DrawScreenFinalTexture)(int tex, int x, int y, int width, int height)
 {
 	float xfix, yfix;
-	float origaspect, newaspect;
-	float xoff = 1, yoff = 1; // xoffset and yoffset for the polygon to have black bars around the screen
 	FRGBAFloat clearColour;
 	INT32 texsize = 512;
 
-	float off[12];
+	const float verts[12] = {-1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -1, 1};
 	float fix[8];
 
 	// look for power of two that is large enough for the screen
@@ -3795,34 +3794,7 @@ EXPORT void HWRAPI(DrawScreenFinalTexture)(int tex, int width, int height)
 	xfix = 1/((float)(texsize)/((float)((screen_width))));
 	yfix = 1/((float)(texsize)/((float)((screen_height))));
 
-	origaspect = (float)screen_width / screen_height;
-	newaspect = (float)width / height;
-	if (origaspect < newaspect)
-	{
-		xoff = origaspect / newaspect;
-		yoff = 1;
-	}
-	else if (origaspect > newaspect)
-	{
-		xoff = 1;
-		yoff = newaspect / origaspect;
-	}
 
-	// float off[12];
-	off[0] = -xoff;
-	off[1] = -yoff;
-	off[2] = 1.0f;
-	off[3] = -xoff;
-	off[4] = yoff;
-	off[5] = 1.0f;
-	off[6] = xoff;
-	off[7] = yoff;
-	off[8] = 1.0f;
-	off[9] = xoff;
-	off[10] = -yoff;
-	off[11] = 1.0f;
-
-	// float fix[8];
 	fix[0] = 0.0f;
 	fix[1] = 0.0f;
 	fix[2] = 0.0f;
@@ -3832,7 +3804,7 @@ EXPORT void HWRAPI(DrawScreenFinalTexture)(int tex, int width, int height)
 	fix[6] = xfix;
 	fix[7] = 0.0f;
 
-	pglViewport(0, 0, width, height);
+	pglViewport(x, y, width, height);
 
 	clearColour.red = clearColour.green = clearColour.blue = 0;
 	clearColour.alpha = 1;
@@ -3843,7 +3815,7 @@ EXPORT void HWRAPI(DrawScreenFinalTexture)(int tex, int width, int height)
 	pglColor4ubv(white);
 
 	pglTexCoordPointer(2, GL_FLOAT, 0, fix);
-	pglVertexPointer(3, GL_FLOAT, 0, off);
+	pglVertexPointer(3, GL_FLOAT, 0, verts);
 
 	pglDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 	tex_downloaded = screenTextures[tex];
@@ -3859,14 +3831,12 @@ void OglDestroySoftwareFrame(void)
 	softwareFrameTextureSize = 0;
 }
 
-void OglRenderSoftwareFrame(const void *pixels, INT32 width, INT32 height,
-	INT32 outputwidth, INT32 outputheight)
+void OglRenderSoftwareFrame(const void *pixels, INT32 width, INT32 height, boolean rgba,
+	INT32 outputx, INT32 outputy, INT32 outputwidth, INT32 outputheight)
 {
 	INT32 texsize = 512;
-	float origaspect, newaspect;
-	float xoff = 1.0f, yoff = 1.0f;
 	float xfix, yfix;
-	float verts[12];
+	const float verts[12] = {-1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -1, 1};
 	float texcoords[8];
 	FRGBAFloat clearColour;
 
@@ -3886,23 +3856,23 @@ void OglRenderSoftwareFrame(const void *pixels, INT32 width, INT32 height,
 	Clamp2D(GL_TEXTURE_WRAP_S);
 	Clamp2D(GL_TEXTURE_WRAP_T);
 
-	if (softwareFrameTextureSize != texsize)
+	const GLenum format = rgba ? GL_RGBA : GL_RGB;
+	const GLenum type = rgba ? GL_UNSIGNED_BYTE : GL_UNSIGNED_SHORT_5_6_5;
+	if (softwareFrameTextureSize != texsize || (rgba && !softwareFrameRGBA))
 	{
-		pglTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texsize, texsize, 0,
-			GL_RGB, GL_UNSIGNED_SHORT_5_6_5, NULL);
+		pglTexImage2D(GL_TEXTURE_2D, 0, format, texsize, texsize, 0, format, type, NULL);
 		softwareFrameTextureSize = texsize;
+		softwareFrameRGBA = rgba;
 	}
 
-	// SDL_PIXELFORMAT_RGB565 maps directly to this upload type. Two bytes per
-	// pixel keeps a 1920x1080 frame transfer to roughly 4 MiB instead of 8 MiB.
-	pglPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-	pglTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height,
-		GL_RGB, GL_UNSIGNED_SHORT_5_6_5, pixels);
+
+	pglPixelStorei(GL_UNPACK_ALIGNMENT, rgba ? 4 : 2);
+	pglTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format, type, pixels);
 	pglPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
-	// Set the complete small state set needed by the uploader directly. The
-	// normal OpenGL setup resets both driver and cached HWR state before the
-	// hardware renderer is used again.
+
+
+
 	pglDisable(GL_DEPTH_TEST);
 	pglDisable(GL_CULL_FACE);
 	pglDisable(GL_BLEND);
@@ -3920,24 +3890,12 @@ void OglRenderSoftwareFrame(const void *pixels, INT32 width, INT32 height,
 	pglLoadIdentity();
 	pglMatrixMode(GL_MODELVIEW);
 	pglLoadIdentity();
-	pglViewport(0, 0, outputwidth, outputheight);
-
-	origaspect = (float)width / (float)height;
-	newaspect = (float)outputwidth / (float)outputheight;
-	if (origaspect < newaspect)
-		xoff = origaspect / newaspect;
-	else if (origaspect > newaspect)
-		yoff = newaspect / origaspect;
+	pglViewport(outputx, outputy, outputwidth, outputheight);
 
 	xfix = (float)width / (float)texsize;
 	yfix = (float)height / (float)texsize;
 
-	verts[0] = -xoff; verts[1] = -yoff; verts[2] = 1.0f;
-	verts[3] = -xoff; verts[4] =  yoff; verts[5] = 1.0f;
-	verts[6] =  xoff; verts[7] =  yoff; verts[8] = 1.0f;
-	verts[9] =  xoff; verts[10] = -yoff; verts[11] = 1.0f;
 
-	// Software screens are top-down; OpenGL texture rows are bottom-up.
 	texcoords[0] = 0.0f; texcoords[1] = yfix;
 	texcoords[2] = 0.0f; texcoords[3] = 0.0f;
 	texcoords[4] = xfix; texcoords[5] = 0.0f;

@@ -295,6 +295,7 @@ typedef struct UpVal {
 typedef struct CClosure {
   ClosureHeader;
   lua_CFunction f;
+  lua_UserdataNumberReader numberindex;
   TValue upvalue[1];
 } CClosure;
 

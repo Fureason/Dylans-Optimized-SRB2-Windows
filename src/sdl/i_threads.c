@@ -137,10 +137,10 @@ Worker (
 
 	th = link->data;
 
-	/* Background work such as HTTPS, UPnP discovery, screenshots and movie
-	 * finalization must yield to the game/render thread. In particular, a TLS
-	 * handshake used to refresh a listen server's master-server listing could
-	 * briefly steal enough CPU to make an uncapped client visibly hitch. */
+
+
+
+
 	SDL_SetThreadPriority(SDL_THREAD_PRIORITY_LOW);
 
 	(*th->entry)(th->userdata);
@@ -225,7 +225,7 @@ I_stop_threads (void)
  Link link, next;
  Thread thread;
  if (!SDL_AtomicCAS(&i_threads_running, 1, 0)) return;
- /* Workers stop first. Zone/WAD cleanup still needs its synchronization. */
+
  I_lock_mutex(&i_thread_pool_mutex);
  for (link = i_thread_pool; link; link = next)
  {

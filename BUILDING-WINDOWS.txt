@@ -1,18 +1,20 @@
-Dylan's Optimized SRB2 Build V5.150 - Windows source
+Dylan's Optimized SRB2 Build V1.6.0 - Windows source
 
-Use a 64-bit MinGW-w64 toolchain with GCC and GNU Make. This build has
-been checked with w64devkit 2.11.0. In PowerShell, run:
+Use a 64-bit MinGW-w64 toolchain with GCC, GNU Make, gendef, dlltool, and
+windres. This build uses w64devkit 2.11.0.
 
-    & '.\Build Windows Client.ps1'
+Pass the matching Windows release folder containing the bundled DLLs.
 
-If the toolchain is installed outside PATH:
+    & '.\Build Windows Client.ps1' -RuntimeDirectory 'C:\path\to\Windows release'
 
-    & '.\Build Windows Client.ps1' -ToolchainBin 'C:\path\to\your\toolchain\bin'
+If the toolchain is outside PATH, also pass -ToolchainBin.
 
-The script uses the compiler on PATH when no toolchain path is supplied.
-It temporarily maps a drive letter when the source path contains spaces.
-The build produces bin\srb2win64.exe and bin\srb2win64.exe.debug.
+    & '.\Build Windows Client.ps1' -RuntimeDirectory 'C:\path\to\Windows release' -ToolchainBin 'C:\path\to\toolchain\bin'
 
-To run the game, use official SRB2 2.2.15 game data and the included
-Windows runtime libraries. The repository README contains credits for
-SRB2 and the Sparkette fork, including add-ons distributed separately.
+The script temporarily maps a drive letter when the source path contains
+spaces. It builds bin\srb2win.exe and bin\srb2win.exe.debug. Keep the debug
+symbols and license notices with the release.
+
+Start with srb2win.exe. It restores missing bundled DLLs next to the
+executable before loading them. If the official SRB2 2.2.15 base game data
+is missing, it downloads and verifies the required data files.

@@ -21,7 +21,7 @@ typedef void * I_cond;
 
 void      I_start_threads (void);
 void      I_stop_threads  (void);
-/** Release SDL synchronization only after final resource/zone cleanup. */
+
 void      I_release_thread_sync(void);
 
 void      I_spawn_thread (const char *name, I_thread_fn, void *userdata);

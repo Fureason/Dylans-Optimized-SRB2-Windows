@@ -60,8 +60,6 @@ typedef UINT8 lighttable_t;
 #define CMF_FADEFULLBRIGHTSPRITES  1
 #define CMF_FOG 4
 
-#define TEXTURE_255_IS_TRANSPARENT
-
 // ExtraColormap type. Use for extra_colormaps from now on.
 typedef struct extracolormap_s
 {
@@ -885,9 +883,9 @@ typedef struct
 	post_t *posts;
 
 #ifdef HWRENDER
-	/* PNG patches keep their original RGBA pixels for the hardware renderer.
-	 * The ordinary columns above remain the authoritative paletted fallback for
-	 * software rendering, gameplay code, and compatibility with stock clients. */
+
+
+
 	RGBA_t *hardware_pixels;
 	UINT8 *hardware_palette_pixels;
 #endif
@@ -897,7 +895,7 @@ typedef struct
 
 #ifdef ROTSPRITE
 	rotsprite_t *rotated; // Rotated patches
-	size_t rotatedcachecost; // Estimated CPU + GPU bytes charged to the rotated-sprite cache
+	size_t rotatedcachecost;
 #endif
 } patch_t;
 

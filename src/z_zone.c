@@ -71,9 +71,9 @@ typedef struct memblock_s
 #define MEMORY(x) (void *)((uintptr_t)(x) + sizeof(memblock_t))
 #define MEMBLOCK(x) (memblock_t *)((uintptr_t)(x) - sizeof(memblock_t))
 
-/* Debug builds keep a small fence behind every zone allocation.  The normal
- * linked-list checks catch damaged headers, but an overrun can otherwise reach
- * the C runtime heap metadata before SRB2 can identify the owning allocation. */
+
+
+
 #ifdef PARANOIA
 #define ZONE_TAIL_GUARD_SIZE 32U
 #define ZONE_TAIL_GUARD_BYTE 0xA7U
@@ -463,11 +463,11 @@ void Z_IterateTags(INT32 lowtag, INT32 hightag, boolean (*iterfunc)(void *))
 			void *mem = MEMORY(block);
 			boolean free = iterfunc(mem);
 
-			/* The iterator callback is allowed to release allocations owned by
-			 * this block. Those allocations can be the block that was formerly
-			 * next in the global zone list, so caching next before the callback
-			 * leaves a dangling traversal pointer. Read the live link only after
-			 * the callback has finished. */
+
+
+
+
+
 			if (free)
 			{
 				memblock_t *next = block->next;

@@ -229,10 +229,10 @@ void COM_BufExecute(void)
 	INT32 quotes;
 	const boolean outermost = (com_bufexecute_depth++ == 0);
 
-	/* Config files commonly place one addfile command on each line. Keep the
-	 * resource refresh batch open through the complete outer command-buffer
-	 * drain so those adjacent files share one final rebuild. Nested executions
-	 * (aliases, Lua and SOC scripts) remain part of the same ordered batch. */
+
+
+
+
 	if (outermost)
 		P_BeginAddonBatch();
 
@@ -2100,12 +2100,12 @@ static void CV_SetCVar(consvar_t *var, const char *value, boolean stealth)
 			}
 		}
 
-		/* A command-line server is marked as a netgame before SV_SpawnServer.
-		 * Config netvars loaded during that window must be applied immediately:
-		 * queueing them in localtextcmd loses them when SV_ResetServer clears the
-		 * startup command buffer. Once the server is running, keep using the
-		 * normal synchronized net command. Clients (including remote admins)
-		 * must always send their change to the server. */
+
+
+
+
+
+
 		if ((netgame || multiplayer) && (client || serverrunning))
 		{
 			WRITEUINT16(p, var->netid);

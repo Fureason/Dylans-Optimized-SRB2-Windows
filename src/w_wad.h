@@ -85,11 +85,13 @@ typedef struct {
 	char name[9];
 	UINT8* data;
 	size_t size;
+	boolean ownsdata;
 } virtlump_t;
 
 typedef struct {
 	size_t numlumps;
 	virtlump_t* vlumps;
+	UINT8 *mapdata;
 } virtres_t;
 
 virtres_t* vres_GetMap(lumpnum_t);
@@ -130,6 +132,7 @@ typedef struct wadfile_s
 	lumpinfo_t *lumpinfo;
 	lumpcache_t *lumpcache;
 	lumpcache_t *patchcache;
+	lumpcache_t *spritepatchcache;
 	aatree_t *startfolders;
 	aatree_t *endfolders;
 	aatree_t *fullnamelumps;

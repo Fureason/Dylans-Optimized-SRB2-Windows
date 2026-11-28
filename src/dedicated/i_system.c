@@ -1043,11 +1043,7 @@ void I_OutputMsg(const char *fmt, ...)
 #endif
 
 #ifdef LOGMESSAGES
-	if (logstream)
-	{
-		fwrite(txt, len, 1, logstream);
-		fflush(logstream);
-	}
+	FIL_WriteLog(txt, len);
 #endif
 
 #if defined (_WIN32)

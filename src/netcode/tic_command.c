@@ -21,6 +21,7 @@
 #include "../g_game.h"
 #include "../i_system.h"
 #include "../i_time.h"
+#include "../m_inputlatency.h"
 #include "../byteptr.h"
 #include "../doomstat.h"
 #include "../doomtype.h"
@@ -40,9 +41,9 @@ typedef struct
 	UINT8 resyncs;
 } consistency_mismatch_tracker_t;
 
-/* A lone stale/corrupt consistency sample should not force a full savegame
- * transfer. Real simulation divergence persists into the next distinct tic,
- * so confirm it twice before resyncing or kicking the player. */
+
+
+
 static consistency_mismatch_tracker_t consistency_mismatches[MAXNETNODES];
 #define CONSISTENCY_MISMATCH_CONFIRMATIONS 2
 #define CONSISTENCY_ATTEMPT_RESET_TIME (5*60*TICRATE)
@@ -55,14 +56,14 @@ typedef struct
 	boolean seen[MAXNETNODES];
 } consistency_cluster_t;
 
-/* When several independent clients report the same checksum offset within a
- * few seconds, they agree with one another and the authoritative host is the
- * outlier. Surface that distinction instead of blaming packet loss. */
+
+
+
 static consistency_cluster_t consistency_cluster;
 
-/* Return a nearby server tic whose checksum matches the client's sample. A
- * one-tic association slip is recoverable as command delivery catches up and
- * should receive one extra confirmation before sending an entire savegame. */
+
+
+
 static SINT8 NearbyConsistencyMatch(tic_t tic, INT16 value)
 {
 	INT32 delta;
@@ -180,12 +181,12 @@ static void CheckConsistancy(SINT8 nodenum, tic_t tic)
 
 	if (tic > gametic || tic + BACKUPTICS - 1 <= gametic || gamestate != GS_LEVEL
 		|| SV_ResendingSavegameToAnyone() || node->resendingsavegame
-		/* Runtime Lua file distribution deliberately leaves peers at slightly
-		 * different points until every client has the same file and the shared
-		 * XD_LUAFILE command runs.  Treating that hand-off as a gameplay split
-		 * starts a needless savegame-resend loop and can make the transfer itself
-		 * take longer.  The per-node cooldown installed when a transfer finishes
-		 * covers the first few synchronized tics afterwards. */
+
+
+
+
+
+
 		|| luafiletransfers
 		|| node->savegameresendcooldown > I_GetTime())
 	{
@@ -196,10 +197,10 @@ static void CheckConsistancy(SINT8 nodenum, tic_t tic)
 	if (neededconsistancy == clientconsistancy)
 	{
 		tracker->samples = 0;
-		/* Do not make a player carry occasional old failures forever. Five
-		 * stable minutes earns a fresh recovery budget, while a client that
-		 * immediately diverges after every savegame still reaches the configured
-		 * resync-attempt limit instead of consuming bandwidth indefinitely. */
+
+
+
+
 		if (tracker->resyncs && tracker->lastfailuretime
 			&& I_GetTime() - tracker->lastfailuretime >= CONSISTENCY_ATTEMPT_RESET_TIME)
 			tracker->resyncs = 0;
@@ -233,7 +234,7 @@ static void CheckConsistancy(SINT8 nodenum, tic_t tic)
 	}
 
 	D_WriteConsistencyReport("server-mismatch", tic, nodenum,
-		neededconsistancy, clientconsistancy);
+		neededconsistancy, clientconsistancy, "host confirmed repeated checksum mismatches");
 	tracker->samples = 0;
 	{
 		const tic_t now = I_GetTime();
@@ -344,12 +345,12 @@ void PT_ClientCmd(SINT8 nodenum, INT32 netconsole)
 		|| netbuffer->packettype == PT_NODEKEEPALIVEMIS)
 		return;
 
-	/* Preserve SRB2's deterministic command-to-tic assignment. A client may
-	 * already have simulated its first local command for maketic when another
-	 * packet reaches the host during the same server tick. Replacing that
-	 * command makes the host and client execute different input for one tic and
-	 * eventually causes a consistency failure. Queue the second command into
-	 * the following tic, as the network protocol expects. */
+
+
+
+
+
+
 	tic_t faketic = maketic;
 	if ((netcmds[maketic % BACKUPTICS][netconsole].angleturn & TICCMD_RECEIVED)
 	&& maketic - firstticstosend < BACKUPTICS - 1)
@@ -421,8 +422,10 @@ void PT_ServerTics(SINT8 node, INT32 netconsole)
 			CL_CopyNetCommandsFromServerPacket(i, &txtpak);
 		}
 
+		if (inputlatency_recording && consoleplayer >= 0 && consoleplayer < packet->numslots)
+			M_InputLatencyServerTics(neededtic, realend);
 		neededtic = realend;
-		// A duplicate from before the gap must not cancel our resend request.
+
 		cl_packetmissed = false;
 	}
 	else
@@ -469,7 +472,8 @@ void CL_SendClientCmd(void)
 			G_MoveTiccmd(&netbuffer->u.client2pak.cmd2, &localcmds2, 1);
 		}
 
-		HSendPacket(servernode, false, 0, packetsize);
+		if (HSendPacket(servernode, false, 0, packetsize) && inputlatency_recording)
+			M_InputLatencySent();
 	}
 
 	if (cl_mode == CL_CONNECTED || dedicated)
@@ -592,6 +596,8 @@ void Local_Maketic(INT32 realtics)
 		rendergametic = gametic;
 	// translate inputs (keyboard/mouse/joystick) into game controls
 	G_BuildTiccmd(&localcmds, realtics, 1);
+	if (inputlatency_recording)
+		M_InputLatencyBuilt();
 	if (splitscreen || botingame)
 		G_BuildTiccmd(&localcmds2, realtics, 2);
 

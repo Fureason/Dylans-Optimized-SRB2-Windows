@@ -74,6 +74,7 @@
 #include "../st_stuff.h"
 #include "../hu_stuff.h"
 #include "../g_game.h"
+#include "../g_input.h"
 #include "../netcode/d_clisrv.h"
 #include "../i_video.h"
 #include "../console.h"
@@ -94,7 +95,6 @@
 #endif
 
 // maximum number of windowed modes (see windowedModes[][])
-#define MAXWINMODES (22)
 
 /**	\brief
 */
@@ -109,7 +109,7 @@ rendermode_t chosenrendermode = render_none; // set by command line arguments
 
 static void VidWaitChanged(void);
 static void WindowedStyleChanged(void);
-static UINT32 VID_GetRefreshRate(void);
+static void VID_UpdateRefreshRate(boolean report);
 static UINT32 refresh_rate;
 
 static CV_PossibleValue_t vsync_cons_t[] = {
@@ -132,6 +132,41 @@ static consvar_t cv_windowedstyle = CVAR_INIT ("windowedstyle", "Normal", CV_CAL
 	windowedstyle_cons_t, WindowedStyleChanged);
 static consvar_t cv_stretch = CVAR_INIT ("stretch", "Off", CV_SAVE|CV_NOSHOWHELP, CV_OnOff, NULL);
 static consvar_t cv_alwaysgrabmouse = CVAR_INIT ("alwaysgrabmouse", "Off", CV_SAVE, CV_OnOff, NULL);
+
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+static void WindowSizeChanged(void);
+
+enum
+{
+	WINDOW_SIZE_CURRENT,
+	WINDOW_SIZE_MATCH
+};
+
+static CV_PossibleValue_t windowsize_cons_t[] =
+{
+	{WINDOW_SIZE_CURRENT, "Keep Current"},
+	{WINDOW_SIZE_MATCH, "Match Resolution"},
+	{2, "320x200"},
+	{3, "320x240"},
+	{4, "640x360"},
+	{5, "640x400"},
+	{6, "640x480"},
+	{7, "800x600"},
+	{8, "960x600"},
+	{9, "1024x768"},
+	{10, "1280x720"},
+	{11, "1280x800"},
+	{12, "1600x900"},
+	{13, "1920x1080"},
+	{14, "1920x1200"},
+	{15, "2560x1440"},
+	{16, "3840x2160"},
+	{0, NULL}
+};
+
+consvar_t cv_windowsize = CVAR_INIT ("windowsize", "Keep Current",
+	CV_SAVE | CV_CALL | CV_NOINIT, windowsize_cons_t, WindowSizeChanged);
+#endif
 
 UINT8 graphics_started = 0; // Is used in console.c and screen.c
 
@@ -177,27 +212,55 @@ static       SDL_bool    software_gl_presenter = SDL_FALSE;
 SDL_Window   *window;
 SDL_Renderer *renderer;
 static SDL_Texture  *texture;
+static SDL_Texture  *software_color_texture;
+static SDL_Texture  *last_software_texture;
+static SDL_Rect src_rect;
 static SDL_bool      havefocus = SDL_TRUE;
 static const char *fallback_resolution_name = "Fallback";
 
 #ifdef _WIN32
 #define SRB2_SIZEMOVE_TIMER_ID 0x53524232u
-static boolean windows_sizemove_active;
-static precise_t windows_sizemove_started;
-static precise_t windows_sizemove_finished;
-static HWND windows_sizemove_window;
+static boolean windows_sizemove_active, windows_move_dispatching, windows_move_ticking;
+static precise_t windows_sizemove_started, windows_sizemove_finished;
+static HWND windows_sizemove_window, windows_game_window;
+static WNDPROC windows_original_proc;
+static UINT windows_move_message;
+static WPARAM windows_move_wparam;
+static LPARAM windows_move_lparam;
+static void (*windows_move_frame)(boolean);
+static POINT resize_cursor;
+static boolean resize_cursor_valid;
 
-/* DefWindowProc enters a modal message loop while the user drags a normal
- * title bar. The engine cannot safely advance or render re-entrantly there,
- * but a small Win32 timer can keep UDP acknowledgements, downloads, and
- * master-server maintenance alive so moving the host window cannot disconnect
- * clients. */
-static void SDLCALL Impl_WindowsMessageHook(void *userdata, void *nativewindow,
-	unsigned int message, Uint64 wparam, Sint64 lparam)
+static void CALLBACK Impl_WindowMoveTimer(HWND hwnd, UINT message, UINT_PTR id, DWORD time)
 {
-	HWND hwnd = (HWND)nativewindow;
-	(void)userdata;
-	(void)lparam;
+	(void)message;
+	(void)id;
+	(void)time;
+	if (hwnd != windows_sizemove_window || !windows_sizemove_active || windows_move_ticking)
+		return;
+
+	windows_move_ticking = true;
+	if (windows_move_dispatching)
+		windows_move_frame(true);
+	else if (netgame || serverrunning)
+	{
+		I_UpdateTime(cv_timescale.value);
+		NetKeepAlive();
+	}
+	windows_move_ticking = false;
+}
+
+static LRESULT CALLBACK Impl_GameWindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	if (windows_move_frame && !windows_move_dispatching && !windows_sizemove_active
+		&& ((message == WM_NCLBUTTONDOWN && wparam == HTCAPTION)
+			|| (message == WM_SYSCOMMAND && (wparam & 0xfff0) == SC_MOVE)))
+	{
+		windows_move_message = message;
+		windows_move_wparam = wparam;
+		windows_move_lparam = lparam;
+		return 0;
+	}
 
 	if (message == WM_ENTERSIZEMOVE)
 	{
@@ -205,26 +268,60 @@ static void SDLCALL Impl_WindowsMessageHook(void *userdata, void *nativewindow,
 		windows_sizemove_started = I_GetPreciseTime();
 		windows_sizemove_finished = 0;
 		windows_sizemove_window = hwnd;
-		SetTimer(hwnd, SRB2_SIZEMOVE_TIMER_ID, 100, NULL);
+		SetTimer(hwnd, SRB2_SIZEMOVE_TIMER_ID, windows_move_dispatching ? 16 : 100, Impl_WindowMoveTimer);
+		if (windows_move_dispatching)
+			memset(gamekeydown, 0, NUMKEYS);
 	}
-	else if (message == WM_TIMER && windows_sizemove_active
-		&& wparam == SRB2_SIZEMOVE_TIMER_ID)
-	{
-		if (netgame || serverrunning)
-			NetKeepAlive();
-	}
-	else if (message == WM_EXITSIZEMOVE)
+	else if (message == WM_EXITSIZEMOVE || message == WM_NCDESTROY)
 	{
 		if (windows_sizemove_window)
 			KillTimer(windows_sizemove_window, SRB2_SIZEMOVE_TIMER_ID);
 		windows_sizemove_finished = I_GetPreciseTime();
 		windows_sizemove_active = false;
 		windows_sizemove_window = NULL;
-		if (netgame || serverrunning)
-			NetKeepAlive();
+	}
+
+	const WNDPROC original = windows_original_proc;
+	if (message == WM_NCDESTROY)
+	{
+		windows_game_window = NULL;
+		windows_original_proc = NULL;
+		windows_move_message = 0;
+	}
+	return CallWindowProcW(original, hwnd, message, wparam, lparam);
+}
+
+static void Impl_SubclassGameWindow(void)
+{
+	SDL_SysWMinfo info;
+	SDL_VERSION(&info.version);
+	if (SDL_GetWindowWMInfo(window, &info) && info.subsystem == SDL_SYSWM_WINDOWS)
+	{
+		HWND hwnd = info.info.win.window;
+		WNDPROC original = (WNDPROC)SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)Impl_GameWindowProc);
+		if (original)
+		{
+			windows_original_proc = original;
+			windows_game_window = hwnd;
+		}
 	}
 }
 
+void I_RunPendingWindowMove(void (*frame)(boolean))
+{
+	windows_move_frame = frame;
+	if (!windows_move_message || !windows_game_window)
+		return;
+
+	const UINT message = windows_move_message;
+	windows_move_message = 0;
+	if (message == WM_NCLBUTTONDOWN && !(GetAsyncKeyState(VK_LBUTTON) & 0x8000))
+		return;
+
+	windows_move_dispatching = true;
+	CallWindowProcW(windows_original_proc, windows_game_window, message, windows_move_wparam, windows_move_lparam);
+	windows_move_dispatching = false;
+}
 boolean I_WindowManagerBlockedDuring(precise_t started, precise_t finished)
 {
 	precise_t blocked_finished;
@@ -245,9 +342,9 @@ boolean I_WindowManagerBlockedDuring(precise_t started, precise_t finished)
 #endif
 
 // windowed video modes from which to choose from.
-static INT32 windowedModes[MAXWINMODES][2] =
+static const INT32 windowedModes[][2] =
 {
-	{2560,1440}, // 1.77
+	{2560,1440},
 	{1920,1200}, // 1.60,6.00
 	{1920,1080}, // 1.66
 	{1680,1050}, // 1.60,5.25
@@ -269,7 +366,9 @@ static INT32 windowedModes[MAXWINMODES][2] =
 	{ 640, 400}, // 1.60,2.00
 	{ 320, 240}, // 1.33,1.00
 	{ 320, 200}, // 1.60,1.00
+	{3840,2160},
 };
+#define MAXWINMODES ((INT32)(sizeof windowedModes / sizeof *windowedModes))
 
 static void Impl_VideoSetupSDLBuffer(void);
 static void Impl_VideoSetupBuffer(void);
@@ -283,6 +382,29 @@ static void Impl_ApplyWindowedStyle(INT32 width, INT32 height, SDL_bool repositi
 	const int display = SDL_GetWindowDisplayIndex(window);
 
 	SDL_SetWindowBordered(window, SDL_TRUE);
+#ifndef __ANDROID__
+	SDL_Rect workarea;
+	if (SDL_GetDisplayUsableBounds(display, &workarea) == 0)
+	{
+		int top = 0, left = 0, bottom = 0, right = 0;
+		SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right);
+		const int maxwidth = max(BASEVIDWIDTH, workarea.w - left - right);
+		const int maxheight = max(BASEVIDHEIGHT, workarea.h - top - bottom);
+		if (width > maxwidth || height > maxheight)
+		{
+			if ((INT64)width * maxheight >= (INT64)height * maxwidth)
+			{
+				height = max(BASEVIDHEIGHT, (INT32)(((INT64)height * maxwidth + width / 2) / width));
+				width = maxwidth;
+			}
+			else
+			{
+				width = max(BASEVIDWIDTH, (INT32)(((INT64)width * maxheight + height / 2) / height));
+				height = maxheight;
+			}
+		}
+	}
+#endif
 	SDL_SetWindowSize(window, width, height);
 	if (reposition)
 	{
@@ -290,11 +412,96 @@ static void Impl_ApplyWindowedStyle(INT32 width, INT32 height, SDL_bool repositi
 			SDL_WINDOWPOS_CENTERED_DISPLAY(display),
 			SDL_WINDOWPOS_CENTERED_DISPLAY(display));
 	}
+#ifdef _WIN32
+
+	resize_cursor_valid = menuactive && M_MenuMouseActive() && GetCursorPos(&resize_cursor);
+#endif
+}
+
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+static void Impl_ApplyPreferredWindowSize(INT32 width, INT32 height, SDL_bool reposition)
+{
+	int presetwidth, presetheight;
+	if (cv_windowsize.value > WINDOW_SIZE_MATCH
+		&& sscanf(cv_windowsize.string, "%dx%d", &presetwidth, &presetheight) == 2)
+	{
+		width = presetwidth;
+		height = presetheight;
+	}
+	if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED)
+		SDL_RestoreWindow(window);
+	Impl_ApplyWindowedStyle(width, height, reposition);
+}
+
+static void WindowSizeChanged(void)
+{
+
+	if (!window || !graphics_started || con_startup || (USE_FULLSCREEN)
+		|| cv_windowsize.value == WINDOW_SIZE_CURRENT)
+		return;
+
+	if (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN)
+		return;
+	Impl_ApplyPreferredWindowSize(vid.width, vid.height, SDL_TRUE);
+}
+
+boolean VID_GetFixedOutputSize(INT32 *width, INT32 *height)
+{
+	if (!window || (cv_windowsize.value == WINDOW_SIZE_MATCH
+		&& !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN)))
+		return false;
+
+	SDL_GetWindowSize(window, width, height);
+	return *width > 0 && *height > 0;
+}
+#endif
+
+static void Impl_FitGameSize(INT32 renderwidth, INT32 renderheight, INT32 *width, INT32 *height)
+{
+	const INT64 outputarea = (INT64)*width * renderheight;
+	const INT64 renderarea = (INT64)*height * renderwidth;
+	const INT64 difference = outputarea - renderarea;
+
+	const INT32 rounding = max(renderwidth, renderheight) / 2;
+
+	if (difference > rounding)
+		*width = max(1, (INT32)((renderarea + renderheight / 2) / renderheight));
+	else if (difference < -rounding)
+		*height = max(1, (INT32)((outputarea + renderwidth / 2) / renderwidth));
+}
+
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+boolean VID_ModeHasFitBars(INT32 outputwidth, INT32 outputheight, INT32 renderwidth, INT32 renderheight)
+{
+	INT32 width = outputwidth, height = outputheight;
+	Impl_FitGameSize(renderwidth, renderheight, &width, &height);
+	return width != outputwidth || height != outputheight;
+}
+#endif
+
+void I_GetGameViewport(INT32 outputwidth, INT32 outputheight, SDL_Rect *viewport)
+{
+	*viewport = (SDL_Rect){0, 0, outputwidth, outputheight};
+	if (outputwidth <= 0 || outputheight <= 0 || !vid.width || !vid.height)
+		return;
+
+#if !defined(__ANDROID__)
+	if (cv_fullscreenscale.value)
+		return;
+#endif
+
+	Impl_FitGameSize(vid.width, vid.height, &viewport->w, &viewport->h);
+	viewport->x = (outputwidth - viewport->w) / 2;
+	viewport->y = (outputheight - viewport->h) / 2;
 }
 
 static void SDLSetMode(INT32 width, INT32 height, SDL_bool fullscreen, SDL_bool reposition)
 {
+#ifdef __ANDROID__
 	static SDL_bool wasfullscreen = SDL_FALSE;
+#else
+	static SDL_Window *sized_window;
+#endif
 	Uint32 rmask;
 	Uint32 gmask;
 	Uint32 bmask;
@@ -305,6 +512,7 @@ static void SDLSetMode(INT32 width, INT32 height, SDL_bool fullscreen, SDL_bool 
 	realwidth = vid.width;
 	realheight = vid.height;
 
+#ifdef __ANDROID__
 	if (window)
 	{
 		if (fullscreen)
@@ -333,21 +541,73 @@ static void SDLSetMode(INT32 width, INT32 height, SDL_bool fullscreen, SDL_bool 
 		else
 			Impl_ApplyWindowedStyle(width, height, reposition);
 	}
+#else
+	if (!window && !Impl_CreateWindow(fullscreen))
+		I_Error("Cannot create the game window: %s\n", SDL_GetError());
+	const SDL_bool wasfullscreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN)
+		? SDL_TRUE : SDL_FALSE;
+	if (fullscreen != wasfullscreen)
+		SDL_SetWindowFullscreen(window, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+#ifndef __EMSCRIPTEN__
+	if (graphics_started && !fullscreen
+		&& (sized_window != window || cv_windowsize.value == WINDOW_SIZE_MATCH
+			|| (wasfullscreen && cv_windowsize.value != WINDOW_SIZE_CURRENT)))
+	{
+		Impl_ApplyPreferredWindowSize(width, height, reposition);
+		sized_window = window;
+	}
+#else
+	if (graphics_started && sized_window != window && !fullscreen)
+	{
+		Impl_ApplyWindowedStyle(width, height, reposition);
+		sized_window = window;
+	}
+#endif
+#endif
 
 #ifdef HWRENDER
 	if (rendermode == render_opengl)
 	{
-		OglSdlSurface(vid.width, vid.height);
+		if (!OglSdlSurface(vid.width, vid.height))
+		{
+			int drawablewidth, drawableheight;
+			INT32 bestarea = 0;
+			INT32 mode = VID_GetModeForSize(BASEVIDWIDTH, BASEVIDHEIGHT);
+			SDL_GL_GetDrawableSize(window, &drawablewidth, &drawableheight);
+			for (INT32 i = 0; i < MAXWINMODES; i++)
+			{
+				const INT32 w = windowedModes[i][0], h = windowedModes[i][1];
+				if (w <= drawablewidth && h <= drawableheight && w*h > bestarea)
+				{
+					mode = i;
+					bestarea = w*h;
+				}
+			}
+			vid.modenum = mode;
+			src_rect.w = realwidth = vid.width = windowedModes[mode][0];
+			src_rect.h = realheight = vid.height = windowedModes[mode][1];
+			if (!OglSdlSurface(vid.width, vid.height))
+				I_Error("Cannot initialize an OpenGL render surface for the current display.");
+			CONS_Alert(CONS_WARNING,
+				"OpenGL could not render %dx%d on this display. Using %dx%d.\n",
+				width, height, vid.width, vid.height);
+		}
 	}
 #endif
 
 	if (rendermode == render_soft)
 	{
+#ifndef __ANDROID__
+		SDL_SetWindowMinimumSize(window, BASEVIDWIDTH, BASEVIDHEIGHT);
+#endif
+#ifdef HWRENDER
+		if (software_gl_presenter)
+			OglSdlReleaseRenderTarget();
+#endif
+#ifdef __ANDROID__
 		if (renderer)
-		{
-			SDL_RenderClear(renderer);
 			SDL_RenderSetLogicalSize(renderer, width, height);
-		}
+#endif
 		// Set up Texture
 		realwidth = width;
 		realheight = height;
@@ -356,6 +616,9 @@ static void SDLSetMode(INT32 width, INT32 height, SDL_bool fullscreen, SDL_bool 
 			SDL_DestroyTexture(texture);
 			texture = NULL;
 		}
+		if (software_color_texture)
+			SDL_DestroyTexture(software_color_texture);
+		software_color_texture = last_software_texture = NULL;
 
 		if (!usesdl2soft)
 		{
@@ -412,15 +675,17 @@ static void VidWaitChanged(void)
 
 static void WindowedStyleChanged(void)
 {
-	/* Accept the retired value from an older config, but always normalize it
-	 * to the only supported windowed presentation. */
+
+
 	if (cv_windowedstyle.value)
 		CV_StealthSetValue(&cv_windowedstyle, 0);
 
+#ifdef __ANDROID__
 	if (!window || USE_FULLSCREEN)
 		return;
 
 	Impl_ApplyWindowedStyle(vid.width, vid.height, SDL_TRUE);
+#endif
 #ifdef HWRENDER
 	if (sdlglcontext != NULL && SDL_GL_GetCurrentContext() == sdlglcontext)
 		OglSdlSetVSync(cv_vidwait.value, true);
@@ -537,7 +802,7 @@ static boolean ShouldIgnoreMouse(void)
 
 static boolean ShouldGrabMouse(void)
 {
-	// Text entry releases the pointer even with Always Grab Mouse enabled.
+
 	if (chat_on || con_destlines)
 		return false;
 	if (M_MenuMouseActive())
@@ -559,10 +824,10 @@ static void SDLdoGrabMouse(void)
 		wrapmouseok = SDL_TRUE; // TODO: is wrapmouseok or HalfWarpMouse needed anymore?
 }
 
-/* Windows can leave SDL's relative-mouse flag set while the OS cursor is no
- * longer captured after repeated Alt-Tab cycles. Toggle the mode on a genuine
- * focus return so SDL rebuilds the platform grab instead of accepting the
- * stale "already enabled" state. */
+
+
+
+
 static void SDLreacquireMouse(void)
 {
 	SDL_SetRelativeMouseMode(SDL_FALSE);
@@ -681,9 +946,23 @@ static void VID_Command_Info_f (void)
 #endif
 	SurfaceInfo(bufSurface, M_GetText("Current Engine Mode"));
 	SurfaceInfo(vidSurface, M_GetText("Current Video Mode"));
-	CONS_Printf(" Window: %dx%d %s on display %d\n",
-		vid.width, vid.height, USE_FULLSCREEN ? "fullscreen" : "windowed",
-		window ? SDL_GetWindowDisplayIndex(window) : -1);
+	CONS_Printf(" Render resolution: %dx%d\n", vid.width, vid.height);
+	if (window)
+	{
+		int width = 0, height = 0;
+		SDL_Rect viewport;
+		SDL_GetWindowSize(window, &width, &height);
+		CONS_Printf(" Window: %dx%d %s on display %d\n",
+			width, height, (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN)
+				? "fullscreen" : "windowed", SDL_GetWindowDisplayIndex(window));
+		if (renderer)
+			SDL_GetRendererOutputSize(renderer, &width, &height);
+		else
+			SDL_GL_GetDrawableSize(window, &width, &height);
+		I_GetGameViewport(width, height, &viewport);
+		CONS_Printf(" Presentation: %dx%d in %dx%d at %d,%d\n",
+			viewport.w, viewport.h, width, height, viewport.x, viewport.y);
+	}
 	CONS_Printf(" Frame pacing: %.2f FPS current, %u Hz display, %s cap (%u effective)\n",
 		averageFPS, refresh_rate, cv_fpscap.string, R_GetFramerateCap());
 #ifdef HWRENDER
@@ -707,8 +986,7 @@ static void VID_Command_ModeList_f(void)
 	// List windowed modes
 	INT32 i = 0;
 	CONS_Printf("NOTE: Under SDL2, all modes are supported on all platforms.\n");
-	CONS_Printf("Under opengl, fullscreen only supports native desktop resolution.\n");
-	CONS_Printf("Under software, the mode is stretched up to desktop resolution.\n");
+	CONS_Printf("Fullscreen scales the selected render resolution to the desktop display.\n");
 	for (i = 0; i < MAXWINMODES; i++)
 	{
 		CONS_Printf("%2d: %dx%d\n", i, windowedModes[i][0], windowedModes[i][1]);
@@ -820,26 +1098,19 @@ static void Impl_HandleWindowEvent(SDL_WindowEvent evt)
 			kbfocus = SDL_TRUE;
 			mousefocus = SDL_TRUE;
 			reacquire = SDL_TRUE;
+			VID_UpdateRefreshRate(true);
 			break;
 		case SDL_WINDOWEVENT_FOCUS_LOST:
 			kbfocus = SDL_FALSE;
 			mousefocus = SDL_FALSE;
 			break;
 		case SDL_WINDOWEVENT_MAXIMIZED:
-			break;
 		case SDL_WINDOWEVENT_MOVED:
 #if SDL_VERSION_ATLEAST(2, 0, 18)
 		case SDL_WINDOWEVENT_DISPLAY_CHANGED:
 #endif
-		{
-			UINT32 newrate = VID_GetRefreshRate();
-			if (newrate && newrate != refresh_rate)
-			{
-				refresh_rate = newrate;
-				CONS_Printf("Display refresh rate: %u Hz\n", refresh_rate);
-			}
+			VID_UpdateRefreshRate(true);
 			break;
-		}
 	}
 
 	if (mousefocus && kbfocus)
@@ -910,9 +1181,9 @@ static void Impl_HandleTextEvent(SDL_TextInputEvent evt)
 {
 	event_t event;
 	event.type = ev_text;
-	// SDL may deliver several characters in one text event (for example an
-	// address pasted or entered by an IME). Keep the existing ASCII policy,
-	// but do not discard an otherwise valid whole string.
+
+
+
 	for (size_t i = 0; i < sizeof evt.text && evt.text[i]; i++)
 	{
 		if ((UINT8)evt.text[i] >= 128) return;
@@ -925,6 +1196,28 @@ static void Impl_HandleTextEvent(SDL_TextInputEvent evt)
 	}
 }
 
+static boolean Impl_IgnoreResizePointer(Uint32 source)
+{
+#ifdef _WIN32
+	if (resize_cursor_valid && source != SDL_TOUCH_MOUSEID)
+	{
+		POINT cursor;
+
+		if (mouse.buttons & MB_BUTTON1)
+		{
+			resize_cursor_valid = GetCursorPos(&resize_cursor);
+			return true;
+		}
+		resize_cursor_valid = GetCursorPos(&cursor)
+			&& cursor.x == resize_cursor.x && cursor.y == resize_cursor.y;
+		return resize_cursor_valid;
+	}
+#else
+	(void)source;
+#endif
+	return false;
+}
+
 static void Impl_PostMenuPointer(INT32 x, INT32 y)
 {
 	int width, height;
@@ -932,12 +1225,13 @@ static void Impl_PostMenuPointer(INT32 x, INT32 y)
 	SDL_GetWindowSize(window, &width, &height);
 	if (width <= 0 || height <= 0)
 		return;
+	SDL_Rect viewport;
+	I_GetGameViewport(width, height, &viewport);
 	SDL_memset(&event, 0, sizeof event);
 	event.type = ev_mouseabsolute;
-	/* SDL mouse coordinates are logical window pixels, including on high-DPI
-	 * displays. Convert to the render surface before the menu removes its margins. */
-	event.x = (INT32)((INT64)x*vid.width/width);
-	event.y = (INT32)((INT64)y*vid.height/height);
+
+	event.x = x < viewport.x ? -1 : (INT32)((INT64)(x - viewport.x)*vid.width/viewport.w);
+	event.y = y < viewport.y ? -1 : (INT32)((INT64)(y - viewport.y)*vid.height/viewport.h);
 	D_PostEvent(&event);
 }
 
@@ -946,7 +1240,10 @@ static void Impl_HandleMouseMotionEvent(SDL_MouseMotionEvent evt)
 	static boolean firstmove = true;
 	if (chat_on || con_destlines)
 	{
-		SDLdoUngrabMouse();
+		if (SDL_GetRelativeMouseMode())
+			SDLdoUngrabMouse();
+		if (!disable_mouse && havefocus)
+			Impl_PostMenuPointer(evt.x, evt.y);
 		firstmove = false;
 		return;
 	}
@@ -955,7 +1252,8 @@ static void Impl_HandleMouseMotionEvent(SDL_MouseMotionEvent evt)
 		if (SDL_GetRelativeMouseMode())
 			SDLdoUngrabMouse();
 		mousemovex = mousemovey = 0;
-		Impl_PostMenuPointer(evt.x, evt.y);
+		if (!Impl_IgnoreResizePointer(evt.which))
+			Impl_PostMenuPointer(evt.x, evt.y);
 		firstmove = false;
 		return;
 	}
@@ -1007,7 +1305,7 @@ static void Impl_HandleMouseMotionEvent(SDL_MouseMotionEvent evt)
 static void Impl_HandleMouseButtonEvent(SDL_MouseButtonEvent evt, Uint32 type)
 {
 	event_t event;
-	const boolean menumouse = !disable_mouse && havefocus && M_MenuMouseActive();
+	const boolean menumouse = !disable_mouse && havefocus && (M_MenuMouseActive() || con_destlines || chat_on);
 	if (evt.button == SDL_BUTTON_LEFT && type == SDL_MOUSEBUTTONUP)
 		SDL_CaptureMouse(SDL_FALSE);
 
@@ -1027,7 +1325,13 @@ static void Impl_HandleMouseButtonEvent(SDL_MouseButtonEvent evt, Uint32 type)
 	{
 		if (menumouse)
 		{
-			Impl_PostMenuPointer(evt.x, evt.y);
+#ifdef _WIN32
+			if (type == SDL_MOUSEBUTTONDOWN)
+				resize_cursor_valid = false;
+#endif
+
+			if (type == SDL_MOUSEBUTTONDOWN || !Impl_IgnoreResizePointer(evt.which))
+				Impl_PostMenuPointer(evt.x, evt.y);
 			if (evt.button == SDL_BUTTON_LEFT && type == SDL_MOUSEBUTTONDOWN)
 				SDL_CaptureMouse(SDL_TRUE);
 		}
@@ -1422,6 +1726,10 @@ void I_StartupMouse(void)
 void I_OsPolling(void)
 {
 	SDL_Keymod mod;
+#ifdef _WIN32
+	if (windows_move_ticking)
+		return;
+#endif
 
 	if (consolevent)
 		I_GetConsoleEvents();
@@ -1449,6 +1757,23 @@ void I_OsPolling(void)
 	if (mod & KMOD_CAPS) capslock = true;
 }
 
+static void Impl_PresentSoftwareTexture(SDL_Texture *frame)
+{
+	int width, height;
+	if (SDL_GetRendererOutputSize(renderer, &width, &height) != 0 || width <= 0 || height <= 0)
+		return;
+
+	SDL_RenderClear(renderer);
+#ifdef __ANDROID__
+	SDL_RenderCopy(renderer, frame, &src_rect, NULL);
+#else
+	SDL_Rect viewport;
+	I_GetGameViewport(width, height, &viewport);
+	SDL_RenderCopy(renderer, frame, &src_rect, &viewport);
+#endif
+	SDL_RenderPresent(renderer);
+}
+
 //
 // I_UpdateNoBlit
 //
@@ -1465,11 +1790,8 @@ void I_UpdateNoBlit(void)
 		}
 		else
 #endif
-		if (rendermode == render_soft)
-		{
-			SDL_RenderCopy(renderer, texture, NULL, NULL);
-			SDL_RenderPresent(renderer);
-		}
+		if (rendermode == render_soft && renderer && last_software_texture)
+			Impl_PresentSoftwareTexture(last_software_texture);
 	}
 	exposevideo = SDL_FALSE;
 }
@@ -1509,7 +1831,7 @@ static inline boolean I_SkipFrame(void)
 //
 // I_FinishUpdate
 //
-static SDL_Rect src_rect = { 0, 0, 0, 0 };
+
 
 void I_FinishUpdate(void)
 {
@@ -1536,12 +1858,27 @@ void I_FinishUpdate(void)
 
 	if (rendermode == render_soft && screens[0])
 	{
+		const RGBA_t *colors = V_FinishSoftwareColors();
+		if (colors && renderer && texture)
+		{
+			if (!software_color_texture)
+			{
+				software_color_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+					SDL_TEXTUREACCESS_STREAMING, vid.width, vid.height);
+				if (software_color_texture)
+					SDL_SetTextureBlendMode(software_color_texture, SDL_BLENDMODE_NONE);
+			}
+			if (!software_color_texture || SDL_UpdateTexture(software_color_texture, &src_rect,
+				colors, vid.width * (INT32)sizeof *colors) < 0)
+				colors = NULL;
+		}
+
 		if (!bufSurface) //Double-Check
 		{
 			Impl_VideoSetupSDLBuffer();
 		}
 
-		if (bufSurface)
+		if (bufSurface && !colors)
 		{
 			SDL_BlitSurface(bufSurface, &src_rect, vidSurface, &src_rect);
 		}
@@ -1549,18 +1886,19 @@ void I_FinishUpdate(void)
 #ifdef HWRENDER
 		if (software_gl_presenter)
 		{
-			OglSdlPresentSoftware(vidSurface->pixels, vid.width, vid.height, cv_vidwait.value);
+			OglSdlPresentSoftware(colors ? (const void *)colors : vidSurface->pixels,
+				vid.width, vid.height, cv_vidwait.value, colors != NULL);
 		}
 		else
 #endif
 		if (renderer && texture)
 		{
-			// UpdateTexture consumes the surface pixels directly; locking this
-			// system-memory surface only adds overhead.
-			SDL_UpdateTexture(texture, &src_rect, vidSurface->pixels, vidSurface->pitch);
-			SDL_RenderClear(renderer);
-			SDL_RenderCopy(renderer, texture, &src_rect, NULL);
-			SDL_RenderPresent(renderer);
+
+
+			if (!colors)
+				SDL_UpdateTexture(texture, &src_rect, vidSurface->pixels, vidSurface->pitch);
+			last_software_texture = colors ? software_color_texture : texture;
+			Impl_PresentSoftwareTexture(last_software_texture);
 		}
 	}
 #ifdef HWRENDER
@@ -1687,10 +2025,10 @@ void VID_PrepareModeList(void)
 	allow_fullscreen = true;
 }
 
-// SDL_Renderer owns backend state that conflicts with SRB2's OpenGL context
-// on some Windows drivers. Always discard every software object before making
-// the game context current again; stale texture pointers also caused delayed
-// crashes after the first Software -> OpenGL transition.
+
+
+
+
 static void Impl_DestroySoftwareContext(void)
 {
 #ifdef HWRENDER
@@ -1709,11 +2047,14 @@ static void Impl_DestroySoftwareContext(void)
 		SDL_DestroyTexture(texture);
 		texture = NULL;
 	}
+	if (software_color_texture)
+		SDL_DestroyTexture(software_color_texture);
+	software_color_texture = last_software_texture = NULL;
 
 	if (renderer)
 	{
-		// Submit queued presentation work before deleting its backend context.
-		// This closes a timing-dependent race seen after several rapid switches.
+
+
 #if SDL_VERSION_ATLEAST(2, 0, 10)
 		SDL_RenderFlush(renderer);
 #endif
@@ -1781,11 +2122,11 @@ static SDL_bool Impl_CreateContext(void)
 	{
 		int flags = 0; // Use this to set SDL_RENDERER_* flags now
 #ifdef HWRENDER
-		// SDL renderers are not reliable on an SDL_WINDOW_OPENGL window,
-		// especially in fullscreen. Upload Software through SRB2's persistent
-		// game context. Keeping the same HWND *and* GL context lets OBS retain
-		// its Game Capture hook across OpenGL -> Software switches. SDLSetMode's
-		// OglSdlSurface call restores the complete HWR state on the way back.
+
+
+
+
+
 		if (sdlglcontext)
 		{
 			static SDL_bool reported_gl_software_presenter = SDL_FALSE;
@@ -1825,7 +2166,9 @@ static SDL_bool Impl_CreateContext(void)
 			CONS_Printf(M_GetText("Couldn't create rendering context: %s\n"), SDL_GetError());
 			return SDL_FALSE;
 		}
+#ifdef __ANDROID__
 		SDL_RenderSetLogicalSize(renderer, BASEVIDWIDTH, BASEVIDHEIGHT);
+#endif
 	}
 	return SDL_TRUE;
 }
@@ -1841,10 +2184,10 @@ static INT32 Impl_GetStartupMSAA(void)
 		return (samples == 2 || samples == 4 || samples == 8 || samples == 16) ? samples : 0;
 	}
 
-	/* Multisampling costs bandwidth even while GL_MULTISAMPLE is disabled,
-	 * because the window still owns a multisampled color/depth backbuffer.
-	 * Keep the normal startup path single-sampled; -msaa remains available for
-	 * users who explicitly accept that cost. */
+
+
+
+
 	return 0;
 }
 
@@ -1885,8 +2228,8 @@ boolean VID_CheckRenderer(void)
 			rendermode, setrenderneeded, vid.width, vid.height, USE_FULLSCREEN));
 #endif
 #ifdef HWRENDER
-		// Release Software's uploader texture before restoring the hardware
-		// renderer's complete state on the same persistent OpenGL context.
+
+
 		if (oldrenderer == render_soft && setrenderneeded == render_opengl)
 			Impl_DestroySoftwareContext();
 
@@ -1922,7 +2265,7 @@ boolean VID_CheckRenderer(void)
 					else
 						Impl_CreateContext();
 
-					// The OpenGL context is active on the retained or new window.
+
 					contextcreated = true;
 				}
 			}
@@ -1938,6 +2281,7 @@ boolean VID_CheckRenderer(void)
 	}
 
 	SDLSetMode(vid.width, vid.height, USE_FULLSCREEN, (setmodeneeded ? SDL_TRUE : SDL_FALSE));
+	VID_UpdateRefreshRate(false);
 	Impl_VideoSetupBuffer();
 
 	if (rendermode == render_soft)
@@ -1967,24 +2311,27 @@ boolean VID_CheckRenderer(void)
 	return rendererchanged;
 }
 
-static UINT32 VID_GetRefreshRate(void)
+static void VID_UpdateRefreshRate(boolean report)
 {
-	int index = SDL_GetWindowDisplayIndex(window);
-	SDL_DisplayMode m;
+	SDL_DisplayMode mode;
+	int index;
 
-	if (SDL_WasInit(SDL_INIT_VIDEO) == 0)
-	{
-		// Video not init yet.
-		return 0;
-	}
+	if (!window || !SDL_WasInit(SDL_INIT_VIDEO))
+		return;
 
-	if (SDL_GetCurrentDisplayMode(index, &m) != 0)
-	{
-		// Error has occurred.
-		return 0;
-	}
+	index = SDL_GetWindowDisplayIndex(window);
+	if (index < 0)
+		return;
+	if ((SDL_GetCurrentDisplayMode(index, &mode) != 0 || mode.refresh_rate <= 0)
+		&& (SDL_GetDesktopDisplayMode(index, &mode) != 0 || mode.refresh_rate <= 0))
+		return;
 
-	return m.refresh_rate;
+	if ((UINT32)mode.refresh_rate == refresh_rate)
+		return;
+
+	refresh_rate = (UINT32)mode.refresh_rate;
+	if (report)
+		CONS_Printf("Display refresh rate: %u Hz\n", refresh_rate);
 }
 
 INT32 VID_SetMode(INT32 modeNum)
@@ -1997,7 +2344,7 @@ INT32 VID_SetMode(INT32 modeNum)
 	if (modeNum < 0)
 		modeNum = 0;
 	if (modeNum >= MAXWINMODES)
-		modeNum = MAXWINMODES-1;
+		modeNum = VID_GetModeForSize(BASEVIDWIDTH, BASEVIDHEIGHT);
 
 	vid.width = windowedModes[modeNum][0];
 	vid.height = windowedModes[modeNum][1];
@@ -2007,8 +2354,6 @@ INT32 VID_SetMode(INT32 modeNum)
 	src_rect.w = vid.width;
 	src_rect.h = vid.height;
 
-	refresh_rate = VID_GetRefreshRate();
-
 	VID_CheckRenderer();
 	return SDL_TRUE;
 }
@@ -2016,6 +2361,9 @@ INT32 VID_SetMode(INT32 modeNum)
 static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 {
 	int flags = SDL_WINDOW_HIDDEN;
+#ifndef __ANDROID__
+	flags |= SDL_WINDOW_RESIZABLE;
+#endif
 #ifdef HWRENDER
 	const INT32 requested_msaa = Impl_GetStartupMSAA();
 #endif
@@ -2030,15 +2378,15 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
 #ifdef HWRENDER
-	/* Create the initial Software window with OpenGL capability so renderer
-	 * switches can retain the same native window handle for capture tools. */
+
+
 	flags |= SDL_WINDOW_OPENGL;
 
-	/* A 24-bit depth buffer is broadly accelerated on Windows and avoids the
-	 * precision loss and GDI Generic fallback caused by unsupported formats. */
+
+
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-	// Hardware visual portals use the stencil buffer to confine the paired
-	// view to the portal opening instead of leaking it across nearby walls.
+
+
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 	if (requested_msaa > 0)
 	{
@@ -2057,8 +2405,8 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 			realwidth, realheight, flags);
 
 #ifdef HWRENDER
-	/* Unsupported sample counts must not prevent the game from starting. Retry
-	 * without MSAA and leave a clear message explaining the fallback. */
+
+
 	if (window == NULL && requested_msaa > 0)
 	{
 		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
@@ -2074,8 +2422,8 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 #endif
 
 #ifdef HWRENDER
-	/* Software rendering should still start on a system where SDL cannot make
-	 * an OpenGL-capable window; that system will use the normal SDL presenter. */
+
+
 	if (window == NULL && rendermode == render_soft)
 	{
 		flags &= ~SDL_WINDOW_OPENGL;
@@ -2091,10 +2439,13 @@ static SDL_bool Impl_CreateWindow(SDL_bool fullscreen)
 		return SDL_FALSE;
 	}
 
-	// Do not expose Windows' default white client area. I_FinishUpdate shows
-	// the window only after a complete Software or OpenGL frame is presented.
+
+
 	window_needs_first_present = SDL_TRUE;
 
+#ifdef _WIN32
+	Impl_SubclassGameWindow();
+#endif
 	Impl_SetWindowIcon();
 
 	return Impl_CreateContext();
@@ -2155,9 +2506,9 @@ static void Impl_VideoSetupBuffer(void)
 	vid.direct = NULL;
 	required = (size_t)NUMSCREENS * (size_t)vid.rowbytes * (size_t)vid.height;
 
-	// Resolution switches used to free and reallocate the full framebuffer even
-	// when the existing allocation was already large enough. Keep a high-water
-	// buffer so switching down from a large mode is effectively allocation-free.
+
+
+
 	if (!vid.buffer || required > vid_buffer_capacity)
 	{
 		newbuffer = calloc(1, required);
@@ -2192,6 +2543,9 @@ void I_StartupGraphics(void)
 	COM_AddCommand ("vid_mode", VID_Command_Mode_f, 0);
 	CV_RegisterVar (&cv_vidwait);
 	CV_RegisterVar (&cv_windowedstyle);
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+	CV_RegisterVar (&cv_windowsize);
+#endif
 	CV_RegisterVar (&cv_stretch);
 	CV_RegisterVar (&cv_alwaysgrabmouse);
 	disable_mouse = M_CheckParm("-nomouse");
@@ -2317,10 +2671,6 @@ void I_StartupGraphics(void)
 	if (mousegrabok && !disable_mouse)
 		SDLdoGrabMouse();
 
-#ifdef _WIN32
-	SDL_SetWindowsMessageHook(Impl_WindowsMessageHook, NULL);
-#endif
-
 	graphics_started = true;
 }
 
@@ -2387,8 +2737,9 @@ void VID_StartupOpenGL(void)
 void I_ShutdownGraphics(void)
 {
 	rendermode = render_none;
+	V_FreeSoftwareColors();
 #ifdef _WIN32
-	SDL_SetWindowsMessageHook(NULL, NULL);
+	windows_move_frame = NULL;
 	if (windows_sizemove_window)
 		KillTimer(windows_sizemove_window, SRB2_SIZEMOVE_TIMER_ID);
 	windows_sizemove_window = NULL;
@@ -2420,7 +2771,10 @@ void I_ShutdownGraphics(void)
 	if (sdlglcontext)
 	{
 		if (window && SDL_GL_GetCurrentContext() == sdlglcontext)
+		{
+			OglSdlReleaseRenderTarget();
 			SDL_GL_MakeCurrent(window, NULL);
+		}
 		SDL_GL_DeleteContext(sdlglcontext);
 		sdlglcontext = NULL;
 	}
@@ -2442,11 +2796,6 @@ void I_GetCursorPosition(INT32 *x, INT32 *y)
 
 UINT32 I_GetRefreshRate(void)
 {
-	// Moved to VID_GetRefreshRate.
-	// Precalculating it like that won't work as
-	// well for windowed mode since you can drag
-	// the window around, but very slow PCs might have
-	// trouble querying mode over and over again.
 	return refresh_rate;
 }
 

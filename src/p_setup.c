@@ -1576,12 +1576,12 @@ static textmap_block_t sidedefBlocks;
 static textmap_block_t vertexBlocks;
 static textmap_block_t sectorBlocks;
 
-/* UDMF maps need one complete token pass merely to find each element before
- * the real parsing pass begins.  Keep the compact position index for a few
- * recently used maps so a restart/reload can skip that first pass.  The key
- * includes the loaded-file count and lump size, so adding a replacement map
- * cannot reuse stale offsets.  The actual map structures remain PU_LEVEL and
- * are rebuilt normally; this cache contains no live level pointers. */
+
+
+
+
+
+
 #define TEXTMAP_INDEX_CACHE_SLOTS 16
 typedef struct textmap_index_cache_s
 {
@@ -3808,10 +3808,10 @@ static boolean P_LoadExtendedSubsectorsAndSegs(UINT8 **data, nodetype_t nodetype
 					leading++;
 				if (first + leading == k)
 					I_Error("P_LoadExtendedSubsectorsAndSegs: Subsector %s does not have any valid segs!", sizeu1(i));
-				/* Sector lookup needs a real first seg, but advancing firstline
-				 * while retaining numlines makes every BSP walk read into the next
-				 * subsector. Rotate the closed loop instead, preserving both its
-				 * complete boundary and its original array range. */
+
+
+
+
 				if (leading)
 				{
 					saved = Z_Malloc(leading * sizeof (*saved), PU_STATIC, NULL);
@@ -7286,7 +7286,10 @@ static boolean P_LoadMapFromFile(void)
 	udmf = textmap != NULL;
 
 	if (!P_LoadMapData(virt))
+	{
+		vres_Free(virt);
 		return false;
+	}
 	P_LoadMapBSP(virt);
 	P_LoadMapLUT(virt);
 
@@ -7731,7 +7734,6 @@ static void P_SetupCamera(void)
 		camera.y = players[displayplayer].mo->y;
 		camera.z = players[displayplayer].mo->z;
 		camera.angle = players[displayplayer].mo->angle;
-		camera.subsector = R_PointInSubsector(camera.x, camera.y); // make sure camera has a subsector set -- Monster Iestyn (12/11/18)
 	}
 	else
 	{
@@ -7748,9 +7750,11 @@ static void P_SetupCamera(void)
 			camera.y = thing->y;
 			camera.z = thing->z;
 			camera.angle = FixedAngle((fixed_t)thing->angle << FRACBITS);
-			camera.subsector = R_PointInSubsector(camera.x, camera.y); // make sure camera has a subsector set -- Monster Iestyn (12/11/18)
 		}
 	}
+
+	camera.subsector = R_PointInSubsector(camera.x, camera.y);
+	camera2.subsector = R_PointInSubsector(camera2.x, camera2.y);
 }
 
 static void P_InitCamera(void)
@@ -8084,10 +8088,10 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		ranspecialwipe = 1;
 	}
 
-	// Stop channels before old level objects are purged. Decoded samples use the
-	// non-level PU_SOUND tag and remain valid across maps; retaining them avoids
-	// repeating expensive OGG/WAV decoding on the first playback in every map.
-	// Runtime add-on loading explicitly invalidates each sound it replaces.
+
+
+
+
 	S_StopSounds();
 	S_ResetSoundPrecacheQueue();
 
@@ -8101,14 +8105,15 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 			FixedDiv((F_GetWipeLength(wipedefs[wipe_level_toblack])-2)*NEWTICRATERATIO, NEWTICRATE), MUSICRATE));
 	}
 
-	// Let's fade to black here
-	// But only if we didn't do the special stage wipe
-	if (rendermode != render_none && !(ranspecialwipe || reloadinggamestate))
+
+
+	if (rendermode != render_none && !(ranspecialwipe || reloadinggamestate)
+		&& (!titledemo || wipetypepre >= 0))
 		P_RunLevelWipe();
 
 #if defined(_WIN32) && !defined(DEDICATED)
-	/* The wipe above is an intentional, user-visible delay. Begin measuring
-	 * actual teardown here so it is not mislabeled as slow map cleanup. */
+
+
 	content_started = phase_started = I_GetPreciseTime();
 #endif
 
@@ -8145,10 +8150,10 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 	// Close text prompt before freeing the old level
 	F_EndTextPrompt(false, true);
 
-	/* A map change can be requested from inside a Lua hook, before the outer
-	 * game tic reaches its usual P_MapEnd. Clear collision scratch references
-	 * while their old-level mobjs are still valid; otherwise the next map's
-	 * P_MapStart tries to adjust a reference count through freed level memory. */
+
+
+
+
 	P_MapEnd();
 
 	LUA_InvalidateLevel();
@@ -8165,9 +8170,9 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 	R_FlushTranslationColormapCache();
 
 #ifdef HWRENDER
-	/* Keep reusable decoded/GPU textures between maps when requested. The old
-	 * unconditional flush made every large custom level pay the same upload cost
-	 * again. Map-owned and colormapped patch data is still discarded here. */
+
+
+
 	if (rendermode == render_opengl && (vid.glstate == VID_GL_LIBRARY_LOADED))
 		HWR_ClearLevelTextures();
 
@@ -8381,7 +8386,7 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		I_SetCrashContext(va("precaching post-hook sounds for %s",
 			G_BuildMapName(gamemap)));
 		#endif
-		// Include objects created by the MapLoad hook as well.
+
 		S_PrecacheLevelSounds();
 		#if defined(_WIN32) && !defined(DEDICATED)
 		I_ReportHitch("post-hook sound precache", phase_started, 50);
@@ -8398,9 +8403,9 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 #if defined(_WIN32) && !defined(DEDICATED)
 	I_SetCrashContext(va("map %s active", G_BuildMapName(gamemap)));
 	I_ReportHitch("map data, objects, scripts, and renderer setup", content_started, 25);
-	/* Fast transitions are expected to finish below the old 250 ms threshold.
-	 * Keep recording them so performance reports can distinguish presentation
-	 * time from actual map setup time. */
+
+
+
 	I_ReportHitch("complete level transition (fade + load)", load_started, 25);
 	I_MarkLevelTransitionEnd();
 #endif
@@ -8420,9 +8425,9 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 		return true;
 	if (ranspecialwipe == 2)
 		return true;
-	/* The 24-tic pre-title loop is presentation-only and blocks the game loop.
-	 * In multiplayer the regular wipe already advances and draws the title card,
-	 * so let that path animate it without an extra apparent server freeze. */
+
+
+
 	if (netgame)
 		return true;
 
@@ -8521,10 +8526,10 @@ static lumpinfo_t* FindFolder(const char *folName, UINT16 *start, UINT16 *end, l
 	return lumpinfo;
 }
 
-/* A single addfile command can contain several archives.  Loading their Lua,
- * SOC and per-WAD resources must stay ordered, but rebuilding global animation,
- * HUD, model and status-bar caches after every archive only throws that work
- * away again on the next one. */
+
+
+
+
 static UINT16 addonbatchdepth;
 static boolean addonbatchanimations;
 static boolean addonbatchhud;
@@ -8548,16 +8553,11 @@ void P_EndAddonBatch(void)
 	started = I_GetPreciseTime();
 	if (addonbatchanimations)
 		P_InitPicAnims();
-	/* Headless companions need the definitions above, not graphics caches that
-	 * can never be displayed. Keep the normal client/software behavior intact
-	 * so changing renderers later still sees every newly added resource. */
+
+
+
 	if (addonbatchhud && rendermode != render_none)
-	{
-		ST_UnloadGraphics();
-		HU_LoadGraphics();
-		ST_LoadGraphics();
-		ST_ReloadSkinFaceGraphics();
-	}
+		ST_RefreshAddonGraphics();
 #ifdef HWRENDER
 	if (addonbatchmodels && rendermode != render_none)
 		HWR_ReloadModels();

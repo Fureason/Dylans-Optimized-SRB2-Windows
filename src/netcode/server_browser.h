@@ -1,4 +1,4 @@
-// SONIC ROBO BLAST 2 -- local server browser, GPLv2
+
 #ifndef __SERVER_BROWSER_H__
 #define __SERVER_BROWSER_H__
 

@@ -59,8 +59,27 @@ static hook_t mobjHookIds[NUMMOBJTYPES][MOBJ_HOOK(MAX)];
 static stringhook_t stringHooks[STRING_HOOK(MAX)];
 
 // This will be indexed by hook id, the value of which fetches the registry.
-static int * hookRefs;
-static int   nextid;
+typedef struct {
+	int ref;
+	char source[LUA_IDSIZE];
+	int line;
+} hook_reference_t;
+
+static hook_reference_t *hookRefs;
+static int nextid;
+
+#if defined(_WIN32) && !defined(DEDICATED)
+static int activeHook = -1;
+
+void LUA_FormatCrashHook(char *buffer, size_t size)
+{
+	const int id = activeHook;
+	if (hookRefs && id >= 0 && id < nextid)
+		snprintf(buffer, size, "%s:%d (hook %d)", hookRefs[id].source, hookRefs[id].line, id);
+	else
+		strlcpy(buffer, "none", size);
+}
+#endif
 
 // After a hook errors once, don't print the error again.
 static UINT8 * hooksErrored;
@@ -198,9 +217,22 @@ static void add_hook_ref(lua_State *L, int idx)
 
 	Z_Realloc(hookRefs, (nextid + 1) * sizeof *hookRefs, PU_STATIC, &hookRefs);
 
-	// set the hook function in the registry.
+
+
+	lua_Debug ar;
 	lua_pushvalue(L, idx);
-	hookRefs[nextid++] = luaL_ref(L, LUA_REGISTRYINDEX);
+	if (lua_getinfo(L, ">S", &ar))
+	{
+		strlcpy(hookRefs[nextid].source, ar.short_src, sizeof hookRefs[nextid].source);
+		hookRefs[nextid].line = ar.linedefined;
+	}
+	else
+	{
+		strlcpy(hookRefs[nextid].source, "unknown", sizeof hookRefs[nextid].source);
+		hookRefs[nextid].line = 0;
+	}
+	lua_pushvalue(L, idx);
+	hookRefs[nextid++].ref = luaL_ref(L, LUA_REGISTRYINDEX);
 }
 
 // Takes hook, function, and additional arguments (mobj type to act on, etc.)
@@ -281,7 +313,7 @@ struct Hook_State {
 	int          values;/* num arguments passed to hook */
 	int          results;/* num values returned by hook */
 	Hook_Callback results_handler;/* callback when hook successfully returns */
-	const char * profile_name;/* non-NULL for hooks worth attributing in hitch logs */
+	const char * profile_name;
 };
 
 enum {
@@ -430,7 +462,7 @@ static void init_hook_call
 static void get_hook(Hook_State *hook, const int *ids, int n)
 {
 	hook->id = ids[n];
-	lua_getref(gL, hookRefs[hook->id]);
+	lua_getref(gL, hookRefs[hook->id].ref);
 }
 
 static void get_hook_from_table(Hook_State *hook, int n)
@@ -438,12 +470,20 @@ static void get_hook_from_table(Hook_State *hook, int n)
 	lua_rawgeti(gL, -1, n);
 	hook->id = lua_tonumber(gL, -1);
 	lua_pop(gL, 1);
-	lua_getref(gL, hookRefs[hook->id]);
+	lua_getref(gL, hookRefs[hook->id].ref);
 }
 
 static int call_single_hook_no_copy(Hook_State *hook)
 {
-	if (lua_pcall(gL, hook->values, hook->results, EINDEX) == 0)
+#if defined(_WIN32) && !defined(DEDICATED)
+	const int previousHook = activeHook;
+	activeHook = hook->id;
+#endif
+	const int result = lua_pcall(gL, hook->values, hook->results, EINDEX);
+#if defined(_WIN32) && !defined(DEDICATED)
+	activeHook = previousHook;
+#endif
+	if (result == 0)
 	{
 		if (hook->results > 0)
 		{
@@ -501,38 +541,31 @@ static int call_mapped(Hook_State *hook, const hook_t *map)
 	{
 #if defined(_WIN32) && !defined(DEDICATED)
 		precise_t started = 0;
-		lua_Debug ar;
-		char description[LUA_IDSIZE + 64];
-		boolean profile = hook->profile_name && cv_luahitchlog.value
+		const boolean profile = hook->profile_name && cv_luahitchlog.value
 			&& PS_DeepProfileActive();
 #endif
 		get_hook(hook, map->ids, k);
 #if defined(_WIN32) && !defined(DEDICATED)
 		if (profile)
-		{
-			lua_pushvalue(gL, -1);
 			started = I_GetPreciseTime();
-		}
 #endif
 		call_single_hook(hook);
 #if defined(_WIN32) && !defined(DEDICATED)
 		if (profile)
 		{
 			precise_t elapsed = I_GetPreciseTime() - started;
-			/* During an explicitly armed sample, attribute moderately expensive
-			 * hooks too. Several sub-millisecond hooks can dominate one tic when
-			 * an add-on pack registers many of them. */
+
+
+
 			if (elapsed >= I_GetPrecisePrecision()/10000)
 			{
-				lua_getinfo(gL, ">S", &ar);
-				snprintf(description, sizeof description, "Lua %s hook (%s)",
-					hook->profile_name, ar.short_src);
-				description[sizeof description - 1] = '\0';
+				char description[LUA_IDSIZE + 64];
+				const hook_reference_t *ref = &hookRefs[hook->id];
+				snprintf(description, sizeof description, "Lua %s hook (%s:%d)",
+					hook->profile_name, ref->source, ref->line);
 				PS_RecordLuaHook(description, elapsed);
 				I_ReportHitch(description, started, 25);
 			}
-			else
-				lua_pop(gL, 1);
 		}
 #endif
 	}
@@ -677,9 +710,30 @@ int LUA_Hook2Mobj(mobj_t *t1, mobj_t *t2, int hook_type)
 	Hook_State hook;
 	if (prepare_mobj_hook(&hook, 0, hook_type, t1))
 	{
-		LUA_PushUserdata(gL, t1, META_MOBJ);
-		LUA_PushUserdata(gL, t2, META_MOBJ);
-		call_hooks(&hook, 1, res_force);
+		const hook_t *typed = hook.mobj_type < NUMMOBJTYPES
+			? &mobjHookIds[hook.mobj_type][hook_type] : NULL;
+		int calls;
+
+
+
+		if (typed && typed->numHooks == 1 && !mobjHookIds[MT_NULL][hook_type].numHooks)
+		{
+			get_hook(&hook, typed->ids, 0);
+			LUA_PushMobjPair(gL, t1, t2);
+			hook.values = 2;
+			hook.results = 1;
+			hook.results_handler = res_force;
+			calls = call_single_hook_no_copy(&hook);
+			ps_lua_mobjhooks.value.i += calls;
+			lua_settop(gL, 0);
+		}
+		else
+		{
+			LUA_PushMobjPair(gL, t1, t2);
+			calls = call_hooks(&hook, 1, res_force);
+		}
+		if (hook_type == MOBJ_HOOK(MobjCollide) || hook_type == MOBJ_HOOK(MobjMoveCollide))
+			ps_lua_collision_hooks.value.i += calls;
 	}
 	return hook.status;
 }
@@ -808,10 +862,10 @@ static void hook_think_frame(int type)
 	{
 		init_hook_call(&hook, 0, res_none);
 
-		/* Normal play does not need a timer, duplicate Lua function or source
-		 * lookup for every callback. Keep a tight dispatch path until an actual
-		 * hitch arms the short attribution window (or the user explicitly opens
-		 * Lua perfstats). Hook order and return behaviour are unchanged. */
+
+
+
+
 		if (cv_perfstats.value < 3
 		&& (!cv_luahitchlog.value || !PS_DeepProfileActive()))
 		{
@@ -830,10 +884,10 @@ static void hook_think_frame(int type)
 
 			get_hook(&hook, map->ids, k);
 
-			/* Capture this once. A hitch raised from inside the hook can arm deep
-			 * profiling before it returns. Re-evaluating the condition afterward
-			 * would then subtract an uninitialised zero start time and report the
-			 * machine uptime as a multi-hour Lua stall. */
+
+
+
+
 			profile_hook = cv_perfstats.value >= 3
 				|| (cv_luahitchlog.value && PS_DeepProfileActive());
 			if (profile_hook)
@@ -1116,10 +1170,10 @@ void LUA_HookNetArchive(lua_CFunction archFunc)
 	const hook_t * map = &hookIds[HOOK(NetVars)];
 	Hook_State hook = {0};
 
-	/* NetVars preserves the existing Lua stack instead of going through the
-	 * normal prepare_hook path. Initialise the fields that path normally owns
-	 * so hitch attribution never treats an indeterminate profile_name as a
-	 * string while a joining client loads a network save. */
+
+
+
+
 	hook.hook_type = HOOK(NetVars);
 	hook.profile_name = hookNames[HOOK(NetVars)];
 	/* this is a remarkable case where the stack isn't reset */

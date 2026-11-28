@@ -93,9 +93,9 @@ extern mobj_t *r_viewmobj;
 extern consvar_t cv_allowmlook;
 extern consvar_t cv_maxportals;
 
-/* Keep portal recursion deliberately shallow. Besides avoiding the large cost of
- * rendering the scene repeatedly, this also clamps older configs that saved the
- * former 3-10/32 choices before the menu control was removed. */
+
+
+
 static inline INT32 R_PortalDepthLimit(void)
 {
 	return min(2, max(1, cv_maxportals.value));

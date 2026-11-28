@@ -22,8 +22,8 @@
 
 extern consvar_t cv_fpscap, cv_smoothframepacing, cv_adaptiveeffects;
 
-/* Client-local visual load shedding. It never changes thinker execution or
- * synchronized game state, so stock 2.2.15 peers remain compatible. */
+
+
 void R_UpdateAdaptiveEffects(precise_t active_time, precise_t frame_budget);
 UINT8 R_GetAdaptiveEffectsLevel(void);
 
@@ -33,6 +33,9 @@ extern ps_metric_t ps_interp_lag;
 UINT32 R_GetFramerateCap(void);
 boolean R_UsingFrameInterpolation(void);
 fixed_t R_NetworkTimeFrac(precise_t now, tic_t tic, fixed_t fallback, boolean active);
+void R_BeginNetworkViewFrame(precise_t now, boolean active);
+void R_EndNetworkViewFrame(void);
+void R_ResetNetworkView(const player_t *player);
 
 enum viewcontext_e
 {

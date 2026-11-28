@@ -1,4 +1,4 @@
-// Shared SDL mixer overlap protection, GPLv2. Runs on the game thread.
+
 #define SFX_MIX_CHANNELS 256
 #define AUDIO_GAIN_ONE 65536u
 static UINT32 mix_headroom_gain = AUDIO_GAIN_ONE;
@@ -12,7 +12,7 @@ static UINT32 get_real_volume(UINT8 volume);
 static UINT32 I_NominalMusicVolume(UINT8 volume)
 {
 #ifdef _WIN32
-	if (I_SongType() == MU_MID) return 128; // native MIDI is not mixed PCM
+	if (I_SongType() == MU_MID) return 128;
 #endif
 	return ((UINT32)volume*128/31) * (UINT32)internal_volume / 100;
 }
@@ -23,8 +23,8 @@ static INT32 I_MusicPeakBound(void)
 #ifdef _WIN32
 	if (I_SongType() == MU_MID) return 0;
 #endif
-	/* Reserve the full configured music level during fades, so a fade-in
-	 * cannot briefly exceed the available room between game updates. */
+
+
 #ifdef HAVE_GME
 	if (gme) return 32768*min(music_volume,18)/20 * max(100,internal_volume)/100;
 #endif
@@ -77,9 +77,9 @@ static void I_RebalanceSfx(INT32 pending, boolean recover)
 	else if (target < mix_headroom_gain) mix_headroom_gain = target;
 	else if (recover) mix_headroom_gain += min(target-mix_headroom_gain,2048u);
 
-	/* Split attenuation over chunk and channel volume, retaining useful
-	 * precision even with hundreds of voices. Rounding always stays below
-	 * the calculated safe peak. */
+
+
+
 	chunkvolume = max(1,(INT32)sqrt((double)mix_headroom_gain*16384.0/AUDIO_GAIN_ONE));
 	for (i = 0; i < mix_voice_limit; i++)
 	{

@@ -385,8 +385,8 @@ static void md2_loadTexture(md2_t *model)
 	if (grPatch->mipmap->data)
 		Z_Free(grPatch->mipmap->data);
 
-	/* Z_Free clears zone user pointers. Reacquire both cache layers in case
-	 * either was purged while this model was not being rendered. */
+
+
 	grPatch = (GLPatch_t *)Patch_AllocateHardwarePatch(patch);
 
 	if (!grPatch->mipmap->downloaded && !grPatch->mipmap->data)
@@ -1295,11 +1295,11 @@ boolean HWR_DrawModel(gl_vissprite_t *spr)
 	if (spr->precip)
 		return false;
 
-	/* A visible-sprite record can outlive an object that an add-on removed or
-	 * replaced during the same frame. It can also briefly observe a malformed
-	 * custom state while that object is being spawned. Never hand either case
-	 * to the model animator: falling back to the sprite renderer is safe, while
-	 * reading state animation fields here would dereference stale memory. */
+
+
+
+
+
 	if (P_MobjWasRemoved(spr->mobj)
 	|| spr->mobj->state < states
 	|| spr->mobj->state >= states + NUMSTATES)
@@ -1397,9 +1397,9 @@ boolean HWR_DrawModel(gl_vissprite_t *spr)
 		else
 		{
 			Surf.PolyColor.s.alpha = (spr->mobj->flags2 & MF2_SHADOW) ? 0x40 : 0xff;
-			/* Object alpha is independent from frame translucency. COPY and
-			 * masked styles must still use alpha blending when Lua/SOC supplies
-			 * a fractional object alpha, matching the sprite path. */
+
+
+
 			Surf.PolyFlags = (newalpha < FRACUNIT && (blendmode <= AST_COPY || blendmode >= AST_OVERLAY))
 				? PF_Translucent : HWR_GetBlendModeFlag(blendmode);
 		}

@@ -26,6 +26,7 @@
 #include "../w_wad.h"
 #include "d_netfil.h"
 #include "d_clisrv.h"
+#include "client_connection.h"
 #include "tic_command.h"
 #include "net_command.h"
 #include "../z_zone.h"
@@ -267,19 +268,19 @@ FUNCMATH static INT32 cmpack(UINT8 a, UINT8 b)
 	return d;
 }
 
-/** Sets freeack to a free acknum and copies the netbuffer in the ackpak table
-  *
-  * \param freeack  The address to store the free acknum at
-  * \return True if a free acknum was found
-  */
+
+
+
+
+
 static boolean GetFreeAcknum(UINT8 *freeack)
 {
 	node_t *node = &nodes[doomcom->remotenode];
 	INT32 numfreeslot = 0;
 
-	/* A slow node may use at most one third of the global sender window for
-	 * low-priority traffic. Urgent protocol/game-state packets retain the
-	 * original per-node window and can still get through reserved slots. */
+
+
+
 	if (netbuffer->packettype >= PT_CANFAIL
 	&& Net_GetReliableBacklog(doomcom->remotenode, NULL) >= MAXACKPACKETS / 3)
 		return false;
@@ -328,7 +329,7 @@ static boolean GetFreeAcknum(UINT8 *freeack)
 
 static void SendAcks(INT32 node)
 {
-	// Stock SRB2 reads a full selective ACK list even for a cumulative ACK.
+
 	netbuffer->packettype = PT_NOTHING;
 	memset(netbuffer->u.textcmd, 0, MAXACKTOSEND);
 	HSendPacket(node, false, 0, MAXACKTOSEND);
@@ -374,8 +375,8 @@ static boolean Processackpak(void)
 		}
 		else
 		{
-			// Only accept the next consecutive reliable packet. If one arrives
-			// out of order, discard it so the sender reliably retransmits it.
+
+
 			UINT8 nextfirstack = (UINT8)(node->firstacktosend + 1);
 			if (!nextfirstack)
 				nextfirstack = 1;
@@ -429,9 +430,9 @@ void Net_ConnectionTimeout(INT32 node)
 		&& playeringame[netnodes[node].player2])
 			hasplayer = true;
 
-		// A half-connected client can already have netnodes[node].ingame set even
-		// though no XD_ADDPLAYER ever completed. There is nobody for SendKick to
-		// remove in that state, so close both transport and game-node state.
+
+
+
 		if (netnodes[node].ingame && hasplayer)
 			SendKicksForNode(node, KICK_MSG_TIMEOUT | KICK_MSG_KEEP_BODY);
 		else
@@ -440,16 +441,18 @@ void Net_ConnectionTimeout(INT32 node)
 			ResetNode(node);
 		}
 	}
-	else
+	else if (node == servernode)
 		CL_HandleTimeout();
+	else
+		Net_CloseConnection(node | FORCECLOSE);
 
 	// Do not redo it quickly (if we do not close connection it is
 	// for a good reason!)
 	nodes[node].lasttimepacketreceived = I_GetTime();
 
-	// Give the timeout/close packets a fresh retry budget. Without this, a
-	// connection that had already accumulated retries could be dropped before
-	// its final state reached the other side.
+
+
+
 	for (INT32 i = 0; i < MAXACKPACKETS; i++)
 		if (ackpak[i].acknum && ackpak[i].destinationnode == node)
 			ackpak[i].resentnum = 0;
@@ -459,6 +462,10 @@ void Net_ConnectionTimeout(INT32 node)
 void Net_AckTicker(void)
 {
 	static tic_t next_congestion_notice[MAXNETNODES];
+	const boolean join_handles_timeout = client
+		&& (cl_mode == CL_SEARCHING || cl_mode == CL_ASKFULLFILELIST
+			|| cl_mode == CL_CHECKFILES || cl_mode == CL_CONFIRMCONNECT
+			|| cl_mode == CL_DOWNLOADHTTPFILES || cl_mode == CL_LOADFILES);
 
 	for (INT32 i = 0; i < MAXACKPACKETS; i++)
 	{
@@ -507,8 +514,11 @@ void Net_AckTicker(void)
 				next_congestion_notice[i] = I_GetTime() + 10*TICRATE;
 			}
 
+			const tic_t now = I_GetTime();
+			if (join_handles_timeout && i == servernode)
+				nodes[i].lasttimepacketreceived = now;
 			if (!(nodes[i].flags & NF_CLOSE)
-				&& nodes[i].lasttimepacketreceived + connectiontimeout < I_GetTime())
+				&& (tic_t)(now - nodes[i].lasttimepacketreceived) > connectiontimeout)
 			{
 				Net_ConnectionTimeout(i);
 			}
@@ -627,7 +637,7 @@ void Net_CloseConnection(INT32 node)
 
 	nodes[node].flags |= NF_CLOSE;
 
-	// Send a final packet carrying our latest acknowledgement.
+
 	if (nodes[node].firstacktosend)
 		SendAcks(node);
 
@@ -1086,8 +1096,8 @@ boolean HGetPacket(void)
 			continue;
 		}*/
 
-		// Finish processing the incoming packet before closing a node.
-		// Closing can send another packet and overwrite the shared buffer.
+
+
 		{
 			const INT32 node = doomcom->remotenode;
 			const boolean valid = Processackpak();

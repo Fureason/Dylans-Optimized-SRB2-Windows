@@ -68,6 +68,7 @@ static int hms_started;
 static char *hms_api;
 #ifdef HAVE_THREADS
 static I_mutex hms_api_mutex;
+static I_mutex hms_host_request_mutex;
 #endif
 
 static char *hms_server_token;
@@ -84,6 +85,7 @@ struct HMS_buffer
 	int   needle;
 	int    end;
 	int query_id;
+	INT32 response;
 };
 
 #ifdef HAVE_THREADS
@@ -184,9 +186,9 @@ HMS_connect (int proto, const char *format, ...)
 #endif
 
 #ifdef HAVE_THREADS
-	/* curl_global_init and the shared API/user-agent state are process-wide.
-	 * A listen host can register while the room menu performs its own request,
-	 * so protect first use as well as URL construction. */
+
+
+
 	I_lock_mutex(&hms_api_mutex);
 #endif
 
@@ -252,9 +254,9 @@ HMS_connect (int proto, const char *format, ...)
 	if (quack_token)
 		sprintf(&url[seek], "?token=%s", quack_token);
 
-	/* Routine master-server traffic runs on a worker thread. Avoid touching the
-	 * shared console/log stream unless verbose diagnostics were requested; a
-	 * flushed log write can otherwise briefly contend with the game thread. */
+
+
+
 	if (cv_masterserver_debug.value)
 		CONS_Printf("HMS: connecting '%s'...\n", url);
 
@@ -264,6 +266,7 @@ HMS_connect (int proto, const char *format, ...)
 	buffer->buffer = malloc(buffer->end);
 	buffer->needle = 0;
 	buffer->query_id = -1;
+	buffer->response = 0;
 
 	if (cv_masterserver_debug.value)
 	{
@@ -286,10 +289,10 @@ HMS_connect (int proto, const char *format, ...)
 #endif
 		curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
-	/* Five seconds is too short when the public master is under load: it can
-	 * accept the TLS connection immediately but take a little longer to begin
-	 * the response. Keep zero's libcurl meaning (no overall timeout), while
-	 * giving old configs that still contain "5" a safer effective minimum. */
+
+
+
+
 	{
 		long timeout = cv_masterserver_timeout.value;
 		if (timeout > 0 && timeout < 8)
@@ -300,9 +303,9 @@ HMS_connect (int proto, const char *format, ...)
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, buffer);
 
 #ifdef HAVE_THREADS
-	/* Leaving a master-server menu changes ms_QueryId. Let libcurl notice that
-	 * while it is waiting for DNS, TLS, or response data so Back does not leave
-	 * an obsolete request occupying the menu until its full timeout. */
+
+
+
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, HMS_progress);
 	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, buffer);
@@ -320,11 +323,13 @@ static int
 HMS_do (struct HMS_buffer *buffer)
 {
 	CURLcode cc;
-	long status;
+	long status = 0;
 
 	char *p;
 
 	cc = curl_easy_perform(buffer->curl);
+	curl_easy_getinfo(buffer->curl, CURLINFO_RESPONSE_CODE, &status);
+	buffer->response = (INT32)status;
 
 	if (cc != CURLE_OK)
 	{
@@ -341,8 +346,6 @@ HMS_do (struct HMS_buffer *buffer)
 	}
 
 	buffer->buffer[buffer->needle] = '\0';
-
-	curl_easy_getinfo(buffer->curl, CURLINFO_RESPONSE_CODE, &status);
 
 	if (status != 200)
 	{
@@ -429,8 +432,8 @@ HMS_fetch_rooms (int joining, int query_id)
 
 	int i;
 
-	/* Room definitions change very rarely. Reuse a recent successful result
-	 * when the player backs out and immediately opens the browser again. */
+
+
 	if (hms_rooms_cached_at != 0
 		&& hms_rooms_cached_joining == joining
 		&& now - hms_rooms_cached_at <= 15)
@@ -451,9 +454,9 @@ HMS_fetch_rooms (int joining, int query_id)
 		doing_shit = 1;
 
 #ifdef HAVE_THREADS
-		/* The user may have backed out while curl was blocked.  Treat that as a
-		 * completed canceled request before touching room/menu storage, including
-		 * the valid-but-empty room-list case. */
+
+
+
 		I_lock_mutex(&ms_QueryId_mutex);
 		if (query_id != ms_QueryId)
 			doing_shit = 0;
@@ -488,7 +491,7 @@ HMS_fetch_rooms (int joining, int query_id)
 #ifdef HAVE_THREADS
 					I_lock_mutex(&ms_QueryId_mutex);
 					{
-						if (query_id != ms_QueryId)
+						if (query_id >= 0 && query_id != ms_QueryId)
 							doing_shit = 0;
 					}
 					I_unlock_mutex(ms_QueryId_mutex);
@@ -527,8 +530,8 @@ HMS_fetch_rooms (int joining, int query_id)
 	}
 	else
 	{
-		/* A temporary outage should not empty a room menu that already worked
-		 * earlier in this process. */
+
+
 		if (hms_rooms_cached_at != 0
 			&& hms_rooms_cached_joining == joining
 			&& HMS_publish_cached_rooms(query_id))
@@ -545,162 +548,165 @@ HMS_fetch_rooms (int joining, int query_id)
 	return ok;
 }
 
-int
-HMS_register (void)
+static int
+HMS_register_family(int proto, const char *post, char **server_token, INT32 *response)
 {
 	struct HMS_buffer *hms;
 	int ok;
 
-	char post[256];
-
-	char *title;
-
-	hms = HMS_connect(PROTO_V4, "rooms/%d/register", cv_masterserver_room_id.value);
-
-	if (! hms)
-		return 0;
-
-	title = curl_easy_escape(hms->curl, cv_servername.string, 0);
-
-	snprintf(post, sizeof post,
-			"port=%d&"
-			"title=%s&"
-			"version=%s",
-
-			current_port,
-
-			title,
-
-			SRB2VERSION
-	);
-
-	curl_free(title);
-
-	curl_easy_setopt(hms->curl, CURLOPT_POSTFIELDS, post);
-
-	ok = HMS_do(hms);
-
-	if (ok)
-	{
-		hms_server_token = strdup(strtok(hms->buffer, "\n"));
-	}
-
-	HMS_end(hms);
-
-#ifndef NO_IPV6
-	if (!Net_UseIPv6())
-		return ok;
-
-	hms = HMS_connect(PROTO_V6, "rooms/%d/register", cv_masterserver_room_id.value);
-
-	if (! hms)
+	free(*server_token);
+	*server_token = NULL;
+	*response = 0;
+	hms = HMS_connect(proto, "rooms/%d/register", cv_masterserver_room_id.value);
+	if (!hms)
 		return 0;
 
 	curl_easy_setopt(hms->curl, CURLOPT_POSTFIELDS, post);
-
 	ok = HMS_do(hms);
-
+	*response = hms->response;
 	if (ok)
 	{
-		hms_server_token_ipv6 = strdup(strtok(hms->buffer, "\n"));
+		hms->buffer[strcspn(hms->buffer, "\r\n")] = '\0';
+		if (hms->buffer[0] && strspn(hms->buffer,
+			"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_.") == strlen(hms->buffer))
+			*server_token = strdup(hms->buffer);
+
+
+		ok = *server_token != NULL;
 	}
-
 	HMS_end(hms);
-#endif
-
 	return ok;
 }
 
 int
-HMS_unlist (void)
+HMS_register(INT32 *response)
+{
+	char post[256];
+	char *title = curl_easy_escape(NULL, cv_servername.string, 0);
+	int ok = 0;
+
+	*response = 0;
+	if (!title)
+		return 0;
+	snprintf(post, sizeof post, "port=%u&title=%s&version=%s",
+		(unsigned)current_port, title, SRB2VERSION);
+	curl_free(title);
+
+#ifdef HAVE_THREADS
+	I_lock_mutex(&hms_host_request_mutex);
+#endif
+	ok = HMS_register_family(PROTO_V4, post, &hms_server_token, response);
+#ifndef NO_IPV6
+	if (Net_UseIPv6())
+	{
+		INT32 v6_response;
+		const int v6_ok = HMS_register_family(PROTO_V6, post, &hms_server_token_ipv6, &v6_response);
+
+
+		if (!ok && (v6_ok || !*response))
+			*response = v6_response;
+		ok = ok || v6_ok;
+	}
+#endif
+#ifdef HAVE_THREADS
+	I_unlock_mutex(hms_host_request_mutex);
+#endif
+	return ok;
+}
+
+static int
+HMS_unlist_family(int proto, char **server_token)
 {
 	struct HMS_buffer *hms;
 	int ok = 0;
 
-	if (hms_server_token)
+	if (!*server_token)
+		return 0;
+
+	hms = HMS_connect(proto, "servers/%s/unlist", *server_token);
+	if (hms)
 	{
-		hms = HMS_connect(PROTO_V4, "servers/%s/unlist", hms_server_token);
-
-		if (! hms)
-			return 0;
-
 		curl_easy_setopt(hms->curl, CURLOPT_POST, 1);
 		curl_easy_setopt(hms->curl, CURLOPT_POSTFIELDSIZE, 0);
-
 		ok = HMS_do(hms);
 		HMS_end(hms);
-
-		free(hms_server_token);
 	}
-
-#ifndef NO_IPV6
-	if (hms_server_token_ipv6 && Net_UseIPv6())
-	{
-		hms = HMS_connect(PROTO_V6, "servers/%s/unlist", hms_server_token_ipv6);
-
-		if (! hms)
-			return 0;
-
-		curl_easy_setopt(hms->curl, CURLOPT_POST, 1);
-		curl_easy_setopt(hms->curl, CURLOPT_POSTFIELDSIZE, 0);
-
-		ok = HMS_do(hms);
-		HMS_end(hms);
-
-		free(hms_server_token_ipv6);
-	}
-#endif
-
+	free(*server_token);
+	*server_token = NULL;
 	return ok;
 }
 
 int
-HMS_update (void)
+HMS_unlist(void)
+{
+	int ok;
+
+#ifdef HAVE_THREADS
+	I_lock_mutex(&hms_host_request_mutex);
+#endif
+	ok = HMS_unlist_family(PROTO_V4, &hms_server_token);
+#ifndef NO_IPV6
+	if (hms_server_token_ipv6)
+		ok |= HMS_unlist_family(PROTO_V6, &hms_server_token_ipv6);
+#endif
+#ifdef HAVE_THREADS
+	I_unlock_mutex(hms_host_request_mutex);
+#endif
+	return ok;
+}
+
+static int
+HMS_update_family(int proto, const char *server_token, const char *post, INT32 *response)
 {
 	struct HMS_buffer *hms;
+	int ok;
+
+	*response = 0;
+	if (!server_token)
+		return 0;
+
+	hms = HMS_connect(proto, "servers/%s/update", server_token);
+	if (!hms)
+		return 0;
+
+	curl_easy_setopt(hms->curl, CURLOPT_POSTFIELDS, post);
+	ok = HMS_do(hms);
+	*response = hms->response;
+	HMS_end(hms);
+	return ok;
+}
+
+int
+HMS_update(INT32 *response)
+{
+	char post[256];
+	char *title = curl_easy_escape(NULL, cv_servername.string, 0);
 	int ok = 0;
 
-	char post[256];
-
-	char *title;
-
-	title = curl_easy_escape(NULL, cv_servername.string, 0);
-
-	snprintf(post, sizeof post,
-			"title=%s",
-			title
-	);
-
+	*response = 0;
+	if (!title)
+		return 0;
+	snprintf(post, sizeof post, "title=%s", title);
 	curl_free(title);
 
-	if (hms_server_token)
-	{
-		hms = HMS_connect(PROTO_V4, "servers/%s/update", hms_server_token);
-
-		if (! hms)
-			return 0;
-
-		curl_easy_setopt(hms->curl, CURLOPT_POSTFIELDS, post);
-
-		ok = HMS_do(hms);
-		HMS_end(hms);
-	}
-
+#ifdef HAVE_THREADS
+	I_lock_mutex(&hms_host_request_mutex);
+#endif
+	ok = HMS_update_family(PROTO_V4, hms_server_token, post, response);
 #ifndef NO_IPV6
 	if (hms_server_token_ipv6 && Net_UseIPv6())
 	{
-		hms = HMS_connect(PROTO_V6, "servers/%s/update", hms_server_token_ipv6);
+		INT32 v6_response;
+		const int v6_ok = HMS_update_family(PROTO_V6, hms_server_token_ipv6, post, &v6_response);
 
-		if (! hms)
-			return ok;
-
-		curl_easy_setopt(hms->curl, CURLOPT_POSTFIELDS, post);
-
-		ok = HMS_do(hms);
-		HMS_end(hms);
+		if (!ok && (v6_ok || !*response))
+			*response = v6_response;
+		ok = ok || v6_ok;
 	}
 #endif
-
+#ifdef HAVE_THREADS
+	I_unlock_mutex(hms_host_request_mutex);
+#endif
 	return ok;
 }
 
@@ -809,7 +815,7 @@ HMS_fetch_servers (msg_server_t *list, int room_number, int query_id)
 #ifdef HAVE_THREADS
 					I_lock_mutex(&ms_QueryId_mutex);
 					{
-						if (query_id != ms_QueryId)
+						if (query_id >= 0 && query_id != ms_QueryId)
 							doing_shit = 0;
 					}
 					I_unlock_mutex(ms_QueryId_mutex);
@@ -823,10 +829,10 @@ HMS_fetch_servers (msg_server_t *list, int room_number, int query_id)
 						strlcpy(list[i].ip,      address, sizeof list[i].ip);
 						strlcpy(list[i].port,    port,    sizeof list[i].port);
 
-						/* Server titles are URL-escaped by the master server (for
-						 * example, spaces arrive as "%20"). Decode them before
-						 * displaying or comparing names; otherwise hoststatus can
-						 * report a false negative for nearly every normal title. */
+
+
+
+
 						decoded_title = curl_easy_unescape(hms->curl, title, 0, NULL);
 						strlcpy(list[i].name,
 							decoded_title ? decoded_title : title,
@@ -854,12 +860,12 @@ HMS_fetch_servers (msg_server_t *list, int room_number, int query_id)
 				}
 			}
 
-			if (! doing_shit)
+			if (!doing_shit || !section_end)
 				break;
 
-			p = ( section_end + 2 );
+			p = section_end + 2;
 		}
-		while (section_end) ;
+		while (*p);
 
 		if (doing_shit)
 			list[i].header.buffer[0] = 0;

@@ -44,6 +44,7 @@
 
 UINT8 hu_redownloadinggamestate = 0;
 boolean cl_redownloadinggamestate = false;
+static precise_t resync_requested_at;
 
 boolean SV_ResendingSavegameToAnyone(void)
 {
@@ -170,26 +171,29 @@ void SV_SavedGame(void)
 
 boolean CL_LoadReceivedSavegame(boolean reloading)
 {
-	save_t savebuffer;
+	save_t savebuffer = {0};
 	size_t decompressedlen;
 	size_t actualdecompressedlen;
+	size_t received_bytes;
 	char tmpsave[256];
+	const precise_t started = I_GetPreciseTime();
+	const precise_t transfer_time = reloading && resync_requested_at ? started - resync_requested_at : 0;
+	const char *failure = "received file missing or unreadable";
+
+	if (reloading)
+		resync_requested_at = 0;
 
 	FreeFileNeeded();
 
 	sprintf(tmpsave, "%s" PATHSEP TMPSAVENAME, srb2home);
 
-	savebuffer.size = FIL_ReadFile(tmpsave, &savebuffer.buf);
-	savebuffer.pos = 0;
-
-	CONS_Printf(M_GetText("Loading savegame length %s\n"), sizeu1(savebuffer.size));
-	if (!savebuffer.size)
-	{
-		I_Error("Can't read savegame sent");
-		return false;
-	}
+	received_bytes = savebuffer.size = FIL_ReadFile(tmpsave, &savebuffer.buf);
+	CONS_Printf(M_GetText("Loading savegame length %s\n"), sizeu1(received_bytes));
+	if (!received_bytes)
+		goto corruptsave;
 
 	// Decompress saved game if necessary.
+	failure = "missing or truncated compression header";
 	decompressedlen = P_ReadUINT32(&savebuffer);
 	if (P_SaveBufferReadError(&savebuffer))
 		goto corruptsave;
@@ -199,6 +203,7 @@ boolean CL_LoadReceivedSavegame(boolean reloading)
 		actualdecompressedlen = lzf_decompress(savebuffer.buf + sizeof(UINT32), savebuffer.size - sizeof(UINT32), decompressedbuffer, decompressedlen);
 		if (actualdecompressedlen != decompressedlen)
 		{
+			failure = "decompression failed or decoded size differed";
 			Z_Free(decompressedbuffer);
 			goto corruptsave;
 		}
@@ -215,6 +220,7 @@ boolean CL_LoadReceivedSavegame(boolean reloading)
 	automapactive = false;
 
 	// load a base level
+	failure = "engine rejected map or gameplay data in received state";
 	if (P_LoadNetGame(&savebuffer, reloading))
 	{
 		const UINT8 actnum = mapheaderinfo[gamemap-1]->actnum;
@@ -243,12 +249,28 @@ boolean CL_LoadReceivedSavegame(boolean reloading)
 	// so they know they can resume the game
 	netbuffer->packettype = PT_RECEIVEDGAMESTATE;
 	HSendPacket(servernode, true, 0, 0);
+	if (reloading)
+	{
+		const precise_t precision = I_GetPrecisePrecision();
+		CONS_Printf("Resync applied: %s bytes received, transfer %.1f ms, apply %.1f ms.\n",
+			sizeu1(received_bytes), transfer_time * 1000.0 / precision,
+			(I_GetPreciseTime() - started) * 1000.0 / precision);
+	}
 	return true;
 
 corruptsave:
-	CONS_Alert(CONS_ERROR, M_GetText("The server sent an incompatible or corrupted game state.\n"));
-	Z_Free(savebuffer.buf);
-	if (unlink(tmpsave) == -1)
+	{
+		char detail[256];
+		const INT16 checksum = consistancy[gametic % BACKUPTICS];
+		snprintf(detail, sizeof detail, "%s (received=%s bytes, read offset=%s of %s)",
+			failure, sizeu1(received_bytes), sizeu2(savebuffer.pos), sizeu3(savebuffer.size));
+		D_WriteConsistencyReport(reloading ? "client-resync-state-error" : "client-join-state-error",
+			gametic, servernode, checksum, checksum, detail);
+		CONS_Alert(CONS_ERROR, "Could not load server game state: %s.\n", detail);
+	}
+	if (savebuffer.buf)
+		Z_Free(savebuffer.buf);
+	if (FIL_FileExists(tmpsave) && unlink(tmpsave) == -1)
 		CONS_Alert(CONS_ERROR, M_GetText("Can't delete %s\n"), tmpsave);
 	D_QuitNetGame();
 	CL_Reset();
@@ -349,17 +371,22 @@ void PT_WillResendGamestate(SINT8 node)
 	if (server || cl_redownloadinggamestate)
 		return;
 
-	// The stock packet has no room for the server's failing checksum/tic. Keep
-	// a local snapshot report anyway; paired with the host report it narrows
-	// the cause without changing the 2.2.15 network protocol.
+
+
+
 	D_WriteConsistencyReport("client-resync-notice", gametic, node,
-		consistancy[gametic%BACKUPTICS], consistancy[gametic%BACKUPTICS]);
+		consistancy[gametic%BACKUPTICS], consistancy[gametic%BACKUPTICS],
+		"host requested a replacement game state");
 
 	// Send back a PT_CANRECEIVEGAMESTATE packet to the server
 	// so they know they can start sending the game state
 	netbuffer->packettype = PT_CANRECEIVEGAMESTATE;
 	if (!HSendPacket(servernode, true, 0, 0))
+	{
+		CONS_Alert(CONS_WARNING, "Resync request could not be sent on the reliable channel.\n");
 		return;
+	}
+	resync_requested_at = I_GetPreciseTime();
 
 	CONS_Printf(M_GetText("Reloading game state...\n"));
 

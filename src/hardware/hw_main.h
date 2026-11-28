@@ -67,7 +67,7 @@ void HWR_EndScreenWipe(void);
 void HWR_DrawIntermissionBG(void);
 void HWR_DoWipe(UINT8 wipenum, UINT8 scrnnum);
 void HWR_MakeScreenFinalTexture(void);
-void HWR_DrawScreenFinalTexture(int width, int height);
+void HWR_DrawScreenFinalTexture(int x, int y, int width, int height);
 
 // This stuff is put here so models can use them
 boolean HWR_UseShader(void);

@@ -171,8 +171,8 @@ consvar_t cv_fov = CVAR_INIT ("fov", "90", CV_SAVE|CV_FLOAT|CV_CALL, fov_cons_t,
 consvar_t cv_fovchange = CVAR_INIT ("fovchange", "Off", CV_SAVE, CV_OnOff, NULL);
 consvar_t cv_screenshake = CVAR_INIT ("screenshake", "On", CV_SAVE|CV_CALL, CV_OnOff, ScreenShake_OnChange);
 
-/* Suppress presentation only. Quake timers, damage, mod hooks and player
- * state still run normally on every peer, regardless of this local option. */
+
+
 static void ScreenShake_OnChange(void)
 {
 	if (!cv_screenshake.value)
@@ -184,8 +184,8 @@ static void ScreenShake_OnChange(void)
 
 angle_t R_GetViewRollAngle(const player_t *player)
 {
-	/* NiGHTS uses roll for its movement axes. Keep that orientation while
-	 * disabling cosmetic mod roll everywhere else, without changing state. */
+
+
 	if (!cv_screenshake.value && player->powers[pw_carry] != CR_NIGHTSMODE)
 		return 0;
 	return player->viewrollangle;
@@ -202,11 +202,11 @@ static void MSAA_OnChange(void)
 boolean R_SkyboxEnabled(void)
 {
 #ifdef HWRENDER
-	/* A map-authored 3D skybox and OpenGL's optional curved sky dome are two
-	 * different features. Older optimized-client configs may have `skybox` Off
-	 * because gr_skydome was temporarily used as the shared switch, so accept
-	 * either setting for compatibility without making the dome control how a
-	 * real map skybox is rendered. */
+
+
+
+
+
 	return cv_skybox.value || cv_glskydome.value;
 #else
 	return cv_skybox.value;
@@ -373,6 +373,20 @@ angle_t R_PointToAngle(fixed_t x, fixed_t y)
 		0;
 }
 
+
+
+fixed_t R_SlopeViewHeight(const pslope_t *slope, fixed_t flatheight)
+{
+	if (!slope)
+		return flatheight;
+
+	const INT64 dx = ((INT64)viewx - slope->o.x) * slope->d.x >> FRACBITS;
+	const INT64 dy = ((INT64)viewy - slope->o.y) * slope->d.y >> FRACBITS;
+	const INT64 dist = dx / 2 + dy / 2;
+	const INT64 z = (INT64)slope->o.z + ((dist * slope->zdelta) >> FRACBITS) * 2;
+	return (fixed_t)max(INT32_MIN, min(INT32_MAX, z));
+}
+
 // This version uses 64-bit variables to avoid overflows with large values.
 angle_t R_PointToAngle64(INT64 x, INT64 y)
 {
@@ -411,8 +425,12 @@ fixed_t R_PointToDist2(fixed_t px2, fixed_t py2, fixed_t px1, fixed_t py1)
 	angle_t angle;
 	ufixed_t dx, dy, dist;
 
-	dx = abs(px1 - px2);
-	dy = abs(py1 - py2);
+	const INT64 dx64 = (INT64)px1 - px2;
+	const INT64 dy64 = (INT64)py1 - py2;
+	if (dx64 > INT32_MAX || dx64 <= INT32_MIN || dy64 > INT32_MAX || dy64 <= INT32_MIN)
+		return INT32_MAX;
+	dx = abs((INT32)dx64);
+	dy = abs((INT32)dy64);
 
 	if (dy > dx)
 	{
@@ -542,19 +560,19 @@ static void R_InitTextureMapping(void)
 		viewangletox[i] = t;
 	}
 
-	// Scan viewangletox[] to generate xtoviewangle[].
-	// Keep this inverse in the same quantized fine-angle space as viewangletox.
-	// Plane spans, wall clips, FOF clips, and masked midtextures all share these
-	// two tables and must agree on the exact screen-column boundary.
+
+
+
+
 	for (x = 0; x <= viewwidth;x++)
 	{
 		i = 0;
 		while (viewangletox[i] > x)
 			i++;
 		xtoviewangle[x] = (i<<ANGLETOFINESHIFT) - ANGLE_90;
-		/* Visibility needs the shared quantized boundary above. Texture rays
-		 * retain their sub-angle precision so a wall does not change texel when
-		 * switching to OpenGL's continuous projection at the same viewpoint. */
+
+
+
 		textureviewangle[x] = (angle_t)(INT64)(atan(((double)centerx-x)
 			/ focallengthf) * ((double)ANGLE_180/M_PI));
 	}
@@ -1142,19 +1160,59 @@ subsector_t *R_PointInSubsectorOrNull(fixed_t x, fixed_t y)
 	return ret;
 }
 
+static boolean R_UsesSecondCamera(const player_t *player)
+{
+	return splitscreen && player == &players[secondarydisplayplayer]
+		&& player != &players[consoleplayer];
+}
+
+boolean R_ViewpointHasChasecam(const player_t *player)
+{
+	if (player->climbing || player->powers[pw_carry] == CR_NIGHTSMODE
+		|| player->playerstate == PST_DEAD || gamestate == GS_TITLESCREEN || tutorialmode)
+		return true;
+	if (player->spectator)
+		return false;
+
+	return (R_UsesSecondCamera(player) ? cv_chasecam2.value : cv_chasecam.value) != 0;
+}
+
+static camera_t *R_SetupViewCamera(player_t *player, boolean skybox)
+{
+	const boolean second = R_UsesSecondCamera(player);
+	const boolean chasecam = R_ViewpointHasChasecam(player);
+	camera_t *cam = second ? &camera2 : &camera;
+
+	if (cam->chase != chasecam)
+	{
+		if (chasecam)
+			P_ResetCamera(player, cam);
+		cam->chase = chasecam;
+		cam->reset = true;
+	}
+
+	if (cam->reset)
+	{
+		R_ResetViewInterpolation(second ? 2 : 1);
+		cam->reset = false;
+	}
+
+	if (skybox)
+		R_SetViewContext(second ? VIEWCONTEXT_SKY2 : VIEWCONTEXT_SKY1);
+	else
+		R_SetViewContext(second ? VIEWCONTEXT_PLAYER2 : VIEWCONTEXT_PLAYER1);
+
+	return cam;
+}
+
 //
 // R_SetupFrame
 //
 void R_SetupFrame(player_t *player)
 {
-	camera_t *thiscam;
-	boolean chasecam = R_ViewpointHasChasecam(player);
-	boolean ispaused = paused || P_AutoPause();
-
-	if (splitscreen && player == &players[secondarydisplayplayer] && player != &players[consoleplayer])
-		thiscam = &camera2;
-	else
-		thiscam = &camera;
+	camera_t *thiscam = R_SetupViewCamera(player, false);
+	const boolean chasecam = thiscam->chase;
+	const boolean ispaused = paused || P_AutoPause();
 
 	newview->sky = false;
 
@@ -1267,21 +1325,54 @@ void R_SetupFrame(player_t *player)
 	R_InterpolateView(R_UsingFrameInterpolation() ? rendertimefrac : FRACUNIT);
 }
 
+static INT64 R_ScaleSkyboxOffset(INT64 offset, INT16 scale)
+{
+	if (scale > 0)
+		return offset / scale;
+	return scale < 0 ? offset * -(INT64)scale : 0;
+}
+
+void R_GetSkyboxPosition(const mobj_t *viewpoint, fixed_t x, fixed_t y, fixed_t z, vector3_t *position)
+{
+	const mapheader_t *header = mapheaderinfo[gamemap - 1];
+	mobj_t *center = skyboxmo[1];
+	INT64 sx = viewpoint->x, sy = viewpoint->y, sz = viewpoint->z;
+
+	if (header && !P_MobjWasRemoved(center))
+	{
+
+
+		const INT64 dx = R_ScaleSkyboxOffset((INT64)x - center->x, header->skybox_scalex);
+		const INT64 dy = R_ScaleSkyboxOffset((INT64)y - center->y, header->skybox_scaley);
+		switch (viewpoint->angle)
+		{
+			case 0: sx += dx; sy += dy; break;
+			case ANGLE_90: sx -= dy; sy += dx; break;
+			case ANGLE_180: sx -= dx; sy -= dy; break;
+			case ANGLE_270: sx += dy; sy -= dx; break;
+			default:
+			{
+				const angle_t angle = viewpoint->angle >> ANGLETOFINESHIFT;
+				const fixed_t sine = FINESINE(angle), cosine = FINECOSINE(angle);
+				sx += (dx * cosine >> FRACBITS) - (dy * sine >> FRACBITS);
+				sy += (dx * sine >> FRACBITS) + (dy * cosine >> FRACBITS);
+				break;
+			}
+		}
+	}
+	if (header)
+		sz += R_ScaleSkyboxOffset(z, header->skybox_scalez);
+
+	if (sx < INT32_MIN || sx > INT32_MAX || sy < INT32_MIN || sy > INT32_MAX
+		|| sz < INT32_MIN || sz > INT32_MAX)
+		*position = (vector3_t){viewpoint->x, viewpoint->y, viewpoint->z};
+	else
+		*position = (vector3_t){(fixed_t)sx, (fixed_t)sy, (fixed_t)sz};
+}
+
 void R_SkyboxFrame(player_t *player)
 {
-	camera_t *thiscam;
-
-	if (splitscreen && player == &players[secondarydisplayplayer]
-	&& player != &players[consoleplayer])
-	{
-		thiscam = &camera2;
-		R_SetViewContext(VIEWCONTEXT_SKY2);
-	}
-	else
-	{
-		thiscam = &camera;
-		R_SetViewContext(VIEWCONTEXT_SKY1);
-	}
+	camera_t *thiscam = R_SetupViewCamera(player, true);
 
 	// cut-away view stuff
 	newview->sky = true;
@@ -1325,83 +1416,29 @@ void R_SkyboxFrame(player_t *player)
 
 	newview->player = player;
 
-	newview->x = r_viewmobj->x;
-	newview->y = r_viewmobj->y;
-	newview->z = r_viewmobj->z; // 26/04/17: use actual Z position instead of spawnpoint angle!
-
-	if (mapheaderinfo[gamemap-1])
+	vector3_t campos;
+	if (player->awayviewtics)
 	{
-		mapheader_t *mh = mapheaderinfo[gamemap-1];
-		vector3_t campos = {0,0,0}; // Position of player's actual view point
-
-		if (player->awayviewtics) {
-			campos.x = player->awayviewmobj->x;
-			campos.y = player->awayviewmobj->y;
-			campos.z = player->awayviewmobj->z + 20*FRACUNIT;
-		} else if (thiscam->chase) {
-			campos.x = thiscam->x;
-			campos.y = thiscam->y;
-			campos.z = thiscam->z + (thiscam->height>>1);
-		} else {
-			campos.x = player->mo->x;
-			campos.y = player->mo->y;
-			campos.z = player->viewz;
-		}
-
-		// Earthquake effects should be scaled in the skybox
-		// (if an axis isn't used, the skybox won't shake in that direction)
-		if (cv_screenshake.value)
-		{
-			campos.x += quake.x;
-			campos.y += quake.y;
-			campos.z += quake.z;
-		}
-
-		if (skyboxmo[1]) // Is there a viewpoint?
-		{
-			fixed_t x = 0, y = 0;
-			if (mh->skybox_scalex > 0)
-				x = (campos.x - skyboxmo[1]->x) / mh->skybox_scalex;
-			else if (mh->skybox_scalex < 0)
-				x = (campos.x - skyboxmo[1]->x) * -mh->skybox_scalex;
-
-			if (mh->skybox_scaley > 0)
-				y = (campos.y - skyboxmo[1]->y) / mh->skybox_scaley;
-			else if (mh->skybox_scaley < 0)
-				y = (campos.y - skyboxmo[1]->y) * -mh->skybox_scaley;
-
-			if (r_viewmobj->angle == 0)
-			{
-				newview->x += x;
-				newview->y += y;
-			}
-			else if (r_viewmobj->angle == ANGLE_90)
-			{
-				newview->x -= y;
-				newview->y += x;
-			}
-			else if (r_viewmobj->angle == ANGLE_180)
-			{
-				newview->x -= x;
-				newview->y -= y;
-			}
-			else if (r_viewmobj->angle == ANGLE_270)
-			{
-				newview->x += y;
-				newview->y -= x;
-			}
-			else
-			{
-				angle_t ang = r_viewmobj->angle>>ANGLETOFINESHIFT;
-				newview->x += FixedMul(x,FINECOSINE(ang)) - FixedMul(y,  FINESINE(ang));
-				newview->y += FixedMul(x,  FINESINE(ang)) + FixedMul(y,FINECOSINE(ang));
-			}
-		}
-		if (mh->skybox_scalez > 0)
-			newview->z += campos.z / mh->skybox_scalez;
-		else if (mh->skybox_scalez < 0)
-			newview->z += campos.z * -mh->skybox_scalez;
+		const mobj_t *awayview = player->awayviewmobj;
+		campos = (vector3_t){awayview->x, awayview->y, awayview->z + 20*FRACUNIT};
 	}
+	else if (thiscam->chase)
+		campos = (vector3_t){thiscam->x, thiscam->y, thiscam->z + (thiscam->height>>1)};
+	else
+		campos = (vector3_t){player->mo->x, player->mo->y, player->viewz};
+
+	if (cv_screenshake.value)
+	{
+		campos.x += quake.x;
+		campos.y += quake.y;
+		campos.z += quake.z;
+	}
+
+	vector3_t skypos;
+	R_GetSkyboxPosition(r_viewmobj, campos.x, campos.y, campos.z, &skypos);
+	newview->x = skypos.x;
+	newview->y = skypos.y;
+	newview->z = skypos.z;
 
 	if (!P_MobjWasRemoved(r_viewmobj) && r_viewmobj->subsector)
 		newview->sector = r_viewmobj->subsector->sector;
@@ -1412,61 +1449,6 @@ void R_SkyboxFrame(player_t *player)
 	// newview->cos = FINECOSINE(viewangle>>ANGLETOFINESHIFT);
 
 	R_InterpolateView(R_UsingFrameInterpolation() ? rendertimefrac : FRACUNIT);
-}
-
-boolean R_ViewpointHasChasecam(player_t *player)
-{
-	camera_t *thiscam;
-	boolean chasecam = false;
-	boolean isplayer2 = (splitscreen && player == &players[secondarydisplayplayer] && player != &players[consoleplayer]);
-
-	if (isplayer2)
-	{
-		thiscam = &camera2;
-		chasecam = (cv_chasecam2.value != 0);
-	}
-	else
-	{
-		thiscam = &camera;
-		chasecam = (cv_chasecam.value != 0);
-	}
-
-	if (player->climbing || (player->powers[pw_carry] == CR_NIGHTSMODE) || player->playerstate == PST_DEAD || gamestate == GS_TITLESCREEN || tutorialmode)
-		chasecam = true; // force chasecam on
-	else if (player->spectator) // no spectator chasecam
-		chasecam = false; // force chasecam off
-
-	if (chasecam && !thiscam->chase)
-	{
-		P_ResetCamera(player, thiscam);
-		thiscam->chase = true;
-	}
-	else if (!chasecam && thiscam->chase)
-	{
-		P_ResetCamera(player, thiscam);
-		thiscam->chase = false;
-	}
-
-	if (isplayer2)
-	{
-		R_SetViewContext(VIEWCONTEXT_PLAYER2);
-		if (thiscam->reset)
-		{
-			R_ResetViewInterpolation(2);
-			thiscam->reset = false;
-		}
-	}
-	else
-	{
-		R_SetViewContext(VIEWCONTEXT_PLAYER1);
-		if (thiscam->reset)
-		{
-			R_ResetViewInterpolation(1);
-			thiscam->reset = false;
-		}
-	}
-
-	return chasecam;
 }
 
 boolean R_IsViewpointThirdPerson(player_t *player, boolean skybox)
@@ -1541,18 +1523,27 @@ static void Mask_Post (maskcount_t* m)
 // so maybe we should release screen lock before each netupdate below..?
 
 static fixed_t viewfov[2];
+static boolean clear_cutout_background;
+
+void R_MarkViewCutout(void)
+{
+	clear_cutout_background = true;
+}
 
 void R_RenderPlayerView(player_t *player)
 {
 	INT32			nummasks	= 1;
 	maskcount_t*	masks		= malloc(sizeof(maskcount_t));
 
-	if (cv_homremoval.value && player == &players[displayplayer]) // if this is display player 1
+	if (player == &players[displayplayer])
 	{
-		if (cv_homremoval.value == 1)
-			V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31); // No HOM effect!
-		else //'development' HOM removal -- makes it blindingly obvious if HOM is spotted.
+		if (cv_homremoval.value > 1)
 			V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 32+(timeinmap&15));
+		else if (cv_homremoval.value || clear_cutout_background)
+			V_DrawFill(0, 0, BASEVIDWIDTH, BASEVIDHEIGHT, 31);
+
+
+		clear_cutout_background = false;
 	}
 
 	fixed_t fov = R_GetPlayerFov(player);
@@ -1689,9 +1680,9 @@ void R_RenderPlayerView(player_t *player)
 
 void R_RegisterEngineStuff(void)
 {
-	/* Some gameplay add-ons query cam_speed while their Lua is loaded on a
-	 * dedicated server. Keep this harmless camera setting available there so
-	 * those scripts take the same initialization path as connected clients. */
+
+
+
 	CV_RegisterVar(&cv_cam_speed);
 
 	// Do nothing for dedicated server

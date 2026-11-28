@@ -60,6 +60,15 @@ extern boolean ds_powersoftwo, ds_solidcolor, ds_fog;
 extern UINT8 *ds_source;
 extern UINT8 *ds_transmap;
 
+#define TRANSPARENTPIXEL 255
+
+static inline void R_DrawWaterTexel(UINT8 *dest, const UINT8 *colormap, UINT8 texel, UINT8 background)
+{
+	if (texel != TRANSPARENTPIXEL)
+		*dest = colormap[ds_transmap[(texel << 8) + background]];
+}
+
+
 // Vectors for Software's tilted slope drawers
 extern dvector3_t ds_su, ds_sv, ds_sz, ds_slopelight;
 extern double zeroheight;
@@ -147,8 +156,6 @@ extern boolean skincolor_modified[];
 void R_InitViewBuffer(INT32 width, INT32 height);
 void R_VideoErase(size_t ofs, INT32 count);
 
-#define TRANSPARENTPIXEL 255
-
 // -----------------
 // 8bpp DRAWING CODE
 // -----------------
@@ -166,6 +173,7 @@ void R_DrawTranslatedColumn_8(void);
 void R_DrawTranslatedTranslucentColumn_8(void);
 void R_DrawFogColumn_8(void);
 void R_DrawColumnShadowed_8(void);
+void R_DrawMaskedWallColumnShadowed_8(void);
 
 void R_DrawSpan_8(void);
 void R_DrawTranslucentSpan_8(void);

@@ -35,8 +35,8 @@
 // we try to re-allocate a minimum of buffers for stability of the memory,
 // so all the small-enough tables based on screen size, are allocated once
 // and for all at the maximum size.
-#define MAXVIDWIDTH 2560 // fixed render tables must cover every listed mode
-#define MAXVIDHEIGHT 1440 // lots of tables are allocated with the MAX size.
+#define MAXVIDWIDTH 3840
+#define MAXVIDHEIGHT 2160 // lots of tables are allocated with the MAX size.
 #define BASEVIDWIDTH 320 // NEVER CHANGE THIS! This is the original
 #define BASEVIDHEIGHT 200 // resolution of the graphics.
 
@@ -158,6 +158,12 @@ extern CV_PossibleValue_t cv_renderer_t[];
 extern INT32 scr_bpp;
 
 extern consvar_t cv_scr_width, cv_scr_height, cv_scr_width_w, cv_scr_height_w, cv_scr_depth, cv_fullscreen;
+#if defined(HAVE_SDL) && !defined(__ANDROID__)
+extern consvar_t cv_fullscreenscale;
+#ifndef __EMSCRIPTEN__
+extern consvar_t cv_windowsize;
+#endif
+#endif
 extern consvar_t cv_renderer;
 // wait for page flipping to end or not
 extern consvar_t cv_vidwait;

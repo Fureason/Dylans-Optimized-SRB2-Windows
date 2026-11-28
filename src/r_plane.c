@@ -72,6 +72,7 @@ static INT32 spanstart[MAXVIDHEIGHT];
 //
 lighttable_t **planezlight;
 static fixed_t planeheight;
+static fixed_t planecos, planesin;
 
 //added : 10-02-98: yslopetab is what yslope used to be,
 //                yslope points somewhere into yslopetab,
@@ -136,7 +137,6 @@ static void R_UpdatePlaneRipple(void)
 
 static void R_MapPlane(INT32 y, INT32 x1, INT32 x2)
 {
-	angle_t angle, planecos, planesin;
 	fixed_t distance = 0, span;
 	size_t pindex;
 
@@ -147,10 +147,6 @@ static void R_MapPlane(INT32 y, INT32 x1, INT32 x2)
 
 	if (x1 >= vid.width)
 		x1 = vid.width - 1;
-
-	angle = (currentplane->viewangle + currentplane->plangle)>>ANGLETOFINESHIFT;
-	planecos = FINECOSINE(angle);
-	planesin = FINESINE(angle);
 
 	// [RH] Notice that I dumped the caching scheme used by Doom.
 	// It did not offer any appreciable speedup.
@@ -640,9 +636,9 @@ static void R_DrawSkyPlane(visplane_t *pl)
 	colfunc = colfuncs[BASEDRAWFUNC];
 	dc_iscale = skyscale;
 
-	/* Preserve the sky's continuous vertical projection separately from wall
-	 * clipping. Fine-angle and 16.16 rounding moved cloud rows up or down when
-	 * switching renderers, especially toward the sides of a wide viewport. */
+
+
+
 	const double scale = (BASEVIDWIDTH / 2.0) * FRACUNIT / projectiony;
 
 	dc_colormap = colormaps;
@@ -650,6 +646,8 @@ static void R_DrawSkyPlane(visplane_t *pl)
 	dc_texheight = textureheight[texture]>>FRACBITS;
 
 	R_CheckTextureCache(texture);
+	if (textures[texture]->has_holes)
+		R_MarkViewCutout();
 
 	for (INT32 x = pl->minx; x <= pl->maxx; x++)
 	{
@@ -660,13 +658,13 @@ static void R_DrawSkyPlane(visplane_t *pl)
 		{
 			INT32 angle = (pl->viewangle + xtoviewangle[x])>>ANGLETOSKYSHIFT;
 			const double ray = ((double)centerx-x) / focallengthf;
-			/* Round outward by one 32.32 unit. Texel edges exactly above the
-			 * horizon then stay on the same side of the sampling boundary as
-			 * the dome, without a visible whole-pixel or half-texel offset. */
+
+
+
 			const INT64 skyfracstep = 1 + (INT64)(scale
 				/ sqrt(1.0 + ray*ray) * 4294967296.0);
 			dc_x = x;
-			dc_source = R_GetColumn(texture, -angle)->pixels; // get negative of angle for each column to display sky correct way round! --Monster Iestyn 27/01/18
+			dc_source = R_GetSolidTextureColumn(texture, -angle); // get negative of angle for each column to display sky correct way round! --Monster Iestyn 27/01/18
 			R_DrawSkyColumn_8(skyfracstep);
 		}
 	}
@@ -1026,15 +1024,32 @@ void R_DrawSinglePlane(visplane_t *pl)
 		texture_t *texture = textures[R_GetTextureNumForFlat(levelflat)];
 		ds_flatwidth = texture->width;
 		ds_flatheight = texture->height;
+		if (texture->flat_has_holes && !pl->ffloor && !pl->polyobj)
+			R_MarkViewCutout();
 
 		if (R_CheckSolidColorFlat())
+		{
+			if (*ds_source == TRANSPARENTPIXEL)
+				return;
 			ds_solidcolor = true;
-		else if (R_CheckPowersOfTwo())
+		}
+		else if (texture->flat_has_holes)
+		{
+			if (spanfunctype == BASEDRAWFUNC)
+				spanfunctype = SPANDRAWFUNC_SPLAT;
+			else if (spanfunctype == SPANDRAWFUNC_TRANS)
+				spanfunctype = SPANDRAWFUNC_TRANSSPLAT;
+		}
+
+		if (!ds_solidcolor && R_CheckPowersOfTwo())
 		{
 			R_SetFlatVars(ds_flatwidth * ds_flatheight);
 			ds_powersoftwo = true;
 		}
 
+		const angle_t angle = pl->viewangle + pl->plangle;
+		planecos = R_InterpolatedFineSine(angle + ANGLE_90);
+		planesin = R_InterpolatedFineSine(angle);
 		mapfunc = R_MapPlane;
 
 		if (ds_solidcolor)

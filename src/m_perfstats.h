@@ -47,6 +47,7 @@ extern ps_metric_t ps_lua_prethinkframe_time;
 extern ps_metric_t ps_lua_thinkframe_time;
 extern ps_metric_t ps_lua_postthinkframe_time;
 extern ps_metric_t ps_lua_mobjhooks;
+extern ps_metric_t ps_lua_collision_hooks;
 extern ps_metric_t ps_lua_mobjiterates;
 
 extern ps_metric_t ps_otherlogictime;
@@ -55,9 +56,9 @@ void PS_SetPreThinkFrameHookInfo(int index, precise_t time_taken, char* short_sr
 void PS_SetThinkFrameHookInfo(int index, precise_t time_taken, char* short_src);
 void PS_SetPostThinkFrameHookInfo(int index, precise_t time_taken, char* short_src);
 
-/* Lightweight hitch attribution. Expensive per-object timing is enabled only
- * for a short window after a hitch, so diagnostics do not become a permanent
- * source of frame-time overhead. */
+
+
+
 void PS_ArmDeepProfile(void);
 void PS_ArmHitchProfile(void);
 void PS_BeginTickProfile(void);

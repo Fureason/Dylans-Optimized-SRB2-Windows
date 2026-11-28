@@ -9,9 +9,9 @@
 /// \file  r_patchrotation.c
 /// \brief Patch rotation.
 
-/* patch_t contains build-dependent hardware-renderer fields.  Load the build
- * feature definitions before any header can declare patch_t, otherwise this
- * file writes rotated/rotatedcachecost at the non-hardware offsets. */
+
+
+
 #include "doomdef.h"
 
 #include "r_patchrotation.h"
@@ -31,9 +31,9 @@ static CV_PossibleValue_t rotspritecache_cons_t[] = {
 	{-1, "Auto"}, {0, "Unlimited"}, {64, "64 MB"}, {128, "128 MB"},
 	{256, "256 MB"}, {512, "512 MB"}, {1024, "1024 MB"}, {0, NULL}};
 
-// This is an estimated combined cost: the indexed software patch plus the
-// RGBA texture OpenGL may create for it. Keeping it bounded is particularly
-// important to 32-bit builds, where address space is much smaller than RAM.
+
+
+
 consvar_t cv_rotspritecache = CVAR_INIT ("rotspritecache", "Auto", CV_SAVE, rotspritecache_cons_t, NULL);
 
 static size_t rotatedcachecost;
@@ -62,8 +62,8 @@ static size_t RotatedPatch_AutoCacheLimit(void)
 		limit = minimum;
 	if (limit > maximum)
 		limit = maximum;
-	// Do not let this optional cache claim more than a quarter of currently
-	// available memory. Keep a small floor so busy systems do not thrash it.
+
+
 	if (available && limit > available / 4)
 		limit = available / 4;
 	if (limit < 32u * megabyte)
@@ -108,7 +108,7 @@ static patch_t *RotatedPatch_FindNearest(rotsprite_t *rotsprite, INT32 angle, bo
 		INT32 lower = (angle - distance + rotsprite->angles) % rotsprite->angles;
 		INT32 upper = (angle + distance) % rotsprite->angles;
 
-		// Angle zero uses the original sprite and is not stored in this cache.
+
 		if (lower && rotsprite->patches[base + lower])
 			return rotsprite->patches[base + lower];
 		if (upper && rotsprite->patches[base + upper])
@@ -131,7 +131,7 @@ static size_t RotatedPatch_MemoryCost(patch_t *patch)
 	if (patch->width <= 0 || patch->height <= 0)
 		return cost;
 
-	// The legacy OpenGL backend pads patches to power-of-two textures.
+
 	while (cachetexturewidth < (size_t)patch->width)
 		cachetexturewidth <<= 1;
 	while (cachetextureheight < (size_t)patch->height)
@@ -141,7 +141,7 @@ static size_t RotatedPatch_MemoryCost(patch_t *patch)
 	area = cachetexturewidth * cachetextureheight;
 	if (area > ((size_t)-1 - cost) / 4)
 		return (size_t)-1;
-	cost += area * 4; // Conservative RGBA OpenGL texture estimate.
+	cost += area * 4;
 
 	if ((size_t)patch->width > ((size_t)-1 - cost) / sizeof(column_t))
 		return (size_t)-1;
@@ -496,7 +496,7 @@ boolean RotatedPatch_DoRotation(rotsprite_t *rotsprite, patch_t *patch, INT32 an
 	}
 	else
 	{
-		// An entirely transparent sprite only needs a one-pixel placeholder.
+
 		Z_Free(rawdst);
 		width = height = 1;
 		size = 1;

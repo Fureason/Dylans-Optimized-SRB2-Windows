@@ -55,7 +55,9 @@ typedef struct
 	UINT32 hash;
 	UINT8 type; // TEXTURETYPE_*
 	boolean transparency;
-	boolean fullytransparent; // No opaque posts/pixels; safe to omit from wall drawing.
+	boolean has_holes;
+	boolean flat_has_holes;
+	boolean fullytransparent;
 	INT16 width, height;
 	UINT8 flip; // 1 = flipx, 2 = flipy, 3 = both
 	void *flat; // The texture, as a flat.
@@ -88,6 +90,7 @@ void R_ClearTextureNumCache(boolean btell);
 
 // Retrieve texture data.
 column_t *R_GetColumn(fixed_t tex, INT32 col);
+UINT8 *R_GetSolidTextureColumn(INT32 tex, INT32 col);
 void *R_GetFlat(levelflat_t *levelflat);
 
 INT32 R_GetTextureNumForFlat(levelflat_t *levelflat);

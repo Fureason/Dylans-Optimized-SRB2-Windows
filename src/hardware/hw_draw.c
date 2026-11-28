@@ -60,27 +60,28 @@ static UINT8 softwaretranstogl_lo[11] = {  0, 12, 24, 36, 48, 60, 71, 83, 95,111
 
 #include "hw_textbatch.inc"
 
-/* Software starts sampling at the first source texel rather than at a fraction
- * of it. Align the quad with destination pixel centres, retaining a small
- * subpixel margin so an edge cannot exclude its first row on one triangle. */
-static void HWR_AlignPatchPixels(double *x, double *y)
+
+
+
+static double HWR_AlignPatchAxis(double origin, double scale, boolean mirrored)
 {
-	const float sampleoffset = 0.5f - 1.0f/64.0f;
-	*x = round(*x) + sampleoffset;
-	*y = round(*y) + sampleoffset;
+	const double bias = (double)V_PATCH_SCREEN_BIAS / FRACUNIT;
+	if (scale <= floor(scale))
+		origin = round(origin) + 0.5;
+	return origin + (mirrored ? bias : -bias);
 }
 
-/* Resolve exact source-texel boundaries consistently on both quad triangles.
- * The positive bias agrees with Software's upward-rounded sampling step. */
+
+
 static void HWR_StabilizePatchSampling(FOutVector vertices[4],
-	const patch_t *patch, const GLPatch_t *hardware)
+	const patch_t *patch, const GLPatch_t *hardware, float bias)
 {
 	float sx, sy;
 	INT32 i;
 	if (patch->width <= 0 || patch->height <= 0)
 		return;
-	sx = hardware->max_s / ((float)patch->width * 1024.0f);
-	sy = hardware->max_t / ((float)patch->height * 1024.0f);
+	sx = hardware->max_s * bias / patch->width;
+	sy = hardware->max_t * bias / patch->height;
 	for (i = 0; i < 4; i++)
 	{
 		vertices[i].s += sx;
@@ -244,15 +245,13 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 	{
 		cx = cx * dup;
 		cy = cy * dup;
-		cx = round(cx);
-		cy = round(cy);
 
 		if (!(option & V_SCALEPATCHMASK))
 		{
 			// if it's meant to cover the whole screen, black out the rest (ONLY IF TOP LEFT ISN'T TRANSPARENT)
 			// cx and cy are possibly *slightly* off from float maths
 			// This is done before here compared to software because we directly alter cx and cy to centre
-			if (opacity == 0xFF && cx >= -0.1f && cx <= 0.1f && gpatch->width == BASEVIDWIDTH && cy >= -0.1f && cy <= 0.1f && gpatch->height == BASEVIDHEIGHT)
+			if (opacity == 0xFF && fabs(cx) < 0.5 && gpatch->width == BASEVIDWIDTH && fabs(cy) < 0.5 && gpatch->height == BASEVIDHEIGHT)
 			{
 				const column_t *column = &gpatch->columns[0];
 				if (column->num_posts && !column->posts[0].topdelta)
@@ -298,9 +297,8 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 		fheight = (float)(gpatch->height) * dup;
 	}
 
-	HWR_AlignPatchPixels(&cx, &cy);
-	if (option & V_FLIP)
-		cx += floor(fwidth) - fwidth + 1.0/32.0;
+	cx = HWR_AlignPatchAxis(cx, fscalew * dup, (option & V_FLIP) != 0);
+	cy = HWR_AlignPatchAxis(cy, fscaleh * dup, false);
 	// positions of the cx, cy, are between 0 and vid.width/vid.height now, we need them to be between -1 and 1
 	cx = -1 + (cx / (vid.width/2.0));
 	cy = 1 - (cy / (vid.height/2.0));
@@ -331,7 +329,7 @@ void HWR_DrawStretchyFixedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t p
 
 	v[0].t = v[1].t = 0.0f;
 	v[2].t = v[3].t = hwrPatch->max_t;
-	HWR_StabilizePatchSampling(v, gpatch, hwrPatch);
+	HWR_StabilizePatchSampling(v, gpatch, hwrPatch, FIXED_TO_FLOAT(V_PATCH_SAMPLE_BIAS));
 
 	// clip it since it is used for bunny scroll in doom I
 	flags = HWR_GetBlendModeFlag(blendmode+1)|PF_NoDepthTest;
@@ -529,7 +527,8 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		fheight *= dup;
 	}
 
-	HWR_AlignPatchPixels(&cx, &cy);
+	cx = HWR_AlignPatchAxis(cx, 1.0, false);
+	cy = HWR_AlignPatchAxis(cy, 1.0, false);
 	// positions of the cx, cy, are between 0 and vid.width/vid.height now, we need them to be between -1 and 1
 	cx = -1 + (cx / (vid.width/2.0));
 	cy = 1 - (cy / (vid.height/2.0));
@@ -628,7 +627,7 @@ void HWR_DrawCroppedPatch(patch_t *gpatch, fixed_t x, fixed_t y, fixed_t pscale,
 		}
 #undef flerp
 	}
-	HWR_StabilizePatchSampling(v, gpatch, hwrPatch);
+	HWR_StabilizePatchSampling(v, gpatch, hwrPatch, 1.0f/1024.0f);
 
 	// clip it since it is used for bunny scroll in doom I
 	flags = HWR_GetBlendModeFlag(blendmode+1)|PF_NoDepthTest;
@@ -1040,9 +1039,9 @@ void HWR_EndAMLineBatch(void)
 		return;
 	}
 
-	/* Counting-sort by palette entry so the entire development map takes at
-	 * most 256 existing indexed-triangle calls instead of one call per line.
-	 * Keeping this above the driver API also avoids changing its ABI. */
+
+
+
 	for (i = 0; i < amline_count; i++)
 		counts[amline_colors[i]]++;
 	offsets[0] = 0;

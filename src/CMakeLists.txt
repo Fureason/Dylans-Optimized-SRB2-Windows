@@ -35,6 +35,7 @@ add_executable(SRB2SDL2 MACOSX_BUNDLE WIN32
 	m_menu.c
 	m_misc.c
 	m_perfstats.c
+	m_inputlatency.c
 	m_hostguard.c
 	m_random.c
 	m_tokenizer.c

@@ -1,4 +1,4 @@
-// Host overload recovery. World changes use ordinary synchronized commands.
+
 #ifndef __M_HOSTGUARD_H__
 #define __M_HOSTGUARD_H__
 

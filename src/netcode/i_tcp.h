@@ -20,6 +20,8 @@ extern UINT16 current_port;
 	\return	true if going or in a netgame, else it's false
 */
 boolean I_InitTcpNetwork(void);
+UINT16 I_GetListeningServerPort(void);
+boolean I_IsPublicNodeAddress(INT32 node);
 
 /**	\brief	The I_InitTcpNetwork function
 
@@ -27,9 +29,9 @@ boolean I_InitTcpNetwork(void);
 */
 boolean I_InitTcpDriver(void);
 void I_ShutdownTcpDriver(void);
-/** Enable or disable automatic UPnP mapping before a server socket opens. */
+
 void I_ConfigureUPnP(boolean enable);
-/** Retry router discovery/mapping for an already-open hosting socket. */
+
 boolean I_RetryUPnP(void);
 
 typedef enum
@@ -43,12 +45,12 @@ typedef enum
 	I_UPNP_FAILED
 } i_upnp_status_t;
 
-/** Return the current automatic port-mapping state for host diagnostics. */
+
 i_upnp_status_t I_GetUPnPStatus(void);
-/** Queue a router-entry refresh so hoststatus cannot report a stale mapping. */
+
 void I_ValidateUPnPMapping(void);
-/** Name of the successful mapping protocol, or "none". */
+
 const char *I_GetPortMappingMethod(void);
-/** Queue a Windows firewall rule check; return false if it could not start. */
+
 boolean I_RequestWindowsFirewallRule(const char *port);
 #endif

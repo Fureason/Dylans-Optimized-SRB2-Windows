@@ -82,8 +82,8 @@ void Flush(void);
 INT32 isExtAvailable(const char *extension, const GLubyte *start);
 void SetModelView(GLint w, GLint h);
 void SetStates(void);
-void OglRenderSoftwareFrame(const void *pixels, INT32 width, INT32 height,
-	INT32 outputwidth, INT32 outputheight);
+void OglRenderSoftwareFrame(const void *pixels, INT32 width, INT32 height, boolean rgba,
+	INT32 outputx, INT32 outputy, INT32 outputwidth, INT32 outputheight);
 void OglDestroySoftwareFrame(void);
 
 #ifndef GL_EXT_texture_filter_anisotropic

@@ -72,8 +72,8 @@ struct flickytypes_s FLICKYTYPES[] = {
 // IMPORTANT!
 // DO NOT FORGET TO SYNC THIS LIST WITH THE ACTIONNUM ENUM IN INFO.H
 #if defined(__GNUC__)
-// GCC 14+ diagnoses the historical actionf_t union initializer as a hard
-// error. Every non-NULL entry below intentionally has the acp1 signature.
+
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
 #endif

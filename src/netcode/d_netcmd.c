@@ -944,6 +944,9 @@ void D_RegisterClientCommands(void)
 
 	// screen.c
 	CV_RegisterVar(&cv_fullscreen);
+#if defined(HAVE_SDL) && !defined(__ANDROID__)
+	CV_RegisterVar(&cv_fullscreenscale);
+#endif
 	CV_RegisterVar(&cv_renderer);
 	CV_RegisterVar(&cv_scr_depth);
 	CV_RegisterVar(&cv_scr_width);
@@ -1597,10 +1600,10 @@ void D_SendPlayerConfig(void)
 
 void D_SendPlayerConfigForced(void)
 {
-	/* A reconnect may reclaim an existing player body whose local values match
-	 * the client's cvars.  The ordinary early-out would then leave stale
-	 * skin/color data on the server indefinitely.  Resend the same 2.2.15
-	 * command unconditionally; this changes no packet or demo format. */
+
+
+
+
 	SendNameAndColorInternal(true);
 	if (splitscreen || botingame)
 		SendNameAndColor2();
@@ -1806,8 +1809,8 @@ void D_MapChange(INT32 mapnum, INT32 newgametype, boolean pultmode, boolean rese
 			flags |= 1<<2;
 		if (FLS)
 			flags |= 1<<3;
-		/* Bit 4 is ignored by stock 2.2.15 clients. Custom clients use it only
-		 * for a local console audit label; it changes no gameplay behavior. */
+
+
 		if (gameaction == ga_worlddone)
 			flags |= 1<<4;
 		WRITEUINT8(buf_p, flags);
@@ -2143,8 +2146,8 @@ static void Got_Mapcmd(UINT8 **cp, INT32 playernum)
 
 	READSTRINGN(*cp, mapname, MAX_WADPATH);
 
-	/* Local-only audit notice. The sender is already part of the normal 2.2.15
-	 * net command, so this adds no packet fields and remains wire-compatible. */
+
+
 	if (cv_commandwatch_originals.value && netgame && !demoplayback)
 	{
 		if (flags & (1<<4))
@@ -2999,7 +3002,7 @@ static void Got_Teamchange(UINT8 **cp, INT32 playernum)
 	}
 	else if (NetPacket.packet.newteam == 3)
 	{
-		// Spectator-to-player transitions otherwise appear only in the full console.
+
 		HU_AddChatText(va(M_GetText("\x82*%s entered the game"), player_names[playernum]), false);
 	}
 	else
@@ -3494,7 +3497,7 @@ static void AddedFilesClearList(addedfile_t **itemHead)
 typedef struct
 {
 	UINT8 md5sum[16];
-	UINT8 verification; // W_VerifyNMUSlumps result + 1; zero means unused
+	UINT8 verification;
 } fileverificationcache_t;
 
 static fileverificationcache_t fileverificationcache[MAX_WADFILES];
@@ -3595,9 +3598,9 @@ static void Command_Addfile(void)
 
 		fn = COM_Argv(curarg);
 
-		// -bypass/-legit are switches for the command, not filenames to load.
-		// Sparks' original implementation detected the switch above but then
-		// accidentally passed it through the file loop as well.
+
+
+
 		if (!stricmp(fn, "-bypass") || !stricmp(fn, "-legit"))
 			continue;
 
@@ -3680,9 +3683,9 @@ static void Command_Addfile(void)
 #else
 			FILE *fhandle = NULL;
 
-			/* Reuse the validated persistent checksum cache when possible. The
-			 * older path always hashed the whole add-on again here, even though
-			 * the loader already maintains an unchanged-file checksum cache. */
+
+
+
 			if (D_GetCachedFileMD5(fn, md5sum))
 			{
 				RememberFileVerification(md5sum, musiconly);
@@ -3727,9 +3730,9 @@ static void Command_Addfile(void)
 
 exit_function:
 	P_EndAddonBatch();
-	/* One small index write after the complete add-on group avoids both a
-	 * rewrite per file and losing the warm-load cache if the game later exits
-	 * abnormally. */
+
+
+
 	D_FlushPersistentMD5Cache();
 	if (bypass) {
 		modifiedgame = mg;
@@ -3917,8 +3920,8 @@ static void Got_RequestAddfilecmd(UINT8 **cp, INT32 playernum)
 	}
 
 	RememberAddonRequester(filename, playernum);
-	/* findfile can expand a basename into a path containing spaces. Keep that
-	 * path as one argument when the server queues the authoritative addfile. */
+
+
 	COM_BufAddText(va("addfile \"%s\"\n", filename));
 }
 
@@ -4009,9 +4012,9 @@ static void Got_Addfilecmd(UINT8 **cp, INT32 playernum)
 		if (verification != -1)
 			fileadded = P_AddWadFileVerified(filename, false, verification, md5sum);
 
-		/* Loading Lua, SOC, sprites, and textures is synchronous and can take
-		 * longer than nettimeout for a large add-on. Neither endpoint should
-		 * time the other out immediately after returning from the same load. */
+
+
+
 		Net_RefreshTimeouts();
 	}
 
@@ -4020,9 +4023,9 @@ static void Got_Addfilecmd(UINT8 **cp, INT32 playernum)
 		if (server)
 			(void)TakeAddonRequester(filename);
 
-		// A file introduced after joining never enters the normal file-list
-		// downloader in vanilla 2.2.15. Reconnect this custom client to the same
-		// host so the normal, checksum-verified join download can handle it.
+
+
+
 		if (!server && cv_autodownloadaddons.value
 			&& (ncs == FS_NOTFOUND || ncs == FS_MD5SUMBAD)
 			&& I_GetNodeAddress && servernode >= 0 && servernode < MAXNETNODES)
@@ -4039,9 +4042,9 @@ static void Got_Addfilecmd(UINT8 **cp, INT32 playernum)
 		if (reconnectfordownload)
 		{
 			CONS_Printf(M_GetText("The server added %s. Reconnecting to download it automatically.\n"), filename);
-			// Put this ahead of any commands still queued by an autoexec. Stop
-			// the title demo first because Command_connect intentionally refuses
-			// to run while one is playing.
+
+
+
 			COM_BufInsertText(va("stopdemo\nconnect \"%s\"\n", reconnectaddress));
 			return;
 		}

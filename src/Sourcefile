@@ -29,6 +29,7 @@ m_fixed.c
 m_menu.c
 m_misc.c
 m_perfstats.c
+m_inputlatency.c
 m_hostguard.c
 m_random.c
 m_tokenizer.c

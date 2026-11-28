@@ -71,10 +71,10 @@ typedef struct mesh_s
 	tinyframe_t *tinyframes;
 	unsigned short *indices;
 
-	/* Shared CPU interpolation cache. Many identical map objects use the same
-	 * model/frame pair and interpolation fraction in one rendered frame; doing
-	 * the full vertex lerp again for every instance needlessly scales model cost
-	 * with player/object count. */
+
+
+
+
 	void *lerpVertices;
 	void *lerpNormals;
 	INT32 lerpFrame;

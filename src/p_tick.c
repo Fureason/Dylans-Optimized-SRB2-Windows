@@ -444,18 +444,18 @@ static inline void P_RunThinkers(void)
 #ifdef PARANOIA
 			I_Assert(currentthinker->function.acp1 != NULL);
 #endif
-			/* Nearly every entry in THINK_MOBJ uses P_MobjThinker. A direct call
-			 * avoids an indirect branch for every object while preserving custom
-			 * thinker functions and removal behavior. */
+
+
+
 			if (i == THINK_MOBJ
 			&& currentthinker->function.acp1 == (actionf_p1)P_MobjThinker)
 			{
 				mobj_t *mobj = (mobj_t *)currentthinker;
 
-				/* Lua/SOC may apply MF_NOTHINK after an object has already been
-				 * linked into THINK_MOBJ. Avoid entering the full thinker in that
-				 * common dormant-object case while keeping the object linked so the
-				 * flag can safely be cleared again later. */
+
+
+
+
 				if (mobj->flags & MF_NOTHINK)
 					continue;
 

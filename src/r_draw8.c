@@ -100,13 +100,13 @@ void R_DrawColumn_8(void)
 	}
 }
 
-/**
- * Draw a repeating sky column with a 32.32 texture step.
- *
- * A 16.16 step loses enough precision at high resolutions to choose a different
- * sky row. Keep the fraction through the entire column and retain the ordinary
- * wall drawer's vertical wrapping, including for non-power-of-two textures.
- */
+
+
+
+
+
+
+
 void R_DrawSkyColumn_8(INT64 fracstep)
 {
 	INT32 count = dc_yh - dc_yl;
@@ -134,7 +134,9 @@ void R_DrawSkyColumn_8(INT64 fracstep)
 	{
 		do
 		{
-			*dest = colormap[source[((UINT64)frac >> 32) & heightmask]];
+			const UINT8 texel = source[((UINT64)frac >> 32) & heightmask];
+			if (texel != TRANSPARENTPIXEL)
+				*dest = colormap[texel];
 			dest += vid.width;
 			frac += fracstep;
 		} while (count--);
@@ -146,7 +148,9 @@ void R_DrawSkyColumn_8(INT64 fracstep)
 			INT32 index = (INT32)((frac >> 32) % texheight);
 			if (index < 0)
 				index += texheight;
-			*dest = colormap[source[index]];
+			const UINT8 texel = source[index];
+			if (texel != TRANSPARENTPIXEL)
+				*dest = colormap[texel];
 			dest += vid.width;
 			frac += fracstep;
 		} while (count--);
@@ -1143,7 +1147,10 @@ void R_DrawTiltedWaterSpan_8(void)
 		v = (INT64)(vz*z);
 
 		colormap = planezlight[tiltlighting[ds_x1++]] + (ds_colormap - colormaps);
-		*dest = *(ds_transmap + (colormap[source[((v >> nflatyshift) & nflatmask) | (u >> nflatxshift)]] << 8) + *dsrc++);
+		const UINT8 texel = source[((v >> nflatyshift) & nflatmask) | (u >> nflatxshift)];
+		if (texel != TRANSPARENTPIXEL)
+			*dest = ds_transmap[(colormap[texel] << 8) + *dsrc];
+		dsrc++;
 		dest++;
 		iz += ds_sz.x;
 		uz += ds_su.x;
@@ -1177,7 +1184,10 @@ void R_DrawTiltedWaterSpan_8(void)
 		for (i = SPANSIZE-1; i >= 0; i--)
 		{
 			colormap = planezlight[tiltlighting[ds_x1++]] + (ds_colormap - colormaps);
-			*dest = *(ds_transmap + (colormap[source[((v >> nflatyshift) & nflatmask) | (u >> nflatxshift)]] << 8) + *dsrc++);
+			const UINT8 texel = source[((v >> nflatyshift) & nflatmask) | (u >> nflatxshift)];
+			if (texel != TRANSPARENTPIXEL)
+				*dest = ds_transmap[(colormap[texel] << 8) + *dsrc];
+			dsrc++;
 			dest++;
 			u += stepu;
 			v += stepv;
@@ -1193,7 +1203,10 @@ void R_DrawTiltedWaterSpan_8(void)
 			u = (INT64)(startu);
 			v = (INT64)(startv);
 			colormap = planezlight[tiltlighting[ds_x1++]] + (ds_colormap - colormaps);
-			*dest = *(ds_transmap + (colormap[source[((v >> nflatyshift) & nflatmask) | (u >> nflatxshift)]] << 8) + *dsrc++);
+			const UINT8 texel = source[((v >> nflatyshift) & nflatmask) | (u >> nflatxshift)];
+			if (texel != TRANSPARENTPIXEL)
+				*dest = ds_transmap[(colormap[texel] << 8) + *dsrc];
+			dsrc++;
 		}
 		else
 		{
@@ -1214,7 +1227,10 @@ void R_DrawTiltedWaterSpan_8(void)
 			for (; width != 0; width--)
 			{
 				colormap = planezlight[tiltlighting[ds_x1++]] + (ds_colormap - colormaps);
-				*dest = *(ds_transmap + (colormap[source[((v >> nflatyshift) & nflatmask) | (u >> nflatxshift)]] << 8) + *dsrc++);
+				const UINT8 texel = source[((v >> nflatyshift) & nflatmask) | (u >> nflatxshift)];
+				if (texel != TRANSPARENTPIXEL)
+					*dest = ds_transmap[(colormap[texel] << 8) + *dsrc];
+				dsrc++;
 				dest++;
 				u += stepu;
 				v += stepv;
@@ -2255,35 +2271,35 @@ void R_DrawWaterSpan_8(void)
 		// SoM: Why didn't I see this earlier? the spot variable is a waste now because we don't
 		// have the uber complicated math to calculate it now, so that was a memory write we didn't
 		// need!
-		dest[0] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest + 0, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 
-		dest[1] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest + 1, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 
-		dest[2] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest + 2, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 
-		dest[3] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest + 3, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 
-		dest[4] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest + 4, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 
-		dest[5] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest + 5, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 
-		dest[6] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest + 6, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 
-		dest[7] = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest + 7, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 
@@ -2292,7 +2308,7 @@ void R_DrawWaterSpan_8(void)
 	}
 	while (count--)
 	{
-		*dest++ = colormap[*(ds_transmap + (source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)] << 8) + *dsrc++)];
+		R_DrawWaterTexel(dest++, colormap, source[((yposition >> nflatyshift) & nflatmask) | (xposition >> nflatxshift)], *dsrc++);
 		xposition += xstep;
 		yposition += ystep;
 	}
@@ -2497,7 +2513,7 @@ void R_DrawFogColumn_8(void)
 
 	This function just cuts the column up into sections and calls R_DrawColumn_8
 */
-void R_DrawColumnShadowed_8(void)
+static void R_DrawLightListColumn(void (*draw)(void))
 {
 	INT32 count, realyh, i, height, bheight = 0, solid = 0;
 
@@ -2548,7 +2564,7 @@ void R_DrawColumnShadowed_8(void)
 
 		if (dc_yh > realyh)
 			dc_yh = realyh;
-		(colfuncs[BASEDRAWFUNC])();		// R_DrawColumn_8 for the appropriate architecture
+		draw();
 		if (solid)
 			dc_yl = bheight;
 		else
@@ -2558,5 +2574,15 @@ void R_DrawColumnShadowed_8(void)
 	}
 	dc_yh = realyh;
 	if (dc_yl <= realyh)
-		(colfuncs[BASEDRAWFUNC])();		// R_DrawWallColumn_8 for the appropriate architecture
+		draw();
+}
+
+void R_DrawColumnShadowed_8(void)
+{
+	R_DrawLightListColumn(colfuncs[BASEDRAWFUNC]);
+}
+
+void R_DrawMaskedWallColumnShadowed_8(void)
+{
+	R_DrawLightListColumn(colfuncs[COLDRAWFUNC_TWOSMULTIPATCH]);
 }

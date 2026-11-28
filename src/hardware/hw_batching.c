@@ -30,7 +30,7 @@ int finalVertexIndexArrayAllocSize = 65536 * 3;
 PolygonArrayEntry* polygonArray = NULL;// contains the polygon data from DrawPolygon, waiting to be processed
 int polygonArraySize = 0;
 UINT32* polygonIndexArray = NULL;// contains sorting pointers for polygonArray
-static UINT32* polygonScratchIndexArray = NULL;// scratch space for stable radix sorting
+static UINT32* polygonScratchIndexArray = NULL;
 int polygonArrayAllocSize = 65536;
 
 FOutVector* unsortedVertexArray = NULL;// contains unsorted vertices and texture coordinates from DrawPolygon
@@ -115,8 +115,8 @@ void HWR_ProcessPolygon(FSurfaceInfo *pSurf, FOutVector *pOutVerts, FUINT iNumPt
 		{
 			polygonArrayAllocSize = HWR_GrowBatchCapacity(polygonArrayAllocSize,
 				polygonArraySize + 1, "polygon list");
-			// realloc can extend these in place, avoiding a second full-sized copy
-			// at the largest point of an unusually open custom map.
+
+
 			polygonArray = HWR_ReallocArray(polygonArray, polygonArrayAllocSize,
 				sizeof(PolygonArrayEntry), "polygons");
 			polygonIndexArray = HWR_ReallocArray(polygonIndexArray,
@@ -145,7 +145,7 @@ void HWR_ProcessPolygon(FSurfaceInfo *pSurf, FOutVector *pOutVerts, FUINT iNumPt
 		polygonArray[polygonArraySize].texture = current_texture;
 		polygonArray[polygonArraySize].shader = (shader_target != SHADER_NONE) ? HWR_GetShaderFromTarget(shader_target) : shader_target;
 		polygonArray[polygonArraySize].horizonSpecial = horizonSpecial;
-		// Put skybox and horizon polygons first while preserving their order.
+
 		polygonArray[polygonArraySize].hash = INT32_MIN + polygonArraySize;
 		polygonArraySize++;
 
@@ -190,8 +190,8 @@ static int comparePolygons(const void *p1, const void *p2)
 	unsigned int index2 = *(const unsigned int*)p2;
 	PolygonArrayEntry* poly1 = &polygonArray[index1];
 	PolygonArrayEntry* poly2 = &polygonArray[index2];
-	// Compare the sign explicitly so subtracting opposite-signed hashes cannot
-	// overflow and reorder horizon polygons behind ordinary geometry.
+
+
 	if ((poly1->hash & 0x80000000) != (poly2->hash & 0x80000000))
 		return (poly1->hash & 0x80000000) < (poly2->hash & 0x80000000) ? 1 : -1;
 	return poly1->hash - poly2->hash;
@@ -215,9 +215,9 @@ static boolean HWR_PolygonIndicesAlreadySorted(void)
 	return true;
 }
 
-/* qsort spends a surprising amount of time repeatedly dereferencing polygon
- * state on large/open maps. Four stable byte passes sort the same signed
- * 32-bit hash in linear time and preserve the required horizon ordering. */
+
+
+
 static void HWR_RadixSortPolygonIndices(void)
 {
 	UINT32 *source = polygonIndexArray;
@@ -255,8 +255,8 @@ static void HWR_RadixSortPolygonIndices(void)
 		}
 	}
 
-	/* Four passes normally finish in polygonIndexArray. Keep this guard so the
-	 * routine remains correct if its pass count is changed later. */
+
+
 	if (source != polygonIndexArray)
 		memcpy(polygonIndexArray, source, polygonArraySize * sizeof(UINT32));
 }
@@ -305,8 +305,8 @@ void HWR_RenderBatches(void)
 
 	// sort polygons
 	phase_started = I_GetPreciseTime();
-	/* A surprising number of simple maps already submit geometry in batch-key
-	 * order. Avoid touching the scratch array at all in that common case. */
+
+
 	if (!HWR_PolygonIndicesAlreadySorted())
 	{
 		if (polygonArraySize >= 256)
@@ -385,10 +385,10 @@ void HWR_RenderBatches(void)
 			finalVertexIndexArray = HWR_ReallocArray(finalVertexIndexArray,
 				finalVertexIndexArrayAllocSize, sizeof(UINT32), "final indices");
 		}
-		/* Vertices were already copied into unsortedVertexArray while the BSP was
-		 * collected. Index that stable array directly instead of copying every
-		 * visible polygon a second time after sorting. This cuts a full geometry
-		 * memory pass on large and open maps without changing any coordinates. */
+
+
+
+
 		firstIndex = polygonArray[index].vertsIndex;
 		lastIndex = firstIndex + numVerts;
 		firstIndex += 2;
@@ -407,7 +407,7 @@ void HWR_RenderBatches(void)
 		{
 			// check if a state change is required, set the change bools and next vars
 			int nextIndex = polygonIndexArray[polygonReadPos];
-			/* A sorting hash does not prove that two draw states are identical. */
+
 			{
 				nextShader = polygonArray[nextIndex].shader;
 				nextTexture = polygonArray[nextIndex].texture;

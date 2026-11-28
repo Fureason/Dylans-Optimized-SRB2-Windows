@@ -84,7 +84,7 @@ patch_t *tallinfin;
 
 static player_t *plr;
 boolean chat_on; // entering a chat message?
-boolean chat_on_first_event; // blocker for first chat input event
+static INT32 chat_open_key;
 static char w_chat[HU_MAXMSGLEN + 1];
 static size_t c_input = 0; // let's try to make the chat input less shitty.
 static boolean headsupactive = false;
@@ -332,74 +332,106 @@ void HU_Start(void)
 
 // EVERY CHANGE IN THIS SCRIPT IS LOL XD! BY VINCYTM
 
-static UINT32 chat_nummsg_log = 0;
-static UINT32 chat_nummsg_min = 0;
-static UINT32 chat_scroll = 0;
-static tic_t chat_scrolltime = 0;
-
-static UINT32 chat_maxscroll = 0; // how far can we scroll?
-
-//static chatmsg_t chat_mini[CHAT_BUFSIZE]; // Display the last few messages sent.
-//static chatmsg_t chat_log[CHAT_BUFSIZE]; // Keep every message sent to us in memory so we can scroll n shit, it's cool.
-
-// A received message can contain HU_MAXMSGLEN text bytes plus the player's
-// name, chat prefixes, and color control bytes added by Got_Saycmd.
 #define HU_CHATDISPLAYLEN (HU_MAXMSGLEN + MAXPLAYERNAME + 64)
-static char chat_log[CHAT_BUFSIZE][HU_CHATDISPLAYLEN + 1];
+#define HU_CHATCOLWIDTH 4
+#define HU_CHATROWHEIGHT 6
+#define HU_CHATBARWIDTH 4
+#define HU_CHATPAD 4
+#define HU_CHATDRAWFLAGS (V_SNAPTOBOTTOM | V_SNAPTOLEFT)
+
+typedef struct
+{
+	char text[HU_CHATDISPLAYLEN + 1];
+	UINT8 link[HU_CHATDISPLAYLEN + 1];
+	UINT16 name_start, name_end;
+	SINT8 player;
+} chatmessage_t;
+
+typedef struct
+{
+	UINT32 message;
+	UINT16 offset;
+} chatposition_t;
+
+typedef struct
+{
+	chatposition_t start;
+	UINT16 end;
+	UINT8 columns, color;
+} chatrow_t;
+
+static INT16 chatx = 13, chaty = 169;
+static chatmessage_t chat_log[CHAT_BUFSIZE];
+static chatrow_t chat_rows[CHAT_BUFSIZE * (HU_CHATDISPLAYLEN + 1)];
+static UINT32 chat_first_message = 1, chat_nummsg_log;
+static INT32 chat_row_count, chat_layout_width;
+static boolean chat_layout_dirty = true;
+static INT32 chat_scroll, chat_maxscroll;
+static boolean chat_follow = true;
+static INT32 chat_view_top, chat_view_width, chat_view_lines;
+static INT32 chat_mouse_x, chat_mouse_y, chat_scroll_grab;
+static boolean chat_scroll_drag, chat_select_drag, chat_select_moved;
+static chatposition_t chat_selection_start, chat_selection_end, chat_click;
+static INT32 chat_recipient = -1;
+static boolean chat_recipient_left;
+
+static UINT32 chat_nummsg_min;
 static char chat_mini[8][HU_CHATDISPLAYLEN + 1];
 static tic_t chat_timers[8];
 
-#define HU_MAX_CHATLINKS 16
-#define HU_MAX_CHATLINK_RECTS 512
-typedef struct
+static size_t HU_ChatLinkLength(const char *text)
 {
-	char url[255];
-} chatlink_t;
-typedef struct
-{
-	INT16 x, y, w, h;
-	UINT8 link;
-} chatlinkrect_t;
-static chatlink_t chat_links[HU_MAX_CHATLINKS];
-static chatlinkrect_t chat_linkrects[HU_MAX_CHATLINK_RECTS];
-static size_t chat_linkcount;
-static size_t chat_linkrectcount;
-
-static boolean HU_OpenChatURLAtCursor(void)
-{
-	INT32 mousex, mousey, basex, basey;
-	size_t i;
-
-	if (!chat_linkrectcount || vid.dup <= 0)
-		return false;
-	I_GetCursorPosition(&mousex, &mousey);
-	basex = mousex / vid.dup;
-	basey = (mousey - (vid.height - BASEVIDHEIGHT*vid.dup)) / vid.dup;
-
-	for (i = 0; i < chat_linkrectcount; i++)
-	{
-		chatlinkrect_t *rect = &chat_linkrects[i];
-		if (basex >= rect->x && basex < rect->x + rect->w
-		 && basey >= rect->y && basey < rect->y + rect->h)
-		{
-			const char *url = chat_links[rect->link].url;
-#ifdef _WIN32
-			HINSTANCE opened = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-			if ((INT_PTR)opened > 32)
-				return true;
-#endif
-			I_ClipboardCopy(url, strlen(url));
-			HU_AddChatText("\x82""Could not open the link, so it was copied.", false);
-			return true;
-		}
-	}
-	return false;
+	size_t length;
+	if (strnicmp(text, "https://", 8) && strnicmp(text, "http://", 7))
+		return 0;
+	for (length = 0; (UINT8)text[length] > ' ' && (UINT8)text[length] < 0x80; length++)
+		;
+	while (length && strchr(".,;:!?)]}>\"'", text[length - 1]))
+		length--;
+	return length;
 }
 
-static boolean chat_scrollmedown = false; // force instant scroll down on the chat log. Happens when you open it / send a message.
+static chatmessage_t *HU_ChatMessage(UINT32 message)
+{
+	const UINT32 index = message - chat_first_message;
+	return index < chat_nummsg_log ? &chat_log[index] : NULL;
+}
 
-// remove text from minichat table
+static void HU_OpenChatURL(const chatmessage_t *message, UINT16 offset)
+{
+	size_t start = offset, end = offset + 1;
+	char url[HU_CHATDISPLAYLEN + 1];
+	while (start && message->link[start - 1])
+		start--;
+	while (message->link[end])
+		end++;
+	memcpy(url, message->text + start, end - start);
+	url[end - start] = '\0';
+#ifdef _WIN32
+	HINSTANCE opened = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+	if ((INT_PTR)opened > 32)
+		return;
+#endif
+	I_ClipboardCopy(url, end - start);
+	HU_AddChatText("\x82""Could not open the link, so it was copied.", false);
+}
 
+void HU_ForgetChatPlayer(INT32 player)
+{
+	for (UINT32 i = 0; i < chat_nummsg_log; i++)
+	{
+		if (chat_log[i].player == player)
+			chat_log[i].player = -1;
+	}
+	if (chat_recipient == player)
+		chat_recipient_left = true;
+}
+
+static boolean HU_ChatRecipientAvailable(INT32 player)
+{
+	return player >= 0 && player < MAXPLAYERS && player != consoleplayer
+		&& netgame && playeringame[player] && !players[player].quittime;
+}
 static INT16 addy = 0; // use this to make the messages scroll smoothly when one fades away
 
 static void HU_removeChatText_Mini(void)
@@ -418,63 +450,53 @@ static void HU_removeChatText_Mini(void)
 
 }
 
-// same but w the log. TODO: optimize this and maybe merge in a single func? im bad at C.
-static void HU_removeChatText_Log(void)
-{
-	size_t i;
-	for (i = 0; i + 1 < chat_nummsg_log; i++)
-		memcpy(chat_log[i], chat_log[i+1], sizeof chat_log[i]);
-	chat_log[chat_nummsg_log-1][0] = '\0';
-	chat_nummsg_log--; // lost 1 msg.
-}
-
-void HU_AddChatText(const char *text, boolean playsound)
+static void HU_AddChatMessage(const char *text, boolean playsound, INT32 player, size_t name_start, size_t name_end)
 {
 	if (!text)
 		return;
 
-	if (playsound && cv_consolechat.value != 2) // Don't play the sound if we're using hidden chat.
+	if (playsound && cv_consolechat.value != 2)
 		S_StartSound(NULL, sfx_radio);
-	// reguardless of our preferences, put all of this in the chat buffer in case we decide to change from oldchat mid-game.
 
-	if (chat_nummsg_log >= CHAT_BUFSIZE) // too many messages!
-		HU_removeChatText_Log();
+	if (chat_nummsg_log == CHAT_BUFSIZE)
+	{
+		memmove(chat_log, chat_log + 1, (CHAT_BUFSIZE - 1) * sizeof chat_log[0]);
+		chat_nummsg_log--;
+		chat_first_message++;
+	}
 
-	strlcpy(chat_log[chat_nummsg_log], text, sizeof chat_log[chat_nummsg_log]);
-	chat_nummsg_log++;
+	chatmessage_t *message = &chat_log[chat_nummsg_log++];
+	strlcpy(message->text, text, sizeof message->text);
+	message->player = (SINT8)player;
+	const size_t length = strlen(message->text);
+	message->name_start = (UINT16)min(name_start, length);
+	message->name_end = (UINT16)min(name_end, length);
+	memset(message->link, 0, sizeof message->link);
+	for (size_t i = 0; i < length;)
+	{
+		const size_t linklen = HU_ChatLinkLength(&message->text[i]);
+		if (linklen)
+			memset(&message->link[i], 1, linklen);
+		i += max(1, linklen);
+	}
+	chat_layout_dirty = true;
 
 	if (chat_nummsg_min >= 8)
 		HU_removeChatText_Mini();
 
-	strlcpy(chat_mini[chat_nummsg_min], text, sizeof chat_mini[chat_nummsg_min]);
-	chat_timers[chat_nummsg_min] = TICRATE*cv_chattime.value;
-	chat_nummsg_min++;
+	strlcpy(chat_mini[chat_nummsg_min], message->text, sizeof chat_mini[chat_nummsg_min]);
+	chat_timers[chat_nummsg_min++] = TICRATE * cv_chattime.value;
 
-	if (OLDCHAT) // if we're using oldchat, print directly in console
+	if (OLDCHAT)
 		CONS_Printf("%s\n", text);
-	else			// if we aren't, still save the message to log.txt
+	else
 		CON_LogMessage(va("%s\n", text));
 }
 
-/** Runs a say command, sending an ::XD_SAY message.
-  * A say command consists of a signed 8-bit integer for the target, an
-  * unsigned 8-bit flag variable, and then the message itself.
-  *
-  * The target is 0 to say to everyone, 1 to 32 to say to that player, or -1
-  * to -32 to say to everyone on that player's team. Note: This means you
-  * have to add 1 to the player number, since they are 0 to 31 internally.
-  *
-  * The flag HU_SERVER_SAY will be set if it is the dedicated server speaking.
-  *
-  * This function obtains the message using COM_Argc() and COM_Argv().
-  *
-  * \param target    Target to send message to.
-  * \param usedargs  Number of arguments to ignore.
-  * \param flags     Set HU_CSAY for server/admin to CECHO everyone.
-  * \sa Command_Say_f, Command_Sayteam_f, Command_Sayto_f, Got_Saycmd
-  * \author Graue <graue@oceanbase.org>
-  */
-
+void HU_AddChatText(const char *text, boolean playsound)
+{
+	HU_AddChatMessage(text, playsound, -1, 0, 0);
+}
 
 static void DoSayCommand(SINT8 target, size_t usedargs, UINT8 flags)
 {
@@ -881,7 +903,11 @@ static void Got_Saycmd(UINT8 **p, INT32 playernum)
 			fmt2 = "%s<%s%s>\x80%s %s%s";
 		}
 
-		HU_AddChatText(va(fmt2, prefix, cstart, dispname, cend, textcolor, msg), cv_chatnotifications.value); // add to chat
+		const INT32 chat_player = (flags & HU_SERVER_SAY) ? -1
+			: target > 0 && target - 1 != consoleplayer ? target - 1 : playernum;
+		const size_t name_start = strlen(prefix) + strlen(cstart) + (action ? 2 : 1);
+		HU_AddChatMessage(va(fmt2, prefix, cstart, dispname, cend, textcolor, msg),
+			cv_chatnotifications.value, chat_player, name_start, name_start + strlen(dispname));
 
 		if (tempchar)
 			Z_Free(tempchar);
@@ -930,12 +956,6 @@ void HU_Ticker(void)
 	else
 		hu_showscores = false;
 
-	if (chat_on)
-	{
-		// count down the scroll timer.
-		if (chat_scrolltime > 0)
-			chat_scrolltime--;
-	}
 
 	if (netgame)
 	{
@@ -958,8 +978,8 @@ void HU_Ticker(void)
 }
 
 static boolean teamtalk = false;
-static boolean justscrolleddown;
-static boolean justscrolledup;
+
+
 static INT16 typelines = 1; // number of drawfill lines we need when drawing the chat. it's some weird hack and might be one frame off but I'm lazy to make another loop.
 // It's up here since it has to be reset when we open the chat.
 
@@ -985,14 +1005,13 @@ static void HU_sendChatMessage(void)
 	if (HU_chatboxContainsOnlySpaces())
 		return;
 
-	// copy printable characters and terminating '\0' only.
-	for (ci = 2; w_chat[ci-2]; ci++)
+	ci = 0;
+	for (const char *p = w_chat; *p; p++)
 	{
-		char c = w_chat[ci-2];
-		if (c >= ' ' && !(c & 0x80))
-			buf[ci] = c;
-	};
-	buf[ci] = '\0';
+		if ((UINT8)*p >= ' ' && (UINT8)*p < 0x7f)
+			msg[ci++] = *p;
+	}
+	msg[ci] = '\0';
 
 	memset(w_chat, '\0', sizeof(w_chat));
 	c_input = 0;
@@ -1007,7 +1026,16 @@ static void HU_sendChatMessage(void)
 		return;
 	}
 
-	if (strlen(msg) > 4 && strnicmp(msg, "/pm", 3) == 0) // used /pm
+	if (chat_recipient >= 0)
+	{
+		if (chat_recipient_left || !HU_ChatRecipientAvailable(chat_recipient))
+		{
+			HU_AddChatText("\x82""That player is no longer in the game.", false);
+			return;
+		}
+		target = chat_recipient + 1;
+	}
+	else if (strlen(msg) > 4 && strnicmp(msg, "/pm", 3) == 0)
 	{
 		INT32 spc = 1; // used if playernum[1] is a space.
 		char playernum[3+1];
@@ -1059,7 +1087,7 @@ static void HU_sendChatMessage(void)
 		newmsg = msg+5+spc;
 		strlcpy(msg, newmsg, HU_MAXMSGLEN + 1);
 	}
-	if (ci > 2) // don't send target+flags+empty message.
+	if (msg[0])
 	{
 		buf[0] = teamtalk ? -1 : target; // target
 		buf[1] = 0; // flags
@@ -1072,7 +1100,13 @@ void HU_clearChatChars(void)
 	memset(w_chat, '\0', sizeof(w_chat));
 	I_SetTextInputMode(false);
 	chat_on = false;
+	chat_open_key = 0;
 	c_input = 0;
+	chat_recipient = -1;
+	chat_recipient_left = false;
+	chat_view_lines = 0;
+	chat_scroll_drag = chat_select_drag = false;
+	chat_selection_start.message = chat_selection_end.message = 0;
 
 	I_UpdateMouseGrab();
 }
@@ -1080,81 +1114,265 @@ void HU_clearChatChars(void)
 //
 // Returns true if key eaten
 //
-boolean HU_Responder(event_t *ev)
+static boolean HU_ChatPositionBefore(chatposition_t a, chatposition_t b)
 {
-	INT32 c=0;
+	return a.message < b.message || (a.message == b.message && a.offset < b.offset);
+}
 
-	if (ev->type != ev_keydown && ev->type != ev_text)
+static boolean HU_ChatSelection(chatposition_t *first, chatposition_t *last)
+{
+	*first = chat_selection_start;
+	*last = chat_selection_end;
+	if (HU_ChatPositionBefore(*last, *first))
+	{
+		*first = chat_selection_end;
+		*last = chat_selection_start;
+	}
+	return HU_ChatPositionBefore(*first, *last)
+		&& HU_ChatMessage(first->message) && HU_ChatMessage(last->message);
+}
+
+static void HU_CopyChatSelection(void)
+{
+	chatposition_t first, last;
+	if (!HU_ChatSelection(&first, &last))
+		return;
+
+	char *text = Z_Malloc((last.message - first.message + 1) * (HU_CHATDISPLAYLEN + 1), PU_STATIC, NULL);
+	char *out = text;
+	for (UINT32 id = first.message; id <= last.message; id++)
+	{
+		const char *message = HU_ChatMessage(id)->text;
+		const size_t start = id == first.message ? first.offset : 0;
+		const size_t end = id == last.message ? last.offset : strlen(message);
+		for (size_t i = start; i < end; i++)
+		{
+			const UINT8 c = message[i];
+			if ((c >= ' ' && c < 0x7f) || c == '\n')
+				*out++ = (char)c;
+		}
+		if (id != last.message)
+			*out++ = '\n';
+	}
+	if (out != text)
+		I_ClipboardCopy(text, (size_t)(out - text));
+	Z_Free(text);
+}
+
+static boolean HU_ChatPrintable(UINT8 c)
+{
+	return c >= FONTSTART && !(c & 0x80);
+}
+
+static boolean HU_ChatPoint(chatposition_t *point, boolean dragging, boolean exact)
+{
+	const INT32 y = chat_mouse_y - chat_view_top - 2;
+	const INT32 x = chat_mouse_x - chatx - HU_CHATPAD;
+	const INT32 visible = min(chat_view_lines, chat_row_count - chat_scroll);
+	if (visible <= 0 || (!dragging && (y < 0 || y >= visible * HU_CHATROWHEIGHT)))
 		return false;
 
-	// only KeyDown events now...
+	const chatrow_t *row = &chat_rows[chat_scroll + max(0, min(y / HU_CHATROWHEIGHT, visible - 1))];
+	const chatmessage_t *message = HU_ChatMessage(row->start.message);
+	if (!message || (exact && (x < 0 || x >= row->columns * HU_CHATCOLWIDTH)))
+		return false;
 
-	/*// Shoot, to prevent P1 chatting from ruining the game for everyone else, it's either:
-	// A. completely disallow opening chat entirely in online splitscreen
-	// or B. iterate through all controls to make sure it's bound to player 1 before eating
-	// You can see which one I chose.
-	// (Unless if you're sharing a keyboard, since you probably establish when you start chatting that you have dibs on it...)
-	// (Ahhh, the good ol days when I was a kid who couldn't afford an extra USB controller...)
+	INT32 column = max(0, (x + (exact ? 0 : HU_CHATCOLWIDTH / 2)) / HU_CHATCOLWIDTH);
+	if (dragging && y < 0)
+		column = 0;
+	else if (dragging && y >= visible * HU_CHATROWHEIGHT)
+		column = row->columns;
 
-	if (ev->key >= KEY_MOUSE1)
+	*point = row->start;
+	while (point->offset < row->end)
 	{
-		INT32 i;
-		for (i = 0; i < NUM_GAMECONTROLS; i++)
-		{
-			if (gamecontrol[i][0] == ev->key || gamecontrol[i][1] == ev->key)
-				break;
-		}
+		if (HU_ChatPrintable(message->text[point->offset]) && column-- == 0)
+			break;
+		point->offset++;
+	}
+	return true;
+}
 
-		if (i == NUM_GAMECONTROLS)
-			return false;
-	}*/	//We don't actually care about that unless we get splitscreen netgames. :V
-
-	c = (INT32)ev->key;
-
-	if (!chat_on)
+static void HU_UpdateChatSelection(void)
+{
+	chatposition_t point;
+	if (HU_ChatPoint(&point, true, false))
 	{
-		if (ev->type == ev_text)
-			return false;
+		chat_select_moved |= point.message != chat_selection_start.message
+			|| point.offset != chat_selection_start.offset;
+		chat_selection_end = point;
+	}
+}
 
-		// enter chat mode
-		if ((ev->key == gamecontrol[GC_TALKKEY][0] || ev->key == gamecontrol[GC_TALKKEY][1])
-			&& netgame && !OLD_MUTE) // check for old chat mute, still let the players open the chat incase they want to scroll otherwise.
+static void HU_SetChatScroll(INT32 row)
+{
+	chat_scroll = max(0, min(row, chat_maxscroll));
+	chat_follow = chat_scroll == chat_maxscroll && !chat_select_drag;
+}
+
+static INT32 HU_ChatScrollbarX(void)
+{
+	return chatx + chat_view_width - HU_CHATBARWIDTH - 1;
+}
+
+static INT32 HU_ChatScrollbar(INT32 *top)
+{
+	return V_ScrollbarThumb(chat_view_lines * HU_CHATROWHEIGHT,
+		chat_maxscroll, chat_view_lines, chat_scroll, top);
+}
+
+static void HU_DragChatScrollbar(void)
+{
+	INT32 top;
+	const INT32 thumb = HU_ChatScrollbar(&top);
+	const INT32 travel = chat_view_lines * HU_CHATROWHEIGHT - thumb;
+	HU_SetChatScroll(V_ScrollbarValue(chat_mouse_y - chat_view_top - 2 - chat_scroll_grab,
+		travel, chat_maxscroll));
+}
+
+boolean HU_ChatHistoryResponder(const event_t *ev)
+{
+	if (!chat_on || OLDCHAT)
+		return false;
+
+	if (ev->type == ev_keydown)
+	{
+		if (ctrldown && ev->key == 'c')
 		{
-			I_SetTextInputMode(true);
-			chat_on = true;
-			chat_on_first_event = false;
-			w_chat[0] = 0;
-			teamtalk = false;
-			chat_scrollmedown = true;
-			typelines = 1;
-			I_SetMouseGrab(false);
+			HU_CopyChatSelection();
 			return true;
 		}
-		if ((ev->key == gamecontrol[GC_TEAMKEY][0] || ev->key == gamecontrol[GC_TEAMKEY][1])
-			&& netgame && !OLD_MUTE)
+		if (ev->key == KEY_MOUSEWHEELUP || ev->key == KEY_MOUSEWHEELDOWN)
 		{
-			I_SetTextInputMode(true);
-			chat_on = true;
-			chat_on_first_event = false;
-			w_chat[0] = 0;
-			teamtalk = G_GametypeHasTeams(); // Don't teamtalk if we don't have teams.
-			chat_scrollmedown = true;
-			typelines = 1;
-			I_SetMouseGrab(false);
+			HU_SetChatScroll(chat_scroll + (ev->key == KEY_MOUSEWHEELUP ? -3 : 3));
+			if (chat_select_drag)
+				HU_UpdateChatSelection();
 			return true;
 		}
 	}
-	else // if chat_on
+
+	if (ev->type == ev_mouseabsolute)
 	{
-		if (!chat_on_first_event)
+		if (vid.dup > 0)
 		{
-			// since the text event is sent immediately after the keydown event,
-			// we need to make sure that nothing is displayed once the chat
-			// opens, otherwise a 't' would be outputted.
-			chat_on_first_event = true;
+			chat_mouse_x = ev->x < 0 ? -1 : ev->x / vid.dup;
+			chat_mouse_y = ev->y < 0 ? -1 : (ev->y - (vid.height - BASEVIDHEIGHT * vid.dup)) / vid.dup;
+		}
+		if (!(mouse.buttons & MB_BUTTON1))
+			chat_scroll_drag = chat_select_drag = false;
+		if (chat_scroll_drag)
+			HU_DragChatScrollbar();
+		else if (chat_select_drag)
+			HU_UpdateChatSelection();
+		return true;
+	}
+
+	if (ev->key != KEY_MOUSE1)
+		return false;
+
+	if (ev->type == ev_keydown)
+	{
+		chat_scroll_drag = chat_select_drag = chat_select_moved = false;
+		chat_selection_start.message = chat_selection_end.message = chat_click.message = 0;
+		if (!chat_view_lines)
+			return true;
+
+		const INT32 y = chat_mouse_y - chat_view_top - 2;
+		const INT32 bar_x = HU_ChatScrollbarX();
+		if (y < 0 || y >= chat_view_lines * HU_CHATROWHEIGHT
+			|| chat_mouse_x < chatx || chat_mouse_x >= chatx + chat_view_width)
+			return true;
+		if (chat_maxscroll > 0 && chat_mouse_x >= bar_x && chat_mouse_x < bar_x + HU_CHATBARWIDTH)
+		{
+			INT32 top;
+			const INT32 thumb = HU_ChatScrollbar(&top);
+			chat_scroll_drag = true;
+			if (y >= top && y < top + thumb)
+				chat_scroll_grab = y - top;
+			else
+			{
+				chat_scroll_grab = thumb / 2;
+				HU_DragChatScrollbar();
+			}
 			return true;
 		}
+		if (HU_ChatPoint(&chat_selection_start, false, false))
+		{
+			chat_selection_end = chat_selection_start;
+			HU_ChatPoint(&chat_click, false, true);
+			chat_select_drag = true;
+			chat_follow = false;
+		}
+		return true;
+	}
 
+	if (ev->type == ev_keyup)
+	{
+		chat_scroll_drag = false;
+		if (chat_select_drag)
+		{
+			HU_UpdateChatSelection();
+			chat_select_drag = false;
+			if (!chat_select_moved)
+			{
+				chatposition_t point;
+				const chatmessage_t *message = HU_ChatMessage(chat_click.message);
+				if (message && HU_ChatPoint(&point, false, true)
+					&& point.message == chat_click.message && point.offset == chat_click.offset)
+				{
+					if (point.offset >= message->name_start && point.offset < message->name_end
+						&& !CHAT_MUTE && HU_ChatRecipientAvailable(message->player))
+					{
+						chat_recipient = message->player;
+						chat_recipient_left = false;
+						teamtalk = false;
+					}
+					else if (message->link[point.offset])
+						HU_OpenChatURL(message, point.offset);
+				}
+				chat_selection_start.message = chat_selection_end.message = 0;
+			}
+		}
+		return true;
+	}
+
+	return false;
+}
+
+boolean HU_Responder(event_t *ev)
+{
+	if (ev->type != ev_keydown && ev->type != ev_text)
+		return false;
+
+	const INT32 c = ev->key;
+	if (!chat_on)
+	{
+		if (ev->type == ev_text || !netgame || OLD_MUTE)
+			return false;
+
+		const boolean talk = c == gamecontrol[GC_TALKKEY][0] || c == gamecontrol[GC_TALKKEY][1];
+		const boolean team = c == gamecontrol[GC_TEAMKEY][0] || c == gamecontrol[GC_TEAMKEY][1];
+		if (!talk && !team)
+			return false;
+
+		I_SetTextInputMode(true);
+		chat_on = true;
+		chat_open_key = c;
+		w_chat[0] = 0;
+		c_input = 0;
+		teamtalk = !talk && G_GametypeHasTeams();
+		chat_follow = true;
+		typelines = 1;
+		I_SetMouseGrab(false);
+		return true;
+	}
+	else
+	{
+		const boolean opening_text = ev->type == ev_text && chat_open_key >= ' ' && chat_open_key <= '~'
+			&& (UINT32)c < 128 && tolower(c) == tolower(chat_open_key);
+		chat_open_key = 0;
+		if (opening_text)
+			return true;
 		if (ev->type == ev_text)
 		{
 			if ((c < FONTSTART || c > FONTEND || !hu_font.chars[c-FONTSTART])
@@ -1180,11 +1398,6 @@ boolean HU_Responder(event_t *ev)
 		 || ev->key == KEY_LALT || ev->key == KEY_RALT)
 			return true;
 
-		if (c == KEY_MOUSE1)
-		{
-			HU_OpenChatURLAtCursor();
-			return true;
-		}
 
 		// pasting. pasting is cool. chat is a bit limited, though :(
 		if (c == 'v' && ctrldown)
@@ -1214,35 +1427,15 @@ boolean HU_Responder(event_t *ev)
 		{
 			if (!CHAT_MUTE)
 				HU_sendChatMessage();
-
-			I_SetTextInputMode(false);
-			chat_on = false;
-			c_input = 0; // reset input cursor
-			chat_scrollmedown = true; // you hit enter, so you might wanna autoscroll to see what you just sent. :)
-			I_UpdateMouseGrab();
+			HU_clearChatChars();
 		}
 		else if (c == KEY_ESCAPE
 			|| ((c == gamecontrol[GC_TALKKEY][0] || c == gamecontrol[GC_TALKKEY][1]
 			|| c == gamecontrol[GC_TEAMKEY][0] || c == gamecontrol[GC_TEAMKEY][1])
-			&& c >= KEY_MOUSE1)) // If it's not a keyboard key, then the chat button is used as a toggle.
-		{
-			I_SetTextInputMode(false);
-			chat_on = false;
-			c_input = 0; // reset input cursor
-			I_UpdateMouseGrab();
-		}
-		else if ((c == KEY_UPARROW || c == KEY_MOUSEWHEELUP) && chat_scroll > 0 && !OLDCHAT) // CHAT SCROLLING YAYS!
-		{
-			chat_scroll--;
-			justscrolledup = true;
-			chat_scrolltime = 4;
-		}
-		else if ((c == KEY_DOWNARROW || c == KEY_MOUSEWHEELDOWN) && chat_scroll < chat_maxscroll && chat_maxscroll > 0 && !OLDCHAT)
-		{
-			chat_scroll++;
-			justscrolleddown = true;
-			chat_scrolltime = 4;
-		}
+			&& c >= KEY_MOUSE1))
+			HU_clearChatChars();
+		else if (!OLDCHAT && (c == KEY_UPARROW || c == KEY_DOWNARROW))
+			HU_SetChatScroll(chat_scroll + (c == KEY_UPARROW ? -1 : 1));
 		else if (c == KEY_LEFTARROW && c_input != 0 && !OLDCHAT) // i said go back
 		{
 			if (ctrldown)
@@ -1284,9 +1477,6 @@ boolean HU_Responder(event_t *ev)
 //                         HEADS UP DRAWING
 //======================================================================
 
-// 30/7/18: chaty is now the distance at which the lowest point of the chat will be drawn if that makes any sense.
-
-INT16 chatx = 13, chaty = 169; // let's use this as our coordinates
 
 // HU_DrawMiniChat
 
@@ -1391,151 +1581,134 @@ static void HU_drawMiniChat(void)
 
 // HU_DrawChatLog
 
-static void HU_drawChatLog(INT32 offset)
+static void HU_LayoutChat(INT32 width)
 {
-	INT32 charwidth = 4, charheight = 6;
-	INT32 boxw = cv_chatwidth.value, boxh = cv_chatheight.value;
-	INT32 x = chatx+2, y, dx = 0, dy = 0;
-	UINT32 i = 0;
-	INT32 chat_topy, chat_bottomy;
-	boolean atbottom = false;
-	boolean prev_linereturn = false;
+	if (!chat_layout_dirty && chat_layout_width == width)
+		return;
 
-	// make sure that our scroll position isn't "illegal";
-	if (chat_scroll > chat_maxscroll)
-		chat_scroll = chat_maxscroll;
+	const chatposition_t anchor = chat_row_count ? chat_rows[chat_scroll].start : (chatposition_t){0, 0};
+	const INT32 columns = max(1, (width - HU_CHATPAD - HU_CHATBARWIDTH - 2) / HU_CHATCOLWIDTH);
+	chat_layout_width = width;
+	chat_layout_dirty = false;
+	chat_row_count = 0;
 
-#ifdef NETSPLITSCREEN
-	if (splitscreen)
+	for (UINT32 i = 0; i < chat_nummsg_log; i++)
 	{
-		boxh = max(6, boxh/2);
-		if (splitscreen > 1)
-			boxw = max(64, boxw/2);
-	}
-#endif
-
-	y = chaty - offset*charheight - (chat_scroll*charheight) - boxh*charheight - 12;
-
-#ifdef NETSPLITSCREEN
-	if (splitscreen)
-	{
-		y -= BASEVIDHEIGHT/2;
-		//if (splitscreen > 1)
-			//y += 16;
-	}
-#endif
-
-	chat_topy = y + chat_scroll*charheight;
-	chat_bottomy = chat_topy + boxh*charheight;
-
-	V_DrawFillConsoleMap(chatx, chat_topy, boxw, boxh*charheight +2, 239|V_SNAPTOBOTTOM|V_SNAPTOLEFT); // log box
-
-	for (i=0; i<chat_nummsg_log; i++) // iterate through our chatlog
-	{
-		char *msg = V_ChatWordWrap(0, boxw-charwidth-2, V_SNAPTOBOTTOM|V_SNAPTOLEFT|V_ALLOWLOWERCASE|V_MONOSPACE, chat_log[i]); // get the current message, and word wrap it.
-		UINT8 *colormap = NULL;
-		INT32 activelink = -1;
-		size_t linkend = 0;
-		for(size_t j = 0; msg[j]; j++) // iterate through msg
+		char *wrapped = V_ChatWordWrap(0, columns * HU_CHATCOLWIDTH, V_ALLOWLOWERCASE | V_MONOSPACE, chat_log[i].text);
+		chatrow_t row = {{chat_first_message + i, 0}, 0, 0, 0x80};
+		UINT8 color = row.color;
+		UINT16 offset;
+		for (offset = 0; wrapped[offset]; offset++)
 		{
-			if (j >= linkend)
-				activelink = -1;
-			if (activelink < 0 && chat_linkcount < HU_MAX_CHATLINKS
-			 && (!strnicmp(&msg[j], "https://", 8) || !strnicmp(&msg[j], "http://", 7)))
+			const UINT8 c = wrapped[offset];
+			const boolean printable = HU_ChatPrintable(c);
+			if (c == '\n' || (printable && row.columns == columns))
 			{
-				size_t k, length = 0;
-				chatlink_t *link = &chat_links[chat_linkcount];
-				for (k = j; msg[k]; k++)
-				{
-					if (msg[k] & 0x80)
-						break;
-					if (msg[k] == '\n')
-						continue;
-					if (msg[k] <= ' ')
-						break;
-					if (length+1 < sizeof link->url)
-						link->url[length++] = msg[k];
-				}
-				while (length && strchr(".,;:!?)]}>\"'", link->url[length-1]))
-					length--;
-				link->url[length] = '\0';
-				if (length)
-				{
-					activelink = (INT32)chat_linkcount++;
-					linkend = k;
-				}
+				row.end = offset;
+				chat_rows[chat_row_count++] = row;
+				row.start.offset = offset + (c == '\n');
+				row.columns = 0;
+				row.color = color;
 			}
-			if (msg[j] == '\n') // get back down.
-			{
-				if (!prev_linereturn)
-				{
-					dy += charheight;
-					dx = 0;
-				}
-				prev_linereturn = true;
-			}
-			else if (msg[j] & 0x80) // get colormap
-				colormap = V_GetStringColormap(((msg[j] & 0x7f) << V_CHARCOLORSHIFT) & V_CHARCOLORMASK);
-			else
-			{
-				prev_linereturn = false;
-
-				if (msg[j] >= FONTSTART)
-				{
-					if ((y+dy+2 >= chat_topy) && (y+dy < (chat_bottomy)))
-					{
-						UINT8 *drawmap = activelink >= 0 ? V_GetStringColormap(V_AQUAMAP) : colormap;
-						V_DrawChatCharacter(x + dx + 2, y+dy+2, msg[j] |V_SNAPTOBOTTOM|V_SNAPTOLEFT|V_MONOSPACE, true, drawmap);
-						if (activelink >= 0 && chat_linkrectcount < HU_MAX_CHATLINK_RECTS)
-						{
-							chatlinkrect_t *rect = &chat_linkrects[chat_linkrectcount++];
-							rect->x = (INT16)(x + dx + 2);
-							rect->y = (INT16)(y + dy + 2);
-							rect->w = (INT16)charwidth;
-							rect->h = (INT16)charheight;
-							rect->link = (UINT8)activelink;
-						}
-					}
-
-					dx += charwidth;
-				}
-
-				if (dx >= boxw-charwidth-2 && i < chat_nummsg_log) // end of message shouldn't count, nor should invisible characters!!!!
-				{
-					dx = 0;
-					dy += charheight;
-					prev_linereturn = true;
-				}
-			}
+			if (c & 0x80)
+				color = c;
+			else if (printable)
+				row.columns++;
 		}
-		dy += charheight;
-		dx = 0;
-
-		if (msg)
-			Z_Free(msg);
+		row.end = offset;
+		chat_rows[chat_row_count++] = row;
+		Z_Free(wrapped);
 	}
 
-	if (((chat_scroll >= chat_maxscroll) || (chat_scrollmedown)) && !(justscrolleddown || justscrolledup || chat_scrolltime)) // was already at the bottom of the page before new maxscroll calculation and was NOT scrolling.
-		atbottom = true; // we should scroll
-
-	chat_scrollmedown = false;
-
-	// getmaxscroll through a lazy hack. We do all these loops, so let's not do more loops that are gonna lag the game more. :P
-	chat_maxscroll = max(dy / charheight - cv_chatheight.value, 0);
-
-	// if we're not bound by the time, autoscroll for next frame:
-	if (atbottom)
-		chat_scroll = chat_maxscroll;
-
-	// draw arrows to indicate that we can (or not) scroll, accounting for Y = -1 offset in tinyfont
-	if (chat_scroll > 0)
-		V_DrawThinString(chatx-8, ((justscrolledup) ? (chat_topy-1) : (chat_topy)) - 1, V_SNAPTOBOTTOM | V_SNAPTOLEFT | V_YELLOWMAP, "\x1A"); // up arrow
-	if (chat_scroll < chat_maxscroll)
-		V_DrawThinString(chatx-8, chat_bottomy-((justscrolleddown) ? 5 : 6) - 1, V_SNAPTOBOTTOM | V_SNAPTOLEFT | V_YELLOWMAP, "\x1B"); // down arrow
-
-	justscrolleddown = justscrolledup = false;
+	if (!chat_follow)
+	{
+		chat_scroll = 0;
+		for (INT32 i = 0; i < chat_row_count && !HU_ChatPositionBefore(anchor, chat_rows[i].start); i++)
+			chat_scroll = i;
+	}
 }
 
+static INT32 HU_ChatColumn(const chatrow_t *row, const char *text, UINT16 offset)
+{
+	INT32 column = 0;
+	for (UINT16 i = row->start.offset; i < min(row->end, offset); i++)
+		column += HU_ChatPrintable(text[i]);
+	return column;
+}
+
+static void HU_drawChatLog(INT32 offset)
+{
+	INT32 width = cv_chatwidth.value, visible_lines = cv_chatheight.value;
+	INT32 bottom = chaty - offset * HU_CHATROWHEIGHT - 12;
+#ifdef NETSPLITSCREEN
+	if (splitscreen)
+	{
+		visible_lines = max(6, visible_lines / 2);
+		bottom -= BASEVIDHEIGHT / 2;
+		if (splitscreen > 1)
+			width = max(64, width / 2);
+	}
+#endif
+
+	chat_view_width = width;
+	chat_view_lines = max(0, min(visible_lines, bottom / HU_CHATROWHEIGHT));
+	if (!chat_view_lines)
+		return;
+
+	HU_LayoutChat(width);
+	chat_maxscroll = max(0, chat_row_count - chat_view_lines);
+	chat_scroll = chat_follow ? chat_maxscroll : min(chat_scroll, chat_maxscroll);
+
+	const INT32 height = chat_view_lines * HU_CHATROWHEIGHT;
+	chat_view_top = bottom - height;
+	V_DrawFillConsoleMap(chatx, chat_view_top, width, height + 2, 239 | HU_CHATDRAWFLAGS);
+	if (chat_maxscroll > 0)
+	{
+		INT32 top;
+		const INT32 thumb = HU_ChatScrollbar(&top);
+		const INT32 x = HU_ChatScrollbarX();
+		V_DrawFill(x, chat_view_top + 2, HU_CHATBARWIDTH, height, HU_CHATDRAWFLAGS | 159);
+		V_DrawFill(x, chat_view_top + 2 + top, HU_CHATBARWIDTH, thumb,
+			HU_CHATDRAWFLAGS | (chat_scroll_drag ? 120 : 148));
+	}
+
+	chatposition_t first, last;
+	const boolean selected = HU_ChatSelection(&first, &last);
+	UINT8 *linkmap = V_GetStringColormap(V_AQUAMAP);
+	const INT32 end = min(chat_scroll + chat_view_lines, chat_row_count);
+	for (INT32 i = chat_scroll; i < end; i++)
+	{
+		const chatrow_t *row = &chat_rows[i];
+		const UINT32 id = row->start.message;
+		const chatmessage_t *message = HU_ChatMessage(id);
+		const INT32 y = chat_view_top + 2 + (i - chat_scroll) * HU_CHATROWHEIGHT;
+		const INT32 left = chatx + HU_CHATPAD;
+		const char *text = message->text;
+		if (selected && id >= first.message && id <= last.message)
+		{
+			const INT32 from = id == first.message ? HU_ChatColumn(row, text, first.offset) : 0;
+			const INT32 to = id == last.message ? HU_ChatColumn(row, text, last.offset) : row->columns;
+			if (to > from)
+				V_DrawFill(left + from * HU_CHATCOLWIDTH, y, (to - from) * HU_CHATCOLWIDTH,
+					HU_CHATROWHEIGHT, HU_CHATDRAWFLAGS | 156);
+		}
+
+		INT32 x = left;
+		UINT8 *colormap = V_GetStringColormap((row->color & 0x7f) << V_CHARCOLORSHIFT);
+		for (UINT16 j = row->start.offset; j < row->end; j++)
+		{
+			const UINT8 c = text[j];
+			if (c & 0x80)
+				colormap = V_GetStringColormap((c & 0x7f) << V_CHARCOLORSHIFT);
+			else if (HU_ChatPrintable(c))
+			{
+				V_DrawChatCharacter(x, y, c | HU_CHATDRAWFLAGS | V_MONOSPACE, true,
+					message->link[j] ? linkmap : colormap);
+				x += HU_CHATCOLWIDTH;
+			}
+		}
+	}
+}
 //
 // HU_DrawChat
 //
@@ -1551,9 +1724,7 @@ static void HU_DrawChat(void)
 	INT32 cflag = 0;
 	const char *ntalk = "Say: ", *ttalk = "Team: ";
 	const char *talk = ntalk;
-
-	chat_linkcount = 0;
-	chat_linkrectcount = 0;
+	char private_prompt[MAXPLAYERNAME + 8];
 
 #ifdef NETSPLITSCREEN
 	if (splitscreen)
@@ -1567,7 +1738,18 @@ static void HU_DrawChat(void)
 	}
 #endif
 
-	if (teamtalk)
+	if (chat_recipient >= 0)
+	{
+		if (chat_recipient_left || !HU_ChatRecipientAvailable(chat_recipient))
+			talk = "PM (left): ";
+		else
+		{
+			const INT32 maxname = max(1, boxw / charwidth - 7);
+			snprintf(private_prompt, sizeof private_prompt, "To %.*s: ", maxname, player_names[chat_recipient]);
+			talk = private_prompt;
+		}
+	}
+	else if (teamtalk)
 		talk = ttalk;
 
 	if (CHAT_MUTE)
@@ -1631,7 +1813,7 @@ static void HU_DrawChat(void)
 	}
 
 	// handle /pm list. It's messy, horrible and I don't care.
-	if (strnicmp(w_chat, "/pm", 3) == 0 && vid.width >= 400 && !teamtalk) // 320x200 unsupported kthxbai
+	if (chat_recipient < 0 && strnicmp(w_chat, "/pm", 3) == 0 && vid.width >= 400 && !teamtalk) // 320x200 unsupported kthxbai
 	{
 		INT32 count = 0;
 		INT32 p_dispy = chaty - charheight -1;
@@ -1868,7 +2050,7 @@ void HU_Drawer(void)
 	else
 	{
 		typelines = 1;
-		chat_scrolltime = 0;
+
 
 		if (!OLDCHAT && cv_consolechat.value < 2 && netgame) // Don't display minimized chat if you set the mode to Window (Hidden)
 			HU_drawMiniChat(); // draw messages in a cool fashion.
@@ -1911,7 +2093,7 @@ void HU_Drawer(void)
 		return;
 
 	// draw the crosshair
-	if (LUA_HudEnabled(hud_crosshair))
+	if (cv_translucenthud.value && LUA_HudEnabled(hud_crosshair))
 		HU_DrawCrosshairs();
 
 	// draw desynch text
@@ -2008,8 +2190,8 @@ static const UINT8 *HU_PendingFaceColormap(const player_t *player)
 {
 	if (player->mo && player->mo->color != SKINCOLOR_NONE)
 		return R_GetTranslationColormap(player->skin, player->mo->color, GTC_CACHE);
-	// Use the same default as R_GetTranslationForThing before the server
-	// applies the player's name, skin and color command.
+
+
 	return R_GetTranslationColormap(TC_DEFAULT, SKINCOLOR_BLUE, GTC_CACHE);
 }
 

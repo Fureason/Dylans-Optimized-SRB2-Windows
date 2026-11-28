@@ -2503,13 +2503,13 @@ void F_StartTitleScreen(void)
 
 	G_SetGamestate(GS_TITLESCREEN);
 
-	/* G_DoLoadLevel resets interpolation while the title map is still being
-	 * assembled, before the title camera above is placed at its final start.
-	 * Loading a replacement title map from a late addfile can render one frame
-	 * against the previous title view as a result, which looks like the skybox
-	 * briefly snapping to an unrelated angle. Invalidate the completed camera
-	 * history here as well, after the final position and any menu enter executor
-	 * have both run. */
+
+
+
+
+
+
+
 	if (titlemapinaction)
 		R_ResetViewInterpolation(0);
 
@@ -4770,8 +4770,8 @@ void F_WaitingPlayersTicker(void)
 
 	finalecount++;
 
-	// dumb hack, only start the music on the 1st tick so if you instantly go into the map you aren't hearing a tic of music
-	if (finalecount == 2)
+	// The waiting music is for guests waiting to enter a server.
+	if (finalecount == 2 && !server && !I_CompanionServerRunning())
 		S_ChangeMusicInternal("_CHSEL", true);
 }
 

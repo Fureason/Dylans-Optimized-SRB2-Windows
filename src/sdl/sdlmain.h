@@ -85,5 +85,6 @@ void SDLforceUngrabMouse(void);
 
 // Needed for some WIN32 functions
 extern SDL_Window *window;
+void I_GetGameViewport(INT32 outputwidth, INT32 outputheight, SDL_Rect *viewport);
 
 #endif

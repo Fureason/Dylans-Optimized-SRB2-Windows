@@ -80,9 +80,9 @@ void R_UpdateAdaptiveEffects(precise_t active_time, precise_t frame_budget)
 		return;
 
 	workload = active_time;
-	/* Preserve some headroom for network and Lua bursts before a frame actually
-	 * misses its deadline. Two consecutive busy frames are enough to react;
-	 * the culled objects are visual-only effects, never gameplay thinkers. */
+
+
+
 	if (workload * 100ULL >= budget * 85ULL)
 	{
 		adaptive_headroom_frames = 0;
@@ -118,9 +118,9 @@ UINT8 R_GetAdaptiveEffectsLevel(void)
 ps_metric_t ps_interp_frac = {0};
 ps_metric_t ps_interp_lag = {0};
 
-// Network arrivals need not share the local 35 Hz clock's phase. Anchor visual
-// interpolation to actual simulation progress, then hold its endpoint during
-// starvation. This never advances a thinker or predicts synchronized state.
+
+
+
 fixed_t R_NetworkTimeFrac(precise_t now, tic_t tic, fixed_t fallback, boolean active)
 {
 	static boolean valid;
@@ -139,7 +139,7 @@ fixed_t R_NetworkTimeFrac(precise_t now, tic_t tic, fixed_t fallback, boolean ac
 	}
 	else if (tic != previous)
 	{
-		// Multiple catch-up tics have no intermediate renderable snapshots.
+
 		anchor = (tic_t)(tic-previous) == 1 ? now : now-min(now, period);
 		previous = tic;
 	}
@@ -158,19 +158,19 @@ UINT32 R_GetFramerateCap(void)
 
 	if (cv_fpscap.value == 0)
 	{
-		// 0: Match refresh rate
-		return I_GetRefreshRate();
+		const UINT32 refresh = I_GetRefreshRate();
+		return refresh ? refresh : 60;
 	}
 
 	if (cv_fpscap.value < 0)
 	{
-		/* Uncapped rendering often feels uneven in a window and consumes the CPU
-		 * headroom crowded maps need. Smooth mode keeps the old Unlimited choice
-		 * available while pacing it to the active display by default. */
+
+
+
 		if (cv_smoothframepacing.value)
 			return I_GetRefreshRate();
 
-		// -1: Truly unlimited when smooth pacing is explicitly disabled.
+
 		return 0;
 	}
 
@@ -195,6 +195,25 @@ static viewvars_t *oldview = &p1view_old;
 static int oldview_invalid[MAXSPLITSCREENPLAYERS] = {0, 0};
 viewvars_t *newview = &p1view_new;
 
+typedef struct
+{
+	const mobj_t *viewpoint, *center;
+	precise_t started, last_frame;
+	vector3_t from, target, current;
+} network_view_origin_t;
+
+typedef struct
+{
+	const player_t *player;
+	const mobj_t *body;
+	precise_t started, last_frame;
+	angle_t fromangle, fromaim, targetangle, targetaim;
+	angle_t angle, aim;
+	network_view_origin_t world, sky;
+} network_look_t;
+
+static network_look_t network_look[MAXSPLITSCREENPLAYERS];
+static precise_t network_view_time, network_view_period;
 
 enum viewcontext_e viewcontext = VIEWCONTEXT_PLAYER1;
 
@@ -211,6 +230,120 @@ static fixed_t R_LerpFixed(fixed_t from, fixed_t to, fixed_t frac)
 static angle_t R_LerpAngle(angle_t from, angle_t to, fixed_t frac)
 {
 	return from + FixedMul(frac, to - from);
+}
+
+static fixed_t R_ViewBlendFraction(precise_t started)
+{
+	const precise_t elapsed = network_view_time - started;
+	return (fixed_t)(min(elapsed, network_view_period) * FRACUNIT / network_view_period);
+}
+
+void R_BeginNetworkViewFrame(precise_t now, boolean active)
+{
+
+	network_view_time = now;
+	network_view_period = active ? I_GetPrecisePrecision() / TICRATE : 0;
+
+	for (UINT8 i = 0; i < MAXSPLITSCREENPLAYERS; i++)
+	{
+		network_look_t *look = &network_look[i];
+		const INT32 num = i ? secondarydisplayplayer : consoleplayer;
+		if (!network_view_period || num < 0 || num >= MAXPLAYERS || !playeringame[num]
+			|| (i ? (!splitscreen || num == consoleplayer) : displayplayer != consoleplayer))
+		{
+			look->player = NULL;
+			continue;
+		}
+
+		const player_t *player = &players[num];
+		if (!player->mo || player->playerstate != PST_LIVE || player->awayviewtics
+			|| R_ViewpointHasChasecam(player))
+		{
+			look->player = NULL;
+			continue;
+		}
+
+		const angle_t angle = i ? localangle2 : localangle;
+		const angle_t aim = (angle_t)(i ? localaiming2 : localaiming);
+		if (look->player != player || look->body != player->mo || now < look->last_frame)
+		{
+			*look = (network_look_t){
+				.player = player, .body = player->mo, .started = now,
+				.fromangle = angle, .targetangle = angle, .fromaim = aim, .targetaim = aim
+			};
+		}
+		else if (angle != look->targetangle || aim != look->targetaim)
+		{
+
+			look->started = look->last_frame;
+			look->fromangle = look->angle;
+			look->fromaim = look->aim;
+			look->targetangle = angle;
+			look->targetaim = aim;
+		}
+
+		const fixed_t frac = R_ViewBlendFraction(look->started);
+		look->angle = R_LerpAngle(look->fromangle, look->targetangle, frac);
+		look->aim = R_LerpAngle(look->fromaim, look->targetaim, frac);
+		look->last_frame = now;
+	}
+}
+
+void R_EndNetworkViewFrame(void)
+{
+	network_view_period = 0;
+}
+
+void R_ResetNetworkView(const player_t *player)
+{
+	for (UINT8 i = 0; i < MAXSPLITSCREENPLAYERS; i++)
+		if (network_look[i].player == player)
+			network_look[i].player = NULL;
+}
+
+static fixed_t R_LerpViewCoordinate(fixed_t from, fixed_t to, fixed_t frac)
+{
+	return (fixed_t)(from + (((INT64)to - from) * frac >> FRACBITS));
+}
+
+static vector3_t R_BlendNetworkViewOrigin(network_look_t *look, boolean skybox,
+	const viewvars_t *prevview, fixed_t scene_frac)
+{
+	network_view_origin_t *origin = skybox ? &look->sky : &look->world;
+	const mobj_t *viewpoint = skybox ? skyboxmo[0] : look->body;
+	const mobj_t *center = skybox ? skyboxmo[1] : NULL;
+	const vector3_t target = {newview->x, newview->y, newview->z};
+
+	if (origin->viewpoint != viewpoint || origin->center != center)
+	{
+		*origin = (network_view_origin_t){
+			.viewpoint = viewpoint, .center = center, .started = network_view_time,
+			.from = target, .target = target
+		};
+	}
+	else if (target.x != origin->target.x || target.y != origin->target.y || target.z != origin->target.z)
+	{
+
+
+		origin->started = origin->last_frame;
+		origin->from = origin->current;
+		origin->target = target;
+	}
+
+	const fixed_t frac = R_ViewBlendFraction(origin->started);
+	origin->current = (vector3_t){
+		R_LerpViewCoordinate(origin->from.x, target.x, frac),
+		R_LerpViewCoordinate(origin->from.y, target.y, frac),
+		R_LerpViewCoordinate(origin->from.z, target.z, frac)
+	};
+	if (look->body->pmomz && (look->body->eflags & MFE_APPLYPMOMZ))
+	{
+
+		origin->current.z = R_LerpViewCoordinate(prevview->z, target.z, scene_frac);
+		origin->from.z = origin->current.z;
+	}
+	origin->last_frame = network_view_time;
+	return origin->current;
 }
 
 static vector2_t *R_LerpVector2(const vector2_t *from, const vector2_t *to, fixed_t frac, vector2_t *out)
@@ -281,7 +414,7 @@ static void R_SetupFreelook(player_t *player, boolean skybox)
 void R_InterpolateView(fixed_t frac)
 {
 	viewvars_t* prevview = oldview;
-	boolean skybox = 0;
+	const boolean skybox = newview->sky;
 	UINT8 i;
 
 	if (FIXED_TO_FLOAT(frac) < 0)
@@ -304,12 +437,33 @@ void R_InterpolateView(fixed_t frac)
 		prevview = newview;
 	}
 
-	viewx = R_LerpFixed(prevview->x, newview->x, frac);
-	viewy = R_LerpFixed(prevview->y, newview->y, frac);
-	viewz = R_LerpFixed(prevview->z, newview->z, frac);
+	network_look_t *look = &network_look[i];
+	const boolean local_view = network_view_period && look->player && look->player == newview->player;
+	if (local_view && !(cv_screenshake.value && quake.time))
+	{
+		const vector3_t origin = R_BlendNetworkViewOrigin(look, skybox, prevview, frac);
+		viewx = origin.x;
+		viewy = origin.y;
+		viewz = origin.z;
+	}
+	else
+	{
+		viewx = R_LerpFixed(prevview->x, newview->x, frac);
+		viewy = R_LerpFixed(prevview->y, newview->y, frac);
+		viewz = R_LerpFixed(prevview->z, newview->z, frac);
+	}
 
-	viewangle = R_LerpAngle(prevview->angle, newview->angle, frac);
-	aimingangle = R_LerpAngle(prevview->aim, newview->aim, frac);
+	if (local_view)
+	{
+
+		viewangle = look->angle + (skybox ? skyboxmo[0]->angle : 0);
+		aimingangle = look->aim;
+	}
+	else
+	{
+		viewangle = R_LerpAngle(prevview->angle, newview->angle, frac);
+		aimingangle = R_LerpAngle(prevview->aim, newview->aim, frac);
+	}
 
 	viewsin = FINESINE(viewangle>>ANGLETOFINESHIFT);
 	viewcos = FINECOSINE(viewangle>>ANGLETOFINESHIFT);
@@ -319,23 +473,29 @@ void R_InterpolateView(fixed_t frac)
 	viewplayer = newview->player;
 	viewsector = R_PointInSubsector(viewx, viewy)->sector;
 
-	// well, this ain't pretty
-	if (newview == &sky1view_new || newview == &sky2view_new)
-	{
-		skybox = 1;
-	}
-
 	R_SetupFreelook(newview->player, skybox);
+}
+
+static void R_AdvanceViewHistory(UINT8 index)
+{
+	if (index == 0)
+	{
+		p1view_old = p1view_new;
+		sky1view_old = sky1view_new;
+	}
+	else
+	{
+		p2view_old = p2view_new;
+		sky2view_old = sky2view_new;
+	}
+	if (oldview_invalid[index] > 0)
+		oldview_invalid[index]--;
 }
 
 void R_UpdateViewInterpolation(void)
 {
-	p1view_old = p1view_new;
-	p2view_old = p2view_new;
-	sky1view_old = sky1view_new;
-	sky2view_old = sky2view_new;
-	if (oldview_invalid[0] > 0) oldview_invalid[0]--;
-	if (oldview_invalid[1] > 0) oldview_invalid[1]--;
+	R_AdvanceViewHistory(0);
+	R_AdvanceViewHistory(1);
 }
 
 void R_ResetViewInterpolation(UINT8 p)
@@ -346,11 +506,13 @@ void R_ResetViewInterpolation(UINT8 p)
 		for (i = 0; i < MAXSPLITSCREENPLAYERS; i++)
 		{
 			oldview_invalid[i]++;
+			network_look[i].player = NULL;
 		}
 	}
 	else
 	{
 		oldview_invalid[p - 1]++;
+		network_look[p - 1].player = NULL;
 	}
 }
 

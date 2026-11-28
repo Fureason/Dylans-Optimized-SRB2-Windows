@@ -218,6 +218,9 @@ void ST_Ticker(boolean run)
 INT32 st_palette = 0;
 INT32 st_translucency = 10;
 
+static RGBA_t hud_graphics_palette[256];
+static boolean hud_graphics_palette_valid;
+
 void ST_doPaletteStuff(void)
 {
 	INT32 palette;
@@ -248,6 +251,29 @@ void ST_doPaletteStuff(void)
 void ST_UnloadGraphics(void)
 {
 	Patch_FreeTag(PU_HUDGFX);
+}
+
+static boolean ST_MarkStaleGraphics(void *patch)
+{
+	Z_ChangeTag(patch, PU_HUDGFX_STALE);
+	return false;
+}
+
+void ST_RefreshAddonGraphics(void)
+{
+	const boolean reuse = rendermode == render_soft && hud_graphics_palette_valid
+		&& pMasterPalette && !memcmp(pMasterPalette, hud_graphics_palette, sizeof hud_graphics_palette);
+	if (reuse)
+		Z_IterateTag(PU_HUDGFX, ST_MarkStaleGraphics);
+	else
+		ST_UnloadGraphics();
+
+
+	HU_LoadGraphics();
+	ST_LoadGraphics();
+	ST_ReloadSkinFaceGraphics();
+	if (reuse)
+		Patch_FreeTag(PU_HUDGFX_STALE);
 }
 
 void ST_LoadGraphics(void)
@@ -361,6 +387,10 @@ void ST_LoadGraphics(void)
 
 	for (i = 0; i < 7; ++i)
 		ngradeletters[i] = W_CachePatchName(va("GRADE%d", i), PU_HUDGFX);
+
+	hud_graphics_palette_valid = (pMasterPalette != NULL);
+	if (hud_graphics_palette_valid)
+		memcpy(hud_graphics_palette, pMasterPalette, sizeof hud_graphics_palette);
 }
 
 // made separate so that skins code can reload custom face graphics
@@ -2542,7 +2572,7 @@ num:
 		ST_DrawPatchFromHud(HUD_TIMEUP, timeup, V_HUDTRANS);
 }*/
 
-static INT32 ST_drawEmeraldHuntIcon(mobj_t *hunt, patch_t **patches, INT32 offset)
+static INT32 ST_drawEmeraldHuntIcon(mobj_t *hunt, patch_t **patches, INT32 offset, boolean draw)
 {
 	INT32 interval, i;
 	if (stplyr->mo == NULL)
@@ -2580,29 +2610,29 @@ static INT32 ST_drawEmeraldHuntIcon(mobj_t *hunt, patch_t **patches, INT32 offse
 		interval = 0;
 	}
 
-	if (!F_GetPromptHideHud(hudinfo[HUD_HUNTPICS].y))
+	if (draw && !F_GetPromptHideHud(hudinfo[HUD_HUNTPICS].y))
 		V_DrawScaledPatch(hudinfo[HUD_HUNTPICS].x+offset, hudinfo[HUD_HUNTPICS].y, hudinfo[HUD_HUNTPICS].f|V_PERPLAYER|V_HUDTRANS, patches[i]);
 	return interval;
 }
 
 // Separated a few things to stop the SOUND EFFECTS BLARING UGH SHUT UP AAAA
-static void ST_doHuntIconsAndSound(void)
+static void ST_doHuntIconsAndSound(boolean draw)
 {
 	INT32 interval = 0, newinterval = 0;
 
 	if (hunt1 && hunt1->health)
-		interval = ST_drawEmeraldHuntIcon(hunt1, hunthoming, -20);
+		interval = ST_drawEmeraldHuntIcon(hunt1, hunthoming, -20, draw);
 
 	if (hunt2 && hunt2->health)
 	{
-		newinterval = ST_drawEmeraldHuntIcon(hunt2, hunthoming, 0);
+		newinterval = ST_drawEmeraldHuntIcon(hunt2, hunthoming, 0, draw);
 		if (newinterval && (!interval || newinterval < interval))
 			interval = newinterval;
 	}
 
 	if (hunt3 && hunt3->health)
 	{
-		newinterval = ST_drawEmeraldHuntIcon(hunt3, hunthoming, 20);
+		newinterval = ST_drawEmeraldHuntIcon(hunt3, hunthoming, 20, draw);
 		if (newinterval && (!interval || newinterval < interval))
 			interval = newinterval;
 	}
@@ -2611,7 +2641,7 @@ static void ST_doHuntIconsAndSound(void)
 		S_StartSound(NULL, sfx_emfind);
 }
 
-static boolean ST_doItemFinderIconsAndSound(void)
+static boolean ST_doItemFinderIconsAndSound(boolean draw)
 {
 	INT32 emblems[16];
 	thinker_t *th;
@@ -2674,7 +2704,7 @@ static boolean ST_doItemFinderIconsAndSound(void)
 
 				soffset = (i * 20) - ((stemblems - 1) * 10);
 
-				newinterval = ST_drawEmeraldHuntIcon(mo2, itemhoming, soffset);
+				newinterval = ST_drawEmeraldHuntIcon(mo2, itemhoming, soffset, draw);
 				if (newinterval && (!interval || newinterval < interval))
 					interval = newinterval;
 
@@ -2698,6 +2728,15 @@ static boolean drawstagetitle = false;
 //
 static void ST_overlayDrawer(void)
 {
+	if (!cv_translucenthud.value)
+	{
+
+		if (!hu_showscores && !ST_doItemFinderIconsAndSound(false))
+			ST_doHuntIconsAndSound(false);
+		if (drawstagetitle && !WipeInAction && !WipeStageTitle)
+			ST_drawTitleCard();
+		return;
+	}
 	// hu_showscores = auto hide score/time/rings when tab rankings are shown
 	if (!(hu_showscores && (netgame || multiplayer)))
 	{
@@ -2796,8 +2835,8 @@ static void ST_overlayDrawer(void)
 			ST_drawRaceHUD();
 
 		// Emerald Hunt Indicators
-		if (!ST_doItemFinderIconsAndSound())
-			ST_doHuntIconsAndSound();
+		if (!ST_doItemFinderIconsAndSound(true))
+			ST_doHuntIconsAndSound(true);
 
 		if(!P_IsLocalPlayer(stplyr))
 		{
@@ -2851,7 +2890,7 @@ static void ST_overlayDrawer(void)
 
 void ST_Drawer(void)
 {
-	if (cv_seenames.value && cv_allowseenames.value && displayplayer == consoleplayer && seenplayer && seenplayer->mo)
+	if (cv_translucenthud.value && cv_seenames.value && cv_allowseenames.value && displayplayer == consoleplayer && seenplayer && seenplayer->mo)
 	{
 		INT32 c = 0;
 		switch (cv_seenames.value)

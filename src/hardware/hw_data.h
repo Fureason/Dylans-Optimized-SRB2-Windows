@@ -61,6 +61,7 @@ struct GLMipmap_s
 	UINT16                height;
 	UINT16                width;
 	UINT32                downloaded; // The GPU has this texture.
+	boolean               truecolor_png;
 
 	struct GLMipmap_s    *nextcolormap;
 	struct GLColormap_s  *colormap;
@@ -76,10 +77,6 @@ struct GLMapTexture_s
 	GLMipmap_t  mipmap;
 	float       scaleX; // Used for scaling textures on walls
 	float       scaleY;
-	/* True-colour masked walls only need a second texture when the source
-	 * actually contains SRB2's palette chromakey colour. */
-	boolean     chromakey_checked;
-	boolean     chromakey_required;
 	boolean     png_checked;
 	boolean     has_truecolor_png;
 };
@@ -90,7 +87,7 @@ typedef struct GLMapTexture_s GLMapTexture_t;
 struct GLPatch_s
 {
 	GLMipmap_t *mipmap; // Texture data. Allocated whenever the patch is.
-	GLMipmap_t *colormapcache[16]; // Direct cache for animated skin translations.
+	GLMipmap_t *colormapcache[16];
 	float       max_s, max_t;
 };
 typedef struct GLPatch_s GLPatch_t;

@@ -1,7 +1,7 @@
-// SONIC ROBO BLAST 2 -- native Windows MP4 recording (GPL v2).
-// Private to m_misc.c. All COM objects belong to the calling worker thread.
-// Media Foundation is loaded from System32 on demand, so missing Windows
-// media components cannot prevent the game itself from starting.
+
+
+
+
 #ifndef COBJMACROS
 #define COBJMACROS
 #endif
@@ -147,12 +147,12 @@ static HRESULT M_MFMovieOpen(movie_mf_writer_t *movie, const char *path,
 	MOVIE_MF_TRY(M_MFPath(path, wide, MAX_WADPATH));
 	MOVIE_MF_TRY(movie->api.attributes(&attributes, 1));
 	MOVIE_MF_TRY(IMFAttributes_SetUINT32(attributes, &MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE));
-	// Keep the sink's backpressure: this worker may wait, the game never does.
+
 	MOVIE_MF_TRY(movie->api.sink(wide, NULL, attributes, &movie->writer));
 	MOVIE_MF_TRY(M_MFVideoType(&movie->api, &encoded, &MFVideoFormat_H264, width, height, fps));
 	MOVIE_MF_TRY(IMFMediaType_SetUINT32(encoded, &MF_MT_AVG_BITRATE,
 		(UINT32)min(80000000ULL, max(4000000ULL, (UINT64)width * height * fps / 3))));
-	MOVIE_MF_TRY(IMFMediaType_SetUINT32(encoded, &MF_MT_MPEG2_PROFILE, 77)); // H.264 Main
+	MOVIE_MF_TRY(IMFMediaType_SetUINT32(encoded, &MF_MT_MPEG2_PROFILE, 77));
 	MOVIE_MF_TRY(IMFSinkWriter_AddStream(movie->writer, encoded, &movie->stream));
 	MOVIE_MF_TRY(M_MFVideoType(&movie->api, &input, &MFVideoFormat_NV12, width, height, fps));
 	MOVIE_MF_TRY(IMFSinkWriter_SetInputMediaType(movie->writer, movie->stream, input, NULL));
@@ -173,8 +173,8 @@ done:
 	return hr;
 }
 
-// RGB24 is top-down in both renderer capture paths. Convert directly to
-// top-down, limited-range BT.709 NV12 in the encoder's own sample buffer.
+
+
 static void M_MFRGBToNV12(const UINT8 *rgb, UINT8 *nv12, UINT32 width, UINT32 height)
 {
 	UINT8 *uv = nv12 + (size_t)width * height;
@@ -246,8 +246,8 @@ static HRESULT M_MFReadSample(IMFSourceReader *reader, DWORD stream, IMFSample *
 	return S_OK;
 }
 
-// The capture is already H.264. Copy it unchanged and encode the recorded
-// PCM mix to AAC while interleaving by timestamp, with bounded memory.
+
+
 static HRESULT M_MFMovieMux(const char *video, const char *audio, const char *output,
 	UINT64 frames, UINT32 fps)
 {

@@ -41,6 +41,7 @@
 #include "hu_stuff.h"
 
 lua_State *gL = NULL;
+static int userdata_cache_ref = LUA_NOREF;
 
 // List of internal libraries to load from SRB2
 static lua_CFunction liblist[] = {
@@ -568,8 +569,10 @@ static void LUA_ClearState(void)
 	luaL_openlibs(L);
 	lua_settop(L, 0);
 
-	// make LREG_VALID table for all pushed userdata cache.
+
 	lua_newtable(L);
+	lua_pushvalue(L, -1);
+	userdata_cache_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	lua_setfield(L, LUA_REGISTRYINDEX, LREG_VALID);
 
 	// make LREG_METATABLES table for all registered metatables
@@ -844,23 +847,19 @@ void LUA_PushUserdata(lua_State *L, void *data, const char *meta)
 	}
 }
 
-// Same as LUA_PushUserdata but don't set a metatable yet.
-lpushed_t LUA_RawPushUserdata(lua_State *L, void *data)
-{
-	lpushed_t status = LPUSHED_NIL;
 
+static lpushed_t LUA_PushCachedUserdata(lua_State *L, void *data, int entriesAboveCache)
+{
+	lpushed_t status;
 	void **userdata;
 
-	if (!data) { // push a NULL
+	if (!data)
+	{
 		lua_pushnil(L);
-		return status;
+		return LPUSHED_NIL;
 	}
 
-	lua_getfield(L, LUA_REGISTRYINDEX, LREG_VALID);
-	I_Assert(lua_istable(L, -1));
-
-	lua_pushlightuserdata(L, data);
-	lua_rawget(L, -2);
+	lua_rawgetp(L, -1 - entriesAboveCache, data);
 
 	if (lua_isnil(L, -1)) { // no userdata? deary me, we'll have to make one.
 		lua_pop(L, 1); // pop the nil
@@ -872,18 +871,50 @@ lpushed_t LUA_RawPushUserdata(lua_State *L, void *data)
 		// Set it in the registry so we can find it again
 		lua_pushlightuserdata(L, data); // k (store the userdata via the data's pointer)
 		lua_pushvalue(L, -2); // v (copy of the userdata)
-		lua_rawset(L, -4);
-
+		lua_rawset(L, -4 - entriesAboveCache);
 		// stack is left with the userdata on top, as if getting it had originally succeeded.
-
 		status = LPUSHED_NEW;
 	}
 	else
 		status = LPUSHED_EXISTING;
 
-	lua_remove(L, -2); // remove LREG_VALID
-
 	return status;
+}
+
+// Same as LUA_PushUserdata but don't set a metatable yet.
+lpushed_t LUA_RawPushUserdata(lua_State *L, void *data)
+{
+	if (!data)
+	{
+		lua_pushnil(L);
+		return LPUSHED_NIL;
+	}
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, userdata_cache_ref);
+	I_Assert(lua_istable(L, -1));
+	const lpushed_t status = LUA_PushCachedUserdata(L, data, 0);
+	lua_remove(L, -2);
+	return status;
+}
+
+void LUA_PushMobjPair(lua_State *L, mobj_t *first, mobj_t *second)
+{
+	if (first && second && lua_pushcacheduserdatapair(L, userdata_cache_ref, first, second))
+		return;
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, userdata_cache_ref);
+	I_Assert(lua_istable(L, -1));
+	if (LUA_PushCachedUserdata(L, first, 0) == LPUSHED_NEW)
+	{
+		luaL_getmetatable(L, META_MOBJ);
+		lua_setmetatable(L, -2);
+	}
+	if (LUA_PushCachedUserdata(L, second, 1) == LPUSHED_NEW)
+	{
+		luaL_getmetatable(L, META_MOBJ);
+		lua_setmetatable(L, -2);
+	}
+	lua_remove(L, -3);
 }
 
 // When userdata is freed, use this function to remove it from Lua.
@@ -894,10 +925,9 @@ void LUA_InvalidateUserdata(void *data)
 		return;
 
 	// fetch the userdata
-	lua_getfield(gL, LUA_REGISTRYINDEX, LREG_VALID);
+	lua_rawgeti(gL, LUA_REGISTRYINDEX, userdata_cache_ref);
 	I_Assert(lua_istable(gL, -1));
-		lua_pushlightuserdata(gL, data);
-		lua_rawget(gL, -2);
+		lua_rawgetp(gL, -1, data);
 			if (lua_isnil(gL, -1)) { // not found, not in lua
 				lua_pop(gL, 2); // pop nil and LREG_VALID
 				return;
@@ -2019,8 +2049,7 @@ int Lua_optoption(lua_State *L, int narg, int def, int list_ref)
 
 	lua_rawgeti(L, LUA_REGISTRYINDEX, list_ref);
 	I_Assert(lua_istable(L, -1));
-	lua_pushvalue(L, narg);
-	lua_rawget(L, -2);
+	lua_rawgetkey(L, -1, narg);
 
 	if (lua_isnumber(L, -1))
 		return lua_tointeger(L, -1);

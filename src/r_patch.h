@@ -22,6 +22,7 @@ patch_t *Patch_Create(INT16 width, INT16 height);
 patch_t *Patch_CreateFromDoomPatch(softwarepatch_t *source, size_t insize);
 void Patch_CalcDataSizes(softwarepatch_t *source, size_t *total_pixels, size_t *total_posts);
 void Patch_MakeColumns(softwarepatch_t *source, size_t num_columns, INT16 width, UINT8 *pixels, column_t *columns, post_t *posts, boolean flip);
+void Patch_RemoveSpriteKey(patch_t *patch);
 void Patch_Free(patch_t *patch);
 
 #define Patch_FreeTag(tagnum) Patch_FreeTags(tagnum, tagnum)

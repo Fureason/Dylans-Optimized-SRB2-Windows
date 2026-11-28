@@ -126,6 +126,7 @@ typedef enum {
 } lpushed_t;
 
 void LUA_PushUserdata(lua_State *L, void *data, const char *meta);
+void LUA_PushMobjPair(lua_State *L, mobj_t *first, mobj_t *second);
 lpushed_t LUA_RawPushUserdata(lua_State *L, void *data);
 
 void LUA_InvalidateUserdata(void *data);

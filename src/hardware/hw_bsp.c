@@ -131,24 +131,6 @@ static poly_t *HWR_AllocPoly(INT32 numpts)
 	return p;
 }
 
-static polyvertex_t *HWR_AllocVertex(void)
-{
-	polyvertex_t *p;
-	size_t size = sizeof (polyvertex_t);
-#ifdef ZPLANALLOC
-	p = Z_Malloc(size, PU_HWRPLANE, NULL);
-#else
-	if (gl_ppfree < size)
-		I_Error("HWR_AllocVertex(): no more memory %u bytes left, %u bytes needed\n\n%s\n",
-		        gl_ppfree, size, "You can try the param -polypoolsize 2048 (or higher if needed)");
-
-	p = (polyvertex_t *)gl_ppcurrent;
-	gl_ppcurrent += size;
-	gl_ppfree -= size;
-#endif
-	return p;
-}
-
 /// \todo polygons should be freed in reverse order for efficiency,
 /// for now don't free because it doesn't free in reverse order
 static void HWR_FreePoly(poly_t *poly)
@@ -214,8 +196,8 @@ static polyvertex_t *fracdivline(fdivline_t *bsp, polyvertex_t *v1,
 	return &pt;
 }
 
-// Preserve distinct map corners, even in details built on a one-unit grid.
-// Only points within the polygon arithmetic tolerance count as equal.
+
+
 static boolean SameVertice (polyvertex_t *p1, polyvertex_t *p2)
 {
 #if 0
@@ -562,10 +544,10 @@ static inline void HWR_SubsecPoly(INT32 num, poly_t *poly)
 
 	if (poly)
 	{
-		/* GL nodes already carry a closed convex boundary, including minisegs.
-		 * Reconstructing it from rounded BSP partitions can leave narrow gaps
-		 * against walls that use the node builder's original vertex coordinates.
-		 * Legacy seg splits are integer-rounded and retain BSP correction. */
+
+
+
+
 		if (count < 3 || !hwr_closed_node_boundaries)
 			closed = false;
 		for (i = 0; closed && i < count; i++)
@@ -805,9 +787,9 @@ static boolean PointInSeg(polyvertex_t *a,polyvertex_t *v1,polyvertex_t *v2)
 
 static INT32 numsplitpoly;
 
-/* Intersections mathematically at a map corner can round a float ULP away
- * from the exact endpoint used by its wall. Weld only that numerical noise;
- * the tolerance scales with float precision rather than the editor grid. */
+
+
+
 static void HWR_SnapPlaneCorners(void)
 {
 	size_t s;
@@ -868,9 +850,9 @@ static void SearchSegInBSP(INT32 bspnum,polyvertex_t *p,poly_t *poly)
 			q = extrasubsectors[bspnum].planepoly;
 			if (poly == q || !q)
 				return;
-			/* A nearby corner can also lie within the T-join tolerance of a
-			 * different edge. Reusing it there folds the polygon back over itself
-			 * and produces thin triangles outside the subsector. */
+
+
+
 			for (j = 0; j < q->numpts; j++)
 				if (SameVertice(p, &q->pts[j]))
 					return;
@@ -948,121 +930,75 @@ static INT32 SolveTProblem(void)
 	return numsplitpoly;
 }
 
-#define NEARDIST (0.75f)
-#define MYMAX    (10000000000000.0f)
-
-/* Adjust true segs (from the segs lump) to be exactely the same as
- * plane polygone segs
- * This also convert fixed_t point of segs in float (in moste case
- * it share the same vertice
- */
+// Give each shared BSP vertex a single OpenGL position.
 static void AdjustSegs(void)
 {
-	size_t i, count;
-	polyvertex_t *mapvertices = Z_Malloc(numvertexes*sizeof (*mapvertices),
-		PU_HWRPLANE, NULL);
-	INT32 j;
-	seg_t *lseg;
-	poly_t *p;
-	INT32 v1found = 0, v2found = 0;
-	float nearv1, nearv2;
+	const float maxsnap = 0.75f;
+	polyvertex_t *mapvertices = Z_Malloc(numvertexes*sizeof (*mapvertices), PU_HWRPLANE, NULL);
+	float *snap = Z_Malloc(numvertexes*sizeof (*snap), PU_STATIC, NULL);
+	size_t i;
+
 	for (i = 0; i < numvertexes; i++)
 	{
 		mapvertices[i].x = FIXED_TO_FLOAT(vertexes[i].x);
 		mapvertices[i].y = FIXED_TO_FLOAT(vertexes[i].y);
 		mapvertices[i].z = 0.0f;
+		snap[i] = maxsnap*maxsnap;
+	}
+
+	// Real map corners keep their original coordinates.
+	for (i = 0; i < numlines; i++)
+	{
+		snap[lines[i].v1-vertexes] = 0.0f;
+		snap[lines[i].v2-vertexes] = 0.0f;
 	}
 
 	for (i = 0; i < numsubsectors; i++)
 	{
-		count = subsectors[i].numlines;
-		lseg = &segs[subsectors[i].firstline];
-		p = extrasubsectors[i].planepoly;
-		//if (!p)
-			//continue;
-		for (; count--; lseg++)
+		const subsector_t *sub = &subsectors[i];
+		const poly_t *poly = extrasubsectors[i].planepoly;
+		for (INT32 j = 0; j < sub->numlines; j++)
 		{
-			float distv1,distv2,tmp;
-			nearv1 = nearv2 = MYMAX;
-
-			// Don't touch polyobject segs. We'll compensate
-			// for this when we go about drawing them.
-			if (lseg->polyseg)
+			const seg_t *seg = &segs[sub->firstline+j];
+			const vertex_t *ends[2] = {seg->v1, seg->v2};
+			if (!poly || seg->polyseg)
 				continue;
-
-			if (p) {
-				for (j = 0; j < p->numpts; j++)
+			for (INT32 end = 0; end < 2; end++)
+			{
+				const size_t index = ends[end]-vertexes;
+				if (snap[index] <= 0.0f)
+					continue;
+				const float x = FIXED_TO_FLOAT(ends[end]->x);
+				const float y = FIXED_TO_FLOAT(ends[end]->y);
+				for (INT32 p = 0; p < poly->numpts; p++)
 				{
-					distv1 = p->pts[j].x - FIXED_TO_FLOAT(lseg->v1->x);
-					tmp    = p->pts[j].y - FIXED_TO_FLOAT(lseg->v1->y);
-					distv1 = distv1*distv1+tmp*tmp;
-					if (distv1 <= nearv1)
+					const float dx = poly->pts[p].x - x;
+					const float dy = poly->pts[p].y - y;
+					const float distance = dx*dx + dy*dy;
+					if (distance < snap[index])
 					{
-						v1found = j;
-						nearv1 = distv1;
-					}
-					// the same with v2
-					distv2 = p->pts[j].x - FIXED_TO_FLOAT(lseg->v2->x);
-					tmp    = p->pts[j].y - FIXED_TO_FLOAT(lseg->v2->y);
-					distv2 = distv2*distv2+tmp*tmp;
-					if (distv2 <= nearv2)
-					{
-						v2found = j;
-						nearv2 = distv2;
+						mapvertices[index].x = poly->pts[p].x;
+						mapvertices[index].y = poly->pts[p].y;
+						snap[index] = distance;
 					}
 				}
 			}
-			/* A real linedef corner is shared by neighboring walls. Snapping
-			 * each side independently to a nearby BSP point opens a vertical
-			 * pixel crack between them. Keep those corners at their map position. */
-			if (lseg->linedef && (lseg->v1 == lseg->linedef->v1
-			|| lseg->v1 == lseg->linedef->v2))
-				lseg->pv1 = &mapvertices[lseg->v1-vertexes];
-			else if (p && nearv1 <= NEARDIST*NEARDIST)
-				// share vertice with segs
-				lseg->pv1 = &(p->pts[v1found]);
-			else
-			{
-				// BP: here we can do better, using PointInSeg and compute
-				// the right point position also split a polygone side to
-				// solve a T-intersection, but too mush work
-
-				// convert fixed vertex to float vertex
-				polyvertex_t *pv = HWR_AllocVertex();
-				pv->x = FIXED_TO_FLOAT(lseg->v1->x);
-				pv->y = FIXED_TO_FLOAT(lseg->v1->y);
-				lseg->pv1 = pv;
-			}
-			if (lseg->linedef && (lseg->v2 == lseg->linedef->v1
-			|| lseg->v2 == lseg->linedef->v2))
-				lseg->pv2 = &mapvertices[lseg->v2-vertexes];
-			else if (p && nearv2 <= NEARDIST*NEARDIST)
-				lseg->pv2 = &(p->pts[v2found]);
-			else
-			{
-				polyvertex_t *pv = HWR_AllocVertex();
-				pv->x = FIXED_TO_FLOAT(lseg->v2->x);
-				pv->y = FIXED_TO_FLOAT(lseg->v2->y);
-				lseg->pv2 = pv;
-			}
-
-			/* Recompute the texture span from the same endpoints used to draw the
-			 * wall. The old +0.5 bias on both deltas made many OpenGL spans longer
-			 * than their geometry, so the error accumulated toward the far end and
-			 * became a visible rightward texel stretch close to a wall. */
-			{
-				float x,y;
-				x = ((polyvertex_t *)lseg->pv2)->x - ((polyvertex_t *)lseg->pv1)->x;
-				y = ((polyvertex_t *)lseg->pv2)->y - ((polyvertex_t *)lseg->pv1)->y;
-				lseg->flength = (float)hypot(x, y);
-				// BP: debug see this kind of segs
-				//if (nearv2 > NEARDIST*NEARDIST || nearv1 > NEARDIST*NEARDIST)
-				//    lseg->length = 1;
-			}
 		}
 	}
-}
 
+	for (i = 0; i < numsegs; i++)
+	{
+		seg_t *seg = &segs[i];
+		if (seg->polyseg)
+			continue;
+		polyvertex_t *v1 = &mapvertices[seg->v1-vertexes];
+		polyvertex_t *v2 = &mapvertices[seg->v2-vertexes];
+		seg->pv1 = v1;
+		seg->pv2 = v2;
+		seg->flength = (float)hypot(v2->x-v1->x, v2->y-v1->y);
+	}
+	Z_Free(snap);
+}
 
 static double HWR_SectorLineSide(const line_t *line, const sector_t *sector,
 	double x, double y)
@@ -1075,10 +1011,10 @@ static double HWR_SectorLineSide(const line_t *line, const sector_t *sector,
 	return line->frontsector == sector ? side : -side;
 }
 
-/* A node-builder leaf is only a visibility cell. In a small convex sector a
- * one-seg leaf can continue far beyond that seg, especially between nearly
- * parallel chair/rail edges. Software bounds planes by the wall spans; filling
- * the entire cell in OpenGL instead draws long, thin FOF triangles. */
+
+
+
+
 typedef struct hwr_sector_hull_s
 {
 	size_t count;
@@ -1131,8 +1067,8 @@ static poly_t *HWR_ClipPlaneToSectorLine(poly_t *poly, const line_t *line,
 		}
 	if (!outside)
 		return poly;
-	/* T-join repair can leave a slightly concave boundary, so reserve room
- 	 * for one intersection on every edge rather than assuming n+1 points. */
+
+
 	clipped = HWR_AllocPoly(poly->numpts*2);
 	previous = poly->numpts-1;
 	for (i = 0; i < poly->numpts; previous = i++)
@@ -1157,8 +1093,8 @@ static poly_t *HWR_ClipPlaneToSectorLine(poly_t *poly, const line_t *line,
 	return clipped;
 }
 
-/* Split a plane without moving either side of the shared edge. The result is
- * used only for the small pieces removed by sector-boundary clipping. */
+
+
 static void HWR_SplitPlaneRegion(poly_t *poly, const line_t *line,
 	poly_t **right, poly_t **left)
 {
@@ -1220,9 +1156,9 @@ static hwr_plane_region_t *HWR_NewPlaneRegion(poly_t *poly,
 	return region;
 }
 
-/* BSP leaves deliberately continue past the ends of their segs. For an
- * exterior fragment, classify the real map region using the first boundary
- * crossed by a horizontal ray, rather than asking that same BSP again. */
+
+
+
 static sector_t *HWR_PlaneRegionSector(double x, double y)
 {
 	double nearest = DBL_MAX;
@@ -1249,10 +1185,10 @@ static sector_t *HWR_PlaneRegionSector(double x, double y)
 	return sector;
 }
 
-/* Trimming an incorrectly extended leaf must not remove neighboring FOFs.
- * Partition its exterior at real boundaries and retain each sector's planes
- * there. Geometry is built once on load; ordinary FOF drawing then handles
- * slopes, moving heights, light and delayed translucent surfaces as usual. */
+
+
+
+
 static void HWR_BuildPlaneRegions(extrasubsector_t *xsub, sector_t *sector,
 	const hwr_sector_hull_t *hull)
 {
@@ -1307,7 +1243,7 @@ static void HWR_BuildPlaneRegions(extrasubsector_t *xsub, sector_t *sector,
 			if (right && left)
 			{
 				region->next = HWR_NewPlaneRegion(left, region->next);
-				region = region->next; // both pieces already lie on this boundary
+				region = region->next;
 			}
 		}
 	}
@@ -1364,9 +1300,9 @@ static void HWR_ConstrainSectorPlanes(void)
 			continue;
 		for (j = 0; j < sector->linecount; j++)
 			parents[j] = (INT32)j;
-		/* Split disconnected islands before computing bounds. A chair can use
-		 * one sector for both legs; one hull around both would retain the false
-		 * wedge between them. Internal/self-referencing lines are not borders. */
+
+
+
 		for (j = 0; j < sector->linecount; j++)
 		{
 			line_t *line = sector->lines[j];
@@ -1405,8 +1341,8 @@ static void HWR_ConstrainSectorPlanes(void)
 			vertex_t *points[512], *hull[1024];
 			size_t k, count = 0, hullcount = 0, lower;
 			hwr_sector_hull_t *result;
-			/* Clockwise components enclose sector islands. Counterclockwise
-			 * components enclose holes: their interior must never bound the floor. */
+
+
 			if (parents[j] != (INT32)j || areas[j] >= 0.0)
 				continue;
 			for (k = 0; k < sector->linecount; k++)
@@ -1491,9 +1427,9 @@ static void HWR_ConstrainSectorPlanes(void)
 		}
 		if (!hull || ambiguous)
 			continue;
-		/* Keep the original cell for the surrounding lower floor/higher ceiling.
-		 * Only the raised surface and FOFs use the bounded copy. Removing the
-		 * original cell creates a crack where Software fills the neighboring floor. */
+
+
+
 		{
 			poly_t *copy = HWR_AllocPoly(poly->numpts);
 			memcpy(copy->pts, poly->pts, poly->numpts*sizeof (*poly->pts));
@@ -1504,7 +1440,7 @@ static void HWR_ConstrainSectorPlanes(void)
 			line_t boundary;
 			memset(&boundary, 0, sizeof boundary);
 			boundary.frontsector = sector;
-			/* The monotone hull is counterclockwise; map interiors are right. */
+
 			boundary.v1 = hull->points[(j+1)%hull->count];
 			boundary.v2 = hull->points[j];
 			poly = HWR_ClipPlaneToSectorLine(poly, &boundary, sector);
@@ -1603,8 +1539,7 @@ void HWR_CreatePlanePolygons(INT32 bspnum)
 	WalkBSPNode(bspnum, rootp, NULL,rootbbox);
 
 	HWR_SnapPlaneCorners();
-	i = SolveTProblem();
-	//CONS_Debug(DBG_RENDER, "%d point divides a polygon line\n",i);
+	SolveTProblem();
 	HWR_ConstrainSectorPlanes();
 	AdjustSegs();
 

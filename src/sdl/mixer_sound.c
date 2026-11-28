@@ -96,8 +96,8 @@ static void I_MovieAudioPostMix(void *userdata, UINT8 *stream, INT32 len)
 	(void)userdata;
 	if (!movie_audio_file || !stream || len <= 0)
 		return;
-	/* Never perform disk I/O in SDL's real-time mixer callback. The main thread
-	 * drains this single-producer buffer every rendered frame. */
+
+
 	if ((size_t)len > MOVIE_AUDIO_BUFFER_SIZE - movie_audio_pending_bytes)
 	{
 		movie_audio_dropped_bytes += (size_t)len
@@ -370,10 +370,10 @@ void I_StartupSound(void)
 		return;
 
 #ifdef _WIN32
-	// Prefer DirectSound instead of WASAPI unless the user selects a driver.
+
 	// SDL 2.0.6+ defaults to the latter and it screws up our sound effects
-	// Keep DirectSound as the default, but respect an explicitly selected
-	// driver, including SDL's silent driver used for recorder tests.
+
+
 	SDL_setenv("SDL_AUDIODRIVER", "directsound", 0);
 #endif
 
@@ -750,8 +750,8 @@ INT32 I_StartSound(sfxenum_t id, UINT8 vol, UINT8 sep, UINT8 pitch, UINT8 priori
  mix_voices[channel].active=true;
  mix_voices[channel].applied=-1;
  mix_voice_limit=max(mix_voice_limit,channel+1);
- // Configure gain and panning before audio starts; a reused channel must
- // not emit its first samples at the previous/default loud volume.
+
+
  I_RebalanceSfx(channel,false);
  Mix_SetPanning(channel,min((UINT16)(255-sep)<<1,255),min((UINT16)sep<<1,255));
  handle=Mix_PlayChannel(channel,chunk,0);
@@ -1404,9 +1404,9 @@ boolean I_LoadSong(char *data, size_t len)
 	loop_point = 0.0f;
 	song_length = 0.0f;
 
-	/* Loop tags live in the file metadata, but the old code called strncmp at
-	 * every byte of large music lumps. Jump directly between 'L' bytes so a
-	 * music change does not spend needless time scanning audio payload data. */
+
+
+
 	while ((size_t)(p - data) < len)
 	{
 		size_t remaining = len - (size_t)(p - data);
@@ -1593,7 +1593,7 @@ void I_ResumeSong(void)
 
 void I_SetMusicVolume(UINT8 volume)
 {
-	// Remember settings applied before the first track has been loaded.
+
 	music_volume = volume;
 	if (!I_SongPlaying())
 	{
@@ -1610,9 +1610,9 @@ void I_SetMusicVolume(UINT8 volume)
 #endif
 		music_volume = volume;
 
-	// SDL_mixer can reset a track's applied volume when playback starts.
-	// An explicit volume set must reach this track even if the cached scalar
-	// happens to match the previous song's volume.
+
+
+
 	mix_music_applied = -1;
 	I_RebalanceSfx(-1,false);
 }

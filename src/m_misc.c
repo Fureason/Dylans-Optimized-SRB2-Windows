@@ -24,6 +24,7 @@
 #endif
 
 #include <errno.h>
+#include <time.h>
 
 // Extended map support.
 #include <ctype.h>
@@ -1454,8 +1455,8 @@ static void M_FreeMovieCaptureBuffers(void)
 	movie_capture_ymap = NULL;
 }
 
-// The producer only snapshots pixels/palette. Resampling and palette expansion
-// belong to the writer, whose queue slot stays occupied until conversion ends.
+
+
 static boolean M_CaptureMovieFrame(movie_frame_slot_t *slot)
 {
 	if (vid.width != movie_capture_source_width || vid.height != movie_capture_source_height)
@@ -1467,6 +1468,12 @@ static boolean M_CaptureMovieFrame(movie_frame_slot_t *slot)
 		return HWR_ReadScreenshot(slot->pixels);
 	}
 #endif
+	if (V_HasSoftwareColors())
+	{
+		slot->indexed = false;
+		V_ReadSoftwareRGB(slot->pixels, cv_screenshot_colorprofile.value != 0);
+		return true;
+	}
 	I_ReadScreen(screens[2]);
 	memcpy(slot->pixels, screens[2], (size_t)vid.width * vid.height);
 	M_CreateScreenShotPalette();
@@ -1541,7 +1548,7 @@ static moviemode_t M_StartMovieCapture(const char *pathname, boolean gif)
 	char basename[13];
 	boolean queue_initialized = false, reserved = false;
 	if (gif && !SearchPathA(NULL, "ffmpeg.exe", NULL, sizeof movie_ffmpeg_path, movie_ffmpeg_path, NULL))
-		return MM_OFF; // GIF has its own in-process fallback.
+		return MM_OFF;
 	if (!(freename = Newsnapshotfile(pathname, gif ? "gif" : "mp4")))
 	{ CONS_Alert(CONS_ERROR, "Couldn't reserve a recording filename in %s\n", pathname); return MM_OFF; }
 	strlcpy(basename, freename, sizeof basename); basename[8] = '\0';
@@ -1551,7 +1558,7 @@ static moviemode_t M_StartMovieCapture(const char *pathname, boolean gif)
 	if (GetFileAttributesA(movie_video_frames) != INVALID_FILE_ATTRIBUTES
 		|| GetFileAttributesA(movie_video_audio) != INVALID_FILE_ATTRIBUTES)
 	{ CONS_Alert(CONS_ERROR, "An unfinished recording already uses %s. Keep or rename it before recording again.\n", basename); return MM_OFF; }
-	// Reserve the final name while asynchronous capture/finalization is active.
+
 	reservation = CreateFileA(movie_video_output, GENERIC_WRITE, FILE_SHARE_READ, NULL,
 		CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (reservation == INVALID_HANDLE_VALUE)
@@ -1798,7 +1805,7 @@ void M_SaveFrame(void)
 	if (movie_async_recording && movie_native_pending)
 	{
 		HRESULT result;
-		// Initialize on the writer and start the media timeline only when ready.
+
 		if (WaitForSingleObject(movie_native_ready, 0) != WAIT_OBJECT_0)
 			return;
 		movie_native_pending = false;
@@ -1840,8 +1847,14 @@ void M_SaveFrame(void)
 	}
 #endif
 
-	/* Capture follows rendered frames rather than the 35 Hz game clock. This is
-	 * what makes 60 FPS recording possible with uncapped rendering. */
+	if (moviemode == MM_GIF)
+	{
+		GIF_frame();
+		return;
+	}
+
+
+
 	if (!singletics && movie_prevcapturetime
 	&& now - movie_prevcapturetime < interval)
 		return;
@@ -1850,8 +1863,8 @@ void M_SaveFrame(void)
 		const UINT64 elapsed = now - movie_prevcapturetime;
 		const UINT64 delay = (elapsed * (UINT64)max(cv_gif_maxfps.value, 1)
 			+ precision / 2) / precision;
-		/* Preserve real elapsed time if the game misses one or more requested
-		 * capture intervals, keeping the final MP4 synchronized with its WAV. */
+
+
 		movie_video_framedelay = (UINT16)min((UINT64)UINT16_MAX,
 			max(1ULL, delay));
 	}
@@ -1863,9 +1876,6 @@ void M_SaveFrame(void)
 	{
 		case MM_SCREENSHOT:
 			takescreenshot = true;
-			return;
-		case MM_GIF:
-			GIF_frame();
 			return;
 		case MM_APNG:
 #ifdef USE_APNG
@@ -1931,7 +1941,7 @@ void M_StopMovie(void)
 		M_FreeMovieCaptureBuffers();
 		if (movie_native_recording && !movie_frames_scheduled)
 		{
-			// Cancelling before encoder startup must not leave an empty MP4.
+
 			remove(movie_video_frames);
 			remove(movie_video_audio);
 			remove(movie_video_output);
@@ -2175,10 +2185,10 @@ static boolean M_AsyncScreenshotBusy(void)
 {
 	boolean busy;
 	I_lock_mutex(&asyncscreenshot_mutex);
-	/* Keep one maximum-compression job on the low-priority worker and allow one
-	 * already-captured image to wait behind it. This avoids rejecting a quick
-	 * second F8 press without making two zlib level-9 workers compete with the
-	 * game at once. */
+
+
+
+
 	busy = (asyncscreenshot_active != NULL
 		&& asyncscreenshot_pending != NULL);
 	I_unlock_mutex(asyncscreenshot_mutex);
@@ -2418,13 +2428,24 @@ void M_DoScreenShot(void)
 	if (!freename)
 		goto failure;
 
+#ifdef USE_PNG
+	const boolean software_rgb = V_HasSoftwareColors();
+	if (software_rgb)
+	{
+		linear = malloc((size_t)vid.width * vid.height * 3);
+		if (!linear)
+			goto failure;
+		V_ReadSoftwareRGB(linear, cv_screenshot_colorprofile.value != 0);
+	}
+#endif
+
 #if defined(USE_PNG) && defined(HAVE_THREADS)
-	// F8 captures the pixels now, then compresses and writes the PNG on a worker.
-	// Screenshot movie mode remains synchronous so its ordered frame stream is
-	// unchanged.
+
+
+
 	if (moviemode != MM_SCREENSHOT)
 	{
-		boolean paletted = (rendermode == render_soft);
+		const boolean paletted = rendermode == render_soft && !software_rgb;
 		if (paletted)
 		{
 			linear = malloc((size_t)vid.width * (size_t)vid.height);
@@ -2448,7 +2469,7 @@ void M_DoScreenShot(void)
 	}
 #endif
 
-	if (rendermode == render_soft)
+	if (rendermode == render_soft && !linear)
 	{
 		// munge planar buffer to linear
 		linear = screens[2];
@@ -2462,10 +2483,19 @@ void M_DoScreenShot(void)
 	else
 #endif
 	{
-		M_CreateScreenShotPalette();
 #ifdef USE_PNG
-		ret = M_SavePNG(va(pandf,pathname,freename), linear, vid.width, vid.height, screenshot_palette);
+		if (software_rgb)
+		{
+			ret = M_SavePNG(va(pandf,pathname,freename), linear, vid.width, vid.height, NULL);
+			free(linear);
+		}
+		else
+		{
+			M_CreateScreenShotPalette();
+			ret = M_SavePNG(va(pandf,pathname,freename), linear, vid.width, vid.height, screenshot_palette);
+		}
 #else
+		M_CreateScreenShotPalette();
 		ret = WritePCXfile(va(pandf,pathname,freename), linear, vid.width, vid.height, screenshot_palette);
 #endif
 	}
@@ -2944,6 +2974,56 @@ void *M_Memcpy(void *dest, const void *src, size_t n)
 
 /** Return the appropriate message for a file error or end of file.
 */
+#ifdef LOGMESSAGES
+void FIL_WriteLog(const char *text, size_t length)
+{
+	static boolean line_start = true;
+	FILE *file = logstream;
+	char stamp[24] = "";
+	struct tm local;
+	if (!file || !length)
+		return;
+
+#ifdef _WIN32
+	_lock_file(file);
+#else
+	flockfile(file);
+#endif
+
+	const time_t now = time(NULL);
+#ifdef _WIN32
+	const boolean have_time = localtime_s(&local, &now) == 0;
+#else
+	const boolean have_time = localtime_r(&now, &local) != NULL;
+#endif
+	if (have_time)
+	{
+		const INT32 hour = local.tm_hour % 12;
+		snprintf(stamp, sizeof stamp, "[%d:%02d:%02d %s] ",
+			hour ? hour : 12, local.tm_min, local.tm_sec, local.tm_hour < 12 ? "AM" : "PM");
+	}
+
+	while (length)
+	{
+		const char *newline = memchr(text, '\n', length);
+		const size_t span = newline ? (size_t)(newline - text) + 1 : length;
+		if (line_start && *text != '\n' && !(span == 2 && text[0] == '\r' && text[1] == '\n'))
+			fputs(stamp, file);
+		fwrite(text, 1, span, file);
+		line_start = newline != NULL;
+		text += span;
+		length -= span;
+	}
+	fflush(file);
+
+#ifdef _WIN32
+	_unlock_file(file);
+#else
+	funlockfile(file);
+#endif
+}
+#endif
+
 const char *M_FileError(FILE *fp)
 {
 	if (ferror(fp))

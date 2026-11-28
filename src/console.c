@@ -79,17 +79,36 @@ static UINT32 con_hudtime[MAXHUDLINES]; // remaining time of display for hud msg
 
 // console text output
 static char *con_line;          // console text output current line
-static size_t con_cx;           // cursor position in current line
+static size_t con_cx;
+static size_t con_columns;
+static size_t con_columns_used;
 static size_t con_cy;           // cursor line number in con_buffer, is always
                                 // increasing, and wrapped around in the text
                                 // buffer using modulo.
 
 static size_t con_totallines;      // lines of console text into the console buffer
 static size_t con_width;           // columns of chars, depend on vid mode width
-static size_t con_historylines;    // valid lines retained, including the current line
+static size_t con_historylines;
 
 static size_t con_scrollup;        // how many rows of text to scroll up (pgup/pgdn)
+static boolean con_scroll_drag;
+static INT32 con_scroll_grab;
+static INT32 con_mouse_x, con_mouse_y;
 UINT32 con_scalefactor;            // text size scale factor
+
+typedef struct
+{
+	size_t line, column;
+} con_historypos_t;
+
+static con_historypos_t con_selection_start, con_selection_end;
+static boolean con_select_drag, con_select_moved;
+
+static void CON_ClearHistorySelection(void)
+{
+	con_selection_start = con_selection_end = (con_historypos_t){0, 0};
+	con_select_drag = con_select_moved = false;
+}
 
 // hold 32 last lines of input for history
 #define CON_MAXPROMPTCHARS 256
@@ -121,11 +140,13 @@ static void CONS_backcolor_Change(void);
 #ifdef macintosh
 #define CON_BUFFERSIZE 4096 // my compiler can't handle local vars >32k
 #else
-/* Keep a session-sized history without adding work to the per-frame drawer.
- * At common console widths this retains tens of thousands of lines. */
+
+
 #define CON_BUFFERSIZE (8*1024*1024)
 #endif
 
+
+#define CON_ROW_EXTRA 13
 static char con_buffer[CON_BUFFERSIZE];
 
 // how many seconds the hud messages lasts on the screen
@@ -145,13 +166,13 @@ static consvar_t cons_speed = CVAR_INIT ("con_speed", "8", CV_SAVE, speed_cons_t
 // percentage of screen height to use for console
 static consvar_t cons_height = CVAR_INIT ("con_height", "50", CV_CALL|CV_SAVE, CV_Unsigned, CONS_height_Change);
 
-// -1 preserves the traditional percentage height, 0 disables the console,
-// and 1-64 selects the exact number of output rows to display.
+
+
 static CV_PossibleValue_t lines_cons_t[] = {{-1, "MIN"}, {64, "MAX"}, {0, NULL}};
 consvar_t cons_lines = CVAR_INIT ("con_lines", "-1", CV_CALL|CV_SAVE, lines_cons_t, CONS_height_Change);
 
 static CV_PossibleValue_t backpic_cons_t[] = {{0, "Translucent"}, {1, "Picture"}, {2, "None"}, {0, NULL}};
-// Whether to use the console picture, translucent tint, or no background.
+
 consvar_t cons_backpic = CVAR_INIT ("con_backpic", "Translucent", CV_SAVE, backpic_cons_t, NULL);
 
 static CV_PossibleValue_t backcolor_cons_t[] = {{0, "White"}, 		{1, "Black"},		{2, "Sepia"},
@@ -205,10 +226,11 @@ static void CONS_Clear_f(void)
 {
 	Lock_state();
 
+	CON_ClearHistorySelection();
 	memset(con_buffer, 0, CON_BUFFERSIZE);
 
-	con_cx = 0;
-	con_cy = con_totallines-1;
+	con_cx = con_columns_used = 0;
+	con_cy = con_totallines - 1;
 	con_line = &con_buffer[con_cy*con_width];
 	con_historylines = 1;
 	con_scrollup = 0;
@@ -571,9 +593,8 @@ static void CON_InputInit(void)
 //
 static void CON_RecalcSize(void)
 {
-	size_t conw, oldcon_width, oldnumlines, oldhistorylines, i, oldcon_cy;
-	char *tmp_buffer;
-	char *string;
+	size_t columns;
+	char *history = NULL;
 
 	Lock_state();
 
@@ -588,95 +609,64 @@ static void CON_RecalcSize(void)
 	case V_MEDSCALEPATCH:
 		con_scalefactor = vid.meddup;
 		break;
-	default:	// Full scaling
+	default:
 		con_scalefactor = vid.dup;
 		break;
 	}
 
 	con_recalc = false;
+	con_scalefactor = max(1, con_scalefactor);
+	columns = dedicated ? 1 : max(8, (INT32)(vid.width / (8 * con_scalefactor)) - 2);
 
-	if (dedicated)
-		conw = 1;
-	else
-		conw = (vid.width>>3) / con_scalefactor - 2;
-
-	if (con_curlines == vid.height) // first init
-	{
-		con_curlines = vid.height;
-		con_destlines = vid.height;
-	}
-
-	if (con_destlines > 0) // Resize console if already open
+	if (con_startup)
+		con_curlines = con_destlines = vid.height;
+	else if (con_destlines > 0)
 	{
 		CON_ChangeHeight();
 		con_curlines = con_destlines;
 	}
 
-	// check for change of video width
-	if (conw == con_width)
+	if (columns == con_columns)
 	{
 		Unlock_state();
-		return; // didn't change
+		return;
 	}
 
-	Unlock_state();
 
-	tmp_buffer = Z_Malloc(CON_BUFFERSIZE, PU_STATIC, NULL);
-	string = Z_Malloc(CON_BUFFERSIZE, PU_STATIC, NULL); // BP: it is a line but who know
+	CON_ClearHistorySelection();
+	if (con_width)
+	{
+		history = Z_Malloc(con_historylines * con_width + 1, PU_STATIC, NULL);
+		char *out = history;
+		for (size_t i = con_cy + 1 - con_historylines; i <= con_cy; i++)
+		{
+			const char *line = &con_buffer[(i % con_totallines) * con_width];
+			const size_t bytes = strlen(line);
+			M_Memcpy(out, line, bytes);
+			out += bytes;
+			if (i < con_cy && !line[con_width - 1])
+				*out++ = '\n';
+		}
+		*out = '\0';
+	}
 
-	Lock_state();
-
-	oldcon_width = con_width;
-	oldnumlines = con_totallines;
-	oldhistorylines = con_historylines;
-	oldcon_cy = con_cy;
-	M_Memcpy(tmp_buffer, con_buffer, CON_BUFFERSIZE);
-
-	if (conw < 1)
-		con_width = (BASEVIDWIDTH>>3) - 2;
-	else
-		con_width = conw;
-
-	con_width += 11; // Graue 06-19-2004 up to 11 control chars per line
-
+	con_columns = columns;
+	con_width = columns + CON_ROW_EXTRA;
 	con_totallines = CON_BUFFERSIZE / con_width;
-	memset(con_buffer, ' ', CON_BUFFERSIZE);
-
-	con_cx = 0;
-	con_cy = con_totallines-1;
-	con_line = &con_buffer[con_cy*con_width];
+	con_cx = con_columns_used = 0;
+	con_cy = con_totallines - 1;
+	con_line = &con_buffer[con_cy * con_width];
+	memset(con_line, 0, con_width);
 	con_historylines = 1;
 	con_scrollup = 0;
 
-	Unlock_state();
-
-	// re-arrange console text buffer to keep text
-	if (oldcon_width && oldhistorylines > 1) // not the first time, and there is completed text
+	if (history)
 	{
-		/* Walk only the lines that have actually been written. With the larger
-		 * history this keeps a resolution or text-size change proportional to
-		 * real console output instead of the buffer capacity. */
-		for (i = oldcon_cy + 1 - oldhistorylines; i < oldcon_cy; i++)
-		{
-			if (tmp_buffer[(i%oldnumlines)*oldcon_width])
-			{
-				M_Memcpy(string, &tmp_buffer[(i%oldnumlines)*oldcon_width], oldcon_width);
-				conw = oldcon_width - 1;
-				while (string[conw] == ' ' && conw)
-					conw--;
-				string[conw+1] = '\n';
-				string[conw+2] = '\0';
-				CON_Print(string);
-			}
-		}
+		CON_Print(history);
+		Z_Free(history);
 	}
-
-	Z_Free(string);
-	Z_Free(tmp_buffer);
+	Unlock_state();
 }
-
-/* Furthest useful scroll position: put the oldest retained line at the top,
- * never a screenful of unused buffer space. */
 static size_t CON_MaxScroll(void)
 {
 	size_t visiblelines;
@@ -715,6 +705,7 @@ static void CON_ChangeHeight(void)
 	{
 		con_curlines = 0;
 		consoleready = false;
+		CON_ClearHistorySelection();
 		CON_ClearHUD();
 		I_UpdateMouseGrab();
 		Unlock_state();
@@ -799,6 +790,7 @@ void CON_ToggleOff(void)
 
 	con_destlines = 0;
 	con_curlines = 0;
+	CON_ClearHistorySelection();
 	CON_ClearHUD();
 	con_forcepic = 0;
 
@@ -842,12 +834,13 @@ void CON_Ticker(void)
 		if (con_destlines > 0)
 		{
 			con_destlines = 0;
+			CON_ClearHistorySelection();
 			CON_ClearHUD();
 			I_UpdateMouseGrab();
 		}
 		else
 		{
-			/* Reopening explicitly returns to the newest output. */
+
 			con_scrollup = 0;
 			CON_ChangeHeight();
 			I_SetMouseGrab(false);
@@ -893,9 +886,9 @@ static void CON_InputSetString(const char *c)
 
 	Lock_state();
 
-	/* c may point inside the current input line (history/autocomplete edits).
-	 * Copying with strcpy after clearing the destination destroys that source,
-	 * and strcpy itself is undefined for overlap. */
+
+
+
 	newlen = strlen(c);
 	if (newlen >= CON_MAXPROMPTCHARS)
 		newlen = CON_MAXPROMPTCHARS - 1;
@@ -985,46 +978,136 @@ static void CON_InputDelChar(void)
 	Unlock_state();
 }
 
-/* Open the web address under the mouse in the expanded console. Only explicit
- * HTTP(S) links are accepted. If Windows cannot open it, keep it on the
- * clipboard so the player can paste it into a browser instead. */
-static boolean CON_OpenURLAtCursor(void)
+typedef struct
 {
-	/* Only the clicked display row is inspected here.  Do not size this local
-	 * scratch buffer from the entire scrollback allocation: the expanded
-	 * history is several MiB and would overflow the thread stack. */
+	size_t first, last;
+	INT32 top, charwidth;
+} con_historyview_t;
+
+static boolean CON_HistoryView(con_historyview_t *view)
+{
+	const INT32 height = con_curlines - 20 * (INT32)con_scalefactor;
+	const INT32 charwidth = 8 * (INT32)con_scalefactor;
+	if (height < 0 || charwidth <= 0 || con_historylines <= con_scrollup + 1)
+		return false;
+
+	const size_t rows = min((size_t)(1 + height / charwidth), con_historylines - con_scrollup - 1);
+	view->last = con_cy - con_scrollup - 1;
+	view->first = view->last + 1 - rows;
+	view->top = height - (INT32)(rows - 1) * charwidth;
+	view->charwidth = charwidth;
+	return true;
+}
+
+static const UINT8 *CON_HistoryLine(size_t row)
+{
+	return (const UINT8 *)&con_buffer[(row % con_totallines) * con_width];
+}
+
+static size_t CON_HistoryColumns(size_t row)
+{
+	size_t columns = 0;
+	for (const UINT8 *p = CON_HistoryLine(row); *p; p++)
+		if (!(*p & 0x80)) columns++;
+	return columns;
+}
+
+static boolean CON_HistorySelection(con_historypos_t *first, con_historypos_t *last)
+{
+	*first = con_selection_start;
+	*last = con_selection_end;
+	if (first->line > last->line || (first->line == last->line && first->column > last->column))
+	{
+		*first = con_selection_end;
+		*last = con_selection_start;
+	}
+	return first->line >= con_cy + 1 - con_historylines && last->line < con_cy
+		&& (first->line != last->line || first->column != last->column);
+}
+
+static boolean CON_HistoryPointer(con_historypos_t *position, boolean dragging)
+{
+	con_historyview_t view;
+	if (!CON_HistoryView(&view))
+		return false;
+
+	const INT32 bottom = view.top + (INT32)(view.last + 1 - view.first) * view.charwidth;
+	if (con_mouse_y < view.top)
+	{
+		*position = (con_historypos_t){view.first, 0};
+		return dragging;
+	}
+	if (con_mouse_y >= bottom)
+	{
+		*position = (con_historypos_t){view.last, CON_HistoryColumns(view.last)};
+		return dragging;
+	}
+	if (!dragging && (con_mouse_x < 0 || con_mouse_x >= vid.width))
+		return false;
+
+	position->line = view.first + (size_t)((con_mouse_y - view.top) / view.charwidth);
+	const INT32 column = (con_mouse_x - view.charwidth / 2) / view.charwidth;
+	position->column = min((size_t)max(0, column), CON_HistoryColumns(position->line));
+	return true;
+}
+
+static void CON_UpdateHistoryDrag(void)
+{
+	con_historypos_t position;
+	if (con_select_drag && CON_HistoryPointer(&position, true))
+	{
+		con_select_moved |= position.line != con_selection_start.line || position.column != con_selection_start.column;
+		con_selection_end = position;
+	}
+}
+
+static void CON_CopyHistorySelection(void)
+{
+	con_historypos_t first, last;
+	Lock_state();
+	if (!CON_HistorySelection(&first, &last))
+	{
+		Unlock_state();
+		return;
+	}
+
+	char *text = Z_Malloc((last.line + 1 - first.line) * con_width + 1, PU_STATIC, NULL);
+	char *out = text;
+	for (size_t row = first.line; row <= last.line; row++)
+	{
+		const UINT8 *line = CON_HistoryLine(row);
+		const size_t start = row == first.line ? first.column : 0;
+		const size_t end = row == last.line ? last.column : con_columns;
+		size_t column = 0;
+		for (const UINT8 *p = line; *p && column < end; p++)
+		{
+			if (*p & 0x80) continue;
+			if (column >= start) *out++ = (char)*p;
+			column++;
+		}
+
+		if (row < last.line && !line[con_width - 1])
+			*out++ = '\n';
+	}
+	Unlock_state();
+	if (out != text)
+		I_ClipboardCopy(text, (size_t)(out - text));
+	Z_Free(text);
+}
+
+
+static void CON_OpenURLAtCursor(size_t row, size_t column)
+{
 	char line[1024];
 	char url[1024];
-	UINT8 *source;
 	size_t raw, plain = 0, start, end;
-	INT64 bufferline;
-	INT32 mousex, mousey, row, column;
-	INT32 charwidth = (INT32)con_scalefactor << 3;
-	INT32 charheight = charwidth;
-	INT32 minheight = 20 * con_scalefactor;
-	INT32 firsty = (con_curlines-minheight) % charheight;
 #ifdef _WIN32
 	HINSTANCE opened;
 #endif
 
-	if (con_curlines < minheight)
-		return false;
-	I_GetCursorPosition(&mousex, &mousey);
-	if (mousex < charwidth || mousey < firsty || mousey > con_curlines-minheight)
-		return false;
-	column = (mousex-charwidth) / charwidth;
-	row = (mousey-firsty) / charheight;
-	if (column < 0 || (size_t)column >= con_width)
-		return false;
-
 	Lock_state();
-	bufferline = (INT64)con_cy - (INT64)con_scrollup - 1;
-	bufferline -= (con_curlines-minheight) / charheight;
-	bufferline += row;
-	if (bufferline < 0)
-		bufferline = 0;
-	source = (UINT8 *)&con_buffer[((size_t)bufferline%con_totallines)*con_width];
-	for (raw = 0; raw < con_width && plain+1 < sizeof line; raw++)
+	const UINT8 *source = CON_HistoryLine(row);
+	for (raw = 0; source[raw] && plain+1 < sizeof line; raw++)
 	{
 		if (!(source[raw] & 0x80))
 			line[plain++] = (char)source[raw];
@@ -1041,7 +1124,7 @@ static boolean CON_OpenURLAtCursor(void)
 			;
 		while (end > start && strchr(".,;:!?)]}>\"'", line[end-1]))
 			end--;
-		if ((size_t)column >= start && (size_t)column < end)
+		if (column >= start && column < end)
 		{
 			size_t length = min(end-start, sizeof url-1);
 			memcpy(url, &line[start], length);
@@ -1051,16 +1134,15 @@ static boolean CON_OpenURLAtCursor(void)
 			if ((INT_PTR)opened > 32)
 			{
 				CONS_Printf("Opened link: %s\n", url);
-				return true;
+				return;
 			}
 #endif
 			I_ClipboardCopy(url, strlen(url));
 			CONS_Printf("Could not open the link, so it was copied: %s\n", url);
-			return true;
+			return;
 		}
 		start = end;
 	}
-	return false;
 }
 
 //
@@ -1069,6 +1151,111 @@ static boolean CON_OpenURLAtCursor(void)
 
 // Handles console key input
 //
+static boolean CON_Scrollbar(INT32 *x, INT32 *height, INT32 *width, INT32 *range, INT32 *top, INT32 *thumb)
+{
+	const INT32 fontScale = con_scalefactor;
+	const INT32 history = (INT32)CON_MaxScroll();
+	*height = con_curlines - 16 * fontScale;
+	if (!consoleready || con_startup || !history || *height <= 1 || fontScale <= 0)
+		return false;
+
+	const INT32 visible = 1 + (con_curlines - 20 * fontScale) / (8 * fontScale);
+	*width = max(4, 4 * fontScale);
+	*x = vid.width - *width - 2;
+	*range = history;
+	*thumb = V_ScrollbarThumb(*height, history, visible, history - (INT32)min((size_t)history, con_scrollup), top);
+	return true;
+}
+
+static void CON_DragScrollbar(INT32 y, INT32 height, INT32 range, INT32 thumb)
+{
+	con_scrollup = (size_t)(range - V_ScrollbarValue(y - con_scroll_grab, height - thumb, range));
+}
+
+static boolean CON_ScrollbarInput(const event_t *ev)
+{
+	if (!consoleready || ev->type == ev_keyup)
+	{
+		if (ev->key == KEY_MOUSE1 || !consoleready)
+			con_scroll_drag = false;
+		return false;
+	}
+
+	const boolean press = ev->type == ev_keydown && ev->key == KEY_MOUSE1;
+	if (ev->type == ev_mouseabsolute)
+	{
+		con_mouse_x = ev->x;
+		con_mouse_y = ev->y;
+	}
+	else if (!press)
+		return false;
+
+	if (!press && !con_scroll_drag)
+		return false;
+
+	INT32 x, height, width, range, top, thumb;
+	if (!CON_Scrollbar(&x, &height, &width, &range, &top, &thumb))
+	{
+		con_scroll_drag = false;
+		return false;
+	}
+
+	if (press)
+	{
+		if (con_mouse_x < x || con_mouse_x >= x + width || con_mouse_y < 0 || con_mouse_y >= height)
+			return false;
+		con_scroll_drag = true;
+		if (con_mouse_y >= top && con_mouse_y < top + thumb)
+		{
+			con_scroll_grab = con_mouse_y - top;
+			return true;
+		}
+		con_scroll_grab = thumb / 2;
+	}
+
+	CON_DragScrollbar(con_mouse_y, height, range, thumb);
+	return true;
+}
+
+static boolean CON_HistorySelectionInput(const event_t *ev)
+{
+	if (!consoleready)
+		return false;
+	if (ev->type == ev_mouseabsolute && con_select_drag)
+	{
+		CON_UpdateHistoryDrag();
+		return true;
+	}
+	if (ev->key != KEY_MOUSE1)
+		return false;
+	if (ev->type == ev_keydown)
+	{
+		con_historypos_t position;
+		CON_ClearHistorySelection();
+		if (CON_HistoryPointer(&position, false))
+		{
+			con_selection_start = con_selection_end = position;
+			con_select_drag = true;
+			input_sel = input_cur;
+		}
+		return true;
+	}
+	if (ev->type == ev_keyup && con_select_drag)
+	{
+		CON_UpdateHistoryDrag();
+		con_select_drag = false;
+		const INT32 charwidth = (INT32)con_scalefactor * 8;
+		if (!con_select_moved && con_mouse_x >= charwidth
+			&& con_selection_start.line >= con_cy + 1 - con_historylines)
+		{
+			CON_OpenURLAtCursor(con_selection_start.line, (size_t)((con_mouse_x - charwidth) / charwidth));
+		}
+		return true;
+	}
+	return false;
+}
+
+
 boolean CON_Responder(event_t *ev)
 {
 	// sequential completions a la 4dos
@@ -1086,6 +1273,9 @@ boolean CON_Responder(event_t *ev)
 
 	if (chat_on)
 		return false;
+
+	if (CON_ScrollbarInput(ev) || CON_HistorySelectionInput(ev))
+		return true;
 
 	// let go keyup events, don't eat them
 	if (ev->type != ev_keydown && ev->type != ev_text && ev->type != ev_console)
@@ -1131,7 +1321,10 @@ boolean CON_Responder(event_t *ev)
 	else if (ev->type == ev_text)
 	{
 		if (!consoletoggle && consoleready)
+		{
+			CON_ClearHistorySelection();
 			CON_InputAddChar(key);
+		}
 		return true;
 	}
 
@@ -1140,12 +1333,6 @@ boolean CON_Responder(event_t *ev)
 	 || key == KEY_LCTRL || key == KEY_RCTRL
 	 || key == KEY_LALT || key == KEY_RALT)
 		return true;
-
-	if (key == KEY_MOUSE1)
-	{
-		CON_OpenURLAtCursor();
-		return true;
-	}
 
 	if (key == KEY_LEFTARROW)
 	{
@@ -1255,8 +1442,8 @@ boolean CON_Responder(event_t *ev)
 		}
 		else if (key == 'c' || key == 'C')
 		{
-			if (input_sel == input_cur) // Don't replace the clipboard without a text selection
-				return true;
+			if (input_sel == input_cur)
+				CON_CopyHistorySelection();
 			else if (input_sel > input_cur)
 				I_ClipboardCopy(&inputlines[inputline][input_cur], input_sel-input_cur);
 			else
@@ -1265,6 +1452,7 @@ boolean CON_Responder(event_t *ev)
 		}
 		else if (key == 'v' || key == 'V')
 		{
+			CON_ClearHistorySelection();
 			const char *paste = I_ClipboardPaste();
 			if (input_sel != input_cur)
 				CON_InputDelSelection();
@@ -1277,6 +1465,7 @@ boolean CON_Responder(event_t *ev)
 		// Select all
 		if (key == 'a' || key == 'A')
 		{
+			CON_ClearHistorySelection();
 			input_sel = 0;
 			input_cur = input_len;
 			return true;
@@ -1361,12 +1550,13 @@ boolean CON_Responder(event_t *ev)
 		return true;
 	}
 
-	// Mouse wheel scrolls history without changing or submitting the prompt.
+
  if (key == KEY_MOUSEWHEELUP || key == KEY_MOUSEWHEELDOWN)
  {
   size_t maximum = CON_MaxScroll();
   if (key == KEY_MOUSEWHEELUP) con_scrollup = min(maximum, con_scrollup+3);
   else con_scrollup = con_scrollup > 3 ? con_scrollup-3 : 0;
+  CON_UpdateHistoryDrag();
   return true;
  }
 
@@ -1482,138 +1672,112 @@ boolean CON_Responder(event_t *ev)
 
 // Insert a new line in the console text buffer
 //
-static void CON_Linefeed(void)
+static void CON_Linefeed(boolean wrapped)
 {
-	// set time for heads up messages
 	if (con_hudlines)
-		con_hudtime[con_cy%con_hudlines] = cons_hudtime.value*TICRATE;
+		con_hudtime[con_cy % con_hudlines] = cons_hudtime.value * TICRATE;
 
+	con_line[con_width - 1] = wrapped;
 	con_cy++;
-	con_cx = 0;
+	con_cx = con_columns_used = 0;
 	if (con_historylines < con_totallines)
 		con_historylines++;
 
-	con_line = &con_buffer[(con_cy%con_totallines)*con_width];
-	memset(con_line, ' ', con_width);
+	con_line = &con_buffer[(con_cy % con_totallines) * con_width];
+	memset(con_line, 0, con_width);
 }
 
-// Outputs text into the console text buffer
-static void CON_Print(char *msg)
+static void CON_WrapLine(UINT8 color)
 {
-	size_t l;
-	size_t oldscroll;
-	size_t maxscroll;
-	size_t oldcy;
-	INT32 controlchars = 0; // for color changing
-	char color = '\x80';  // keep color across lines
+	CON_Linefeed(true);
+	if (color != 0x80)
+		con_line[con_cx++] = (char)color;
+}
 
-	if (msg == NULL)
+static void CON_PrintCharacter(UINT8 key, UINT8 color)
+{
+	if (con_columns_used == con_columns || con_cx >= con_width - 2)
+		CON_WrapLine(color);
+	con_line[con_cx++] = (char)key;
+	con_columns_used++;
+}
+
+
+static void CON_Print(char *text)
+{
+	UINT8 *msg = (UINT8 *)text;
+	UINT8 color = 0x80;
+
+	if (!msg)
 		return;
 
-	if (*msg == '\3') // chat text, makes ding sound
-		S_StartSound(NULL, sfx_radio);
-	else if (*msg == '\4') // chat action, dings and is in yellow
+	if (*msg == '\3' || *msg == '\4')
 	{
-		*msg = '\x82'; // yellow
+		if (*msg == '\4')
+			color = *msg = 0x82;
 		S_StartSound(NULL, sfx_radio);
 	}
 
 	Lock_state();
-	oldscroll = con_scrollup;
-	oldcy = con_cy;
+	const size_t oldscroll = con_scrollup;
+	const size_t oldcy = con_cy;
 
-	if (!(*msg & 0x80))
+	if (!(*msg & 0x80) && con_cx)
 	{
-		con_line[con_cx++] = '\x80';
-		controlchars = 1;
+		if (con_cx >= con_width - 2)
+			CON_WrapLine(color);
+		con_line[con_cx++] = (char)color;
 	}
 
 	while (*msg)
 	{
-		// skip non-printable characters and white spaces
-		while (*msg && *msg <= ' ')
+		if (*msg & 0x80)
 		{
-			if (*msg & 0x80)
+			color = *msg++;
+			if (con_cx >= con_width - 2)
+				CON_Linefeed(true);
+			con_line[con_cx++] = (char)color;
+		}
+		else if (*msg == '\r' || *msg == '\n')
+		{
+			if (*msg++ == '\r')
 			{
-				color = con_line[con_cx++] = *(msg++);
-				controlchars++;
-				continue;
+				memset(con_line, 0, con_width);
+				con_cx = con_columns_used = 0;
+				color = 0x80;
 			}
-			else if (*msg == '\r') // carriage return
+			else
 			{
-				if (con_historylines > 1)
-					con_historylines--;
-				con_cy--;
-				CON_Linefeed();
-				color = '\x80';
-				controlchars = 0;
+				CON_Linefeed(false);
+				if (color != 0x80)
+					con_line[con_cx++] = (char)color;
 			}
-			else if (*msg == '\n') // linefeed
-			{
-				CON_Linefeed();
-				con_line[con_cx++] = color;
-				controlchars = 1;
-			}
-			else if (*msg == ' ') // space
-			{
-				con_line[con_cx++] = ' ';
-				if (con_cx - controlchars >= con_width-11)
-				{
-					CON_Linefeed();
-					con_line[con_cx++] = color;
-					controlchars = 1;
-				}
-			}
-			else if (*msg == '\t')
-			{
-				// adds tab spaces for nice layout in console
-
-				do
-				{
-					con_line[con_cx++] = ' ';
-				} while ((con_cx - controlchars) % 4 != 0);
-
-				if (con_cx - controlchars >= con_width-11)
-				{
-					CON_Linefeed();
-					con_line[con_cx++] = color;
-					controlchars = 1;
-				}
-			}
+		}
+		else if (*msg == ' ' || *msg == '\t')
+		{
+			size_t spaces = *msg++ == '\t' ? 4 - (con_columns_used % 4) : 1;
+			while (spaces--)
+				CON_PrintCharacter(' ', color);
+		}
+		else if (*msg > ' ')
+		{
+			size_t length = 0;
+			while (length < con_columns && msg[length] > ' ' && !(msg[length] & 0x80))
+				length++;
+			if (con_columns_used + length > con_columns)
+				CON_WrapLine(color);
+			while (length--)
+				CON_PrintCharacter(*msg++, color);
+		}
+		else
 			msg++;
-		}
-
-		if (*msg == '\0')
-			break;
-
-		// printable character
-		for (l = 0; l < (con_width-11) && msg[l] > ' '; l++)
-			;
-
-		// word wrap
-		if ((con_cx - controlchars) + l > con_width-11)
-		{
-			CON_Linefeed();
-			con_line[con_cx++] = color;
-			controlchars = 1;
-		}
-
-		// a word at a time
-		for (; l > 0; l--)
-			con_line[con_cx++] = *(msg++);
 	}
 
-	/* Keep the same text under the reader's eyes while they are reviewing old
-	 * output. New output follows only if they were already at the bottom. */
 	if (oldscroll && con_cy > oldcy)
-	{
-		maxscroll = CON_MaxScroll();
-		con_scrollup = min(oldscroll + (con_cy - oldcy), maxscroll);
-	}
+		con_scrollup = min(oldscroll + (con_cy - oldcy), CON_MaxScroll());
 
 	Unlock_state();
 }
-
 void CON_LogMessage(const char *msg)
 {
 	char txt[8192], *t;
@@ -1771,7 +1935,7 @@ static void CON_DrawInput(void)
 	y = con_curlines - 12 * con_scalefactor;
 	x = charwidth*2;
 
-	clen = con_width-13;
+	clen = con_columns - 2;
 
 	if (input_len <= clen)
 	{
@@ -1848,59 +2012,40 @@ static void CON_DrawInput(void)
 }
 
 // draw the last lines of console text to the top of the screen
-static void CON_DrawHudlines(void)
+static void CON_DrawHistoryLine(size_t row, INT32 x, INT32 y, INT32 charwidth)
 {
-	UINT8 *p;
-	size_t i;
-	INT32 y;
-	INT32 charflags = 0;
-	INT32 charwidth = 8 * con_scalefactor;
-	INT32 charheight = 8 * con_scalefactor;
+	const UINT8 *p = CON_HistoryLine(row);
+	INT32 color = 0;
 
-	if (!con_hudlines)
-		return;
-
-	if (chat_on && OLDCHAT)
-		y = charheight; // leave place for chat input in the first row of text (only do it if consolechat is on.)
-	else
-		y = 0;
-
-	for (i = con_cy - con_hudlines; i <= con_cy; i++)
+	for (; *p; p++)
 	{
-		size_t c;
-		INT32 x;
-
-		if ((signed)i < 0)
-			continue;
-		if (con_hudtime[i%con_hudlines] == 0)
-			continue;
-
-		p = (UINT8 *)&con_buffer[(i%con_totallines)*con_width];
-
-		for (c = 0, x = 0; c < con_width; c++, x += charwidth, p++)
+		if (*p & 0x80)
+			color = (*p & 0x7f) << V_CHARCOLORSHIFT;
+		else
 		{
-			while (*p & 0x80) // Graue 06-19-2004
-			{
-				charflags = (*p & 0x7f) << V_CHARCOLORSHIFT;
-				p++;
-				c++;
-			}
-			if (c >= con_width)
-				break;
-			if (*p < FONTSTART)
-				;//charwidth = 4 * con_scalefactor;
-			else
-			{
-				//charwidth = (hu_font.chars['A'-FONTSTART]->width) * con_scalefactor;
-				V_DrawCharacter(x, y, (INT32)(*p) | charflags | cv_constextsize.value | V_NOSCALESTART, true);
-			}
+			if (*p >= FONTSTART)
+				V_DrawCharacter(x, y, *p | color | cv_constextsize.value | V_NOSCALESTART, true);
+			x += charwidth;
 		}
-
-		//V_DrawCharacter(x, y, (p[c]&0xff) | cv_constextsize.value | V_NOSCALESTART, true);
-		y += charheight;
 	}
 }
 
+static void CON_DrawHudlines(void)
+{
+	if (!con_hudlines)
+		return;
+
+	const INT32 charsize = 8 * con_scalefactor;
+	INT32 y = (chat_on && OLDCHAT) ? charsize : 0;
+	const size_t shown = min(con_hudlines + 1, con_historylines);
+	for (size_t i = con_cy + 1 - shown; i <= con_cy; i++)
+	{
+		if (!con_hudtime[i % con_hudlines])
+			continue;
+		CON_DrawHistoryLine(i, 0, y, charsize);
+		y += charsize;
+	}
+}
 // Lactozilla: Draws the console's background picture.
 static void CON_DrawBackpic(void)
 {
@@ -1955,13 +2100,7 @@ static void CON_DrawBackpic(void)
 //
 static void CON_DrawConsole(void)
 {
-	UINT8 *p;
-	size_t i;
-	INT32 y;
-	INT32 charflags = 0;
-	INT32 charwidth = (INT32)con_scalefactor << 3;
-	INT32 charheight = charwidth;
-	INT32 minheight = 20 * con_scalefactor;	// 20 = 8+8+4
+	con_historyview_t view;
 
 	if (con_curlines <= 0)
 		return;
@@ -1977,51 +2116,42 @@ static void CON_DrawConsole(void)
 	}
 
 	// draw console text lines from top to bottom
-	if (con_curlines >= minheight)
+	if (CON_HistoryView(&view))
 	{
-		i = con_cy - con_scrollup;
-
-		// skip the last empty line due to the cursor being at the start of a new line
-		i--;
-
-		i -= (con_curlines - minheight) / charheight;
-
 		if (rendermode == render_none) return;
 
+		con_historypos_t first, last;
+		const boolean selected = CON_HistorySelection(&first, &last);
 #ifdef HWRENDER
 		HWR_BeginTextBatch();
 #endif
-		for (y = (con_curlines-minheight) % charheight; y <= con_curlines-minheight; y += charheight, i++)
+		INT32 y = view.top;
+		for (size_t row = view.first; row <= view.last; row++, y += view.charwidth)
 		{
-			INT32 x;
-			size_t c, drawchars;
-
-			p = (UINT8 *)&con_buffer[((i > 0 ? i : 0)%con_totallines)*con_width];
-			drawchars = con_width;
-			while (drawchars && (p[drawchars-1] == ' ' || p[drawchars-1] == '\0'))
-				drawchars--;
-
-			for (c = 0, x = charwidth; c < drawchars; c++, x += charwidth, p++)
+			if (selected && row >= first.line && row <= last.line)
 			{
-				while (*p & 0x80)
-				{
-					charflags = (*p & 0x7f) << V_CHARCOLORSHIFT;
-					p++;
-					c++;
-				}
-				if (c >= drawchars)
-					break;
-				if (*p != ' ' && *p != '\0')
-					V_DrawCharacter(x, y, (INT32)(*p) | charflags | cv_constextsize.value | V_NOSCALESTART, true);
+				const size_t start = row == first.line ? first.column : 0;
+				const size_t end = row == last.line ? last.column : CON_HistoryColumns(row);
+				if (end > start)
+					V_DrawFill(((INT32)start+1)*view.charwidth, y,
+						(INT32)(end-start)*view.charwidth, view.charwidth, V_NOSCALESTART | 156);
 			}
+			CON_DrawHistoryLine(row, view.charwidth, y, view.charwidth);
 		}
 #ifdef HWRENDER
 		HWR_EndTextBatch();
 #endif
 	}
 
+	INT32 barX, barHeight, barWidth, barRange, barTop, barThumb;
+	if (CON_Scrollbar(&barX, &barHeight, &barWidth, &barRange, &barTop, &barThumb))
+	{
+		V_DrawFill(barX, 0, barWidth, barHeight, V_NOSCALESTART | 159);
+		V_DrawFill(barX, barTop, barWidth, barThumb, V_NOSCALESTART | (con_scroll_drag ? 120 : 148));
+	}
+
 	// draw prompt if enough place (not while game startup)
-	if ((con_curlines >= (minheight-charheight)) && !con_startup)
+	if (con_curlines >= 12 * (INT32)con_scalefactor && !con_startup)
 		CON_DrawInput();
 }
 
