@@ -1555,8 +1555,8 @@ static void HWR_RenderMidtexture(INT32 gl_midtexture, double cliplow, double cli
 	// polytop and polybottom, are the ideal (i.e. unclipped)
 	// heights of the polygon, and h & l, are the final (clipped)
 	// poly coords.
-	fixed_t popentop, popenbottom, polytop, polybottom, lowcut, highcut;
-	fixed_t popentopslope, popenbottomslope, polytopslope, polybottomslope, lowcutslope, highcutslope;
+	fixed_t popentop, popenbottom, polytop, polybottom;
+	fixed_t popentopslope, popenbottomslope, polytopslope, polybottomslope;
 
 	// NOTE: With polyobjects, whenever you need to check the properties of the polyobject sector it belongs to,
 	// you must use the linedef's backsector to be correct
@@ -1618,26 +1618,12 @@ static void HWR_RenderMidtexture(INT32 gl_midtexture, double cliplow, double cli
 		polybottomslope = polytopslope - midtexheight;
 	}
 
-	// The cut-off values of a linedef can always be constant, since every line has an absoulute front and or back sector
-	if (gl_curline->polyseg)
-	{
-		lowcut = polybottom;
-		highcut = polytop;
-		lowcutslope = polybottomslope;
-		highcutslope = polytopslope;
-	}
-	else
-	{
-		lowcut = popenbottom;
-		highcut = popentop;
-		lowcutslope = popenbottomslope;
-		highcutslope = popentopslope;
-	}
-
-	fixed_t h = min(highcut, polytop);
-	fixed_t l = max(polybottom, lowcut);
-	fixed_t hS = min(highcutslope, polytopslope);
-	fixed_t lS = max(polybottomslope, lowcutslope);
+	fixed_t h = min(popentop, polytop);
+	fixed_t l = max(polybottom, popenbottom);
+	fixed_t hS = min(popentopslope, polytopslope);
+	fixed_t lS = max(polybottomslope, popenbottomslope);
+	if (gl_curline->polyseg && h <= l && hS <= lS)
+		return;
 
 	// PEGGING
 	fixed_t texturevpeg, texturevpegslope;
@@ -6769,54 +6755,78 @@ static void HWR_DrawSkyBackground(player_t *player)
 // -----------------+
 // HWR_ClearView : clear the viewwindow, with maximum z value
 // -----------------+
-static boolean HWR_SegmentNearView(const seg_t *seg)
+static double HWR_NearSegmentDistanceSquared(const seg_t *seg, double range)
 {
-	const double range = ZCLIP_PLANE * FRACUNIT;
 	const double x1 = (double)seg->v1->x - viewx;
 	const double y1 = (double)seg->v1->y - viewy;
 	const double x2 = (double)seg->v2->x - viewx;
 	const double y2 = (double)seg->v2->y - viewy;
 	if (min(x1, x2) >= range || max(x1, x2) <= -range
 		|| min(y1, y2) >= range || max(y1, y2) <= -range)
-		return false;
+		return range * range;
 
 	const double dx = x2 - x1;
 	const double dy = y2 - y1;
 	const double length2 = dx*dx + dy*dy;
 	if (length2 < 1.0)
-		return false;
+		return range * range;
 	const double t = max(0.0, min(1.0, -(x1*dx + y1*dy) / length2));
 	const double x = x1 + t*dx;
 	const double y = y1 + t*dy;
-	return x*x + y*y < range*range;
+	return x*x + y*y;
 }
 
 static float HWR_ViewNearClip(void)
 {
-	const subsector_t *sub;
 	if (!numsubsectors)
 		return ZCLIP_PLANE;
 
-	sub = R_PointInSubsector(viewx, viewy);
+	const double wall_range = ZCLIP_PLANE * FRACUNIT;
+	float nearclip = ZCLIP_PLANE;
+	const subsector_t *sub = R_PointInSubsector(viewx, viewy);
 	for (INT32 i = 0; i < sub->numlines; i++)
 	{
 		const seg_t *seg = &segs[sub->firstline + i];
 		if (!seg->glseg && !seg->polyseg && seg->sidedef
 			&& (!seg->backsector || seg->sidedef->midtexture
 				|| seg->sidedef->toptexture || seg->sidedef->bottomtexture)
-			&& HWR_SegmentNearView(seg))
-			return 1.0f;
-	}
-	for (const polyobj_t *poly = sub->polyList; poly; poly = (const polyobj_t *)poly->link.next)
-	{
-		if (!poly->isBad && (poly->flags & POF_RENDERSIDES))
+			&& HWR_NearSegmentDistanceSquared(seg, wall_range) < wall_range * wall_range)
 		{
-			for (size_t i = 0; i < poly->segCount; i++)
-				if (HWR_SegmentNearView(poly->segs[i]))
-					return 1.0f;
+			nearclip = 1.0f;
+			break;
 		}
 	}
-	return ZCLIP_PLANE;
+
+	if (!polyblocklinks || !numPolyObjects)
+		return nearclip;
+
+	const INT64 range = 2 * ZCLIP_PLANE * FRACUNIT;
+	const INT64 x = (INT64)viewx - bmaporgx;
+	const INT64 y = (INT64)viewy - bmaporgy;
+	const INT32 minx = (INT32)max(0, (x - range) >> MAPBLOCKSHIFT);
+	const INT32 maxx = (INT32)min(bmapwidth - 1, (x + range) >> MAPBLOCKSHIFT);
+	const INT32 miny = (INT32)max(0, (y - range) >> MAPBLOCKSHIFT);
+	const INT32 maxy = (INT32)min(bmapheight - 1, (y + range) >> MAPBLOCKSHIFT);
+	double distance2 = (double)range * range;
+	for (INT32 by = miny; by <= maxy; by++)
+	{
+		for (INT32 bx = minx; bx <= maxx; bx++)
+		{
+			for (const polymaplink_t *link = polyblocklinks[by * bmapwidth + bx];
+				link; link = (const polymaplink_t *)link->link.next)
+			{
+				const polyobj_t *poly = link->po;
+				if (poly->isBad || !(poly->flags & POF_RENDERSIDES))
+					continue;
+				for (size_t i = 0; i < poly->segCount; i++)
+				{
+					const double near2 = HWR_NearSegmentDistanceSquared(poly->segs[i], range);
+					distance2 = min(distance2, near2);
+				}
+			}
+		}
+	}
+	return min(nearclip, (float)max(0.0625, sqrt(distance2) / (2 * FRACUNIT)));
 }
 
 static inline void HWR_ClearView(void)

@@ -413,7 +413,12 @@ void R_RenderMaskedSegRange(drawseg_t *ds, INT32 x1, INT32 x2)
 		const INT32 cliprange = max(ds->x2 - ds->x1, 1);
 
 		if (curline->polyseg)
-			clipfront = clipback = back;
+		{
+			clipback = ldef->backsector;
+			if (clipback->heightsec != -1)
+				clipback = &sectors[clipback->heightsec];
+			clipfront = clipback;
+		}
 
 		lefttop = min(P_GetZAt(clipfront->c_slope, ds->leftpos.x,
 			ds->leftpos.y, clipfront->ceilingheight),
@@ -1369,7 +1374,7 @@ static fixed_t R_WallTextureOffset(INT32 x)
 {
 	if (rw_exactprojection)
 	{
-		const double screenx = x - centerx;
+		const double screenx = x - centerx + (curline->polyseg ? 0.5 : 0.0);
 		const double denominator = rw_raynormal + screenx*rw_raynormalstep;
 		if (fabs(denominator) > 1.0e-12)
 		{
@@ -1957,7 +1962,8 @@ static fixed_t R_WallScaleAtX(INT32 x)
 {
 	if (rw_exactprojection && fabs(rw_normaldistance) > 0.0)
 	{
-		const double denominator = rw_raynormal + (x-centerx)*rw_raynormalstep;
+		const double screenx = x - centerx + (curline->polyseg ? 0.5 : 0.0);
+		const double denominator = rw_raynormal + screenx*rw_raynormalstep;
 		const double scale = -(double)projectiony * FRACUNIT
 			* denominator / rw_normaldistance;
 		if (scale >= 64.0*FRACUNIT)
@@ -3215,33 +3221,20 @@ void R_StoreWallRange(INT32 start, INT32 stop)
 		}
 	}
 
-	// get a new or use the same visplane
-	if (markceiling)
+	if (curline->polyseg)
 	{
-		if (ceilingplane) //SoM: 3/29/2000: Check for null ceiling planes
-			ceilingplane = R_CheckPlane (ceilingplane, rw_x, rw_stopx-1);
-		else
-			markceiling = false;
-
-		// Don't mark ceiling flat lines for polys unless this line has an upper texture, otherwise we get flat leakage pulling downward
-		// (If it DOES have an upper texture and we do this, the ceiling won't render at all)
-		if (curline->polyseg && !curline->sidedef->toptexture)
-			markceiling = false;
+		markceiling = markceiling && curline->sidedef->toptexture;
+		markfloor = markfloor && curline->sidedef->bottomtexture;
 	}
+	if (markceiling && ceilingplane)
+		ceilingplane = R_CheckPlane(ceilingplane, rw_x, rw_stopx - 1);
+	else
+		markceiling = false;
 
-	// get a new or use the same visplane
-	if (markfloor)
-	{
-		if (floorplane) //SoM: 3/29/2000: Check for null planes
-			floorplane = R_CheckPlane (floorplane, rw_x, rw_stopx-1);
-		else
-			markfloor = false;
-
-		// Don't mark floor flat lines for polys unless this line has a lower texture, otherwise we get flat leakage pulling upward
-		// (If it DOES have a lower texture and we do this, the floor won't render at all)
-		if (curline->polyseg && !curline->sidedef->bottomtexture)
-			markfloor = false;
-	}
+	if (markfloor && floorplane)
+		floorplane = R_CheckPlane(floorplane, rw_x, rw_stopx - 1);
+	else
+		markfloor = false;
 
 	ds_p->numffloorplanes = 0;
 	if (numffloors)

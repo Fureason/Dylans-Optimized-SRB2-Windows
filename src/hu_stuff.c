@@ -498,6 +498,62 @@ void HU_AddChatText(const char *text, boolean playsound)
 	HU_AddChatMessage(text, playsound, -1, 0, 0);
 }
 
+static void HU_AttributeHookChat(UINT32 first_message, INT32 player)
+{
+	const char *name = player_names[player];
+	const size_t length = strlen(name);
+	const UINT32 added = chat_first_message + chat_nummsg_log - first_message;
+
+	if (!length)
+		return;
+
+	for (UINT32 i = chat_nummsg_log - min(added, chat_nummsg_log); i < chat_nummsg_log; i++)
+	{
+		chatmessage_t *message = &chat_log[i];
+		const char *start = message->text;
+		char separator;
+
+		if (message->player >= 0)
+			continue;
+		while ((UINT8)*start & 0x80)
+			start++;
+
+		if (*start == '<')
+		{
+			start++;
+			separator = '>';
+		}
+		else if (start[0] == '*' && start[1] == ' ')
+		{
+			start += 2;
+			separator = ' ';
+		}
+		else
+			separator = ':';
+
+		for (; *start; start++)
+		{
+			if ((UINT8)*start & 0x80)
+				continue;
+			if (!strncmp(start, name, length))
+			{
+				const char *end = start + length;
+				while ((UINT8)*end & 0x80)
+					end++;
+				if (*end == separator)
+				{
+					message->player = (SINT8)player;
+					message->name_start = (UINT16)(start - message->text);
+					message->name_end = message->name_start + (UINT16)length;
+					break;
+				}
+			}
+			if (separator == ':' || !strchr("~*&@%#+", *start))
+				break;
+		}
+	}
+}
+
 static void DoSayCommand(SINT8 target, size_t usedargs, UINT8 flags)
 {
 	char buf[2 + HU_MAXMSGLEN + 1];
@@ -771,7 +827,15 @@ static void Got_Saycmd(UINT8 **p, INT32 playernum)
 	if (spam_eatmsg)
 		return; // don't proceed if we were supposed to eat the message.
 
-	if (LUA_HookPlayerMsg(playernum, target, flags, msg))
+	const UINT32 first_hook_message = chat_first_message + chat_nummsg_log;
+	const boolean hook_handled = LUA_HookPlayerMsg(playernum, target, flags, msg);
+	if (!(flags & (HU_CSAY | HU_SERVER_SAY)))
+	{
+		const INT32 named_player = target > 0 && playernum == consoleplayer ? target - 1 : playernum;
+		if (HU_ChatRecipientAvailable(named_player))
+			HU_AttributeHookChat(first_hook_message, named_player);
+	}
+	if (hook_handled)
 		return;
 
 	// If it's a CSAY, just CECHO and be done with it.

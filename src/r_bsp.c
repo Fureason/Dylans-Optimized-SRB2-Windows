@@ -500,9 +500,19 @@ static void R_AddLine(seg_t *line)
 		}
 	}
 
-	// big room fix
-	angle1 = R_PointToAngle64(render_v1x, render_v1y);
-	angle2 = R_PointToAngle64(render_v2x, render_v2y);
+	if (line->polyseg)
+	{
+		const double angle_units = (double)ANGLE_180 / M_PI;
+		angle1 = (angle_t)(INT64)(atan2((double)render_v1y - viewy,
+			(double)render_v1x - viewx) * angle_units);
+		angle2 = (angle_t)(INT64)(atan2((double)render_v2y - viewy,
+			(double)render_v2x - viewx) * angle_units);
+	}
+	else
+	{
+		angle1 = R_PointToAngle64(render_v1x, render_v1y);
+		angle2 = R_PointToAngle64(render_v2x, render_v2y);
+	}
 	curline = line;
 
 	// Clip to view edges.
@@ -545,9 +555,9 @@ static void R_AddLine(seg_t *line)
 	{
 		const double radians = M_PI / (double)ANGLE_180;
 		x1 = (INT32)max(0.0, min((double)viewwidth,
-			ceil(centerx - focallengthf * tan((INT32)angle1 * radians))));
+			ceil(centerx - focallengthf * tan((INT32)angle1 * radians) - 0.5)));
 		x2 = (INT32)max(0.0, min((double)viewwidth,
-			ceil(centerx - focallengthf * tan((INT32)angle2 * radians))));
+			ceil(centerx - focallengthf * tan((INT32)angle2 * radians) - 0.5)));
 	}
 	else
 	{
